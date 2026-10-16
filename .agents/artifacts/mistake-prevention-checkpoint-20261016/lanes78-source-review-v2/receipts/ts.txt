@@ -1,0 +1,8 @@
+/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/retained-v1-checks/address91-recipe.ts:1
+import type { MatchRecord, TeamProfile } from 'RUNTIME_TYPES_PATH'
+            ^
+
+SyntaxError: Unexpected token '{'
+    at checkSyntax (node:internal/main/check_syntax:84:5)
+
+Node.js v24.21.0

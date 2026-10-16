@@ -1,0 +1,719 @@
+{
+  "at": "2026-10-16T23:23:20.549341+00:00",
+  "phase": "before",
+  "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+  "tree": "10c19882806045f340674c6627b4715929ee020e",
+  "trackedBlobCount": 680,
+  "memoryFullAvg60": 0.89,
+  "memAvailableKiB": 3065196,
+  "diskFreeGiB": 203.87748336791992,
+  "processMatches": [
+    {
+      "pid": 1053839,
+      "ppid": 980791,
+      "cwd": "/home/codex",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 471,
+      "startTicks": 5446864,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 471,
+      "cpuAfter": 471,
+      "cpuDelta": 0,
+      "startBefore": 5446864,
+      "startAfter": 5446864,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053842,
+      "ppid": 1053839,
+      "cwd": "/home/codex",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --no-zygote-sandbox --headless --force-device-scale-factor=2 ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --no-zygote-sandbox --headless --force-device-scale-factor=2"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d6e6f2d7a79676f74652d73616e64626f78202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 1,
+      "startTicks": 5446896,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1053842,
+          "ppid": 1053839,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --no-zygote-sandbox --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --no-zygote-sandbox --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d6e6f2d7a79676f74652d73616e64626f78202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446896,
+          "state": "S"
+        },
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 1,
+      "cpuAfter": 1,
+      "cpuDelta": 0,
+      "startBefore": 5446896,
+      "startAfter": 5446896,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053843,
+      "ppid": 1053839,
+      "cwd": "/proc/1053844/fdinfo",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 1,
+      "startTicks": 5446896,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1053843,
+          "ppid": 1053839,
+          "cwd": "/proc/1053844/fdinfo",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446896,
+          "state": "S"
+        },
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 1,
+      "cpuAfter": 1,
+      "cpuDelta": 0,
+      "startBefore": 5446896,
+      "startAfter": 5446896,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053845,
+      "ppid": 1053843,
+      "cwd": "/proc/1053844/fdinfo",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 1,
+      "startTicks": 5446899,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1053845,
+          "ppid": 1053843,
+          "cwd": "/proc/1053844/fdinfo",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446899,
+          "state": "S"
+        },
+        {
+          "pid": 1053843,
+          "ppid": 1053839,
+          "cwd": "/proc/1053844/fdinfo",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446896,
+          "state": "S"
+        },
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 1,
+      "cpuAfter": 1,
+      "cpuDelta": 0,
+      "startBefore": 5446899,
+      "startAfter": 5446899,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053861,
+      "ppid": 1053842,
+      "cwd": "/home/codex",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=gpu-process --gpu-recent-crash-count=0 --disable-dev-shm-usage --disable-breakpad --headless --ozone-platform=headless --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --gpu-preferences=YAAAAAAAAAAgAAAEAAAAAAAAAAAAAGAASAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAMAAAAAQAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708988185955192 ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=gpu-process --gpu-recent-crash-count=0 --disable-dev-shm-usage --disable-breakpad --headless --ozone-platform=headless --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --gpu-preferences=YAAAAAAAAAAgAAAEAAAAAAAAAAAAAGAASAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAMAAAAAQAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708988185955192"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d6770752d70726f63657373202d2d6770752d726563656e742d63726173682d636f756e743d30202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d627265616b706164202d2d686561646c657373202d2d6f7a6f6e652d706c6174666f726d3d686561646c657373202d2d7573652d616e676c653d73776966747368616465722d776562676c202d2d656e61626c652d756e736166652d7377696674736861646572202d2d6770752d707265666572656e6365733d5941414141414141414141674141414541414141414141414141414141474141534141414141414141414141414141414141414141454141414141414141414141414141414141414141414341414141414141414141414141414141414141414d4141414141414141414177414141414141414141414141414141414141414143414141414141414141414d4141414141514141414141414141414141414141434141414141414141414149414141414141414141413d3d202d2d7368617265642d66696c6573202d2d6669656c642d747269616c2d68616e646c653d332c692c31313232393537313435323136363031303030352c323833363630383534393530383431363138382c323632313434202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d64697361626c652d66656174757265733d4175746f4465456c65766174652c41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c4f7074696d697a6174696f6e48696e74732c5061696e74486f6c64696e672c52656e646572446f63756d656e742c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e2c6d73466f72636542726f777365725369676e496e202d2d766172696174696f6e732d736565642d76657273696f6e202d2d70736575646f6e796d697a6174696f6e2d73616c742d68616e646c653d372c692c31333637323332343838383231383839313537392c31323133363039363431313334383536383635342c34202d2d74726163652d70726f636573732d747261636b2d757569643d3331393037303839383831383539353531393200",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 212,
+      "startTicks": 5446908,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1053861,
+          "ppid": 1053842,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=gpu-process --gpu-recent-crash-count=0 --disable-dev-shm-usage --disable-breakpad --headless --ozone-platform=headless --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --gpu-preferences=YAAAAAAAAAAgAAAEAAAAAAAAAAAAAGAASAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAMAAAAAQAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708988185955192 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=gpu-process --gpu-recent-crash-count=0 --disable-dev-shm-usage --disable-breakpad --headless --ozone-platform=headless --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --gpu-preferences=YAAAAAAAAAAgAAAEAAAAAAAAAAAAAGAASAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAMAAAAAQAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708988185955192"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d6770752d70726f63657373202d2d6770752d726563656e742d63726173682d636f756e743d30202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d627265616b706164202d2d686561646c657373202d2d6f7a6f6e652d706c6174666f726d3d686561646c657373202d2d7573652d616e676c653d73776966747368616465722d776562676c202d2d656e61626c652d756e736166652d7377696674736861646572202d2d6770752d707265666572656e6365733d5941414141414141414141674141414541414141414141414141414141474141534141414141414141414141414141414141414141454141414141414141414141414141414141414141414341414141414141414141414141414141414141414d4141414141414141414177414141414141414141414141414141414141414143414141414141414141414d4141414141514141414141414141414141414141434141414141414141414149414141414141414141413d3d202d2d7368617265642d66696c6573202d2d6669656c642d747269616c2d68616e646c653d332c692c31313232393537313435323136363031303030352c323833363630383534393530383431363138382c323632313434202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d64697361626c652d66656174757265733d4175746f4465456c65766174652c41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c4f7074696d697a6174696f6e48696e74732c5061696e74486f6c64696e672c52656e646572446f63756d656e742c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e2c6d73466f72636542726f777365725369676e496e202d2d766172696174696f6e732d736565642d76657273696f6e202d2d70736575646f6e796d697a6174696f6e2d73616c742d68616e646c653d372c692c31333637323332343838383231383839313537392c31323133363039363431313334383536383635342c34202d2d74726163652d70726f636573732d747261636b2d757569643d3331393037303839383831383539353531393200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 212,
+          "startTicks": 5446908,
+          "state": "S"
+        },
+        {
+          "pid": 1053842,
+          "ppid": 1053839,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --no-zygote-sandbox --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --no-zygote-sandbox --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d6e6f2d7a79676f74652d73616e64626f78202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446896,
+          "state": "S"
+        },
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 212,
+      "cpuAfter": 213,
+      "cpuDelta": 1,
+      "startBefore": 5446908,
+      "startAfter": 5446908,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053863,
+      "ppid": 1053839,
+      "cwd": "/home/codex",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --disable-dev-shm-usage --use-angle=swiftshader-webgl --use-gl=angle --mute-audio --headless=old --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708989122997041 ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --disable-dev-shm-usage --use-angle=swiftshader-webgl --use-gl=angle --mute-audio --headless=old --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708989122997041"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7574696c697479202d2d7574696c6974792d7375622d747970653d6e6574776f726b2e6d6f6a6f6d2e4e6574776f726b53657276696365202d2d6c616e673d656e2d5553202d2d736572766963652d73616e64626f782d747970653d6e6f6e65202d2d64697361626c652d6465762d73686d2d7573616765202d2d7573652d616e676c653d73776966747368616465722d776562676c202d2d7573652d676c3d616e676c65202d2d6d7574652d617564696f202d2d686561646c6573733d6f6c64202d2d7368617265642d66696c65733d76385f636f6e746578745f736e617073686f745f646174613a313030202d2d6669656c642d747269616c2d68616e646c653d332c692c31313232393537313435323136363031303030352c323833363630383534393530383431363138382c323632313434202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d64697361626c652d66656174757265733d4175746f4465456c65766174652c41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c4f7074696d697a6174696f6e48696e74732c5061696e74486f6c64696e672c52656e646572446f63756d656e742c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e2c6d73466f72636542726f777365725369676e496e202d2d766172696174696f6e732d736565642d76657273696f6e202d2d70736575646f6e796d697a6174696f6e2d73616c742d68616e646c653d372c692c31333637323332343838383231383839313537392c31323133363039363431313334383536383635342c34202d2d74726163652d70726f636573732d747261636b2d757569643d3331393037303839383931323239393730343100",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 208,
+      "startTicks": 5446912,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1053863,
+          "ppid": 1053839,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --disable-dev-shm-usage --use-angle=swiftshader-webgl --use-gl=angle --mute-audio --headless=old --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708989122997041 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --disable-dev-shm-usage --use-angle=swiftshader-webgl --use-gl=angle --mute-audio --headless=old --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708989122997041"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7574696c697479202d2d7574696c6974792d7375622d747970653d6e6574776f726b2e6d6f6a6f6d2e4e6574776f726b53657276696365202d2d6c616e673d656e2d5553202d2d736572766963652d73616e64626f782d747970653d6e6f6e65202d2d64697361626c652d6465762d73686d2d7573616765202d2d7573652d616e676c653d73776966747368616465722d776562676c202d2d7573652d676c3d616e676c65202d2d6d7574652d617564696f202d2d686561646c6573733d6f6c64202d2d7368617265642d66696c65733d76385f636f6e746578745f736e617073686f745f646174613a313030202d2d6669656c642d747269616c2d68616e646c653d332c692c31313232393537313435323136363031303030352c323833363630383534393530383431363138382c323632313434202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d64697361626c652d66656174757265733d4175746f4465456c65766174652c41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c4f7074696d697a6174696f6e48696e74732c5061696e74486f6c64696e672c52656e646572446f63756d656e742c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e2c6d73466f72636542726f777365725369676e496e202d2d766172696174696f6e732d736565642d76657273696f6e202d2d70736575646f6e796d697a6174696f6e2d73616c742d68616e646c653d372c692c31333637323332343838383231383839313537392c31323133363039363431313334383536383635342c34202d2d74726163652d70726f636573732d747261636b2d757569643d3331393037303839383931323239393730343100",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 208,
+          "startTicks": 5446912,
+          "state": "S"
+        },
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 208,
+      "cpuAfter": 208,
+      "cpuDelta": 0,
+      "startBefore": 5446912,
+      "startAfter": 5446912,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1192990,
+      "ppid": 1053845,
+      "cwd": "/proc/1053844/fdinfo",
+      "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=renderer --headless=old --disable-dev-shm-usage --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --force-device-scale-factor=2 --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --ozone-platform=headless --disable-gpu-compositing --disable-blink-features=AutomationControlled --lang=en-US --num-raster-threads=3 --enable-main-frame-before-activation --renderer-client-id=8 --launch-time-ticks=62469702228 --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708993808206286 ",
+      "argv": [
+        "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=renderer --headless=old --disable-dev-shm-usage --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --force-device-scale-factor=2 --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --ozone-platform=headless --disable-gpu-compositing --disable-blink-features=AutomationControlled --lang=en-US --num-raster-threads=3 --enable-main-frame-before-activation --renderer-client-id=8 --launch-time-ticks=62469702228 --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708993808206286"
+      ],
+      "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d72656e6465726572202d2d686561646c6573733d6f6c64202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d627265616b706164202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d72656d6f74652d646562756767696e672d70697065202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d6f7a6f6e652d706c6174666f726d3d686561646c657373202d2d64697361626c652d6770752d636f6d706f736974696e67202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d6c616e673d656e2d5553202d2d6e756d2d7261737465722d746872656164733d33202d2d656e61626c652d6d61696e2d6672616d652d6265666f72652d61637469766174696f6e202d2d72656e64657265722d636c69656e742d69643d38202d2d6c61756e63682d74696d652d7469636b733d3632343639373032323238202d2d7368617265642d66696c65733d76385f636f6e746578745f736e617073686f745f646174613a313030202d2d6669656c642d747269616c2d68616e646c653d332c692c31313232393537313435323136363031303030352c323833363630383534393530383431363138382c323632313434202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d64697361626c652d66656174757265733d4175746f4465456c65766174652c41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c4f7074696d697a6174696f6e48696e74732c5061696e74486f6c64696e672c52656e646572446f63756d656e742c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e2c6d73466f72636542726f777365725369676e496e202d2d766172696174696f6e732d736565642d76657273696f6e202d2d70736575646f6e796d697a6174696f6e2d73616c742d68616e646c653d372c692c31333637323332343838383231383839313537392c31323133363039363431313334383536383635342c34202d2d74726163652d70726f636573732d747261636b2d757569643d3331393037303839393338303832303632383600",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "cpuTicks": 796,
+      "startTicks": 6246977,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": true,
+      "familyPid": 1053839,
+      "owner": {
+        "pid": 980791,
+        "ppid": 254535,
+        "cwd": "/home/codex",
+        "command": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3 serve ",
+        "argv": [
+          "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+          "serve"
+        ],
+        "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f72756e74696d652f76657273696f6e732f302e312e312d6e696768746c792e32303236313031362e333231382f743300736572766500",
+        "executable": "/home/codex/.t3/runtime/versions/0.1.1-nightly.20261016.3218/t3",
+        "cpuTicks": 277699,
+        "startTicks": 5094949,
+        "state": "S"
+      },
+      "parentChain": [
+        {
+          "pid": 1192990,
+          "ppid": 1053845,
+          "cwd": "/proc/1053844/fdinfo",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=renderer --headless=old --disable-dev-shm-usage --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --force-device-scale-factor=2 --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --ozone-platform=headless --disable-gpu-compositing --disable-blink-features=AutomationControlled --lang=en-US --num-raster-threads=3 --enable-main-frame-before-activation --renderer-client-id=8 --launch-time-ticks=62469702228 --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708993808206286 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=renderer --headless=old --disable-dev-shm-usage --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --force-device-scale-factor=2 --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --ozone-platform=headless --disable-gpu-compositing --disable-blink-features=AutomationControlled --lang=en-US --num-raster-threads=3 --enable-main-frame-before-activation --renderer-client-id=8 --launch-time-ticks=62469702228 --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,11229571452166010005,2836608549508416188,262144 --enable-features=CDPScreenshotNewSurface --disable-features=AutoDeElevate,AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,OptimizationHints,PaintHolding,RenderDocument,ThirdPartyStoragePartitioning,Translate,msEdgeUpdateLaunchServicesPreferredVersion,msForceBrowserSignIn --variations-seed-version --pseudonymization-salt-handle=7,i,13672324888218891579,12136096411348568654,4 --trace-process-track-uuid=3190708993808206286"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d72656e6465726572202d2d686561646c6573733d6f6c64202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d627265616b706164202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d72656d6f74652d646562756767696e672d70697065202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d6f7a6f6e652d706c6174666f726d3d686561646c657373202d2d64697361626c652d6770752d636f6d706f736974696e67202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d6c616e673d656e2d5553202d2d6e756d2d7261737465722d746872656164733d33202d2d656e61626c652d6d61696e2d6672616d652d6265666f72652d61637469766174696f6e202d2d72656e64657265722d636c69656e742d69643d38202d2d6c61756e63682d74696d652d7469636b733d3632343639373032323238202d2d7368617265642d66696c65733d76385f636f6e746578745f736e617073686f745f646174613a313030202d2d6669656c642d747269616c2d68616e646c653d332c692c31313232393537313435323136363031303030352c323833363630383534393530383431363138382c323632313434202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d64697361626c652d66656174757265733d4175746f4465456c65766174652c41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c4f7074696d697a6174696f6e48696e74732c5061696e74486f6c64696e672c52656e646572446f63756d656e742c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e2c6d73466f72636542726f777365725369676e496e202d2d766172696174696f6e732d736565642d76657273696f6e202d2d70736575646f6e796d697a6174696f6e2d73616c742d68616e646c653d372c692c31333637323332343838383231383839313537392c31323133363039363431313334383536383635342c34202d2d74726163652d70726f636573732d747261636b2d757569643d3331393037303839393338303832303632383600",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 796,
+          "startTicks": 6246977,
+          "state": "S"
+        },
+        {
+          "pid": 1053845,
+          "ppid": 1053843,
+          "cwd": "/proc/1053844/fdinfo",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446899,
+          "state": "S"
+        },
+        {
+          "pid": 1053843,
+          "ppid": 1053839,
+          "cwd": "/proc/1053844/fdinfo",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2 ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --type=zygote --headless --force-device-scale-factor=2"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d747970653d7a79676f7465202d2d686561646c657373202d2d666f7263652d6465766963652d7363616c652d666163746f723d3200",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 1,
+          "startTicks": 5446896,
+          "state": "S"
+        },
+        {
+          "pid": 1053839,
+          "ppid": 980791,
+          "cwd": "/home/codex",
+          "command": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank ",
+          "argv": [
+            "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --disable-gpu --force-device-scale-factor=2 --disable-blink-features=AutomationControlled --user-data-dir=/home/codex/.t3/userdata/server-browser/profiles/default --remote-debugging-pipe about:blank"
+          ],
+          "rawCmdlineHex": "2f686f6d652f636f6465782f2e74332f746f6f6c732f6368726f6d652d686561646c6573732d7368656c6c2f6c696e757836342f3135342e302e383033372e39322f6368726f6d652d686561646c6573732d7368656c6c202d2d64697361626c652d6669656c642d747269616c2d636f6e666967202d2d64697361626c652d6261636b67726f756e642d6e6574776f726b696e67202d2d64697361626c652d6261636b67726f756e642d74696d65722d7468726f74746c696e67202d2d64697361626c652d6261636b67726f756e64696e672d6f63636c756465642d77696e646f7773202d2d64697361626c652d6261636b2d666f72776172642d6361636865202d2d64697361626c652d627265616b706164202d2d64697361626c652d636c69656e742d736964652d7068697368696e672d646574656374696f6e202d2d64697361626c652d636f6d706f6e656e742d657874656e73696f6e732d776974682d6261636b67726f756e642d7061676573202d2d64697361626c652d636f6d706f6e656e742d757064617465202d2d6e6f2d64656661756c742d62726f777365722d636865636b202d2d64697361626c652d64656661756c742d61707073202d2d64697361626c652d6465762d73686d2d7573616765202d2d64697361626c652d6564676575706461746572202d2d64697361626c652d657874656e73696f6e73202d2d64697361626c652d66656174757265733d41766f6964556e6e65636573736172794265666f7265556e6c6f6164436865636b53796e632c426f756e646172794576656e744469737061746368547261636b734e6f646552656d6f76616c2c44657374726f7950726f66696c654f6e42726f77736572436c6f73652c4469616c4d65646961526f75746550726f76696465722c476c6f62616c4d65646961436f6e74726f6c732c487474707355706772616465732c4c656e734f7665726c61792c4d65646961526f757465722c5061696e74486f6c64696e672c5468697264506172747953746f72616765506172746974696f6e696e672c5472616e736c6174652c4175746f4465456c65766174652c52656e646572446f63756d656e742c4f7074696d697a6174696f6e48696e74732c6d73466f72636542726f777365725369676e496e2c6d73456467655570646174654c61756e6368536572766963657350726566657272656456657273696f6e202d2d656e61626c652d66656174757265733d43445053637265656e73686f744e657753757266616365202d2d616c6c6f772d7072652d636f6d6d69742d696e707574202d2d64697361626c652d68616e672d6d6f6e69746f72202d2d64697361626c652d6970632d666c6f6f64696e672d70726f74656374696f6e202d2d64697361626c652d706f7075702d626c6f636b696e67202d2d64697361626c652d70726f6d70742d6f6e2d7265706f7374202d2d64697361626c652d72656e64657265722d6261636b67726f756e64696e67202d2d666f7263652d636f6c6f722d70726f66696c653d73726762202d2d6d6574726963732d7265636f7264696e672d6f6e6c79202d2d6e6f2d66697273742d72756e202d2d70617373776f72642d73746f72653d6261736963202d2d7573652d6d6f636b2d6b6579636861696e202d2d6e6f2d736572766963652d6175746f72756e202d2d6578706f72742d7461676765642d706466202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d756e736166656c792d64697361626c652d646576746f6f6c732d73656c662d7873732d7761726e696e6773202d2d656467652d736b69702d636f6d7061742d6c617965722d72656c61756e6368202d2d64697361626c652d696e666f62617273202d2d64697361626c652d7365617263682d656e67696e652d63686f6963652d73637265656e202d2d64697361626c652d73796e63202d2d656e61626c652d756e736166652d7377696674736861646572202d2d686561646c657373202d2d686964652d7363726f6c6c62617273202d2d6d7574652d617564696f202d2d626c696e6b2d73657474696e67733d7072696d617279486f766572547970653d322c617661696c61626c65486f76657254797065733d322c7072696d617279506f696e746572547970653d342c617661696c61626c65506f696e74657254797065733d34202d2d64697361626c652d677075202d2d666f7263652d6465766963652d7363616c652d666163746f723d32202d2d64697361626c652d626c696e6b2d66656174757265733d4175746f6d6174696f6e436f6e74726f6c6c6564202d2d757365722d646174612d6469723d2f686f6d652f636f6465782f2e74332f75736572646174612f7365727665722d62726f777365722f70726f66696c65732f64656661756c74202d2d72656d6f74652d646562756767696e672d706970652061626f75743a626c616e6b00",
+          "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+          "cpuTicks": 471,
+          "startTicks": 5446864,
+          "state": "S"
+        }
+      ],
+      "reason": "positive family CPU delta",
+      "cpuBefore": 796,
+      "cpuAfter": 796,
+      "cpuDelta": 0,
+      "startBefore": 6246977,
+      "startAfter": 6246977,
+      "familyMembersBefore": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyMembersAfter": [
+        1053839,
+        1053842,
+        1053843,
+        1053845,
+        1053861,
+        1053863,
+        1192990
+      ],
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1213619,
+      "ppid": 1213593,
+      "cwd": "/home/codex/.t3/worktrees/fleet/heavy-check-memory-floor",
+      "command": "bash commands/heavy-check --lock-timeout 08 -- touch /tmp/tmp.5V9Gr3CKo1/ran ",
+      "argv": [
+        "bash",
+        "commands/heavy-check",
+        "--lock-timeout",
+        "08",
+        "--",
+        "touch",
+        "/tmp/tmp.5V9Gr3CKo1/ran"
+      ],
+      "rawCmdlineHex": "6261736800636f6d6d616e64732f68656176792d636865636b002d2d6c6f636b2d74696d656f7574003038002d2d00746f756368002f746d702f746d702e355639477233434b6f312f72616e00",
+      "executable": "/usr/bin/bash",
+      "cpuTicks": 4,
+      "startTicks": 6415285,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": false,
+      "reason": "executable/script role"
+    }
+  ],
+  "locks": [
+    {
+      "path": "/run/user/1000/codex-heavy-check/e0d36a6f58a17460b80541caf783382f36e8bf2e6f62f6a6d0c27645219d15d7.lock",
+      "acquiredNonblocking": true,
+      "released": true
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/browser.lock",
+      "acquiredNonblocking": true,
+      "released": true
+    }
+  ],
+  "sharedGitConfigDrift": true,
+  "ready": false,
+  "errors": [
+    "active source/heavy process"
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "at": "2026-10-16T23:05:36.673154+00:00",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/cleanup-owned.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "019d7f51c3533067f6415ebaca3b8525b4e063262f8d754eadfa0594b98591ff",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/dependencies-preloader.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "25477b81a001e63115abc6712c36caa35f07c9fb52cd25cafeaeb7b075bb8aaa",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/lanes78-driver.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "252dcea90baa30a3d6bdb56128415d0dbf7764adf372f837c4fb4653dd059ec0",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/observe.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "520c3b1aad5f33df037d98dd23b068382aa5e19a20258ce0ae7de5f8ad572908",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-controls.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "415860c41c0b0a29ec11167a412f986fde9c22f74154e419238b7b3e6fbed62c",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-guards.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "d55e9b45972c6a63bc500fc78e41d142b7cc9cf7ae04ef27c8590a35d2ac79ba",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-identity.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "dc57cf81d1bb3a83b64f71b6617c68641fcc7b1336bd47f25e6b9ee50a2ef07d",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/address91-recipe.mts"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "sha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION"
+    },
+    {
+      "command": [
+        "bash",
+        "-n",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/run-lanes78.sh"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/retained-v1-checks/address91-recipe.ts"
+      ],
+      "exit": 1,
+      "status": "FAILED",
+      "stdout": "",
+      "stderr": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/retained-v1-checks/address91-recipe.ts:1\nimport type { MatchRecord, TeamProfile } from 'RUNTIME_TYPES_PATH'\n            ^\n\nSyntaxError: Unexpected token '{'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v24.21.0\n",
+      "scope": "RETAINED_PLAIN_NODE_CHECK_STAYS_FAILED"
+    },
+    {
+      "command": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-controls.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "{\"sourceControlsPassed\":42,\"runtime\":\"UNRUN\",\"nativeInspector\":\"NOT_CALLED\"}\n",
+      "stderr": "",
+      "scope": "DETERMINISTIC_SOURCE_CONTROLS_NO_PRODUCT_OR_INSPECTOR"
+    }
+  ]
+}

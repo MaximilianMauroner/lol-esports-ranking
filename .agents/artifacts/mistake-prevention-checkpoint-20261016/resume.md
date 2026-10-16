@@ -2,7 +2,7 @@
 
 R3 is incomplete. No merge or ready transition is authorized.
 
-This snapshot was prepared at 2026-10-16T23:05Z. Read the canonical state again before any action.
+This snapshot was updated at 2026-10-16T23:30Z. Read the canonical state again before any action.
 Finished work must be pushed before 2026-10-16T23:50Z. T3 stops at 2026-10-17T00:00Z.
 
 ## State and source
@@ -47,7 +47,13 @@ They do not grant runtime admission.
 
 The lanes 7 and 8 companion source review is BLOCKED on four blockers and seven required fixes.
 The blockers cover temporary writes, false no-history credit, shared dependency identities, and unbound admission evidence.
-A fresh source-only author owns `max-update/r3-lanes78-companion-fix-v2`.
+The fresh source repair is frozen in `max-update/r3-lanes78-companion-fix-v2`.
+Its independent fix review remains BLOCKED on R1. Vite can rewrite the pinned root optimizer before the after-check detects it.
+Root preserved that blocker. No further source repair or runtime is released tonight.
+The exact next source task is to prove configHash and lockfileHash reuse before createServer, with a rebuild prohibition.
+No cache copy, warmup, gate change, or shared-tool redesign is approved.
+S2 selection, S5 pixel mapping, and the literal S7 new-response claim remain unproved.
+The scoped source repairs accepted by the reviewer do not pass the full lane.
 Both a separate network measurement and the T3 visible journey remain required.
 
 ## Resource boundary
@@ -58,10 +64,17 @@ Its failed admission measured foreign T3 browser activity. It is not a CH3 produ
 
 Max gives Zen's reviewed 720-second JS and app validation unit the next priority.
 It must finish by 23:40Z and cannot start after 23:28Z.
-Root admitted one unit at 23:04:22Z after a fresh canonical native check returned actual exit 0.
-The allocation is `zen-pr93-s1-js-cleared-root-v3`. Its latest launch is 23:05:52Z.
-Launch and terminal results are not yet observed in this checkpoint.
+Zen ran once and explicitly FINALRELEASED the whole allocation.
+Root checked seven raw stage receipts, all 1041 frozen dependency identities, gates, and actual owned PID absence.
+The expected historical negative had exit 1 with pass 2 and fail 1. The fixed regression passed 3.
+The full Node suite passed 207. Nightly passed 36 Node tests and 11 Python tests. Types, lint, and web export exited 0.
+These are external coordination results. They give R3 no gate credit.
 Earlier native failures from T3 browser CPU activity remain in the record.
+A new R3 ABAB baseline allocation then passed root preflight but failed its own native admission before launch.
+It explicitly FINALRELEASED with zero workload executions. No observer, host, browser, or runtime output was created.
+The native check observed foreign Fleet heavy-check PID 1213619 and T3 browser activity.
+Root found the Fleet owner by metadata and requested an explicit quiet boundary. Process absence is not release.
+All four new ABAB runtime units remain UNRUN. No automatic retry is approved.
 Memory, disk, and both locks passed. A resource wait is not a stuck agent.
 No outside process was touched. No duplicate or automatic retry is authorized.
 All other heavy units remain held.

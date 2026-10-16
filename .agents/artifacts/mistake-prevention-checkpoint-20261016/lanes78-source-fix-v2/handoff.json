@@ -1,0 +1,161 @@
+{
+  "kind": "source-only-fix-handoff",
+  "package": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2",
+  "status": "SOURCEONLY",
+  "runtime": "UNRUN",
+  "independentFixDiffReview": "PENDING",
+  "rootCountersign": "PENDING",
+  "externalInventoryPin": "PENDING_ROOT_PIN",
+  "inventory": {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/inventory-sha256.txt",
+    "selfExcluded": true,
+    "selfPinFileExcluded": true,
+    "detachedLocalDigest": "inventory-self-sha256.txt",
+    "authority": "PENDING_EXTERNAL_ROOT_PIN"
+  },
+  "source": {
+    "root": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610",
+    "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+    "tree": "10c19882806045f340674c6627b4715929ee020e",
+    "fixtureTeams": 20,
+    "fixtureMatches": 91,
+    "dataMode": "seeded-sample"
+  },
+  "findings": [
+    {
+      "id": "B1",
+      "status": "SOURCE_REPAIR_IMPLEMENTED",
+      "response": "Owned 0700 TMPDIR sibling, tsx cache disabled, private Node compile path, Vite runner, preloader and driver assertions, inventory and owned cleanup after failure. Runtime remains UNRUN."
+    },
+    {
+      "id": "B2",
+      "status": "SOURCE_REPAIR_IMPLEMENTED",
+      "response": "Cold full nonempty history bag. Continuous PW and CDP prior absence. Actual trusted input boundaries and both request start times. Final audit of every observed or planned phase, including failed teardown. No abort allowance."
+    },
+    {
+      "id": "B3",
+      "status": "SOURCE_REPAIR_IMPLEMENTED",
+      "response": "Shared store disclosed. Exact realpaths and all 20011 regular files in 98 dependency packages pinned before tsx and before and after the unit. Root owns concurrent store writer admission. Existing seven metadata and four tool pins unchanged. The existing optimizer is separately pinned by all 47 file hashes. It must match before and after."
+    },
+    {
+      "id": "B4",
+      "status": "SOURCE_REPAIR_IMPLEMENTED",
+      "response": "Canonical inspector path and SHA pinned. Actual JSON phase, at, ready, errors, head, tree, locks, and resources verified. Exact numeric before command receipt required. Canonical after recorder and command documented. Inspector UNRUN."
+    },
+    {
+      "id": "S1",
+      "status": "FAILED_LABEL_PRESERVED",
+      "response": "Original plain Node recipe check exit 1 stays FAILED. Historical type-strip parse is separately labeled. New byte-identical .mts syntax result is separate."
+    },
+    {
+      "id": "S2",
+      "status": "SOURCE_REPAIR_IMPLEMENTED_SELECTION_PROOF_PENDING",
+      "response": "Closure members record inline or archive status, logical references, actual URL, digest, and full emitted body path. Selected raw keys have body JSON pointers and response sequences. Aggregate requests grant no selection or selected-only byte claim."
+    },
+    {
+      "id": "S3",
+      "status": "SOURCE_REPAIR_IMPLEMENTED",
+      "response": "Geometry before each history phase and after every close, with pointer, focus, scroll, rectangle and viewport. No IO or rootMargin change."
+    },
+    {
+      "id": "S4",
+      "status": "SOURCE_REPAIR_IMPLEMENTED",
+      "response": "Unexpected main-frame document request or Page.frameNavigated event blocks after first goto. Same-document public hash actions remain recorded."
+    },
+    {
+      "id": "S5",
+      "status": "PIXEL_PROOF_PENDING",
+      "response": "Mounted SVG stroke paths and dot cx/cy, labels and rectangles retained with raw key maps. Props equality grants no pixel credit. Exact pixel to raw-value proof stays PENDING."
+    },
+    {
+      "id": "S6",
+      "status": "SOURCE_TRACE_COMPLETE_ACTUAL_CLOSURE_UNRUN",
+      "response": "demand-source-trace.md lists the fixed logical history and Players closure. Future emitted actual member catalog is retained before browser start, with exact selected per-action bags. Extra requests fail. Actual digest catalog is UNRUN."
+    },
+    {
+      "id": "S7",
+      "status": "PROVENANCE_REPAIR_IMPLEMENTED_EXACT_CLAIM_BLOCKED_WHEN_CACHED",
+      "response": "Same actual unit saved raw response bodies and sequences form the oracle. Cache reuse and zero actual requests are separate. A cached action is never called a new HTTP response. Literal new-response wording remains BLOCKED when no new response exists."
+    },
+    {
+      "id": "N1",
+      "status": "ADDRESSED",
+      "response": "Bootstrap uses canonicalJsonFor plus newline, as the production serializer does."
+    },
+    {
+      "id": "N2",
+      "status": "ADDRESSED",
+      "response": "Active recipe is .mts with the exact original bytes. The old .ts is retained only as failed-check evidence."
+    },
+    {
+      "id": "N3",
+      "status": "DEFERRED_BY_SCOPE",
+      "response": "No heavy-check or flock redesign is authorized. Owned process inventory and canonical after lock proof remain required. An orphan holding the inherited lock fails cleanup, without outside signals."
+    }
+  ],
+  "runtimePredicates": {
+    "naturalGeometry": "PENDING",
+    "completePWAndCDPAttempts": "PENDING",
+    "sensitivityControl": "PENDING",
+    "exactSelectedKeys": "PENDING",
+    "pixelPointMapping": "PENDING",
+    "lane8ExactOracleClaim": "PENDING",
+    "driverAndCallerExits": "PENDING",
+    "ownedTempCleanup": "PENDING",
+    "descendantAbsence": "PENDING",
+    "bothLocksFree": "PENDING",
+    "T3VisibleJourney": "PENDING",
+    "media": "PENDING"
+  },
+  "checks": "syntax-checks.json, static-checks.json, receipts/final-source-checks.json, receipts/source-controls-final/source-controls.json",
+  "statusByArea": {
+    "local": "See actual receipts. Original plain Node recipe FAILED exit 1 remains separate.",
+    "ci": "NOT_RUN",
+    "review": "INDEPENDENT_FIX_DIFF_REVIEW_PENDING",
+    "merge": "NONE_NOT_AUTHORIZED",
+    "maxAcceptance": "NONE"
+  },
+  "authority": {
+    "gatePass": false,
+    "merge": false,
+    "maxAcceptance": false,
+    "ABABResult": false,
+    "T3FallbackChange": false
+  },
+  "standingMergeRule": "BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.",
+  "preservation": {
+    "writes": "Only this NEW package directory.",
+    "productOldSourceFailuresEvidenceCanonicalState": "READ_ONLY",
+    "sixRootArtifactDeletions": "UNTOUCHED",
+    "privateSessionContents": "NOT_READ",
+    "gitCommitOrPush": "NONE",
+    "outsideProcessSignals": "NONE",
+    "externalMessages": "NONE"
+  },
+  "patch": "minimaldiff.patch is the review diff for code and proof documents. The package also carries mechanical dependency pins, preserved checks, input receipts, and inventories. It is not a product patch.",
+  "openDecisions": [
+    {
+      "owner": "Root",
+      "decision": "Obtain fresh independent fix diff review, countersign and externally pin the inventory. No allocation is released here."
+    },
+    {
+      "owner": "Independent evidence reviewer and Root",
+      "decision": "Prove mounted pixel mapping and resolve literal lane 8 new-response claim against actual same-unit cache provenance."
+    },
+    {
+      "owner": "Root",
+      "decision": "Assign fresh canonical before directory, actual exit receipts, and exclusive shared store writer admission for any future allocation."
+    },
+    {
+      "owner": "Max",
+      "decision": "Acceptance remains absent. Any merge requires the standing stop and explicit go."
+    }
+  ],
+  "nextAction": "Stop once frozen. Root arranges independent fix diff review.",
+  "dispatchLedger": "In-thread implementation only. No nested agents.",
+  "optimizerSourcePin": {
+    "file": "optimizer-pins.json",
+    "regularFiles": 47,
+    "warmth": "NOT_INFERRED"
+  }
+}

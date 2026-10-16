@@ -1,0 +1,195 @@
+{
+  "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite",
+  "exists": true,
+  "files": [
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_button.js",
+      "sha256": "c2213a548920b1474087677aa71f7701b5e20dee410a22e7d689dbacab5d51eb"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_button.js.map",
+      "sha256": "88b4ccef643c31f7002ce7760436c18b07b3ff5a398527ceb65fbea892072d24"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_dialog.js",
+      "sha256": "2bec7b2ebbd214a97cdf2096c6cfa8ee574a19cac06a38333832b5b3a1da32dd"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_dialog.js.map",
+      "sha256": "c27f6a175b5706fea7a6a9c1839d859fa913dea5d4ec03ecf714f0ea771a073a"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_input.js",
+      "sha256": "689e16b733c65844875f1b27a8ec9efb323fe55e10aeed1b0498e593720d80cf"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_input.js.map",
+      "sha256": "68b4093ec358012d321ce73f00121a202f8e3b71b0125d4620806cf0d68a24d4"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_preview-card.js",
+      "sha256": "0608e82f3c0d2859da04230af68b078848de5ce213545b59f4a3a142c13fac00"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_preview-card.js.map",
+      "sha256": "2bfe04ed4eba762a957bd11b87ba473eab06086c1834376ad14e2b2669691a02"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_tooltip.js",
+      "sha256": "8d264b2cd2b703f721d767293f3bea77f4655c2641da8baab8519623f5605d2d"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/@base-ui_react_tooltip.js.map",
+      "sha256": "d789a087cc5b76865f27f35d8cc8f7884c36ffbc9280386e314eda29e5400389"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/_metadata.json",
+      "sha256": "a4ef6bb1e7fa4c9e9bc6cfd4f8e1e3bf22351c0626760de777838de0e296723f"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/class-variance-authority.js",
+      "sha256": "f87c495339537807c53d12fefc8848222c5cc7f0e7be057849a4debc3e4a5a39"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/class-variance-authority.js.map",
+      "sha256": "4cca6c3f00fc493255d4dcb6aa68857c2e27cf76cd690e6c45a13d8f5838cb46"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/clsx.js",
+      "sha256": "acfebf51f72e8c2842d7fa2d81d506ea2118b8ed64b9f4cbfd1b82e34696a400"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/clsx.js.map",
+      "sha256": "e29dba0c999c09aaf16a402433bae1554c02f604ffdf5f71d33041a35fd552dc"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/error-B3uE47s5.js",
+      "sha256": "56d12fefe4fa39e89be2e779ee09b72efb3806d501433e2e32a7d9160db8e5c4"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/error-B3uE47s5.js.map",
+      "sha256": "e80df4b7e0742c68e0aa7e271b1891a8f1b75f22dc7299f5c6463ea405891ee0"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/inertValue-tjPgOHcl.js",
+      "sha256": "3ba2e7f535c8f97240bee30f54b9030eae7e7fd1759d644962a5b06da325c21f"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/inertValue-tjPgOHcl.js.map",
+      "sha256": "aae496c14fcd4cf816af8166939e64ea3a8eb6166c879d0219555d90346d4685"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/lucide-react.js",
+      "sha256": "a151f9841fcc0f92e090a8c9ad4c4d9650e3a0ca8e6df4172ec42cbd23e68be4"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/lucide-react.js.map",
+      "sha256": "16483c9b364c3e1d3fd4e12efbed3437c70975dcdf2fd0b0d86eb47ad18b3333"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/owner-CDJN0ny2.js",
+      "sha256": "82b8ed60d0162c564f5d9967bc8a118ed82b0cf91951ac649ae4f00054f12919"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/owner-CDJN0ny2.js.map",
+      "sha256": "1fa2e3db9dd7dfb322bb926158bc3bbaba06384f72c092692fe70103482acff9"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/package.json",
+      "sha256": "3ca9d4afd21425087cf31893b8f9f63c81b0b8408db5e343ca76e5f8aa26ab9a"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react-dom.js",
+      "sha256": "e97fac2254abab133fe293b791c669e071fb598d32624ff4a03cb1b5b9562775"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react-dom.js.map",
+      "sha256": "bd8b09084ee1d9835c9c2274e92e6a597d8ff868f092e36f08da2f883e86e86c"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react-dom_client.js",
+      "sha256": "d1dc95addb9afb4b4b75c1d63b02c04611436dc57beb6e0ff0f9a56b142b3e61"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react-dom_client.js.map",
+      "sha256": "1fbb79d7f6aafa002ff5443ecd40ebb3437756898600b41d4cbfb5c1833dcee1"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react.js",
+      "sha256": "cd65e93f9f4b029f1953184102b41f890498b93e79e96e5358e2ce5a3866b54a"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react.js.map",
+      "sha256": "bef67c9863a8c28299962d81dc5f13093803dda4f4f1bbd56f33d54544dcd288"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react_jsx-dev-runtime.js",
+      "sha256": "c5b432ce79a2733b1cc50610d374c45d1b395666c7f445d0617a0111efb20a47"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react_jsx-dev-runtime.js.map",
+      "sha256": "86b3453a99664015c8ec2451fc46e2d1228e922862917c1a39c3b03e6474c1c5"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react_jsx-runtime.js",
+      "sha256": "530d3bc2db9f8461c150b7b89a6a29118b0549bbbedf0dd9de96a8d9c2846cb6"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/react_jsx-runtime.js.map",
+      "sha256": "053cf17e7ba0fb0b1ff9a40b3d2587a395b457163d14fe02629700404ae80edc"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/recharts.js",
+      "sha256": "082e745d1b4a2c49793536bf2b333b7a88cdd03075a70a03ca1c4979dc376e03"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/recharts.js.map",
+      "sha256": "f1557ea016de1cbd90b19c5ddbf8d032e14b68a62448a7f8899f828d7eb47511"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/rolldown-runtime-B-1-B7_t.js",
+      "sha256": "f6af920994ca9c006a1f564a14c151831bea86659d403db3a472a9696ac9c9f7"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/tailwind-merge.js",
+      "sha256": "ec00e270a32174b2e0ca84c5a84e439b858fed41b27a2aa8e630fcf83cae4ce3"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/tailwind-merge.js.map",
+      "sha256": "b0f0b82c6ea0256b7fcbb8ff0f67288b45d262cd0857e5c945301f033dba80fe"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/useButton-CovJsx-a.js",
+      "sha256": "c0c58bf20d0bba08bf7ae947c4e7431af13541ac1387df7f9651ec1df5ab990d"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/useButton-CovJsx-a.js.map",
+      "sha256": "eb3475c23f75c1031d4dae0ce16b96b8ae17a6e99eb9f3695a45404f0345ee85"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/usePopupViewport-0_7-nASU.js",
+      "sha256": "712ad003eee3b162f5ae669c445fd5efb86dc799206c0a19a1a447ba1c433d64"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/usePopupViewport-0_7-nASU.js.map",
+      "sha256": "07a7fd4bab8f81d67f323413dead689530839de3e7a476c1a2647a14d498965a"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/useRenderElement-BM97TIXn.js",
+      "sha256": "3da3aa2a8748a088a3daebd776615ee212009c4d9c888d078c7f0e27a6681b11"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/useRenderElement-BM97TIXn.js.map",
+      "sha256": "3daae4934e4b82e35f36930e6cf05614952c7d48adb2ad0231779484063837bf"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/with-selector-C2jAg7TY.js",
+      "sha256": "822d3a57cd8398591e4d5dbb73f948ef6a1798c62578dc23101d9b9aad215cd0"
+    },
+    {
+      "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/.vite/deps/with-selector-C2jAg7TY.js.map",
+      "sha256": "3afe19ebe26448325ffd88fbed5539d5c130fdbf7cec9922a08767b4ed13a303"
+    }
+  ],
+  "warmth": "Not inferred from optimizer files."
+}

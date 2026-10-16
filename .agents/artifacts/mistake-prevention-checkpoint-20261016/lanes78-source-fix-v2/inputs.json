@@ -1,0 +1,156 @@
+{
+  "kind": "source-only-repair-inputs",
+  "originalInventoryRequired": "928f0ad70074a0572715b3f622cd60d34fc0cea1830da789ac11d77625f469c3",
+  "inputs": [
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1-request.json",
+      "sha256": "6185376c575f903b361d71c35ed6d8c85f6abdd9995a1ce76eb89534b8e83dba",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/address91-recipe.ts",
+      "sha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/commands.md",
+      "sha256": "d3f83196934f7b5150f5014cb087d3fc163d59f7ab8bae95681298b419802928",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/external-inputs-sha256.txt",
+      "sha256": "257417a137e4e3306b72ed166956859fa1e360bf1280327b24d40b18e88e90ad",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/handoff.json",
+      "sha256": "a4d2d1e874b02e3e026888e562c48c7d5142816140a3abae978c382aeddcae36",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/head-dependency-pins.json",
+      "sha256": "9401b9aa87151afd87f40abdfd7bbd6c226cd7bf0b9834715934d56627bbeb6d",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-self-sha256.txt",
+      "sha256": "0697bea0d8b5b60f2164612a7425b8ff15a2444d2bc19eee3b6144797a1e5b29",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-sha256.txt",
+      "sha256": "928f0ad70074a0572715b3f622cd60d34fc0cea1830da789ac11d77625f469c3",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/lanes78-driver.mjs",
+      "sha256": "7d3e7cb7f95fcaddc5cea901c8e4c85fb0ad7863c942c377fec4c2598e10b106",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/observe.mjs",
+      "sha256": "3458676fdec2e12337e1d7a699e3d1f55e23db20655eff2babb4dbfef8493329",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/predicates.json",
+      "sha256": "876612de37f49650c8aa8b7a8c935c193f306ccc17b5cfb19729980a0c36f5b7",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/proof-spec.md",
+      "sha256": "edc67ee6af87c002012a8027fadbdfdf30056a8b0a79a5368e46d87ad6f79d44",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/release.template.json",
+      "sha256": "74a8467eb133dcafa75057ffafdaab7a51f113a86a10ce1f6af7950974d778a3",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/report.md",
+      "sha256": "540189663781406bca908563112e12b4a3e3c8832b9f7c8e106a8fbfc0802623",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/run-lanes78.sh",
+      "sha256": "99a2354fc3ea213d13a41856cd02ab661ac8c3997b76db8725d944d808384434",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/runtime-tool-pins.json",
+      "sha256": "12004064370f63da76482469e4dcceb59912e6ee4e6b908690f1ac98bf95c845",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/source-identity.mjs",
+      "sha256": "3e84290e374284cded58cc330b5ddbaa6f78ec38602f133a3adc858de0d78ff9",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/static-checks.json",
+      "sha256": "bd6d87418f240d899050c47e328b5512a20ddb993e1a96f39066417675e973c1",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/syntax-checks.json",
+      "sha256": "2f8860a3e7e8e5794e72d6ac3264ca5eac822de610acd5f09fae84392aa1da08",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/report.md",
+      "sha256": "23c669852ba7ec40fe8b85473fc8abfe298b955706fe5635defd803775867e1d",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/verdict.json",
+      "sha256": "9a42fb5fc44e8303f34a4939fa955970de7fb09c9e69527bfd5dbfeb7c8ee4be",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/hash-checks.txt",
+      "sha256": "c85968b4172c44dfda2ba2f641aa95dc499cf007f4fa3a6ddd08ab34a5fb160f",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/output-sha256.txt",
+      "sha256": "6abd5de8002d87952d14dd7eb8fa773878c5d18ac29acd9b9770e1f3943511ef",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/pin-and-env-greps.txt",
+      "sha256": "0a01e188952e25821588ba54a09de98c9eb6ed735c5b705be2f90f198654265b",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/predicate-fidelity.txt",
+      "sha256": "deb77e33ff121f5c6e7337fd5b5702a45d054b116e3d048d7a1981a8daf45851",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/reads-sha256.txt",
+      "sha256": "64e5dead9fc1269f8122fd48bcd2fa8a77dcff1afcb003d8573b6f82f6d976cf",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/recipe-slice-check.txt",
+      "sha256": "623e53a70ee8e882e9d7329f3318aea8209e9b5e63b476eff9934043a8a1dde1",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/syntax-checks.txt",
+      "sha256": "adb773c581a95afbaaa90086b9a403d2c6d29cb8ee795b71172bc3b746c196af",
+      "status": "READ_ONLY_INPUT"
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py",
+      "sha256": "ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b",
+      "status": "READ_ONLY_INPUT"
+    }
+  ],
+  "privateContentsRead": false,
+  "runtimeOrInspectorCalled": false,
+  "loadedDependencyInventory": "loaded-dependency-pins.json",
+  "priorExternalPins": "Original v1 external-inputs entries are unchanged. New source and review inputs are appended.",
+  "optimizerInventory": "optimizer-pins.json"
+}

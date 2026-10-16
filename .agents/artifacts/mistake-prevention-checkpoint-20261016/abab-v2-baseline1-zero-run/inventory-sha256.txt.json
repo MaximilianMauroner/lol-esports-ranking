@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "sha256sum",
+    "--check",
+    "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/inventory-sha256.txt"
+  ],
+  "started": "2026-10-16T23:23:20.192655+00:00",
+  "ended": "2026-10-16T23:23:20.198834+00:00",
+  "elapsedNs": 6186473,
+  "code": 0,
+  "signal": null,
+  "stdoutSHA256": "8b49e77d93a88e24486745a93030d8da790d861987f85d468847a7fdbba9eaca",
+  "stderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

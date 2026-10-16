@@ -1,0 +1,128 @@
+{
+  "provenance": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-coverage-prep-v1/coverage.json",
+  "identity": {
+    "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+    "head_tree": "10c19882806045f340674c6627b4715929ee020e"
+  },
+  "common_raw_evidence": [
+    "Actual source head/tree and clean status before and after. Record baseline source independently, including any test overlay.",
+    "Input SHA256, generation mapping, schema/model/config/source/coverage, logical path and raw HTTP body SHA256. Seeded sample label required.",
+    "Timestamped action ledger, full hash and control state at each stage, DOM/saved preview snapshots, expected versus actual values.",
+    "Owned server PID/session/listener and exact source root. Outer observed close code/signal, inner exit, source-after exit. Never infer an exit.",
+    "All HTTP >=400, failed requests, console and page errors, font HTTP status, and blocked external requests. Classify fixture feed failures explicitly. No silent allowlist.",
+    "Requested PNG and its SHA256 after capture. No existing failure screenshot substitution. Finalize video before hashing where required.",
+    "Actual context/server cleanup, owned port closed, no owned compute, lock release, resource samples. Missing proof stays pending."
+  ],
+  "lanes": [
+    {
+      "lane": 7,
+      "title": "Selected histories outside initial top five before trajectory",
+      "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "head_tree": "10c19882806045f340674c6627b4715929ee020e",
+      "status": "PREPARED_ONLY_NO_GATE_PASS",
+      "fixture_refs": [
+        "tests/rankingBoardAddressBrowser.test.ts"
+      ],
+      "controls": [
+        "table tbody tr; row input[type=checkbox] or checkbox Compare TEAM",
+        "button Open comparison",
+        "dialog Team comparison",
+        "region Compared team power score trend",
+        "img Power score over time for CODE1, CODE2, CODE3"
+      ],
+      "steps": [
+        "Reuse existing teams/roundRobin/msi input declarations at lines 11-33, with dataMode seeded-sample and generatedAt 2026-07-01T00:00:00.000Z. It has 20 teams and 91 input matches by literal loop cardinality. Do not rebuild today.",
+        "Open #rankings?scope=all&eligibility=all&sort=rating. Keep trajectory outside its 420px rootMargin. Capture panel geometry and initial request ledger before scrolling.",
+        "Record initial top-five ids and all row identities. Pick zero-based rows 5,6,7. Prove each selected id is outside initial five. Open comparison.",
+        "Require chart labels and saved history series keys exactly match selected ids. Remove first pick and require only remaining two series."
+      ],
+      "independent_expected_value_source": [
+        "Existing source input and independent test assertions at lines 203-215 define selected codes from actual row identity, not guessed team ranks.",
+        "Save emitted history index/shard/record objects. Map selected ids to raw series and compare graph labels and points. No default-top-five series may replace selected series."
+      ],
+      "source_citations": [
+        "tests/rankingBoardAddressBrowser.test.ts:11-36,54-56,185-217",
+        "src/views/TeamsView.tsx:306-346",
+        "src/App.tsx:183,333,480",
+        "src/hooks/usePublicArtifacts.ts:140-144,518-550"
+      ],
+      "requested_screenshot": "receipts/r3-lane-7.png",
+      "screenshot_status": "PENDING. Not created by this task.",
+      "required_raw_evidence": "common_raw_evidence plus lane_raw_evidence",
+      "lane_raw_evidence": [
+        "Initial five ids, selected ids, trajectory bounding rectangle/rootMargin/scroll position, initial absence of selected-history loading, selected-history requests, series labels and raw point arrays."
+      ],
+      "remaining_gaps": [
+        "Existing input is suitable. No new team/input adjustment is required. Generated standalone serving payload and preview capture are pending.",
+        "The old test disables IntersectionObserver to guarantee no trajectory demand. That is a test technique, not authorization to alter the live product. Natural offscreen geometry must prove the condition, or root must review a new scoped instrument.",
+        "98-game input fails count(applicableTeams outside initialTop5) >= 2 because total distinct teams is 5. For the existing three-pick test the required count is >=3."
+      ]
+    },
+    {
+      "lane": 8,
+      "title": "Close detail then choose new comparison",
+      "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "head_tree": "10c19882806045f340674c6627b4715929ee020e",
+      "status": "PREPARED_ONLY_NO_GATE_PASS",
+      "fixture_refs": [
+        "tests/rankingBoardAddressBrowser.test.ts"
+      ],
+      "controls": [
+        "team row Open TEAM button/title",
+        "team details dialog; Close button",
+        "comparison Clear button",
+        "Compare checkboxes and Open comparison",
+        "dialog Team comparison and chart img"
+      ],
+      "steps": [
+        "Use lane7 twenty-team input and clear prior picks. Open first team detail and wait for its history chart. Record the old single-team history key.",
+        "Close detail. Pick zero-based rows 8 and 9, then Open comparison.",
+        "Require the chart uses those two codes and raw history keys, with no replacement by the prior detail team."
+      ],
+      "independent_expected_value_source": [
+        "Existing browser test lines 219-233 explicitly checks this sequence and dynamically derives codes from the fixture team dictionary.",
+        "New raw selected-history responses are the point-value oracle. Compare selected ids with prior detail id. Do not infer request count from labels alone."
+      ],
+      "source_citations": [
+        "tests/rankingBoardAddressBrowser.test.ts:219-233",
+        "src/App.tsx:183,333,473-482",
+        "src/views/TeamsView.tsx:295-346",
+        "src/hooks/usePublicArtifacts.ts:140-144,518-550"
+      ],
+      "requested_screenshot": "receipts/r3-lane-8.png",
+      "screenshot_status": "PENDING. Not created by this task.",
+      "required_raw_evidence": "common_raw_evidence plus lane_raw_evidence",
+      "lane_raw_evidence": [
+        "Old detail id, close event and address, new pick ids, request selection records, chart labels and point-source mapping."
+      ],
+      "remaining_gaps": [
+        "No new live flow receipt. Reuse lane7 output only if its full raw evidence and source attribution remain valid."
+      ]
+    }
+  ],
+  "demand_accounting_exact_source": [
+    "Attach browser request-attempt evidence before navigation. Count all /data/ attempts, including retries, cache-hit requests and failures, with URL/query/logical path/generation/digest/phase/action timestamps. Also record server arrivals and resource-cache flags separately.",
+    "A server-only arrival counter misses requests satisfied by the browser cache. Zero server arrivals is not alone zero new artifact requests. State the request definition and keep both ledgers.",
+    "Map immutable object URLs and archive child requests through the exact generation manifest. Retain duplicates as attempts. Exclude Vite JS/font/HMR from artifact count but retain them in the error ledger.",
+    "Require per-action delta 0 and total post-warm delta 0 for the 11 actions. Do not absorb a late prefetch by moving the boundary after the action.",
+    "Opening a comparison is a separate selected-history phase. Expect only uncached required history root, selected scope/shard/record dependencies for selected ids. Exact count remains pending the actual emitted mapping/cache state.",
+    "Opening detail is a separate single-team phase. Players stay closed with zero player-directory requests. Opening Players separately permits its directory dependency closure. Data and sources is local markup and expects zero artifacts.",
+    "Keep exact-tournament index/shard requests and held-load experiments outside the warmed client-action total."
+  ],
+  "control_surface": {
+    "required": "T3 preview status/open/navigate/snapshot, current role/name locators. No preview tools were called today.",
+    "fallback": "Only explicit unsupported/unavailable preview_open per project control skill permits an available headless Chromium fallback. Record exact error and same owned instance. Current approved narrow Playwright capture is not all ten lanes.",
+    "cleanup": "Close only owned tab/context and server session. Verify exact listener closes, owned PIDs end and both locks release. Preserve user tabs, outside processes, ignored data and all prior failure evidence."
+  },
+  "fixture_recipe": {
+    "source": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/tests/rankingBoardAddressBrowser.test.ts",
+    "sourceSha256": "8d96f97660b81b812b54b4b140bc8157ed267e6d7eb2b55048ac18e62ba7fc31",
+    "startByte": 524,
+    "endByte": 2213,
+    "sliceSha256": "587da5b775f1a7c3f72b41b39ead475e8a56205a3e3685c73c560e33bbeb3be3",
+    "generation": "UNRUN",
+    "retained_input_search": "Five named real retained fixture-input.json files checked. Each had 98 matches and 5 teams. No address91 input located. No private sessions read."
+  },
+  "source_baseline_metadata_omitted": true,
+  "scope": "HEAD lanes7/8 only. Original action and demand statements retained verbatim. No baseline measurement."
+}

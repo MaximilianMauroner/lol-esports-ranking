@@ -1,0 +1,13 @@
+{
+  "command": [
+    "python3",
+    "-c",
+    "import json,pathlib; p=pathlib.Path('.'); files=sorted(p.rglob('*.json')); [json.loads(f.read_text()) for f in files]; print(json.dumps({'jsonFilesParsed':len(files),'scope':'JSON_PARSE_ONLY'}))"
+  ],
+  "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2",
+  "exit": 0,
+  "status": "PASSED",
+  "stdout": "{\"jsonFilesParsed\": 21, \"scope\": \"JSON_PARSE_ONLY\"}\n",
+  "stderr": "",
+  "scope": "JSON_PARSE_ONLY_FINAL_METADATA"
+}

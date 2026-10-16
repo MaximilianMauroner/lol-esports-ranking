@@ -1,0 +1,12 @@
+{
+  "provenance": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/dependency-state-pins.json",
+  "expected": {
+    "pnpm-lock.yaml": "3887d73689714304614674614fd51bd5c62f5f704050a5ca7dea4f4b8fc9c0e9",
+    "package.json": "b2f8bb513ec10a4bf36c28198288e61e234890f4e7c7850d07fc00001c594cce",
+    "pnpm-workspace.yaml": "dad6d0d0c2a58fce70bb566123424ef6c566169cdaacee163c3059d66a2a006e",
+    "node_modules/.modules.yaml": "d757bf3e874ef7089b4c3b0d0faaae4f8c2286a680a0e9ee4bfd9fef37737f4c",
+    "node_modules/.package-map.json": "49782f7331253d978092a3fb31e3064f66a8146824fa591dfdc6296efad8acf5",
+    "node_modules/.pnpm-workspace-state-v1.json": "0ef94e739bd53c60253fd166157df8d378c2e449cfdce2600f5f0fe256672a2c",
+    "node_modules/.pnpm/lock.yaml": "3887d73689714304614674614fd51bd5c62f5f704050a5ca7dea4f4b8fc9c0e9"
+  }
+}

@@ -1,0 +1,272 @@
+{
+  "status": "SOURCE_CONTROLS_PASSED",
+  "runtime": "UNRUN",
+  "nativeInspector": "NOT_CALLED",
+  "fakeActualExitReceipts": "NONE",
+  "results": [
+    {
+      "name": "B2 cold history requires the full nonempty bag",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw setup history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw setup player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw initial-navigation history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw initial-navigation player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw sensitivity-control history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw sensitivity-control player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw late-unplanned history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw late-unplanned player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw teardown history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects pw teardown player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp setup history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp setup player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp initial-navigation history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp initial-navigation player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp sensitivity-control history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp sensitivity-control player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp late-unplanned history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp late-unplanned player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp teardown history including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects cdp teardown player including failed cleanup",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 retains duplicate and aborted attempts in a planned bag",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 sees a late initial request despite a correct later comparison bag",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 no unrelated postloaded artifact can disappear",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B2 rejects a pre-click request even when host delivery occurs in comparison",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 accepts only the canonical JSON data shape in this synthetic control",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects typed approved and observedAt",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects stale at",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects future at",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects invalid at",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects wrong phase",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects wrong head",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects wrong tree",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects ready string",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects nonempty errors",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects lock not acquired",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects wrong lock path",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects PSI too high",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects memory too low",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects disk too low",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B4 rejects unknown process sample",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B3 rejects a shared store writer in either canonical sample",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B1 accepts the owned mode 0700 sibling only",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    },
+    {
+      "name": "B3 rejects changed code, realpaths, and added files without loading a package",
+      "status": "PASSED",
+      "scope": "DETERMINISTIC_SOURCE_CONTROL_ONLY",
+      "syntheticInputs": true
+    }
+  ]
+}

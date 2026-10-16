@@ -1,0 +1,128 @@
+{
+  "createdAt": "2026-10-16T22:28:45.490933+00:00",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/lanes78-driver.mjs"
+      ],
+      "sourceSha256": "c78b35c0fc120370112d7c592606f140d9380892acfa006c9cd8f2ee8e63cdd3",
+      "actualExit": 0,
+      "stdout": "",
+      "stderr": "",
+      "status": "PASSED",
+      "scope": "Syntax only. No module imports, product execution, browser or fixture generation."
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/source-identity.mjs"
+      ],
+      "sourceSha256": "3e84290e374284cded58cc330b5ddbaa6f78ec38602f133a3adc858de0d78ff9",
+      "actualExit": 0,
+      "stdout": "",
+      "stderr": "",
+      "status": "PASSED",
+      "scope": "Syntax only. No module imports, product execution, browser or fixture generation."
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/observe.mjs"
+      ],
+      "sourceSha256": "3458676fdec2e12337e1d7a699e3d1f55e23db20655eff2babb4dbfef8493329",
+      "actualExit": 0,
+      "stdout": "",
+      "stderr": "",
+      "status": "PASSED",
+      "scope": "Syntax only. No module imports, product execution, browser or fixture generation."
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/address91-recipe.ts"
+      ],
+      "sourceSha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be",
+      "actualExit": 1,
+      "stdout": "",
+      "stderr": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/address91-recipe.ts:1\nimport type { MatchRecord, TeamProfile } from 'RUNTIME_TYPES_PATH'\n            ^\n\nSyntaxError: Unexpected token '{'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v24.21.0\n",
+      "status": "FAILED",
+      "scope": "Syntax only. No module imports, product execution, browser or fixture generation."
+    },
+    {
+      "command": [
+        "bash",
+        "-n",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/run-lanes78.sh"
+      ],
+      "sourceSha256": "99a2354fc3ea213d13a41856cd02ab661ac8c3997b76db8725d944d808384434",
+      "actualExit": 0,
+      "stdout": "",
+      "stderr": "",
+      "status": "PASSED",
+      "scope": "Syntax only. No module imports, product execution, browser or fixture generation."
+    },
+    {
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import ts from '/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/typescript/lib/typescript.js'; import { readFileSync } from 'node:fs'; const path = process.argv[1]; const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS); for (const diagnostic of source.parseDiagnostics) console.error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\\n')); process.exitCode = source.parseDiagnostics.length ? 1 : 0;",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/address91-recipe.ts"
+      ],
+      "sourceSha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be",
+      "parserSourceSha256": "569177652966bd528c319171c7dd22860dbf72bde116cbc4f644f1d02bb12e39",
+      "actualExit": 0,
+      "stdout": "",
+      "stderr": "",
+      "status": "PASSED",
+      "scope": "TypeScript parser only. No emit, type check, recipe evaluation, product import, browser, generation, build, or test. The prior plain Node check failure remains retained."
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/lanes78-driver.mjs"
+      ],
+      "sourceSha256": "7d3e7cb7f95fcaddc5cea901c8e4c85fb0ad7863c942c377fec4c2598e10b106",
+      "actualExit": 0,
+      "stdout": "",
+      "stderr": "",
+      "status": "PASSED",
+      "scope": "Final driver syntax after the last source edit. No module imports or execution. Prior checks remain retained."
+    }
+  ],
+  "runtime": "UNRUN",
+  "gateCredit": false,
+  "latestPerSource": {
+    "lanes78-driver.mjs": {
+      "sha256": "7d3e7cb7f95fcaddc5cea901c8e4c85fb0ad7863c942c377fec4c2598e10b106",
+      "status": "PASSED",
+      "actualExit": 0
+    },
+    "source-identity.mjs": {
+      "sha256": "3e84290e374284cded58cc330b5ddbaa6f78ec38602f133a3adc858de0d78ff9",
+      "status": "PASSED",
+      "actualExit": 0
+    },
+    "observe.mjs": {
+      "sha256": "3458676fdec2e12337e1d7a699e3d1f55e23db20655eff2babb4dbfef8493329",
+      "status": "PASSED",
+      "actualExit": 0
+    },
+    "address91-recipe.ts": {
+      "sha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be",
+      "status": "PASSED",
+      "actualExit": 0
+    },
+    "run-lanes78.sh": {
+      "sha256": "99a2354fc3ea213d13a41856cd02ab661ac8c3997b76db8725d944d808384434",
+      "status": "PASSED",
+      "actualExit": 0
+    }
+  }
+}

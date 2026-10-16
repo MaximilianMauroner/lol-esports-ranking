@@ -1,0 +1,37 @@
+{
+  "status": "TEMPLATE_ONLY_UNEXECUTED",
+  "packageInventorySha256": "PENDING_NEW_ROOT_COUNTERSIGN",
+  "root": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610",
+  "output": "PENDING_NEW_RUN_DIRECTORY/driver",
+  "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+  "tree": "10c19882806045f340674c6627b4715929ee020e",
+  "unit": "lanes78-companion-head-address91",
+  "fullIndependentSourceReview": "PENDING",
+  "rootCountersign": "PENDING",
+  "runtimeAllocation": "PENDING",
+  "expiresAt": null,
+  "review": {
+    "path": "PENDING",
+    "sha256": "PENDING"
+  },
+  "countersign": {
+    "path": "PENDING",
+    "sha256": "PENDING"
+  },
+  "nativeAdmission": {
+    "directory": "PENDING_FRESH_ROOT_ASSIGNED_BEFORE_DIRECTORY",
+    "path": "PENDING_FRESH_ROOT_ASSIGNED_BEFORE_DIRECTORY/before-native.json",
+    "sha256": "PENDING",
+    "inspector": {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py",
+      "sha256": "ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b"
+    },
+    "exitReceipt": {
+      "path": "PENDING_ROOT_CAPTURED_NUMERIC_EXIT_RECEIPT",
+      "sha256": "PENDING"
+    }
+  },
+  "standingMergeRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.",
+  "heavyLock": "PENDING_ROOT_ASSIGNED_EXACT_CANONICAL_HEAVY_LOCK_PATH",
+  "sharedStoreOwnerCheck": "PENDING_ROOT_EXCLUSIVE_STORE_WRITER_ADMISSION"
+}

@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "python3",
+    "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py",
+    "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-v2-baseline1-owner-v1/native",
+    "after"
+  ],
+  "started": "2026-10-16T23:23:37.234715+00:00",
+  "ended": "2026-10-16T23:23:41.360500+00:00",
+  "elapsedNs": 4125780413,
+  "code": 1,
+  "signal": null,
+  "stdoutSHA256": "ae1037ec3ea12a6a274111014ded3d9ea35af6fb19de09dc31a2a521250846e2",
+  "stderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

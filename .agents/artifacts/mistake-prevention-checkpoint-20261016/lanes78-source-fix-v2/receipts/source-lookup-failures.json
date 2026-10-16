@@ -1,0 +1,17 @@
+{
+  "scope": "SOURCE_READ_LOOKUPS_ONLY",
+  "records": [
+    {
+      "command": "rg in vite/dist/node/chunks/config.js",
+      "exit": 2,
+      "status": "FAILED_SOURCE_LOOKUP",
+      "reason": "Path does not exist in the installed bundle. Correct source vite/dist/node/chunks/node.js was then read."
+    },
+    {
+      "command": "rg in playwright-core/lib/client/network.js and lib/server/chromium/crNetworkManager.js",
+      "exit": 2,
+      "status": "FAILED_SOURCE_LOOKUP",
+      "reason": "Split files do not exist in this installed bundle. Relevant source in lib/coreBundle.js was then read with bounded lines."
+    }
+  ]
+}

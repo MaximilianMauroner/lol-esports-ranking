@@ -1,0 +1,107 @@
+{
+  "kind": "independent-source-fix-diff-review",
+  "round": "v2",
+  "subject": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2",
+  "verdict": "BLOCKED",
+  "scopedResult": "Source repairs for B2, B4, S1, S3, S4, S6 and the S7 provenance split are acceptable at source level. B1/B3 bounded-write safety is BLOCKED by R1 (Vite optimizer can write into the runtime root before the after-check). S2 selection proof and S5 pixel proof stay PENDING as the author states. S7 literal new-HTTP-response wording stays BLOCKED when the action is served from app cache.",
+  "blockedClaims": [
+    "Source package is ready for a runtime admission with no writes outside the owned output and its 0700 sibling (R1).",
+    "Package proves strict lane 7/8 predicates as written (S2 selection, S5 pixel mapping, S7 literal new response, all runtime predicates UNRUN)."
+  ],
+  "authority": {
+    "rootCountersign": false,
+    "maxAcceptance": "PENDING",
+    "mergeAuthority": false,
+    "runtimeRelease": false,
+    "runtime": "UNRUN",
+    "lanes78ResultInferred": false
+  },
+  "standingMergeRule": "BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.",
+  "inputs": {
+    "inventory-sha256.txt": "31bdcb73c6387e879435d23a0aa657b4e18da4792274666c3c5701b4b6760b5f",
+    "inventory-self-sha256.txt": "dec093fef787020ff2386e7a428c3e37ce1d9e22832c1c0dda613213637e8a11",
+    "external-inputs-sha256.txt": "7e27f98cc3be43cb0c2afd190900fba8b8c713f54d763038eed511a5f0421b96",
+    "minimaldiff.patch": "d59866392f7f470f03e2b7ae28b3feebe70b068b65ca423ac2c1ebea914da179",
+    "finding-responses.json": "b0615f1939545ed0ab01548a80a06bcc0665b017b921ea4a05ddd33c3be52017",
+    "report.md": "435346ed97e69994f4c721565a164de7c1947451b95468203767df1c7c90d81f",
+    "lanes78-driver.mjs": "4f4dde592f8354dd8b7510e688949ff93f822bc6ea67e204cb17f14a5c79900e",
+    "source-guards.mjs": "27b6a04e1f253e34f0f80a0982e3823b779d675483b051676beb256d9e023d47",
+    "source-controls.mjs": "d7371d9dcd3f9372f6ce4c1fa3e313cee0824362a401e5192b146e3424ef8c18",
+    "run-lanes78.sh": "6aa1e0777524ededd7858a3d3beebd8d354def6ee3c9ac4231c611c856ec0951",
+    "cleanup-owned.mjs": "019d7f51c3533067f6415ebaca3b8525b4e063262f8d754eadfa0594b98591ff",
+    "dependencies-preloader.mjs": "25477b81a001e63115abc6712c36caa35f07c9fb52cd25cafeaeb7b075bb8aaa",
+    "record-native.mjs": "35ca9bf35cd83a48dabda90f36d02c11c1d9c14c6f4e3b65561474eded51ad8f",
+    "loaded-dependency-pins.json": "94088b05e393282ef1a12c017c25672e8bfc3993a01761fcf247b9786e3e3814",
+    "optimizer-pins.json": "d5c7d649da30632bc1f473713a0ea12d4bb31459dd5a3cfe00de21d7bb40a3a5",
+    "canonicalInspector": { "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py", "sha256": "ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b", "verifiedByReviewer": true },
+    "nodeVersion": "v24.21.0"
+  },
+  "commandExits": [
+    { "command": "sha256sum --strict --quiet --check inventory-self-sha256.txt", "exit": 0, "status": "PASSED" },
+    { "command": "sha256sum --strict --quiet --check inventory-sha256.txt", "exit": 0, "status": "PASSED" },
+    { "command": "sha256sum --strict --quiet --check external-inputs-sha256.txt (76 lines, includes inspect.py ea94e43a...)", "exit": 0, "status": "PASSED" },
+    { "command": "sha256sum inventory-sha256.txt", "exit": 0, "result": "31bdcb73... equals Root observation" },
+    { "command": "sha256sum inspect.py", "exit": 0, "result": "ea94e43a... equals pin" },
+    { "command": "node source-controls.mjs (hash-identical copy d7371d9d..., guards 27b6a04e..., run from review dir because the author script only writes under its own read-only receipts dir)", "exit": 0, "status": "PASSED", "result": "44 of 44 PASSED", "outputSha256": "c6919272848c872dde4f8a99319f657e44182091bc43d209523cb8d2aeb2b2db" },
+    { "command": "first attempt: node source-controls.mjs <review receipts dir>", "exit": 1, "status": "FAILED", "reason": "Script asserts output under its own package receipts dir. Not a control failure. Rerun from hash-identical copy." },
+    { "command": "node --check on 8 .mjs files", "exit": 0, "status": "PASSED" },
+    { "command": "bash -n run-lanes78.sh", "exit": 0, "status": "PASSED" },
+    { "command": "node --check address91-recipe.mts (Node 24 type strip)", "exit": 0, "status": "PASSED", "label": "type-strip parse only" },
+    { "command": "node --check retained-v1-checks/address91-recipe.ts", "exit": 1, "status": "FAILED", "note": "S1 original plain Node check stays FAILED. Bytes equal the .mts file." },
+    { "command": "Date.parse of Python isoformat with microseconds", "exit": 0, "result": "1792192951123, parse accepted" }
+  ],
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "BLOCKER",
+      "verdict": "CONFIRMED mechanism, PLAUSIBLE reach",
+      "title": "Vite optimizer can rewrite runtime-root node_modules/.vite before the after-check",
+      "where": ["lanes78-driver.mjs:429", "lanes78-driver.mjs:460", "lanes78-driver.mjs:462", "lanes78-driver.mjs:378-380", "lanes78-driver.mjs:711", "t3-14557610/node_modules/vite/dist/node/chunks/node.js:31933-31941"],
+      "reachableImpact": "Vite getConfigHash includes plugins: config.plugins.map((p) => p.name). The driver adds plugin 'lanes78-address91'. The frozen _metadata.json has configHash 5e0aa88f. Nothing in the package proves that hash was made with the same plugin list. On mismatch Vite re-optimizes at server start and replaces node_modules/.vite in the runtime root. Runtime dependency discovery can do the same. The driver detects this only after the unit (line 711). The unit then fails, but the write outside the owned output has already happened and the frozen optimizer pin is destroyed for later units.",
+      "smallestCompliantFix": "Before createServer, prove reuse without writes: resolve the config with the exact plugin array, compute configHash and lockfileHash with the algorithm from the pinned Vite dist, compare with the pinned _metadata.json, and abort before createServer on mismatch. Block on any Vite optimizer log line during the unit. If the hash cannot be proven, Root keeps the bounded-write claim BLOCKED. No cache copy, no warmup, no rebuild exception."
+    },
+    {
+      "id": "N4",
+      "severity": "NIT",
+      "verdict": "PLAUSIBLE, not verified",
+      "title": "Chromium HOME-level writes are not redirected or inventoried",
+      "where": ["run-lanes78.sh:24-31"],
+      "reachableImpact": "HOME and XDG_CACHE_HOME stay shared. Chromium can touch ~/.pki/nssdb and fontconfig can touch ~/.cache/fontconfig. Not a false pass. Bounded-write evidence is incomplete for these paths.",
+      "smallestCompliantFix": "Record lstat and hashes of these paths before and after, or redirect XDG_CACHE_HOME to the owned sibling. Do not change Playwright browser lookup."
+    },
+    {
+      "id": "N5",
+      "severity": "NIT",
+      "verdict": "CONFIRMED",
+      "title": "Launcher integrity checks are not strict",
+      "where": ["run-lanes78.sh:17-19"],
+      "reachableImpact": "sha256sum --check without --strict accepts malformed lines with a warning. Inventories are frozen, so impact is low.",
+      "smallestCompliantFix": "Add --strict."
+    }
+  ],
+  "priorFindings": {
+    "B1": "PARTIAL. TMPDIR/TMP/TEMP 0700 sibling, TSX_DISABLE_CACHE=1, NODE_DISABLE_COMPILE_CACHE, Vite runner loader, preloader and driver assertions, cleanup without signals: source OK. Vite optimizer path R1 BLOCKED.",
+    "B2": "RESOLVED AT SOURCE. requireColdHistory asserts nonempty full bag and disjoint cache; auditPhases covers setup, initial-navigation, sensitivity-control, teardown, planned and observed phases in PW and CDP; auditInputBoundaries uses actual PW timing.startTime and CDP wallTime against trusted click epoch; duplicates and aborts stay in bags. 44 controls rerun PASSED.",
+    "B3": "PARTIAL. Shared store disclosed; 98 packages and 20011 files pinned by realpath, exact file inventory, no symlinks, before tsx and before and after the unit; package-manager processes rejected in both canonical samples. Optimizer pin detects but does not prevent drift (R1).",
+    "B4": "RESOLVED AT SOURCE. Inspector path and SHA pinned in source-guards, release, external inputs. Driver validates actual JSON phase, at (<=30 s), ready, errors, head, tree, status, 680 blobs, resources, processMatches, process samples, locks with exact paths. Numeric exit receipt with signal null and exact command. Field names match inspect.py lines 121-195. Inspector UNRUN.",
+    "S1": "RESOLVED. Plain .ts check exit 1 stays FAILED; .mts parse labeled separately.",
+    "S2": "SOURCE REPAIR OK, SELECTION PROOF PENDING.",
+    "S3": "SOURCE REPAIR OK (spot check). Runtime UNRUN.",
+    "S4": "RESOLVED AT SOURCE. PW main-frame navigation request count and CDP Page.frameNavigated block after first goto; same-document hash navigation does not fire frameNavigated.",
+    "S5": "PIXEL PROOF PENDING. Correctly kept PENDING.",
+    "S6": "SOURCE TRACE OK, ACTUAL CLOSURE UNRUN.",
+    "S7": "PROVENANCE SPLIT OK; newHttpResponseClaim false; literal claim BLOCKED when cached.",
+    "N1": "ADDRESSED per author; not re-verified in this round.",
+    "N2": "ADDRESSED.",
+    "N3": "DEFERRED BY SCOPE. Runtime PENDING."
+  },
+  "statuses": {
+    "localChecks": "Hash, syntax and 44 source controls PASSED; retained plain .ts check FAILED as expected",
+    "ci": "NOT_RUN",
+    "review": "BLOCKED",
+    "merge": "NONE_NOT_AUTHORIZED",
+    "maxAcceptance": "PENDING",
+    "runtime": "UNRUN"
+  },
+  "manifest": "manifest-sha256.txt excludes itself; its external hash is reported in the final reply."
+}

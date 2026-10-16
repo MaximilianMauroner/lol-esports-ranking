@@ -1,0 +1,70 @@
+{
+  "createdAt": "2026-10-16T22:30:15.434816+00:00",
+  "checks": [
+    {
+      "check": "JSON syntax",
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/handoff.json",
+      "status": "PASSED"
+    },
+    {
+      "check": "JSON syntax",
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/head-dependency-pins.json",
+      "status": "PASSED"
+    },
+    {
+      "check": "JSON syntax",
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/predicates.json",
+      "status": "PASSED"
+    },
+    {
+      "check": "JSON syntax",
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/release.template.json",
+      "status": "PASSED"
+    },
+    {
+      "check": "JSON syntax",
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/runtime-tool-pins.json",
+      "status": "PASSED"
+    },
+    {
+      "check": "JSON syntax",
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/syntax-checks.json",
+      "status": "PASSED"
+    },
+    {
+      "check": "Exact tracked fixture declaration slice and existing match expression",
+      "status": "PASSED",
+      "generation": "UNRUN",
+      "testSha256": "8d96f97660b81b812b54b4b140bc8157ed267e6d7eb2b55048ac18e62ba7fc31"
+    },
+    {
+      "check": "Byte-identical retained source helper, no approval transfer",
+      "file": "source-identity.mjs",
+      "status": "PASSED"
+    },
+    {
+      "check": "Byte-identical retained source helper, no approval transfer",
+      "file": "observe.mjs",
+      "status": "PASSED"
+    },
+    {
+      "check": "All final source bodies have a passing syntax-only check",
+      "status": "PASSED",
+      "retainedFailedInvocation": "Plain Node check of TypeScript, superseded by parser-only TypeScript check."
+    },
+    {
+      "check": "Read-only exact source HEAD/tree and clean tracked status after authoring",
+      "status": "PASSED",
+      "identityCommandExit": 0,
+      "statusCommandExit": 0,
+      "trackedStatus": ""
+    },
+    {
+      "check": "New package is flat and contains only regular files",
+      "status": "PASSED"
+    }
+  ],
+  "runtime": "UNRUN",
+  "gateCredit": false,
+  "scope": "Read source and retained references only. No fixture evaluation, test, build, browser, HTTP, inspector or heavy command."
+}

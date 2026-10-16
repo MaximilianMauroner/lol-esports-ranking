@@ -1,0 +1,13 @@
+{
+  "admissionTool": {
+    "chunk_id": "f40b4a",
+    "exit_code": 0,
+    "output": "external-pin 0\ninput-self-sha256.txt 0\ninput-sha256.txt 0\ninventory-self-sha256.txt 0\ninventory-sha256.txt 0\nnative-before 1\nADMISSION False\n"
+  },
+  "afterTool": {
+    "chunk_id": "63c752",
+    "exit_code": 0,
+    "nativeSubprocessCode": 1
+  },
+  "note": "Tool shell code 0 does not replace actual inspector subprocess codes 1. Raw inspector outputs are saved separately."
+}

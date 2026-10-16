@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-16T23:23:37.276373+00:00",
+  "phase": "after",
+  "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+  "tree": "10c19882806045f340674c6627b4715929ee020e",
+  "trackedBlobCount": 680,
+  "memoryFullAvg60": 1.23,
+  "memAvailableKiB": 3118760,
+  "diskFreeGiB": 203.87279510498047,
+  "processMatches": [
+    {
+      "pid": 1213619,
+      "ppid": 1213593,
+      "cwd": "/home/codex/.t3/worktrees/fleet/heavy-check-memory-floor",
+      "command": "bash commands/heavy-check --lock-timeout 08 -- touch /tmp/tmp.5V9Gr3CKo1/ran ",
+      "argv": [
+        "bash",
+        "commands/heavy-check",
+        "--lock-timeout",
+        "08",
+        "--",
+        "touch",
+        "/tmp/tmp.5V9Gr3CKo1/ran"
+      ],
+      "rawCmdlineHex": "6261736800636f6d6d616e64732f68656176792d636865636b002d2d6c6f636b2d74696d656f7574003038002d2d00746f756368002f746d702f746d702e355639477233434b6f312f72616e00",
+      "executable": "/usr/bin/bash",
+      "cpuTicks": 6,
+      "startTicks": 6415285,
+      "state": "S",
+      "selectedRoot": false,
+      "hostHeavy": true,
+      "listenerOwnership": [],
+      "t3Managed": false,
+      "reason": "executable/script role"
+    }
+  ],
+  "locks": [
+    {
+      "path": "/run/user/1000/codex-heavy-check/e0d36a6f58a17460b80541caf783382f36e8bf2e6f62f6a6d0c27645219d15d7.lock",
+      "acquiredNonblocking": true,
+      "released": true
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/browser.lock",
+      "acquiredNonblocking": true,
+      "released": true
+    }
+  ],
+  "sharedGitConfigDrift": true,
+  "ready": false,
+  "errors": [
+    "active source/heavy process"
+  ]
+}

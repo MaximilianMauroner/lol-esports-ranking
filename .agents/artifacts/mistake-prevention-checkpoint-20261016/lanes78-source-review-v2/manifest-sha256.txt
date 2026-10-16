@@ -1,0 +1,15 @@
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./receipts/check-external-inputs-sha256.txt.out
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./receipts/check-inventory-self-sha256.txt.out
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./receipts/check-inventory-sha256.txt.out
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./receipts/controls-rerun.stderr
+70deb23c2889cc47e1e22c5080379304f3a8f1fb1c98d04d33aba8209539e7ed  ./receipts/controls-rerun.stdout
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./receipts/mts.txt
+765897257921acd36d114d9cd7d4c2dcebd2524b2fed3b90a1131110bff2461e  ./receipts/syntax.txt
+abc4a84b7ee87966f14afe374133d1679d5a2486277e7ed8fe099ccc36c0367c  ./receipts/ts.txt
+7566f469c45edead9b0c2934c621f07332c0d3a1b05b1f02334081be60da56d0  ./report.md
+c6919272848c872dde4f8a99319f657e44182091bc43d209523cb8d2aeb2b2db  ./rerun-src/receipts/controls/source-controls.json
+7992a39d6cde5e050eb78461a8bf9ad986175a94826e835c110b3967290bd249  ./rerun-src/receipts/controls/synthetic-package/added.mjs
+07cdb762574065a44a10eb88ac5570026c9cf8ee2f9d2296f1c2c660e20ccd52  ./rerun-src/receipts/controls/synthetic-package/entry.mjs
+d7371d9dcd3f9372f6ce4c1fa3e313cee0824362a401e5192b146e3424ef8c18  ./rerun-src/source-controls.mjs
+27b6a04e1f253e34f0f80a0982e3823b779d675483b051676beb256d9e023d47  ./rerun-src/source-guards.mjs
+25428e2cae5cc2a17810252ce2b0b850052e1ff929112f038a1f202acabb3e36  ./verdict.json

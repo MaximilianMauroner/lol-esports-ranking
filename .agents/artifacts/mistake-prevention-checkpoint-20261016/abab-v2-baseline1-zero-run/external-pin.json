@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "sha256sum",
+    "--check",
+    "--strict"
+  ],
+  "started": "2026-10-16T23:23:20.159101+00:00",
+  "ended": "2026-10-16T23:23:20.161643+00:00",
+  "elapsedNs": 2522708,
+  "code": 0,
+  "signal": null,
+  "stdoutSHA256": "a3c29e68ba57a4c0891ba262153556d611c4644403726590db4b88c0a3bc77b5",
+  "stderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,26 @@
+{
+  "events": [
+    {
+      "at": "2026-10-16T23:23:20.549341+00:00",
+      "action": "native-before",
+      "actualCode": 1,
+      "result": "BLOCKED, zero workload"
+    },
+    {
+      "at": "2026-10-16T23:23:37.276373+00:00",
+      "action": "native-after",
+      "actualCode": 1,
+      "result": "foreign activity retained"
+    },
+    {
+      "at": "2026-10-16T23:24:11.304452+00:00",
+      "action": "FINALRELEASE",
+      "ownedInspectorPIDAbsence": {
+        "1213995": true,
+        "1214195": true
+      },
+      "outputAbsent": true
+    }
+  ],
+  "dispatch": "in-thread, single-unit verifier; nested agents forbidden"
+}

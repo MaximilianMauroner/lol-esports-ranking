@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-16T23:29:38.166260+00:00",
+  "verdict": "BLOCKED",
+  "subject": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2",
+  "independentReview": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-review-v2/verdict.json",
+  "rootManifestStrictActualExit": 0,
+  "rootManifestEntries": 15,
+  "reviewManifestSHA256": "be8d0e84569956061d1dffea3c49815ed83092aa2d697a6101972ba76451fc79",
+  "sourceInventorySHA256": "31bdcb73c6387e879435d23a0aa657b4e18da4792274666c3c5701b4b6760b5f",
+  "rootStaticConfirmation": {
+    "plugin": "lanes78-address91",
+    "ViteConfigHashIncludes": "config.plugins.map((p) => p.name)",
+    "frozenConfigHash": "5e0aa88f",
+    "frozenLockfileHash": "3887d736",
+    "existingRootOptimizerMustNotBeMutated": true
+  },
+  "acceptedSourceScopes": [
+    "B2 cold full history request bag and continuous bothstream priorabsence",
+    "B4 canonical actual admission JSON and numeric exit binding",
+    "S1 oldFAILEDstatuspreserved",
+    "S3 naturalgeometrysourcechecks",
+    "S4 mainframereloadguard/hashnavigationpreserved",
+    "S6 logicalsource demandtrace",
+    "S7 honest sameunitresponse/cacheprovenance split"
+  ],
+  "blockedSourceScope": "R1 potentialoptimizerwrite beforecheck; B1/B3boundedwrite incomplete",
+  "pendingRuntimeClaims": [
+    "S2 correctselection",
+    "S5 exactpixelmapping",
+    "S7 literalnewHTTPresponsewhenappcacheused",
+    "All actualjourney/request/control/exits/cleanup/media"
+  ],
+  "rootDecision": "No further source repair or shared-tool redesign is started tonight. Preserve frozen source/review and queue exact pre-server configHash+lockfileHash proof and optimizer rebuild prohibition for resume. No runtime release/waiver.",
+  "runtime": "UNRUN",
+  "CI": "UNRUN",
+  "MaxAcceptance": "PENDING",
+  "mergeAuthorized": false
+}

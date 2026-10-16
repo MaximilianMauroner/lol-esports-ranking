@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "sha256sum",
+    "--check",
+    "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/input-self-sha256.txt"
+  ],
+  "started": "2026-10-16T23:23:20.161853+00:00",
+  "ended": "2026-10-16T23:23:20.164020+00:00",
+  "elapsedNs": 2169724,
+  "code": 0,
+  "signal": null,
+  "stdoutSHA256": "92a8d282a97cb5b5a8e3d864c1cae3f2ae575a9183356de0de0372009a6b1e75",
+  "stderrSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,11 @@
+node --check lanes78-driver.mjs exit=0
+node --check observe.mjs exit=0
+node --check source-identity.mjs exit=0
+node --check source-guards.mjs exit=0
+node --check source-controls.mjs exit=0
+node --check cleanup-owned.mjs exit=0
+node --check dependencies-preloader.mjs exit=0
+node --check record-native.mjs exit=0
+bash -n run-lanes78.sh exit=0
+node --check address91-recipe.mts exit=0
+node --check retained address91-recipe.ts exit=1 (expected 1, stays FAILED)

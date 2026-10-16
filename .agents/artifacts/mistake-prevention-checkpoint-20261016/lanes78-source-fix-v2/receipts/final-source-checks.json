@@ -1,0 +1,268 @@
+{
+  "at": "2026-10-16T23:15:25.243038+00:00",
+  "runtime": "UNRUN",
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/cleanup-owned.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "019d7f51c3533067f6415ebaca3b8525b4e063262f8d754eadfa0594b98591ff"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/dependencies-preloader.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "25477b81a001e63115abc6712c36caa35f07c9fb52cd25cafeaeb7b075bb8aaa"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/lanes78-driver.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "f0a417d6057ae3cf632bbf11b0e3a3e4cd87857a5629cb421b0748415c9a56c7"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/observe.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "520c3b1aad5f33df037d98dd23b068382aa5e19a20258ce0ae7de5f8ad572908"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/record-native.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "35ca9bf35cd83a48dabda90f36d02c11c1d9c14c6f4e3b65561474eded51ad8f"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-controls.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "d7371d9dcd3f9372f6ce4c1fa3e313cee0824362a401e5192b146e3424ef8c18"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-guards.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "27b6a04e1f253e34f0f80a0982e3823b779d675483b051676beb256d9e023d47"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-identity.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "dc57cf81d1bb3a83b64f71b6617c68641fcc7b1336bd47f25e6b9ee50a2ef07d"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/address91-recipe.mts"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be"
+    },
+    {
+      "command": [
+        "bash",
+        "-n",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/run-lanes78.sh"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY"
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/retained-v1-checks/address91-recipe.ts"
+      ],
+      "exit": 1,
+      "status": "FAILED",
+      "stdout": "",
+      "stderr": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/retained-v1-checks/address91-recipe.ts:1\nimport type { MatchRecord, TeamProfile } from 'RUNTIME_TYPES_PATH'\n            ^\n\nSyntaxError: Unexpected token '{'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v24.21.0\n",
+      "scope": "S1_PLAIN_NODE_STAYS_FAILED"
+    },
+    {
+      "command": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/source-controls.mjs",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/receipts/source-controls-final"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "{\"sourceControlsPassed\":44,\"runtime\":\"UNRUN\",\"nativeInspector\":\"NOT_CALLED\"}\n",
+      "stderr": "",
+      "scope": "DETERMINISTIC_SOURCE_CONTROLS_NO_PRODUCT_OR_INSPECTOR"
+    },
+    {
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import assert from 'node:assert/strict'; import { readFileSync } from 'node:fs'; import { dependencyState, runtimeRoot } from './source-guards.mjs'; const pins=JSON.parse(readFileSync('./loaded-dependency-pins.json','utf8')); const state=dependencyState(runtimeRoot,pins); assert.deepEqual(state,{sharedStore:pins.sharedStore,packages:pins.packages}); console.log(JSON.stringify({status:'PASSED_SOURCE_HASH_IDENTITY_ONLY',packages:state.packages.length,files:state.packages.reduce((n,p)=>n+p.files.length,0),importedProductOrDependencyModules:false}));"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2",
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "{\"status\":\"PASSED_SOURCE_HASH_IDENTITY_ONLY\",\"packages\":98,\"files\":20011,\"importedProductOrDependencyModules\":false}\n",
+      "stderr": "",
+      "scope": "STATIC_DEPENDENCY_FILE_HASH_AND_REALPATH_IDENTITY_NO_IMPORTS"
+    },
+    {
+      "command": [
+        "sha256sum",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-self-sha256.txt"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-sha256.txt: OK\n",
+      "stderr": "",
+      "scope": "READ_ONLY_INPUT_HASH_CHECK"
+    },
+    {
+      "command": [
+        "sha256sum",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-sha256.txt"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/address91-recipe.ts: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/commands.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/external-inputs-sha256.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/handoff.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/head-dependency-pins.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/lanes78-driver.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/observe.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/predicates.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/proof-spec.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/release.template.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/report.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/run-lanes78.sh: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/runtime-tool-pins.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/source-identity.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/static-checks.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/syntax-checks.json: OK\n",
+      "stderr": "",
+      "scope": "READ_ONLY_INPUT_HASH_CHECK"
+    },
+    {
+      "command": [
+        "sha256sum",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/external-inputs-sha256.txt"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/abab-driver.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/dependency-state-pins.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/locked-abab.sh: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/record-shape.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-source-root-countersign-v2.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-attempt-surface-explainer-v1-result.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-coverage-prep-v1/coverage.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-coverage-prep-v1/report.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/browser-observer.js: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/commands.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fixture-host.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fixture-origins.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-proof-fix-v2/observe.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-proof-fix-v2/source-identity.mjs: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/.agents/skills/verify-lol-esports/features/l14.md: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/.agents/skills/verify-lol-esports/features/l3.md: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/.agents/skills/verify-lol-esports/features/l4.md: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/index.html: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/playwright-core/browsers.json: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/playwright-core/lib/coreBundle.js: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/playwright-core/package.json: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/tsx/dist/loader.mjs: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/typescript/lib/typescript.js: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/scripts/public-artifact-storage.mjs: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/App.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/CompareAnalysis.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/CompareDrawer.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/LineChart.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/TeamHistoryLineChart.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/WorldsTournamentPanel.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/ui/card.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/components/ui/panel.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/hooks/usePublicArtifacts.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/prefetch.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/publicArtifacts/archive.mjs: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/publicArtifacts/artifactIdentity.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/publicArtifacts/schema.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/publicArtifacts/semanticCache.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/publicArtifacts/writePlan.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/teamHistoryChart.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/timelineCompaction.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/worldsWorkerClient.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/main.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/views/TeamsView.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/views/TournamentsView.tsx: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/tests/rankingBoardAddressBrowser.test.ts: OK\n/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/vite.config.ts: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1-request.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/address91-recipe.ts: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/commands.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/external-inputs-sha256.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/handoff.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/head-dependency-pins.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-self-sha256.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/inventory-sha256.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/lanes78-driver.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/observe.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/predicates.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/proof-spec.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/release.template.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/report.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/run-lanes78.sh: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/runtime-tool-pins.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/source-identity.mjs: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/static-checks.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1/syntax-checks.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/report.md: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/verdict.json: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/hash-checks.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/output-sha256.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/pin-and-env-greps.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/predicate-fidelity.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/reads-sha256.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/recipe-slice-check.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-review-v1/receipts/syntax-checks.txt: OK\n/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py: OK\n",
+      "stderr": "",
+      "scope": "READ_ONLY_INPUT_HASH_CHECK"
+    },
+    {
+      "command": [
+        "git",
+        "--no-optional-locks",
+        "-C",
+        "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610",
+        "rev-parse",
+        "HEAD",
+        "HEAD^{tree}"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "d38add5f228e67022a3001e27a820ad76657f37f\n10c19882806045f340674c6627b4715929ee020e\n",
+      "stderr": "",
+      "scope": "READ_ONLY_SOURCE_HEAD_TREE",
+      "matchesRequiredIdentity": true
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/lanes78-driver.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "07a4ddfcc52c42bc29d05ca15f474e34a93672bf8b4a7164826618f5adec7fa1",
+      "reason": "Final os.tmpdir and TMP/TEMP assertions added after the first source check."
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/lanes78-driver.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "7a2bc0dc3050e7bc5da278dc76f4f51e8abbbd9ebb4180a21ed94c712e6e01ab",
+      "reason": "The explicit after-close geometry check now occurs before Clear, as well as after the combined close-and-clear phase."
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2/lanes78-driver.mjs"
+      ],
+      "exit": 0,
+      "status": "PASSED",
+      "stdout": "",
+      "stderr": "",
+      "scope": "SYNTAX_ONLY_NO_MODULE_EXECUTION",
+      "sourceSha256": "4f4dde592f8354dd8b7510e688949ff93f822bc6ea67e204cb17f14a5c79900e",
+      "reason": "The full before optimizer snapshot is bound to source-only reviewed optimizer-pins.json, not just compared with the after snapshot."
+    }
+  ]
+}

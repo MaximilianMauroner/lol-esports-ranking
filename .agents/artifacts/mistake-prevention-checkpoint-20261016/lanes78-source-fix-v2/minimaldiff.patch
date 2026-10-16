@@ -1,0 +1,1437 @@
+--- v1/address91-recipe.ts
++++ /dev/null
+@@ -1,29 +0,0 @@
+-import type { MatchRecord, TeamProfile } from 'RUNTIME_TYPES_PATH'
+-const regions = ['LEC', 'LCS'] as const
+-const prefixes = { LEC: 'Euro', LCS: 'Amer' }
+-const teams: Record<string, TeamProfile> = Object.fromEntries(regions.flatMap((region) =>
+-  Array.from({ length: 10 }, (_, index) => {
+-    const number = String(index + 1).padStart(2, '0')
+-    const name = `${prefixes[region]} ${number}`
+-    return [name, { name, code: `${prefixes[region][0]}${number}`, league: region, region }]
+-  })))
+-
+-function roundRobin(region: typeof regions[number]): MatchRecord[] {
+-  const names = Object.values(teams).filter((team) => team.region === region).map((team) => team.name)
+-  return names.flatMap((teamA, a) => names.slice(a + 1).map((teamB, offset) => {
+-    const date = `2026-0${1 + (a % 6)}-${String(offset + 1).padStart(2, '0')}`
+-    return { id: `${region}-${teamA}-${teamB}`, sourceProvider: 'oracles-elixir', date, datetimeUtc: `${date}T12:00:00.000Z`, season: 2026,
+-      event: `${region} 2026`, phase: 'Regular season', region, league: region, patch: '', bestOf: 1, bestOfBasis: 'provider',
+-      tier: 'regional-regular', teamA, teamB, winner: teamA, teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
+-  }))
+-}
+-
+-// One MSI series gives the board an `international` tournament option with two teams.
+-const msi: MatchRecord = { id: 'MSI-Euro 01-Amer 01', sourceProvider: 'oracles-elixir', date: '2026-06-20', datetimeUtc: '2026-06-20T12:00:00.000Z',
+-  season: 2026, event: 'MSI 2026', phase: 'Bracket', region: 'International', league: 'MSI', patch: '', bestOf: 1, bestOfBasis: 'provider',
+-  tier: 'msi-bracket', teamA: 'Euro 01', teamB: 'Amer 01', winner: 'Euro 01', teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
+-
+-
+-const matches = [...regions.flatMap(roundRobin), msi]
+-const rosters = {}
+-export { matches, teams, rosters }
+--- /dev/null
++++ v2/address91-recipe.mts
+@@ -0,0 +1,29 @@
++import type { MatchRecord, TeamProfile } from 'RUNTIME_TYPES_PATH'
++const regions = ['LEC', 'LCS'] as const
++const prefixes = { LEC: 'Euro', LCS: 'Amer' }
++const teams: Record<string, TeamProfile> = Object.fromEntries(regions.flatMap((region) =>
++  Array.from({ length: 10 }, (_, index) => {
++    const number = String(index + 1).padStart(2, '0')
++    const name = `${prefixes[region]} ${number}`
++    return [name, { name, code: `${prefixes[region][0]}${number}`, league: region, region }]
++  })))
++
++function roundRobin(region: typeof regions[number]): MatchRecord[] {
++  const names = Object.values(teams).filter((team) => team.region === region).map((team) => team.name)
++  return names.flatMap((teamA, a) => names.slice(a + 1).map((teamB, offset) => {
++    const date = `2026-0${1 + (a % 6)}-${String(offset + 1).padStart(2, '0')}`
++    return { id: `${region}-${teamA}-${teamB}`, sourceProvider: 'oracles-elixir', date, datetimeUtc: `${date}T12:00:00.000Z`, season: 2026,
++      event: `${region} 2026`, phase: 'Regular season', region, league: region, patch: '', bestOf: 1, bestOfBasis: 'provider',
++      tier: 'regional-regular', teamA, teamB, winner: teamA, teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
++  }))
++}
++
++// One MSI series gives the board an `international` tournament option with two teams.
++const msi: MatchRecord = { id: 'MSI-Euro 01-Amer 01', sourceProvider: 'oracles-elixir', date: '2026-06-20', datetimeUtc: '2026-06-20T12:00:00.000Z',
++  season: 2026, event: 'MSI 2026', phase: 'Bracket', region: 'International', league: 'MSI', patch: '', bestOf: 1, bestOfBasis: 'provider',
++  tier: 'msi-bracket', teamA: 'Euro 01', teamB: 'Amer 01', winner: 'Euro 01', teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
++
++
++const matches = [...regions.flatMap(roundRobin), msi]
++const rosters = {}
++export { matches, teams, rosters }
+--- v1/lanes78-driver.mjs
++++ v2/lanes78-driver.mjs
+@@ -1,10 +1,13 @@
+ import assert from 'node:assert/strict'
++import { execFileSync } from 'node:child_process'
+ import { createHash, randomUUID } from 'node:crypto'
+-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, statfsSync, writeFileSync } from 'node:fs'
++import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, statfsSync, statSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
+ import { dirname, isAbsolute, join } from 'node:path'
+ import { fileURLToPath, pathToFileURL } from 'node:url'
+ import { getHeapStatistics } from 'node:v8'
+ import { sourceIdentity } from './source-identity.mjs'
++import { inspector, runtimeRoot, validateAdmission, requireColdHistory, auditPhases, assertOwnedTemp, dependencyState, tempInventory, storeWriters, auditInputBoundaries } from './source-guards.mjs'
+ 
+ const startedNs = process.hrtime.bigint()
+ const deadline = Date.now() + 13 * 60_000
+@@ -16,6 +19,7 @@
+ assert.ok([root, out, releasePath].every(isAbsolute))
+ assert.equal(process.cwd(), root)
+ assert.equal(realpathSync(root), root)
++assert.equal(root, runtimeRoot)
+ assert.equal(realpathSync(dirname(out)), dirname(out))
+ assert.ok(!existsSync(out) && !out.startsWith(`${root}/`) && !out.startsWith(`${prep}/`))
+ const sha = (bytes) => createHash('sha256').update(bytes).digest('hex')
+@@ -30,13 +34,36 @@
+ assert.equal(release.fullIndependentSourceReview, 'APPROVED')
+ assert.equal(release.rootCountersign, 'APPROVED')
+ assert.equal(release.runtimeAllocation, 'RELEASED_ONCE')
++assert.equal(release.sharedStoreOwnerCheck, 'ROOT_VERIFIED_NO_CONCURRENT_STORE_WRITER')
+ assert.ok(Date.parse(release.expiresAt) > Date.now())
+ for (const key of ['review', 'countersign', 'nativeAdmission']) {
+   assert.ok(isAbsolute(release[key].path))
+   assert.equal(sha(readFileSync(release[key].path)), release[key].sha256)
+ }
+-assert.ok(Date.now() - Date.parse(release.nativeAdmission.observedAt) >= 0 && Date.now() - Date.parse(release.nativeAdmission.observedAt) <= 30_000, 'fresh canonical native admission required')
+-assert.equal(release.nativeAdmission.approved, true)
++assert.deepEqual(release.nativeAdmission.inspector, inspector)
++assert.equal(sha(readFileSync(inspector.path)), inspector.sha256)
++assert.ok(isAbsolute(release.nativeAdmission.directory))
++assert.equal(release.nativeAdmission.path, join(release.nativeAdmission.directory, 'before-native.json'))
++assert.equal(realpathSync(release.nativeAdmission.directory), release.nativeAdmission.directory)
++const nativeExit = json(release.nativeAdmission.exitReceipt.path)
++assert.equal(sha(readFileSync(release.nativeAdmission.exitReceipt.path)), release.nativeAdmission.exitReceipt.sha256)
++assert.equal(nativeExit.exitCode, 0, 'actual numeric canonical before exit required')
++assert.equal(nativeExit.signal, null)
++assert.equal(nativeExit.spawnError, null)
++assert.deepEqual(nativeExit.inspector, inspector)
++assert.deepEqual(nativeExit.command, ['python3', inspector.path, release.nativeAdmission.directory, 'before'])
++const commonDir = realpathSync(execFileSync('git', ['--no-optional-locks', '-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } }).trim())
++const heavyLock = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, 'codex-heavy-check', `${sha(commonDir)}.lock`)
++assert.equal(release.heavyLock, heavyLock)
++const admission = json(release.nativeAdmission.path)
++const admissionState = validateAdmission(admission, { now: Date.now(), head, tree, heavyLock: release.heavyLock, browserLock: '/home/codex/.local/state/pstack/mistake-prevention-20261015/browser.lock' })
++const writerAdmission = storeWriters([admission.processSnapshotBefore, admission.processSnapshotAfter])
++const ownedTemp = assertOwnedTemp(out, process.env, process.getuid())
++assert.equal(tmpdir(), ownedTemp.path)
++assert.equal(process.env.TMP, ownedTemp.path)
++assert.equal(process.env.TEMP, ownedTemp.path)
++assert.equal(process.env.NODE_DISABLE_COMPILE_CACHE, '1')
++assert.equal(process.env.NODE_COMPILE_CACHE, join(ownedTemp.path, 'node-compile'))
+ assert.match(process.version, /^v24\./)
+ assert.equal(process.env.NODE_OPTIONS, '--max-old-space-size=1536')
+ assert.ok(!process.execArgv.some((arg) => /^--(?:max[-_]old[-_]space[-_]size|huge[-_]max[-_]old[-_]generation[-_]size)/.test(arg)), 'no competing heap argv override')
+@@ -50,7 +77,7 @@
+ const raw = (name, value) => writeFileSync(join(out, name), value, { flag: 'wx', mode: 0o600 })
+ let phase = 'setup', seq = 0, ledgerError = null, fault = null
+ const emit = (source, kind, value = {}) => {
+-  try { appendFileSync(join(out, 'events.jsonl'), `${JSON.stringify({ seq: ++seq, hr: String(process.hrtime.bigint()), wall: new Date().toISOString(), phase, source, kind, ...value })}\n`, { mode: 0o600 }) }
++  try { appendFileSync(join(out, 'events.jsonl'), `${JSON.stringify({ seq: ++seq, hr: String(process.hrtime.bigint()), wall: new Date().toISOString(), phase, source, kind, ...value })}\n`, { mode: 0o600 }); return seq }
+   catch (error) { ledgerError ??= String(error); process.exitCode = 1; console.error(error) }
+ }
+ const block = (reason) => { fault ??= reason; emit('driver', 'coverage-block', { reason }); process.exitCode = 1 }
+@@ -60,11 +87,19 @@
+ const pins = json(join(prep, 'head-dependency-pins.json')).expected
+ const toolPins = json(join(prep, 'runtime-tool-pins.json')).expected
+ const toolState = () => Object.fromEntries(Object.keys(toolPins).map((path) => [path, sha(readFileSync(join(root, path)))]))
+-const instrumentState = () => Object.fromEntries(readdirSync(prep).sort().map((name) => [name, sha(readFileSync(join(prep, name)))]))
++const instrumentState = () => {
++  const files = {}
++  const walk = (dir) => { for (const name of readdirSync(dir).sort()) { const path = join(dir, name); if (statSync(path).isDirectory()) walk(path); else files[path.slice(prep.length + 1)] = sha(readFileSync(path)) } }
++  walk(prep)
++  return files
++}
+ const deps = () => Object.fromEntries(Object.keys(pins).map((path) => [path, sha(readFileSync(join(root, path)))]))
+ const cache = () => {
+-  const path = join(root, 'node_modules/.vite/deps/_metadata.json')
+-  return { path, exists: existsSync(path), sha256: existsSync(path) ? sha(readFileSync(path)) : null, warmth: 'Not inferred from metadata.' }
++  const path = join(root, 'node_modules/.vite')
++  const files = []
++  const walk = (dir) => { for (const name of readdirSync(dir).sort()) { const file = join(dir, name); if (realpathSync(file) !== file) throw new Error(`optimizer symlink ${file}`); if (statSync(file).isDirectory()) walk(file); else files.push({ path: file, sha256: sha(readFileSync(file)) }) } }
++  if (existsSync(path)) walk(path)
++  return { path, exists: existsSync(path), files, warmth: 'Not inferred from optimizer files.' }
+ }
+ function resources() {
+   const memory = readFileSync('/proc/meminfo', 'utf8')
+@@ -80,6 +115,11 @@
+ const cleanup = []
+ const objects = new Map(), logical = new Map(), references = new Map()
+ const phasePlans = new Map()
++const forbiddenPaths = new Set(), observedBodies = new Map()
++let lane7HistoryStarted = false, playersStarted = false, firstDocumentLoader = null, mainNavigationRequests = 0
++const ownedProcesses = new Map()
++let dependencyBefore, optimizerBefore
++const pixelPredicates = [], inputBoundaries = {}
+ const serverRecords = []
+ const records = [], inflight = new Set(), completeObjects = new Set(), bodyJobs = new Set()
+ let lastArtifact = process.hrtime.bigint(), pwSeq = 0, serverSeq = 0, serverId = 0
+@@ -87,8 +127,16 @@
+ const pwId = (request) => { if (!pwIds.has(request)) pwIds.set(request, ++pwSeq); return pwIds.get(request) }
+ function event(source, kind, value) {
+   const row = { phase, source, kind, ...value }
++  row.seq = emit(source, kind, value)
+   records.push(row)
+-  emit(source, kind, value)
++  if (plan && (source === 'pw' && kind === 'request' || source === 'cdp' && kind === 'requestWillBeSent')) {
++    const url = source === 'pw' ? value.url : value.raw.request.url
++    if (artifact(url)) {
++      try { assertNoPriorDemand('continuous-request-observation') }
++      catch (error) { block(String(error)) }
++    }
++  }
++  return row
+ }
+ function serverEvent(kind, value) {
+   serverRecords.push({ phase, kind, ...value })
+@@ -128,9 +176,65 @@
+     required = [...new Set([...closure(plan.manifest.teamHistoryIndexUrl), ...closure(indexWrite.value.scopeIndex.All__All__All.url, { '/series': ids })])].sort()
+   } else if (kind === 'players') required = closure(plan.manifest.playerDirectoryUrl ?? '/data/entities/players.json')
+   else assert.equal(kind, 'zero')
+-  return { kind, ids, required, semanticCacheBefore: [...completeObjects].sort(), expectedAttemptBag: required.filter((path) => !completeObjects.has(path)).map((path) => `${base}${path}`).sort() }
++  return { kind, ids, required, closureMembers: required.map((path) => ({ objectPath: path, url: `${base}${path}`, digest: sha(objects.get(path)), bytes: objects.get(path).length, storage: ['public-artifact-archive', 'public-archive-node'].includes(JSON.parse(objects.get(path)).content.artifactKind) ? 'archive' : 'inline', logicalReferences: references.get(path), rawEmittedBody: `objects/${sha(objects.get(path))}.json` })), semanticCacheBefore: [...completeObjects].sort(), expectedAttemptBag: required.filter((path) => !completeObjects.has(path)).map((path) => `${base}${path}`).sort() }
++}
++function assertNoPriorDemand(name) {
++  const historyPaths = new Set([...logical.values()].filter((entry) => /^team-history/.test(entry.value?.artifactKind ?? '')).flatMap((entry) => closure(entry.logicalPath)))
++  const playerPaths = new Set(closure(plan.manifest.playerDirectoryUrl ?? '/data/entities/players.json'))
++  const attempts = records.filter((row) => row.source === 'pw' && row.kind === 'request' || row.source === 'cdp' && row.kind === 'requestWillBeSent')
++  for (const row of attempts) {
++    const path = new URL(row.source === 'pw' ? row.url : row.raw.request.url).pathname
++    if (!lane7HistoryStarted) assert.ok(!historyPaths.has(path), `initial history absence ${name} ${row.source} seq ${row.seq}`)
++    if (!playersStarted) assert.ok(!playerPaths.has(path), `initial player absence ${name} ${row.source} seq ${row.seq}`)
++  }
++  emit('driver', 'prior-demand-absence', { name, throughSeq: seq, historyRequired: !lane7HistoryStarted, playersRequired: !playersStarted, observers: ['pw', 'cdp'] })
++}
++function readObservedLogical(logicalPath, selectedIds) {
++  const mapping = logical.get(new URL(logicalPath, 'http://fixture.invalid').pathname)
++  const receipts = [], selectedKeySources = [], seen = new Set()
++  const content = (path, ancestors = new Set()) => {
++    assert.ok(!ancestors.has(path), 'raw browser archive cycle')
++    const receipt = observedBodies.get(path)?.find((item) => item.unit === release.unit && item.output === out && item.bodySeq <= seq)
++    assert.ok(receipt, `current-unit saved raw browser body required ${path}`)
++    const body = readFileSync(join(out, receipt.rawBodyPath))
++    assert.equal(sha(body), receipt.sha256)
++    assert.equal(path, `/data/objects/sha256/${sha(body)}`)
++    assert.ok(Number.isInteger(receipt.requestSeq) && receipt.requestSeq < receipt.responseSeq && receipt.responseSeq < receipt.bodySeq)
++    const parsed = JSON.parse(body)
++    if (!seen.has(path)) {
++      receipts.push(receipt); seen.add(path)
++      const walk = (value, pointer = '') => {
++        if (!value || typeof value !== 'object') return
++        for (const [key, child] of Object.entries(value)) {
++          const childPointer = `${pointer}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`
++          if (selectedIds.includes(key) && Array.isArray(child?.points)) selectedKeySources.push({ selectedId: key, jsonPointer: childPointer, objectPath: path, rawBodyPath: receipt.rawBodyPath, bodySha256: receipt.sha256, requestSeq: receipt.requestSeq, responseSeq: receipt.responseSeq, bodySeq: receipt.bodySeq, pointsSha256: sha(JSON.stringify(child.points)) })
++          walk(child, childPointer)
++        }
++      }
++      walk(parsed)
++    }
++    const value = parsed.content
++    if (!['public-artifact-archive', 'public-archive-node'].includes(value.artifactKind)) return value
++    const visit = (node) => {
++      if (node.kind === 'inline') return node.value
++      if (node.kind === 'record') return Object.fromEntries(node.entries.map(([key, child]) => [key, visit(child)]))
++      assert.ok(['map', 'list'].includes(node.kind))
++      const children = node.parts.filter((ref) => !(ref.path === '/series' && ref.keyStart && !selectedIds.some((id) => id >= ref.keyStart && id <= ref.keyEnd))).map((ref) => content(`/data/objects/sha256/${ref.sha256}`, new Set([...ancestors, path])))
++      return node.kind === 'list' ? children.flat() : Object.assign({}, ...children)
++    }
++    return visit(value.tree)
++  }
++  return { value: content(mapping.objectPath), receipts, selectedKeySources }
+ }
+ async function inventory(name) {
++  const processes = await browserCdp.send('SystemInfo.getProcessInfo')
++  for (const item of processes.processInfo) {
++    const path = `/proc/${item.id}/stat`
++    if (!existsSync(path)) { block(`browser process vanished during inventory ${item.id}`); continue }
++    const stat = readFileSync(path, 'utf8')
++    ownedProcesses.set(item.id, { pid: item.id, type: item.type, startTicks: stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19] })
++  }
++  emit('driver', 'owned-process-inventory', { name, processes: [...ownedProcesses.values()] })
+   const targets = await browserCdp.send('Target.getTargets')
+   const frames = page.frames().map((frame) => ({ url: frame.url(), main: frame === page.mainFrame() }))
+   const workers = page.workers().map((worker) => worker.url())
+@@ -141,12 +245,13 @@
+   check()
+ }
+ async function geometry(name) {
+-  const value = await page.getByRole('heading', { name: 'Power over time', exact: true }).evaluate((heading) => {
++  const value = await page.getByRole('heading', { name: 'Power over time', exact: true, includeHidden: true }).evaluate((heading) => {
+     const panel = heading.closest('[data-slot="card"]')
+     if (!panel) return null
+-    return { rect: panel.getBoundingClientRect().toJSON(), viewport: { width: innerWidth, height: innerHeight, devicePixelRatio }, scroll: { x: scrollX, y: scrollY }, activeElement: document.activeElement?.outerHTML, pointerCondition: 'No hover or focus on the trajectory is requested by this driver.', hash: location.hash }
++    return { rect: panel.getBoundingClientRect().toJSON(), viewport: { width: innerWidth, height: innerHeight, devicePixelRatio }, scroll: { x: scrollX, y: scrollY }, activeElement: document.activeElement?.outerHTML, trajectoryHasFocus: panel.contains(document.activeElement), pointerCondition: 'No hover or focus on the trajectory is requested by this driver.', pointer: window.__r3Lanes78Pointer ?? null, hash: location.hash }
+   })
+   emit('driver', 'geometry', { name, value, rootMargin: '420px 0px' })
++  assert.equal(value?.trajectoryHasFocus, false, 'trajectory must not have keyboard focus')
+   assert.ok(value?.rect.height > 0, 'trajectory rectangle available')
+   assert.ok(value.rect.top > value.viewport.height + 420 || value.rect.bottom < -420, 'BLOCKED natural trajectory geometry intersects 420px rootMargin')
+   return value
+@@ -171,9 +276,15 @@
+   await boundary(`${name}-before`)
+   phase = name
+   const expected = typeof demand === 'function' ? demand() : expectedDemand(demand)
++  if (name === 'lane7-open-comparison') requireColdHistory(expected.required, expected.semanticCacheBefore, expected.expectedAttemptBag, base)
++  if (name === 'lane8-players-open') {
++    assertNoPriorDemand('players-before-open')
++    playersStarted = true
++  }
+   phasePlans.set(name, expected)
+   emit('driver', 'phase-open', { expected })
+   const start = records.length
++  if (expected.kind === 'history') await geometry(`${name}-before-history`)
+   await action()
+   if (postcondition) await postcondition()
+   emit('driver', 'postcondition-met')
+@@ -183,6 +294,7 @@
+   emit('driver', 'phase-attempt-bag', { expected, actualPwBag: attempts, actualCdpBag: cdpAttempts })
+   assert.deepEqual(attempts, expected.expectedAttemptBag, 'literal PW demand attempt bag, no retry or failure allowance')
+   assert.deepEqual(cdpAttempts, expected.expectedAttemptBag, 'literal CDP demand attempt bag, no retry or failure allowance')
++  emit('driver', 'action-cache-provenance', { name, selectedIds: expected.ids ?? [], semanticCacheBefore: expected.semanticCacheBefore ?? [], required: expected.required ?? [], actualPwRequests: attempts.length, actualCdpRequests: cdpAttempts.length, applicationCacheReuse: expected.kind === 'history' && attempts.length === 0, newHttpResponseClaim: false })
+   raw(`${name}.html`, await page.content())
+   emit('driver', 'phase-close')
+ }
+@@ -191,6 +303,7 @@
+   const img = locator.getByRole('img', { name: `${yLabel} over time for ${labels.join(', ')}`, exact: true })
+   await img.waitFor()
+   await img.locator('.recharts-surface').waitFor()
++  await quiet()
+   const actual = await img.evaluate((node) => {
+     const key = Object.keys(node).find((key) => key.startsWith('__reactFiber$'))
+     let fiber = key ? node[key] : null
+@@ -198,7 +311,28 @@
+     while (fiber && chain.length < 80) {
+       const props = fiber.memoizedProps
+       if (Array.isArray(props?.series) && props.series.every((s) => typeof s.id === 'string' && typeof s.label === 'string' && Array.isArray(s.points))) {
+-        return { series: props.series.map((s) => ({ id: s.id, label: s.label, color: s.color, points: s.points.map((p) => ({ t: p.t, y: p.y })) })), ariaLabel: node.getAttribute('aria-label'), summary: document.getElementById(node.getAttribute('aria-describedby'))?.textContent, svg: node.innerHTML, chain }
++        const geometry = [...node.querySelectorAll('.recharts-line')].map((line) => ({
++          className: line.getAttribute('class'),
++          paths: [...line.querySelectorAll('path')].map((path) => ({
++            d: path.getAttribute('d'), stroke: path.getAttribute('stroke'), strokeWidth: path.getAttribute('stroke-width'),
++            opacity: getComputedStyle(path).opacity, rect: path.getBoundingClientRect().toJSON(),
++            totalLength: path.getTotalLength(), transform: path.getAttribute('transform'),
++          })),
++          dots: [...line.querySelectorAll('circle')].map((dot) => ({
++            cx: dot.getAttribute('cx'), cy: dot.getAttribute('cy'), r: dot.getAttribute('r'),
++            stroke: dot.getAttribute('stroke'), fill: dot.getAttribute('fill'), rect: dot.getBoundingClientRect().toJSON(),
++          })),
++          labels: [...line.querySelectorAll('text')].map((label) => ({
++            text: label.textContent, x: label.getAttribute('x'), y: label.getAttribute('y'), rect: label.getBoundingClientRect().toJSON(),
++          })),
++        }))
++        return {
++          series: props.series.map((entry) => ({ id: entry.id, label: entry.label, color: entry.color, points: entry.points.map((point) => ({ t: point.t, y: point.y })) })),
++          ariaLabel: node.getAttribute('aria-label'), summary: document.getElementById(node.getAttribute('aria-describedby'))?.textContent,
++          svg: node.innerHTML, geometry,
++          visibleLabels: [...node.closest('.chart-shell').querySelectorAll('span,button')].map((element) => ({ text: element.textContent, rect: element.getBoundingClientRect().toJSON() })),
++          chain,
++        }
+       }
+       chain.push(typeof fiber.type === 'function' ? fiber.type.name : String(fiber.type))
+       fiber = fiber.return
+@@ -209,18 +343,30 @@
+   assert.ok(!actual.missingSeries, 'BLOCKED passive chart series observation unavailable')
+   const source = [...logical.values()].find((entry) => entry.value?.artifactKind === 'team-history-scope' && entry.value.filter?.season === 'All' && entry.value.filter?.event === 'All' && entry.value.filter?.region === 'All')
+   assert.ok(source?.value?.series, 'raw all-scope history oracle')
++  const rawIndex = readObservedLogical(plan.manifest.teamHistoryIndexUrl, [])
++  assert.equal(new URL(rawIndex.value.scopeIndex.All__All__All.url, 'http://fixture.invalid').pathname, source.logicalPath)
++  const rawSource = readObservedLogical(source.logicalPath, picks.map((pick) => pick.id))
+   const expected = picks.map((pick) => {
+-    const series = source.value.series[pick.id]
++    const series = rawSource.value.series[pick.id]
+     assert.ok(series?.points?.length >= 2, 'selected raw series has points')
+     const days = new Map()
+     for (const point of series.points) if (Number.isFinite(point[1])) days.set(point[0], point[1])
+-    return { id: pick.id, label: pick.code, rawPoints: series.points, points: [...days].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([date, y]) => ({ t: Date.parse(date), y })) }
+-  })
+-  save(`${name}-point-map.json`, { logicalPath: source.logicalPath, objectPath: source.objectPath, expected, actualSeries: actual.series, basis: 'Independent date grouping of raw emitted point tuples. Read-only React props and DOM. This is a separate companion tab.' })
++    return { id: pick.id, label: pick.code, rawPoints: series.points, rawKeyMapping: rawSource.selectedKeySources.filter((entry) => entry.selectedId === pick.id && entry.pointsSha256 === sha(JSON.stringify(series.points))), points: [...days].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([date, y]) => ({ t: Date.parse(date), y })) }
++  })
++  save(`${name}-point-map.json`, {
++    unit: release.unit, output: out, actionPhase: phase, logicalPath: source.logicalPath, objectPath: source.objectPath,
++    actualSelectedKeys: picks.map((pick) => pick.id), returnedRawKeys: Object.keys(rawSource.value.series),
++    responseProvenance: [...rawIndex.receipts, ...rawSource.receipts], expected, actualSeries: actual.series, actualMountedGeometry: actual.geometry,
++    selectedKeyMappingStatus: expected.every((entry) => entry.rawKeyMapping.length > 0) ? 'RAW_KEY_LOCATIONS_RETAINED_INDEPENDENT_SELECTION_PROOF_PENDING' : 'PENDING_EXACT_KEY_LOCATION_PROOF',
++    pixelMappingStatus: 'PENDING_INDEPENDENT_GEOMETRY_TO_RAW_VALUE_PROOF',
++    lane8OracleClaim: phase.startsWith('lane8') ? 'Same actual unit newly captured full bodies. Earlier lane7 sequence reuse is explicit. No new HTTP response is claimed for app cache reuse. Exact literal wording remains BLOCKED until independent review and root countersign.' : null,
++    basis: 'Expected tuples decoded from saved current-unit browser bodies. Generated logical values only locate the immutable digest. Props equality alone grants no rendered-point or selection credit.',
++  })
++  pixelPredicates.push({ name, status: 'PENDING', reason: 'Mounted SVG stroke and dot geometry retained. Exact pixel mapping to raw values requires independent proof.' })
+   assert.deepEqual(actual.series.map(({ id, label, points }) => ({ id, label, points })), expected.map(({ id, label, points }) => ({ id, label, points })))
+ }
+ try {
+-  emit('driver', 'start', { root, head, tree, argv: process.argv, execArgv: process.execArgv, heapSizeLimitBytes: getHeapStatistics().heap_size_limit, nodeOptions: process.env.NODE_OPTIONS, releasePath, release, provenance: 'Separate named Playwright+CDP companion. Not a T3 tab or the T3 live run.', label: 'SYNTHETIC seeded-sample. Not official LoL Esports data.' })
++  emit('driver', 'start', { ownedTemp, admissionState, writerAdmission, tmpdir: process.env.TMPDIR, osTmpdir: tmpdir(), nodeCompileCache: process.env.NODE_COMPILE_CACHE, nodeDisableCompileCache: process.env.NODE_DISABLE_COMPILE_CACHE, tsxDisableCache: process.env.TSX_DISABLE_CACHE, root, head, tree, argv: process.argv, execArgv: process.execArgv, heapSizeLimitBytes: getHeapStatistics().heap_size_limit, nodeOptions: process.env.NODE_OPTIONS, releasePath, release, provenance: 'Separate named Playwright+CDP companion. Not a T3 tab or the T3 live run.', label: 'SYNTHETIC seeded-sample. Not official LoL Esports data.' })
+   resources()
+   resourceTimer = setInterval(() => { try { resources() } catch (error) { block(String(error)) } }, 5000)
+   save('release.json', release)
+@@ -229,17 +375,24 @@
+   save('runtime-tools-before.json', toolState()); assert.deepEqual(toolState(), toolPins)
+   save('instrument-before.json', instrumentState())
+   emit('native', 'actual-node-argv', { argv: readFileSync('/proc/self/cmdline', 'utf8').split('\0').filter(Boolean) })
+-  save('optimizer-before.json', cache())
++  optimizerBefore = cache()
++  save('optimizer-before.json', optimizerBefore)
++  assert.deepEqual(optimizerBefore, json(join(prep, 'optimizer-pins.json')), 'reviewed frozen optimizer identity')
++  const dependencyPins = json(join(prep, 'loaded-dependency-pins.json'))
++  dependencyBefore = dependencyState(root, dependencyPins)
++  save('loaded-dependencies-before.json', dependencyBefore)
++  assert.deepEqual(dependencyBefore, { sharedStore: dependencyPins.sharedStore, packages: dependencyPins.packages })
++  assert.deepEqual(json(join(ownedTemp.path, 'dependencies-preloader.json')), dependencyBefore)
+   const load = (path) => import(pathToFileURL(join(root, path)).href)
+-  const recipe = readFileSync(join(prep, 'address91-recipe.ts'), 'utf8').replace("'RUNTIME_TYPES_PATH'", JSON.stringify(join(root, 'src/types.ts')))
+-  raw('fixture-from-test.ts', recipe)
+-  const fixture = await import(pathToFileURL(join(out, 'fixture-from-test.ts')).href)
++  const recipe = readFileSync(join(prep, 'address91-recipe.mts'), 'utf8').replace("'RUNTIME_TYPES_PATH'", JSON.stringify(join(root, 'src/types.ts')))
++  raw('fixture-from-test.mts', recipe)
++  const fixture = await import(pathToFileURL(join(out, 'fixture-from-test.mts')).href)
+   const { matches, teams, rosters } = fixture
+   assert.equal(matches.length, 91); assert.equal(Object.keys(teams).length, 20)
+   save('fixture-input.json', { label: 'SYNTHETIC seeded-sample', generatedAt: '2026-07-01T00:00:00.000Z', matches, teams, rosters })
+   const { createStaticRankingData } = await load('src/lib/snapshot.ts')
+   const { createPublicArtifactWritePlan } = await load('src/lib/publicArtifacts/writePlan.ts')
+-  const { createGenerationManifest, prepareSemanticArtifact } = await load('scripts/public-artifact-storage.mjs')
++  const { createGenerationManifest, prepareSemanticArtifact, canonicalJsonFor } = await load('scripts/public-artifact-storage.mjs')
+   const data = createStaticRankingData({ matches, teams, rosters, generatedAt: '2026-07-01T00:00:00.000Z', dataMode: 'seeded-sample' })
+   plan = createPublicArtifactWritePlan(data)
+   save('write-plan.json', plan)
+@@ -261,10 +414,12 @@
+     }
+   }
+   manifest = createGenerationManifest({ generationId: plan.manifest.artifactMeta.runId, rootManifest: { ...plan.manifest }, entries })
+-  const bootstrap = Buffer.from(JSON.stringify(manifest))
++  const bootstrap = Buffer.from(canonicalJsonFor(manifest) + '\n')
+   save('generation-manifest.json', manifest); raw('bootstrap-body.json', bootstrap)
+   save('logical-mapping.json', [...logical.values()].map(({ value, ...rest }) => rest))
+   save('object-inventory.json', [...objects].map(([path, bytes]) => ({ path, sha256: sha(bytes), bytes: bytes.length, references: references.get(path) })))
++  for (const entry of logical.values()) if (/^team-history/.test(entry.value?.artifactKind ?? '')) for (const path of closure(entry.logicalPath)) forbiddenPaths.add(path)
++  for (const path of closure(plan.manifest.playerDirectoryUrl ?? '/data/entities/players.json')) forbiddenPaths.add(path)
+   const { HOMEPAGE_PRERENDER_MARKER, injectHomepagePrerender, loadHomepagePrerenderSnapshot, renderHomepagePrerenderSnapshot } = await load('scripts/seo-prerender.ts')
+   const homepage = renderHomepagePrerenderSnapshot(await loadHomepagePrerenderSnapshot(async (url) => {
+     const entry = logical.get(new URL(url, 'http://fixture.invalid').pathname)
+@@ -302,7 +457,7 @@
+     })
+   } }
+   const { createServer } = await load('node_modules/vite/dist/node/index.js')
+-  server = await createServer({ root, logLevel: 'info', plugins: [plugin], server: { host: '127.0.0.1', port: 0 } })
++  server = await createServer({ root, configLoader: 'runner', logLevel: 'info', plugins: [plugin], server: { host: '127.0.0.1', port: 0 } })
+   assert.equal(server.config.root, root); assert.equal(server.config.configFile, join(root, 'vite.config.ts'))
+   assert.equal(server.config.cacheDir, join(root, 'node_modules/.vite'))
+   assert.ok(!server.config.env.VITE_RANKING_DATA_URL)
+@@ -310,6 +465,8 @@
+   const address = server.httpServer.address()
+   assert.ok(address && typeof address !== 'string' && address.address === '127.0.0.1')
+   base = `http://127.0.0.1:${address.port}`
++  const allHistoryIds = Object.keys([...logical.values()].find((entry) => entry.value?.artifactKind === 'team-history-scope' && entry.value.filter?.season === 'All' && entry.value.filter?.event === 'All' && entry.value.filter?.region === 'All').value.series)
++  save('emitted-demand-closure-before-browser.json', { indexAndAllScope: expectedDemand('history', allHistoryIds).closureMembers, allHistoryIds, players: expectedDemand('players').closureMembers, requestAllowance: false, onlySelectedBytesClaim: false, runtimeReleaseMustHaveReviewedThisSourceTrace: 'demand-source-trace.md' })
+   save('server-identity.json', { pid: process.pid, address, base, root, head, tree, variant: 'address91', configFile: server.config.configFile, cacheDir: server.config.cacheDir, plugins: server.config.plugins.map((p) => p.name), bootstrapPolicy: 'no-store, no ETag, not production revalidation equivalent' })
+   const pkg = json(join(root, 'node_modules/playwright-core/package.json'))
+   const catalog = json(join(root, 'node_modules/playwright-core/browsers.json')).browsers.find((b) => b.name === 'chromium-headless-shell')
+@@ -329,6 +486,20 @@
+   assert.ok(executable.includes('chromium_headless_shell-1243/')); assert.equal(browser.version(), catalog.browserVersion)
+   emit('driver', 'browser-identity', { pid, executable, executableSha256: sha(readFileSync(executable)), version: browser.version(), catalog, playwrightCore: pkg.version })
+   context = await browser.newContext({ viewport: { width: 1280, height: 900 }, recordVideo: { dir: join(out, 'video'), size: { width: 1280, height: 900 } } })
++  await context.addInitScript(() => {
++    window.__r3Lanes78Pointer = { x: null, y: null, type: 'no observed pointer event', target: null }
++    window.__r3Lanes78Inputs = []
++    document.addEventListener('click', (event) => {
++      const button = event.target.closest?.('button')
++      const summary = event.target.closest?.('summary')
++      const label = button?.getAttribute('aria-label') ?? button?.textContent?.trim()
++      const kind = label === 'Open comparison' ? 'history' : /^Players$/.test(summary?.textContent?.trim() ?? '') ? 'players' : null
++      if (kind) window.__r3Lanes78Inputs.push({ kind, trusted: event.isTrusted, wallEpochMs: performance.timeOrigin + performance.now(), performanceNow: performance.now(), x: event.clientX, y: event.clientY, target: event.target.outerHTML.slice(0, 1024) })
++    }, { passive: true, capture: true })
++    for (const name of ['pointermove', 'pointerdown', 'pointerup']) document.addEventListener(name, (event) => {
++      window.__r3Lanes78Pointer = { x: event.clientX, y: event.clientY, type: name, target: event.target?.outerHTML?.slice(0, 1024), at: performance.now() }
++    }, { passive: true, capture: true })
++  })
+   context.setDefaultTimeout(30_000); context.setDefaultNavigationTimeout(30_000)
+   context.on('request', (request) => {
+     const id = pwId(request), url = request.url()
+@@ -336,6 +507,10 @@
+     let frameUrl = null
+     try { frameUrl = request.frame().url() } catch (error) { emit('pw', 'frame-unavailable', { id, error: String(error) }) }
+     event('pw', 'request', { pwId: id, url, method: request.method(), headers: request.headers(), resourceType: request.resourceType(), navigation: request.isNavigationRequest(), redirectedFromPwId: request.redirectedFrom() ? pwId(request.redirectedFrom()) : null, frameUrl, serviceWorker: !!request.serviceWorker() })
++    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
++      mainNavigationRequests += 1
++      if (mainNavigationRequests !== 1 || phase !== 'initial-navigation') block('unexpected main-frame navigation request after first goto')
++    }
+     if (/^https?:/.test(url) && new URL(url).origin !== base) block(`nonfixture HTTP origin ${url}`)
+   })
+   context.on('response', (response) => {
+@@ -345,16 +520,22 @@
+   })
+   context.on('requestfinished', (request) => {
+     const id = pwId(request)
+-    inflight.delete(`pw:${id}`); event('pw', 'requestfinished', { pwId: id, url: request.url() })
++    inflight.delete(`pw:${id}`); event('pw', 'requestfinished', { pwId: id, url: request.url(), timing: request.timing() })
+     if (!artifact(request.url())) return
+     const job = (async () => {
+       const response = responses.get(id); assert.ok(response, 'response for finished artifact')
+       const body = await response.body(), path = new URL(request.url()).pathname
+       raw(`browser-bodies/${id}.body`, body)
+-      event('pw', 'body', { pwId: id, url: request.url(), sha256: sha(body), bytes: body.length, path: `browser-bodies/${id}.body` })
++      const bodyEvent = event('pw', 'body', { pwId: id, url: request.url(), sha256: sha(body), bytes: body.length, path: `browser-bodies/${id}.body` })
+       if (objects.has(path)) {
+         assert.ok(body.equals(objects.get(path)), 'browser raw immutable bytes match generated object')
+-        if (response.status() === 200) completeObjects.add(path)
++        if (response.status() === 200) {
++          completeObjects.add(path)
++          const requestEvent = records.find((row) => row.source === 'pw' && row.kind === 'request' && row.pwId === id)
++          const responseEvent = records.find((row) => row.source === 'pw' && row.kind === 'response' && row.pwId === id)
++          const receipt = { unit: release.unit, output: out, objectPath: path, url: request.url(), pwId: id, requestSeq: requestEvent?.seq, responseSeq: responseEvent?.seq, bodySeq: bodyEvent.seq, requestPhase: requestEvent?.phase, bodyPhase: bodyEvent.phase, sha256: sha(body), bytes: body.length, rawBodyPath: `browser-bodies/${id}.body` }
++          observedBodies.set(path, [...(observedBodies.get(path) ?? []), receipt])
++        }
+       }
+     })().catch((error) => block(`body receipt ${error}`)).finally(() => bodyJobs.delete(job))
+     bodyJobs.add(job)
+@@ -369,7 +550,9 @@
+   page.on('worker', (worker) => { emit('page', 'worker', { url: worker.url() }); block('dedicated worker has no complete CDP coverage') })
+   page.on('frameattached', (frame) => { emit('page', 'frameattached', { url: frame.url() }); block('child frame has no complete CDP coverage') })
+   page.on('framedetached', (frame) => emit('page', 'framedetached', { url: frame.url() }))
+-  page.on('framenavigated', (frame) => emit('page', 'framenavigated', { url: frame.url(), main: frame === page.mainFrame() }))
++  page.on('framenavigated', (frame) => {
++    emit('page', 'framenavigated', { url: frame.url(), main: frame === page.mainFrame() })
++  })
+   for (const name of ['domcontentloaded', 'load', 'crash', 'close']) page.on(name, () => emit('page', name, { url: page.url() }))
+   page.on('pageerror', (error) => { emit('page', 'pageerror', { error: String(error), stack: error.stack }); block('page error') })
+   cdp = await context.newCDPSession(page)
+@@ -387,6 +570,13 @@
+     event('cdp', name, { raw })
+     if (name === 'loadingFailed' || name === 'webSocketFrameError') block(`CDP ${name}`)
+   })
++  cdp.on('Page.frameNavigated', ({ frame }) => {
++    emit('cdp', 'document-navigation', { frame })
++    if (frame.parentId) return
++    if (phase !== 'initial-navigation' || firstDocumentLoader !== null) block('unexpected main-frame document navigation after first goto')
++    else firstDocumentLoader = frame.loaderId
++  })
++  await cdp.send('Page.enable')
+   await cdp.send('Network.enable')
+   await inventory('listeners-ready')
+   emit('driver', 'listeners-ready', { viewport: page.viewportSize(), coverage: 'PW context plus page CDP. Source-proved no worker or child-frame use on this ranking path, enforced with continuous events and inventories. No routing, fetch wrapping, cache disabling, IO override, or viewport changes.' })
+@@ -407,8 +597,7 @@
+     return { index, name, id: standing.teamId, code: teams[name].code ?? name }
+   })
+   save('row-identities.json', { rows, initialFive: rows.slice(0, 5), selected7: rows.slice(5, 8), selected8: rows.slice(8, 10) })
+-  const historyPaths = [...logical.values()].filter((entry) => /^team-history/.test(entry.value?.artifactKind ?? '')).flatMap((entry) => closure(entry.logicalPath))
+-  assert.ok(!records.some((row) => row.source === 'pw' && row.kind === 'request' && historyPaths.includes(new URL(row.url).pathname)), 'no initial selected-history attempt')
++  assertNoPriorDemand('initial-loaded-both-observers')
+   const selected7 = rows.slice(5, 8)
+   assert.ok(selected7.every((pick) => !rows.slice(0, 5).some((first) => first.id === pick.id)))
+   for (const pick of selected7) await step(`lane7-pick-${pick.index}`, 'zero', async () => {
+@@ -419,13 +608,22 @@
+   const comparison = page.getByRole('dialog', { name: 'Team comparison', exact: true })
+   await step('lane7-open-comparison', () => expectedDemand('history', selected7.map((p) => p.id)), async () => {
+     await geometry('before-open-comparison')
++    assertNoPriorDemand('immediately-before-comparison-input')
++    lane7HistoryStarted = true
++    emit('driver', 'lane7-first-history-input', { beforeInputSeq: seq })
+     await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
++    const inputs = await page.evaluate(() => window.__r3Lanes78Inputs.filter((row) => row.kind === 'history'))
++    assert.equal(inputs.length, 1)
++    inputBoundaries.history = inputs[0]
++    emit('driver', 'actual-input-boundary', inputs[0])
+   }, () => chart(comparison, selected7, 'lane7-three'))
+   await step('lane7-remove-first', () => expectedDemand('history', selected7.slice(1).map((p) => p.id)), () => comparison.getByRole('button', { name: `Remove ${selected7[0].name} from comparison`, exact: true }).click(), () => chart(comparison, selected7.slice(1), 'lane7-two'))
+   await page.screenshot({ path: join(out, 'receipts/r3-lane-7.png') })
+   await step('lane7-close-and-clear', 'zero', async () => {
+     await comparison.getByRole('button', { name: 'Close', exact: true }).click()
++    await geometry('immediately-after-lane7-comparison-close')
+     await page.getByRole('region', { name: 'Compare teams: 2 selected', exact: true }).getByRole('button', { name: 'Clear', exact: true }).click()
++    await geometry('after-lane7-close-and-clear')
+   })
+   const old = rows[0]
+   await step('lane8-detail-players-closed', () => expectedDemand('history', [old.id]), async () => {
+@@ -435,15 +633,21 @@
+     await chart(detail, [old], 'lane8-old-detail', 'Power')
+     assert.equal(await detail.locator('summary').filter({ hasText: /^Players$/ }).evaluate((s) => s.parentElement.open), false)
+   })
+-  const playerClosure = closure(plan.manifest.playerDirectoryUrl ?? '/data/entities/players.json')
+-  assert.ok(!records.some((row) => row.source === 'pw' && row.kind === 'request' && playerClosure.includes(new URL(row.url).pathname)), 'closed Players made zero directory-closure attempts')
+-  await step('lane8-players-open', 'players', () => page.getByRole('dialog').locator('summary').filter({ hasText: /^Players$/ }).click(), async () => {
++  assertNoPriorDemand('closed-players-both-observers')
++  await step('lane8-players-open', 'players', async () => {
++    await page.getByRole('dialog').locator('summary').filter({ hasText: /^Players$/ }).click()
++    const inputs = await page.evaluate(() => window.__r3Lanes78Inputs.filter((row) => row.kind === 'players'))
++    assert.equal(inputs.length, 1)
++    inputBoundaries.players = inputs[0]
++    emit('driver', 'actual-input-boundary', inputs[0])
++  }, async () => {
+     await page.waitForFunction(() => [...document.querySelectorAll('[role="dialog"] details')].some((d) => d.open && /^Players/.test(d.textContent)))
+   })
+   await step('lane8-close-detail', 'zero', async () => {
+     await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click()
+     await page.getByRole('dialog').waitFor({ state: 'hidden' })
+     emit('driver', 'old-detail-closed', { old, hash: await page.evaluate(() => location.hash) })
++    await geometry('after-lane8-close-detail')
+   })
+   const selected8 = rows.slice(8, 10)
+   assert.ok(selected8.every((pick) => pick.id !== old.id))
+@@ -455,14 +659,15 @@
+   await step('lane8-open-comparison', () => expectedDemand('history', selected8.map((p) => p.id)), () => page.getByRole('button', { name: 'Open comparison', exact: true }).click(), () => chart(comparison, selected8, 'lane8-new-picks'))
+   emit('driver', 'no-old-detail-replacement', { old, selected8 })
+   await page.screenshot({ path: join(out, 'receipts/r3-lane-8.png') })
+-  await step('lane8-close-comparison', 'zero', () => comparison.getByRole('button', { name: 'Close', exact: true }).click())
++  await step('lane8-close-comparison', 'zero', async () => { await comparison.getByRole('button', { name: 'Close', exact: true }).click(); await geometry('after-lane8-close-comparison') })
+   await step('data-and-sources', 'zero', () => page.locator('summary').filter({ hasText: /^Data and sources/ }).click(), async () => {
+     assert.equal(await page.locator('summary').filter({ hasText: /^Data and sources/ }).evaluate((s) => s.parentElement.open), true)
+   })
+   await boundary('postloaded-end')
+-  const candidate = records.find((row) => row.source === 'pw' && row.kind === 'body' && row.phase === 'initial-navigation' && objects.has(new URL(row.url).pathname))
++  const candidate = records.find((row) => row.source === 'pw' && row.kind === 'body' && row.phase === 'initial-navigation' && objects.has(new URL(row.url).pathname) && !forbiddenPaths.has(new URL(row.url).pathname))
+   assert.ok(candidate, 'sensitivity control requires actual initial immutable body')
+   phase = 'sensitivity-control'
++  phasePlans.set(phase, { expectedAttemptBag: [candidate.url] })
+   const tag = randomUUID()
+   emit('driver', 'control-start', { tag, header: 'X-R3-Lanes78-Control', url: candidate.url, expectedPwAttempts: 1, expectedCdpAttempts: 1, expectedServerArrivals: 0, requiredCache: true, excludedFromAppPredicateOnly: true })
+   const status = await page.evaluate(async ({ url, tag }) => { const r = await fetch(url, { headers: { 'X-R3-Lanes78-Control': tag } }); await r.arrayBuffer(); return r.status }, { url: candidate.url, tag })
+@@ -492,6 +697,7 @@
+   emit('driver', 'error', { error: String(error), stack: error.stack })
+   console.error(error)
+ } finally {
++  save('owned-processes.json', { driverPid: process.pid, temp: ownedTemp.path, processes: [...ownedProcesses.values()] });
+   phase = 'teardown'; phasePlans.set(phase, { expectedAttemptBag: [] }); emit('driver', 'phase-open')
+   if (resourceTimer) clearInterval(resourceTimer)
+   let video
+@@ -499,7 +705,17 @@
+     ['context', async () => { if (context) { video = page?.video(); await context.close(); emit('driver', 'context-closed'); await Promise.allSettled([...bodyJobs]); if (video) { const path = await video.path(); emit('driver', 'video-finalized', { path, sha256: sha(readFileSync(path)) }) } } }],
+     ['browser', async () => { if (browser) { await browser.close(); emit('driver', 'browser-closed', { connected: browser.isConnected() }) } }],
+     ['server', async () => { if (server) { const closing = server.close(); server.httpServer?.closeAllConnections(); await closing; assert.equal(server.httpServer?.listening ?? false, false); emit('driver', 'server-closed', { listening: server.httpServer?.listening ?? null }) } }],
+-    ['source-after', async () => { save('source-after.json', sourceIdentity(root, head, tree)); save('dependencies-after.json', deps()); assert.deepEqual(deps(), pins); save('optimizer-after.json', cache()); save('runtime-tools-after.json', toolState()); assert.deepEqual(toolState(), toolPins); const instruments = instrumentState(); save('instrument-after.json', instruments); assert.deepEqual(instruments, json(join(out, 'instrument-before.json'))) }],
++    ['source-after', async () => {
++      save('source-after.json', sourceIdentity(root, head, tree))
++      save('dependencies-after.json', deps()); assert.deepEqual(deps(), pins)
++      save('optimizer-after.json', cache()); assert.deepEqual(cache(), optimizerBefore, 'frozen optimizer')
++      save('loaded-dependencies-after.json', dependencyState(root, json(join(prep, 'loaded-dependency-pins.json'))))
++      assert.deepEqual(json(join(out, 'loaded-dependencies-after.json')), dependencyBefore)
++      save('runtime-tools-after.json', toolState()); assert.deepEqual(toolState(), toolPins)
++      const instruments = instrumentState()
++      save('instrument-after.json', instruments)
++      assert.deepEqual(instruments, json(join(out, 'instrument-before.json')))
++    }],
+   ]) {
+     try { await close(); cleanup.push({ name, code: 0 }) }
+     catch (error) { cleanup.push({ name, code: 1, error: String(error) }); process.exitCode = 1; emit('driver', 'cleanup-error', { name, error: String(error) }) }
+@@ -508,6 +724,16 @@
+     const path = join(out, 'receipts', name)
+     if (existsSync(path)) emit('driver', 'media-sha256', { path, sha256: sha(readFileSync(path)) })
+   }
++  const historyPaths = new Set([...logical.values()].filter((entry) => /^team-history/.test(entry.value?.artifactKind ?? '')).flatMap((entry) => closure(entry.logicalPath)))
++  const playerPaths = plan ? new Set(closure(plan.manifest.playerDirectoryUrl ?? '/data/entities/players.json')) : new Set()
++  const inputAudit = auditInputBoundaries(records, inputBoundaries, historyPaths, playerPaths)
++  save('actual-input-boundary-audit.json', inputAudit)
++  for (const failure of inputAudit.failures) block(`actual input boundary ${failure.kind} ${failure.source} ${failure.error}`)
++  const fullAudit = auditPhases(records, phasePlans, forbiddenPaths)
++  save('all-phase-audit.json', fullAudit)
++  for (const failure of fullAudit.failures) block(`all-phase demand ${failure.phase} ${failure.error}`)
++  save('owned-temp-before-driver-exit.json', tempInventory(ownedTemp.path))
++  save('pixel-predicates.json', pixelPredicates)
+   for (const [name, expected] of phasePlans) {
+     const rows = records.filter((row) => row.phase === name)
+     const pwBag = rows.filter((row) => row.source === 'pw' && row.kind === 'request' && artifact(row.url)).map((row) => row.url).sort()
+--- v1/run-lanes78.sh
++++ v2/run-lanes78.sh
+@@ -4,7 +4,8 @@
+ runtime_root=$1
+ new_output=$2
+ release_json=$3
+-package_dir=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1
++package_dir=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2
++[[ "$runtime_root" = /home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610 ]] || exit 65
+ cd "$runtime_root"
+ [[ ! -e "$new_output" && -d $(dirname "$new_output") ]] || exit 65
+ awk '/^full / { for(i=1;i<=NF;i++) if($i ~ /^avg60=/) { split($i,a,"="); value=a[2]; found=1 } } END { print "memory_full_avg60=" value; exit !(found && value <= 5) }' /proc/pressure/memory || exit 65
+@@ -16,12 +17,35 @@
+ sha256sum --check "$package_dir/inventory-self-sha256.txt"
+ sha256sum --check "$package_dir/inventory-sha256.txt"
+ sha256sum --check "$package_dir/external-inputs-sha256.txt"
++umask 077
++owned_tmp="${new_output}.tmp"
++[[ ! -e "$owned_tmp" && ! -L "$owned_tmp" ]] || exit 65
++mkdir -m 700 "$owned_tmp"
++export TMPDIR="$owned_tmp"
++export TMP="$owned_tmp"
++export TEMP="$owned_tmp"
++export TSX_DISABLE_CACHE=1
++export NODE_DISABLE_COMPILE_CACHE=1
++export NODE_COMPILE_CACHE="$owned_tmp/node-compile"
+ export NODE_OPTIONS=--max-old-space-size=1536
+ export COREPACK_ENABLE_NETWORK=0
++inner_status=UNRUN
++finish_owned() {
++  caller_status=$?
++  trap - EXIT
++  set +e
++  node --max-old-space-size=128 "$package_dir/cleanup-owned.mjs" "$new_output" "$owned_tmp"
++  cleanup_status=$?
++  printf 'lanes78_owned_cleanup_exit=%s\n' "$cleanup_status"
++  printf 'lanes78_inner_exit=%s ended=%s\n' "$inner_status" "$(date -u +%FT%TZ)"
++  [[ $caller_status -eq 0 ]] || exit "$caller_status"
++  exit "$cleanup_status"
++}
++trap finish_owned EXIT
++node --max-old-space-size=128 "$package_dir/dependencies-preloader.mjs" "$runtime_root" "$new_output" "$package_dir/loaded-dependency-pins.json"
+ printf 'lanes78_inner_start=%s root=%s output=%s\n' "$(date -u +%FT%TZ)" "$runtime_root" "$new_output"
+ set +e
+ node --import "$runtime_root/node_modules/tsx/dist/loader.mjs" "$package_dir/lanes78-driver.mjs" "$runtime_root" "$new_output" "$release_json"
+ inner_status=$?
+ set -e
+-printf 'lanes78_inner_exit=%s ended=%s\n' "$inner_status" "$(date -u +%FT%TZ)"
+ exit "$inner_status"
+--- v1/observe.mjs
++++ v2/observe.mjs
+@@ -1,7 +1,7 @@
+ import assert from 'node:assert/strict'
+ import { spawn } from 'node:child_process'
+ import { createHash } from 'node:crypto'
+-import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
++import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, lstatSync, writeFileSync } from 'node:fs'
+ import { isAbsolute, join } from 'node:path'
+ 
+ const [out, separator, command, ...args] = process.argv.slice(2)
+@@ -24,8 +24,10 @@
+ function inventory(directory) {
+   for (const name of readdirSync(directory).sort()) {
+     const path = join(directory, name)
+-    if (statSync(path).isDirectory()) inventory(path)
+-    else artifacts.push({ path, bytes: statSync(path).size, sha256: createHash('sha256').update(readFileSync(path)).digest('hex') })
++    const info = lstatSync(path)
++    if (info.isDirectory() && !info.isSymbolicLink()) inventory(path)
++    else if (info.isFile()) artifacts.push({ path, bytes: info.size, sha256: createHash('sha256').update(readFileSync(path)).digest('hex') })
++    else artifacts.push({ path, bytes: info.size, nonregular: true, sha256: null })
+   }
+ }
+ inventory(out)
+--- v1/source-identity.mjs
++++ v2/source-identity.mjs
+@@ -8,7 +8,7 @@
+ export function sourceIdentity(root, expectedHead, expectedTree) {
+   assert.ok(isAbsolute(root), 'one explicit absolute source root is required')
+   assert.equal(realpathSync(root), root, 'source root must be canonical')
+-  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trimEnd()
++  const git = (...args) => execFileSync('git', ['-C', root, ...args], { env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }).trimEnd()
+   assert.equal(git('rev-parse', '--show-toplevel'), root)
+   assert.match(expectedHead, /^[a-f0-9]{40}$/)
+   assert.match(expectedTree, /^[a-f0-9]{40}$/)
+@@ -38,7 +38,7 @@
+   const dependencyLock = readFileSync(join(root, 'node_modules/.pnpm/lock.yaml'))
+   const installedLockSha256 = createHash('sha256').update(dependencyLock).digest('hex')
+   assert.equal(installedLockSha256, '3887d73689714304614674614fd51bd5c62f5f704050a5ca7dea4f4b8fc9c0e9', 'released installed lock identity')
+-  return { root, head: expectedHead, tree: expectedTree, commonDir: git('rev-parse', '--path-format=absolute', '--git-common-dir'), installedLockSha256, ignoredPublicData: { path: join(root, 'public/data'), exists: existsSync(join(root, 'public/data')) }, sources }
++  return { root, head: expectedHead, tree: expectedTree, commonDir: git('rev-parse', '--path-format=absolute', '--git-common-dir'), installedLockSha256, sharedStoreRealpath: realpathSync(join(root, 'node_modules/.pnpm')), ignoredPublicData: { path: join(root, 'public/data'), exists: existsSync(join(root, 'public/data')) }, sources }
+ }
+ 
+ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+--- /dev/null
++++ v2/source-guards.mjs
+@@ -0,0 +1,151 @@
++import assert from 'node:assert/strict'
++import { createHash } from 'node:crypto'
++import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
++import { dirname, join } from 'node:path'
++
++export const inspector = Object.freeze({ path: '/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py', sha256: 'ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b' })
++export const runtimeRoot = '/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610'
++export const sharedStore = '/home/codex/work/lol-esports-ranking/node_modules/.pnpm'
++export const sha = (body) => createHash('sha256').update(body).digest('hex')
++
++export function validateAdmission(value, { now, head, tree, heavyLock, browserLock }) {
++  assert.equal(value.phase, 'before')
++  assert.equal(value.ready, true)
++  assert.deepEqual(value.errors, [])
++  assert.equal(value.head, head)
++  assert.equal(value.tree, tree)
++  assert.equal(value.status, '')
++  assert.equal(value.trackedBlobCount, 680)
++  const age = now - Date.parse(value.at)
++  assert.ok(Number.isFinite(age) && age >= 0 && age <= 30_000, 'actual inspector at must be fresh')
++  assert.ok(Number.isFinite(value.memoryFullAvg60) && value.memoryFullAvg60 <= 5)
++  assert.ok(Number.isFinite(value.memAvailableKiB) && value.memAvailableKiB >= 1536 * 1024)
++  assert.ok(Number.isFinite(value.diskFreeGiB) && value.diskFreeGiB >= 4)
++  assert.deepEqual(value.processMatches, [])
++  assert.ok(Array.isArray(value.processSnapshotBefore) && value.processSnapshotBefore.length > 0)
++  assert.ok(Array.isArray(value.processSnapshotAfter) && value.processSnapshotAfter.length > 0)
++  assert.deepEqual(value.processInspectionErrors, { before: [], after: [] })
++  assert.deepEqual(value.locks, [heavyLock, browserLock].map((path) => ({ path, acquiredNonblocking: true, released: true })))
++  return { at: value.at, ageMs: age, locks: value.locks, resourcesVerified: true }
++}
++
++export function requireColdHistory(required, semanticCacheBefore, expectedAttemptBag, base) {
++  assert.ok(required.length > 0, 'lane 7 full history closure must be nonempty')
++  assert.deepEqual(required.filter((path) => semanticCacheBefore.includes(path)), [], 'no prior complete history body')
++  assert.deepEqual(expectedAttemptBag, required.map((path) => `${base}${path}`).sort(), 'full required bag, no cache subtraction')
++}
++
++export function attemptBags(records, phase) {
++  const rows = records.filter((row) => row.phase === phase)
++  return {
++    pw: rows.filter((row) => row.source === 'pw' && row.kind === 'request' && /^\/(data|tournament-data)\//.test(new URL(row.url).pathname)).map((row) => row.url).sort(),
++    cdp: rows.filter((row) => row.source === 'cdp' && row.kind === 'requestWillBeSent' && /^\/(data|tournament-data)\//.test(new URL(row.raw.request.url).pathname)).map((row) => row.raw.request.url).sort(),
++  }
++}
++
++export function auditPhases(records, plans, forbiddenPaths) {
++  const phases = new Set(['setup', 'initial-navigation', 'sensitivity-control', 'teardown', ...plans.keys(), ...records.map((row) => row.phase)])
++  const failures = [], results = []
++  for (const phase of phases) {
++    const bags = attemptBags(records, phase)
++    const expected = plans.get(phase)
++    const forbidden = (bag) => bag.filter((url) => forbiddenPaths.has(new URL(url).pathname))
++    try {
++      if (expected) {
++        assert.deepEqual(bags.pw, expected.expectedAttemptBag)
++        assert.deepEqual(bags.cdp, expected.expectedAttemptBag)
++      } else {
++        assert.deepEqual(forbidden(bags.pw), [], `unplanned PW history or player closure in ${phase}`)
++        assert.deepEqual(forbidden(bags.cdp), [], `unplanned CDP history or player closure in ${phase}`)
++        if (!['setup', 'initial-navigation'].includes(phase)) {
++          assert.deepEqual(bags.pw, [])
++          assert.deepEqual(bags.cdp, [])
++        }
++      }
++      results.push({ phase, bags, expected: expected ?? null, status: 'PASSED_SOURCE_RULE' })
++    } catch (error) {
++      failures.push({ phase, error: String(error), bags, expected: expected ?? null })
++    }
++  }
++  return { results, failures }
++}
++
++export function assertOwnedTemp(out, env, uid) {
++  assert.equal(env.TSX_DISABLE_CACHE, '1')
++  assert.equal(env.TMPDIR, `${out}.tmp`)
++  const info = lstatSync(env.TMPDIR)
++  assert.ok(info.isDirectory() && !info.isSymbolicLink())
++  assert.equal(realpathSync(env.TMPDIR), env.TMPDIR)
++  assert.equal(info.uid, uid)
++  assert.equal(info.mode & 0o777, 0o700)
++  return { path: env.TMPDIR, uid: info.uid, mode: info.mode & 0o777, tsxDisableCache: env.TSX_DISABLE_CACHE }
++}
++
++export function dependencyState(root, pins) {
++  assert.equal(root, runtimeRoot)
++  assert.equal(realpathSync(join(root, 'node_modules/.pnpm')), sharedStore)
++  return { sharedStore, packages: pins.packages.map((pkg) => {
++    assert.equal(realpathSync(pkg.path), pkg.realpath, `dependency realpath ${pkg.name}`)
++    const actualPaths = []
++    const walk = (dir) => { for (const name of readdirSync(dir).sort()) {
++      if (name === 'node_modules') continue
++      const file = join(dir, name), info = lstatSync(file)
++      assert.ok(!info.isSymbolicLink(), `unexpected dependency symlink ${file}`)
++      if (info.isDirectory()) walk(file)
++      else if (info.isFile()) actualPaths.push(file.slice(pkg.realpath.length + 1))
++      else assert.fail(`nonregular dependency file ${file}`)
++    } }
++    walk(pkg.realpath)
++    assert.deepEqual(actualPaths.sort(), pkg.files.map((file) => file.relativePath).sort(), `exact package file inventory ${pkg.name}`)
++    const files = pkg.files.map(({ relativePath, sha256 }) => {
++      const path = join(pkg.realpath, relativePath)
++      const realpath = realpathSync(path)
++      assert.equal(realpath, path, `dependency file symlink ${path}`)
++      assert.ok(lstatSync(path).isFile())
++      const actual = sha(readFileSync(path))
++      assert.equal(actual, sha256, `dependency code hash ${path}`)
++      return { relativePath, sha256: actual }
++    })
++    return { ...pkg, files }
++  }) }
++}
++
++export function tempInventory(path) {
++  const entries = []
++  const walk = (directory) => {
++    for (const name of readdirSync(directory).sort()) {
++      const file = join(directory, name), info = lstatSync(file)
++      entries.push({ path: file, mode: info.mode & 0o777, uid: info.uid, type: info.isDirectory() ? 'directory' : info.isFile() ? 'file' : info.isSymbolicLink() ? 'symlink' : info.isSocket() ? 'socket' : info.isFIFO() ? 'fifo' : 'other', bytes: info.size })
++      if (info.isDirectory() && !info.isSymbolicLink()) walk(file)
++    }
++  }
++  walk(path)
++  return { path, parent: dirname(path), entries }
++}
++
++export function storeWriters(snapshots) {
++  const rows = snapshots.flat().filter((row) => {
++    const command = [row.executable ?? '', ...(row.argv ?? [])].join(' ')
++    return /(?:^|[ /])(pnpm(?:\.cjs)?|npm(?:-cli\.js)?|yarn(?:\.js)?)(?: |$)/.test(command)
++  })
++  assert.deepEqual(rows, [], 'no package manager process while the shared store is in use')
++  return { matchedWriters: rows, sharedStore, basis: 'All package manager processes are rejected. Root also checks store ownership before allocation.' }
++}
++
++export function auditInputBoundaries(records, boundaries, historyPaths, playerPaths) {
++  const failures = [], results = []
++  for (const [kind, paths] of [['history', historyPaths], ['players', playerPaths]]) {
++    const attempts = records.filter((row) => row.source === 'pw' && row.kind === 'request' || row.source === 'cdp' && row.kind === 'requestWillBeSent').filter((row) => paths.has(new URL(row.source === 'pw' ? row.url : row.raw.request.url).pathname))
++    for (const row of attempts) {
++      const marker = boundaries[kind]
++      const terminal = row.source === 'pw' ? records.find((end) => end.source === 'pw' && end.kind === 'requestfinished' && end.pwId === row.pwId) : null
++      const startedAt = row.source === 'cdp' ? row.raw.wallTime * 1000 : terminal?.timing?.startTime
++      try {
++        assert.ok(marker?.trusted === true && Number.isFinite(marker.wallEpochMs), `actual trusted ${kind} input required`)
++        assert.ok(Number.isFinite(startedAt) && startedAt >= marker.wallEpochMs, `${row.source} ${kind} started before actual input or has missing start time`)
++        results.push({ kind, source: row.source, seq: row.seq, startedAt, input: marker })
++      } catch (error) { failures.push({ kind, source: row.source, seq: row.seq, startedAt: startedAt ?? null, input: marker ?? null, error: String(error) }) }
++    }
++  }
++  return { results, failures, basis: 'Actual browser request start times and trusted DOM capture click epoch times. Host delivery order grants no exception.' }
++}
+--- /dev/null
++++ v2/source-controls.mjs
+@@ -0,0 +1,119 @@
++import assert from 'node:assert/strict'
++import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
++import { dirname, join } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { validateAdmission, requireColdHistory, auditPhases, assertOwnedTemp, storeWriters, auditInputBoundaries, dependencyState, runtimeRoot, sha } from './source-guards.mjs'
++const prep = dirname(fileURLToPath(import.meta.url))
++const controlOut = process.argv[2]
++assert.ok(controlOut?.startsWith(`${prep}/receipts/`), 'one new owned source-control output directory is required')
++mkdirSync(controlOut, { mode: 0o700 })
++const results = []
++function control(name, body) {
++  body()
++  results.push({ name, status: 'PASSED', scope: 'DETERMINISTIC_SOURCE_CONTROL_ONLY', syntheticInputs: true })
++}
++const base = 'http://source-control.invalid'
++const history = '/data/objects/sha256/history', player = '/data/objects/sha256/player'
++const forbidden = new Set([history, player])
++const request = (source, phase, path, extra = {}) => source === 'pw'
++  ? { source, phase, kind: 'request', url: `${base}${path}`, ...extra }
++  : { source, phase, kind: 'requestWillBeSent', raw: { request: { url: `${base}${path}` } }, ...extra }
++control('B2 cold history requires the full nonempty bag', () => {
++  requireColdHistory([history], [], [`${base}${history}`], base)
++  assert.throws(() => requireColdHistory([], [], [], base))
++  assert.throws(() => requireColdHistory([history], [history], [], base))
++  assert.throws(() => requireColdHistory([history], [], [], base))
++})
++for (const source of ['pw', 'cdp']) for (const phase of ['setup', 'initial-navigation', 'sensitivity-control', 'late-unplanned', 'teardown']) for (const path of [history, player]) {
++  control(`B2 rejects ${source} ${phase} ${path.endsWith('history') ? 'history' : 'player'} including failed cleanup`, () => {
++    const audit = auditPhases([request(source, phase, path), { source, phase, kind: 'requestfailed', failure: 'synthetic abort' }], new Map(), forbidden)
++    assert.equal(audit.failures.length, 1)
++    assert.equal(audit.failures[0].phase, phase)
++  })
++}
++control('B2 retains duplicate and aborted attempts in a planned bag', () => {
++  const plan = new Map([['lane7-open-comparison', { expectedAttemptBag: [`${base}${history}`] }]])
++  for (const source of ['pw', 'cdp']) {
++    const rows = [request('pw', 'lane7-open-comparison', history), request('cdp', 'lane7-open-comparison', history), request(source, 'lane7-open-comparison', history, { failure: 'synthetic abort' })]
++    assert.equal(auditPhases(rows, plan, forbidden).failures.length, 1)
++  }
++})
++control('B2 sees a late initial request despite a correct later comparison bag', () => {
++  const phase = 'lane7-open-comparison'
++  const rows = [request('cdp', 'initial-navigation', history), request('pw', phase, history), request('cdp', phase, history)]
++  const audit = auditPhases(rows, new Map([[phase, { expectedAttemptBag: [`${base}${history}`] }]]), forbidden)
++  assert.equal(audit.failures.length, 1)
++  assert.equal(audit.failures[0].phase, 'initial-navigation')
++})
++control('B2 no unrelated postloaded artifact can disappear', () => {
++  for (const source of ['pw', 'cdp']) assert.equal(auditPhases([request(source, 'late-unplanned', '/data/objects/sha256/other')], new Map(), forbidden).failures.length, 1)
++})
++control('B2 rejects a pre-click request even when host delivery occurs in comparison', () => {
++  const marker = { trusted: true, wallEpochMs: 2000 }
++  const rows = [request('cdp', 'lane7-open-comparison', history), { ...request('pw', 'lane7-open-comparison', history), pwId: 1 }, { source: 'pw', phase: 'lane7-open-comparison', kind: 'requestfinished', pwId: 1, timing: { startTime: 1999 } }]
++  rows[0].raw.wallTime = 1.999
++  assert.equal(auditInputBoundaries(rows, { history: marker }, new Set([history]), new Set()).failures.length, 2)
++  rows[0].raw.wallTime = 2.001
++  rows[2].timing.startTime = 2001
++  assert.equal(auditInputBoundaries(rows, { history: marker }, new Set([history]), new Set()).failures.length, 0)
++  assert.equal(auditInputBoundaries(rows, {}, new Set([history]), new Set()).failures.length, 2)
++})
++const now = Date.parse('2026-10-16T23:00:00Z')
++const settings = { now, head: 'h', tree: 't', heavyLock: '/synthetic/heavy.lock', browserLock: '/synthetic/browser.lock' }
++const admission = {
++  phase: 'before', ready: true, errors: [], head: 'h', tree: 't', status: '', trackedBlobCount: 680,
++  at: new Date(now - 1000).toISOString(), memoryFullAvg60: 5, memAvailableKiB: 1536 * 1024, diskFreeGiB: 4,
++  processMatches: [], processSnapshotBefore: [{ pid: 1 }], processSnapshotAfter: [{ pid: 1 }], processInspectionErrors: { before: [], after: [] },
++  locks: [settings.heavyLock, settings.browserLock].map((path) => ({ path, acquiredNonblocking: true, released: true })),
++}
++control('B4 accepts only the canonical JSON data shape in this synthetic control', () => validateAdmission(admission, settings))
++const badAdmissions = [
++  ['typed approved and observedAt', { approved: true, observedAt: new Date(now).toISOString() }],
++  ['stale at', { ...admission, at: new Date(now - 30_001).toISOString() }],
++  ['future at', { ...admission, at: new Date(now + 1).toISOString() }],
++  ['invalid at', { ...admission, at: 'invalid' }],
++  ['wrong phase', { ...admission, phase: 'after' }],
++  ['wrong head', { ...admission, head: 'other' }],
++  ['wrong tree', { ...admission, tree: 'other' }],
++  ['ready string', { ...admission, ready: 'true' }],
++  ['nonempty errors', { ...admission, errors: ['synthetic error'] }],
++  ['lock not acquired', { ...admission, locks: admission.locks.map((lock) => ({ ...lock, acquiredNonblocking: false })) }],
++  ['wrong lock path', { ...admission, locks: [] }],
++  ['PSI too high', { ...admission, memoryFullAvg60: 5.01 }],
++  ['memory too low', { ...admission, memAvailableKiB: 1536 * 1024 - 1 }],
++  ['disk too low', { ...admission, diskFreeGiB: 3.99 }],
++  ['unknown process sample', { ...admission, processInspectionErrors: { before: ['synthetic gap'], after: [] } }],
++]
++for (const [name, value] of badAdmissions) control(`B4 rejects ${name}`, () => assert.throws(() => validateAdmission(value, settings)))
++control('B3 rejects a shared store writer in either canonical sample', () => {
++  storeWriters([[{ executable: '/usr/bin/node', argv: ['node', 'source-controls.mjs'] }]])
++  assert.throws(() => storeWriters([[{ executable: '/usr/bin/node', argv: ['node', '/tools/pnpm.cjs', 'install'] }]]))
++})
++const tempOut = join(controlOut, 'synthetic-temp-output')
++mkdirSync(`${tempOut}.tmp`, { mode: 0o700 })
++const env = { TMPDIR: `${tempOut}.tmp`, TSX_DISABLE_CACHE: '1' }
++control('B1 accepts the owned mode 0700 sibling only', () => {
++  assertOwnedTemp(tempOut, env, process.getuid())
++  assert.throws(() => assertOwnedTemp(tempOut, { ...env, TSX_DISABLE_CACHE: '0' }, process.getuid()))
++  assert.throws(() => assertOwnedTemp(tempOut, { ...env, TMPDIR: '/tmp' }, process.getuid()))
++  assert.throws(() => assertOwnedTemp(tempOut, env, process.getuid() + 1))
++  chmodSync(env.TMPDIR, 0o755)
++  assert.throws(() => assertOwnedTemp(tempOut, env, process.getuid()))
++  chmodSync(env.TMPDIR, 0o700)
++})
++control('B3 rejects changed code, realpaths, and added files without loading a package', () => {
++  const path = join(controlOut, 'synthetic-package')
++  mkdirSync(path, { mode: 0o700 })
++  const body = 'export const syntheticSourceOnly = true\n'
++  writeFileSync(join(path, 'entry.mjs'), body, { flag: 'wx', mode: 0o600 })
++  const pkg = { name: 'synthetic-source-control', version: '0', path, realpath: path, files: [{ relativePath: 'entry.mjs', sha256: sha(body) }] }
++  dependencyState(runtimeRoot, { packages: [pkg] })
++  assert.throws(() => dependencyState(runtimeRoot, { packages: [{ ...pkg, realpath: path + '-wrong' }] }))
++  writeFileSync(join(path, 'entry.mjs'), body + 'export const changed = true\n')
++  assert.throws(() => dependencyState(runtimeRoot, { packages: [pkg] }))
++  writeFileSync(join(path, 'added.mjs'), 'export {}\n', { flag: 'wx', mode: 0o600 })
++  assert.throws(() => dependencyState(runtimeRoot, { packages: [pkg] }))
++})
++const value = { status: 'SOURCE_CONTROLS_PASSED', runtime: 'UNRUN', nativeInspector: 'NOT_CALLED', fakeActualExitReceipts: 'NONE', results }
++writeFileSync(join(controlOut, 'source-controls.json'), JSON.stringify(value, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
++console.log(JSON.stringify({ sourceControlsPassed: results.length, runtime: 'UNRUN', nativeInspector: 'NOT_CALLED' }))
+--- /dev/null
++++ v2/dependencies-preloader.mjs
+@@ -0,0 +1,10 @@
++import assert from 'node:assert/strict'
++import { readFileSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { dependencyState, assertOwnedTemp } from './source-guards.mjs'
++const [root, out, pinsPath] = process.argv.slice(2)
++assertOwnedTemp(out, process.env, process.getuid())
++const pins = JSON.parse(readFileSync(pinsPath, 'utf8'))
++const state = dependencyState(root, pins)
++assert.deepEqual(state, { sharedStore: pins.sharedStore, packages: pins.packages })
++writeFileSync(join(process.env.TMPDIR, 'dependencies-preloader.json'), JSON.stringify(state, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
+--- /dev/null
++++ v2/cleanup-owned.mjs
+@@ -0,0 +1,33 @@
++import assert from 'node:assert/strict'
++import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { assertOwnedTemp, tempInventory } from './source-guards.mjs'
++const [out, temp] = process.argv.slice(2)
++assert.equal(temp, `${out}.tmp`)
++assertOwnedTemp(out, process.env, process.getuid())
++const metadata = join(out, 'owned-processes.json')
++const ownership = existsSync(metadata) ? JSON.parse(readFileSync(metadata, 'utf8')) : null
++const survivors = [], inspectionErrors = []
++for (const item of ownership?.processes ?? []) {
++  const path = `/proc/${item.pid}/stat`
++  if (!existsSync(path)) continue
++  try {
++    const raw = readFileSync(path, 'utf8'), fields = raw.slice(raw.lastIndexOf(')') + 2).split(' ')
++    if (fields[19] === item.startTicks && fields[0] !== 'Z') survivors.push({ ...item, state: fields[0] })
++  } catch (error) { if (existsSync(path)) inspectionErrors.push({ pid: item.pid, error: String(error) }) }
++}
++const tempReferences = []
++for (const pid of readdirSync('/proc').filter((name) => /^\d+$/.test(name))) {
++  if (Number(pid) === process.pid) continue
++  try {
++    const argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')
++    if (argv.some((arg) => arg.includes(temp))) tempReferences.push({ pid: Number(pid), basis: 'owned temp path in argv' })
++  } catch (error) { if (existsSync(`/proc/${pid}`)) inspectionErrors.push({ pid: Number(pid), error: String(error) }) }
++}
++const result = { temp: tempInventory(temp), ownership, survivors, tempReferences, inspectionErrors, deletedFiles: [], signalsSent: [], locks: 'Still held by outer allocation. Canonical after inspector with actual exit is required after caller close.', status: ownership && !survivors.length && !tempReferences.length && !inspectionErrors.length ? 'OWNED_DESCENDANTS_ABSENT_LOCK_PROOF_PENDING' : 'BLOCKED' }
++const destination = existsSync(out) ? join(out, 'owned-cleanup.json') : join(temp, 'owned-cleanup.json')
++writeFileSync(destination, JSON.stringify(result, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
++assert.ok(ownership, 'driver ownership receipt missing')
++assert.deepEqual(survivors, [])
++assert.deepEqual(tempReferences, [])
++assert.deepEqual(inspectionErrors, [])
+--- /dev/null
++++ v2/record-native.mjs
+@@ -0,0 +1,21 @@
++import assert from 'node:assert/strict'
++import { spawnSync } from 'node:child_process'
++import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
++import { dirname, isAbsolute } from 'node:path'
++import { inspector, sha } from './source-guards.mjs'
++const [directory, phase, receiptPath] = process.argv.slice(2)
++assert.equal(process.argv.length, 5)
++assert.ok([directory, receiptPath].every(isAbsolute))
++assert.ok(['before', 'after'].includes(phase))
++assert.equal(realpathSync(dirname(directory)), dirname(directory))
++assert.equal(realpathSync(dirname(receiptPath)), dirname(receiptPath))
++assert.ok(!existsSync(receiptPath) && !existsSync(`${receiptPath}.stdout`) && !existsSync(`${receiptPath}.stderr`))
++assert.equal(sha(readFileSync(inspector.path)), inspector.sha256)
++const command = ['python3', inspector.path, directory, phase]
++const startedAt = new Date().toISOString()
++const result = spawnSync(command[0], command.slice(1), { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } })
++const endedAt = new Date().toISOString()
++writeFileSync(`${receiptPath}.stdout`, result.stdout ?? '', { flag: 'wx', mode: 0o600 })
++writeFileSync(`${receiptPath}.stderr`, result.stderr ?? '', { flag: 'wx', mode: 0o600 })
++writeFileSync(receiptPath, JSON.stringify({ command, inspector, startedAt, endedAt, exitCode: result.status, signal: result.signal, spawnError: result.error ? String(result.error) : null, basis: 'Actual spawnSync status and signal of the pinned canonical command. No result inferred.' }, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
++process.exitCode = result.error || result.signal || result.status !== 0 ? result.status || 1 : 0
+--- v1/commands.md
++++ v2/commands.md
+@@ -1,34 +1,28 @@
+-# Commands for one future allocation
++# Commands for a future allocation
+ 
+-All runtime commands in this file are UNEXECUTED. This package has no runtime release. A source syntax check gives no runtime credit.
++All runtime commands below are UNEXECUTED. This source package has no runtime release. Root must first obtain an independent fix diff review and countersign the exact inventory. Read `proof-spec.md` and `demand-source-trace.md`. Keep all failed outputs. Run no automatic retry, warmup, install, browser test, build, generator, or replacement inspector.
+ 
+ Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.
+ 
+-## Obtain the separate release
++## Assign exact new paths
+ 
+-1. Complete a fresh, full, independent source review of this package and its external input hashes. Obtain Root's countersign of the exact inventory digest. Old ABAB approval gives this package no approval.
+-2. Obtain one real allocation for `lanes78-companion-head-address91`. Assign an exact canonical runtime root at HEAD `d38add5f228e67022a3001e27a820ad76657f37f`, tree `10c19882806045f340674c6627b4715929ee020e`. Allocate no baseline and no ABAB action run.
+-3. Through the canonical native inspector, inspect active owners, processes, ancestry, and listeners. Confirm there is no conflicting server for that root and no conflicting compute owner. Use no replacement inspector script. Do not signal other processes. Retain the native result and its exact exit or tool status. Root must assign the actual inspector command or tool because this package does not invent one.
+-4. In the actual launch environment, require both case variants of `npm_config_workspace_dir` to be absent. List matching variable names only. Require Node 24 and the exact seven head dependency pins. Require private runtime dependencies and `.vite`, with no cache copy or warmup. Record optimizer metadata without calling it warm.
+-5. Require memory PSI full avg60 at most 5%, available memory at least 1536 MiB, and free disk at least 4 GiB. Use Node 1536 MiB for the inner process. Root's resource release and native admission must still be current when the inner driver starts. The driver refuses a native admission older than 30 seconds.
+-6. Write a new external release JSON. Match `release.template.json`. Give the driver output path, never the package path. Cite the independent review, Root countersign, and canonical native admission by absolute file path and SHA256. The template is pending. Changing status strings alone is not review, native proof, or authorization.
+-
+-The launcher verifies source and external hashes. The driver checks the exact source tree, installed dependencies, and raw Node configuration before app or browser start. A mismatch ends the unit. There is no repin, install, regeneration retry, or automatic retry.
+-
+-## Launch exactly once after Root release
+-
+-These values are placeholders. Root must replace every value in angle brackets. Do not run a command with a placeholder.
++Root assigns one allocation with these values. Every placeholder must be replaced. The source root is fixed by the canonical inspector. No baseline or ABAB run is part of this allocation.
+ 
+ ```bash
+-PACKAGE=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-source-v1
+-RUNTIME_ROOT='<assigned canonical HEAD runtime root>'
++PACKAGE=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-lanes78-companion-fix-v2
++RUNTIME_ROOT=/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610
+ RUN_OUT='<existing canonical parent>/<new allocated run directory>'
+-RELEASE_JSON='<new external allocation release JSON>'
++RELEASE_JSON='<root-owned new allocation release JSON>'
++NATIVE_DIR='<root-assigned fresh metadata directory>'
++BEFORE_EXIT='<existing canonical parent>/<new before numeric exit receipt.json>'
++AFTER_EXIT='<existing canonical parent>/<new after numeric exit receipt.json>'
+ BROWSER_LOCK=/home/codex/.local/state/pstack/mistake-prevention-20261015/browser.lock
+ cd "$RUNTIME_ROOT"
+ ```
+ 
+-Verify the detached inventory digest against the new Root countersign before these checks. Retain actual command exits.
++Confirm no concurrent store writer, no ABAB overlap, no active owner conflict, and no install activity against `/home/codex/work/lol-esports-ranking/node_modules/.pnpm`. This store is shared. Confirm the frozen optimizer and the unchanged metadata pins. Do not call the dependencies private. Do not copy a cache or start a store custodian.
++
++Verify the package against Root's detached inventory pin. These checks do not constitute review.
+ 
+ ```bash
+ sha256sum --check "$PACKAGE/inventory-self-sha256.txt"
+@@ -36,7 +30,25 @@
+ sha256sum --check "$PACKAGE/external-inputs-sha256.txt"
+ ```
+ 
+-Execute one foreground unit. The browser lock is inside heavy-check. Keep the terminal session handle until the actual caller returns. The new observer only records the heavy-check child's actual close and source artifacts. The new launcher reports and returns its actual driver exit unchanged.
++## Capture the canonical before admission
++
++Use the canonical inspector path below. Its SHA256 is `ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b`. The recorder calls exactly `python3 inspect.py "$NATIVE_DIR" before`. It records the real numeric exit, signal, command, stdout, and stderr. It never substitutes another inspector.
++
++```bash
++set +e
++node --max-old-space-size=128 "$PACKAGE/record-native.mjs" "$NATIVE_DIR" before "$BEFORE_EXIT"
++before_recorder_exit=$?
++set -e
++printf 'before_recorder_exit=%s\n' "$before_recorder_exit"
++```
++
++Retain `$NATIVE_DIR/before-native.json`, its 680-source-blobs receipt, and `$BEFORE_EXIT` with its stdout and stderr files. Root must inspect the actual record and status. Do not proceed on a missing or nonzero exit. No native command was called during package authoring.
++
++Complete a new external release from `release.template.json`. Bind the real before directory, body hash, recorder receipt hash, canonical inspector path and hash, derived heavy lock, review hash, and Root countersign hash. Confirm no concurrent store writer through Root's actual process and ownership check. Set the release only for this one unit. Its JSON `at` must remain at most 30 seconds old when the driver checks it. Release-typed freshness or approved fields do not count.
++
++## Launch once after release
++
++Run one foreground unit. The browser lock stays inside heavy-check. Retain the terminal's actual final code and signal. The observer records the actual heavy-check child close. The launcher records the actual driver exit and its owned cleanup exit separately.
+ 
+ ```bash
+ set +e
+@@ -49,16 +61,30 @@
+ printf 'actual_caller_exit=%s\n' "$actual_caller_exit"
+ ```
+ 
+-Retain the terminal tool's final code and signal separately. `observed-exit.json` records the actual heavy-check close. `process.log` records the actual inner exit when the launcher reaches it. `driver/end.json` records cleanup results and the intended inner code at the end of driver cleanup. It cannot replace the launcher's or caller's actual exit. A missing exit remains missing. Source identity after cleanup is mandatory.
++The launcher creates `$RUN_OUT/driver.tmp` with mode 0700. It sets TMPDIR, TMP, TEMP, TSX_DISABLE_CACHE=1, NODE_DISABLE_COMPILE_CACHE=1, and a private Node compile path before any tsx or Playwright code loads. A preloader failure still invokes owned cleanup and remains a failure. The driver verifies package code pins before and after. It checks the full existing optimizer against optimizer-pins.json before and after and rejects drift. The Vite runner avoids a config bundle in `.vite-temp`.
+ 
+-The heavy-check ceiling is 900 seconds. The driver has a 780-second own budget from entry. Browser launch, each public action, and each quiet wait have 30-second bounds. Module load, fixture generation, and server startup must fit the same outer 900 seconds. There is no proof that startup and cleanup fit until the real run. A timeout is preserved as failure. Readiness never extends the outer deadline. No HTTP probe, warmup, or browser retry is part of this command.
++Keep the original 900-second outer ceiling, 1536 MiB driver heap, PSI full avg60 at most 5%, available memory at least 1536 MiB, free disk at least 4 GiB, and at most 900 seconds and 30 samples for readiness. The existing 780-second driver budget and 30-second actions and quiet bounds remain unchanged. No new readiness loop or retry was added. Missing or timed-out output is preserved.
+ 
+-## Retain and review the result
++## Capture the canonical after result
+ 
+-The driver creates an isolated seeded-sample fixture from the exact 20-team and 91-input recipe. It starts one fixture server and one separate Playwright context. It takes no control of a T3 tab. Source preparation does not generate fixture output.
++After the actual caller has returned, capture exactly `python3 inspect.py "$NATIVE_DIR" after` through the same recorder. Do not invoke it while the allocation still owns either lock.
+ 
+-Read `proof-spec.md` before an evidence verdict. Inspect every raw phase, including initial navigation, late events, sensitivity control, and teardown. Hash `artifact-sha256.json` separately after the observer returns. Retain actual PNG and finalized video hashes. The observer's artifact inventory includes raw events, HTTP receipts, source identities, point maps, and media. It excludes itself to avoid a circular digest.
++```bash
++set +e
++node --max-old-space-size=128 "$PACKAGE/record-native.mjs" "$NATIVE_DIR" after "$AFTER_EXIT"
++after_recorder_exit=$?
++set -e
++printf 'after_recorder_exit=%s\n' "$after_recorder_exit"
++```
+ 
+-Use the canonical native inspector to confirm that the exact owned port is closed, owned browser and driver compute ended, and both locks are free. Retain its actual output. Do not use an HTTP cleanup probe or an outside process signal. Failed or partial outputs stay in the allocated directory. Missing cleanup proof remains PENDING.
++Retain `$NATIVE_DIR/after-native.json`, its source blobs, the actual numeric exit receipt, and its raw stdout and stderr. Check the actual owned port, descendant absence, and acquired and released locks. A browser that retains an inherited heavy lock fails cleanup. Never signal an outside process or alter heavy-check or flock. The owned cleanup inventory retains temporary files and every inspection error. It deletes no failed evidence. Missing cleanup stays PENDING.
+ 
+-Obtain a separate independent raw-evidence verdict and Root countersign. Keep T3 visible journey evidence under its own run and tab identity. Root must correlate source, fixture generation, selected IDs, and predicates across both provenances. Do not claim simultaneity, shared cache, or one tab. The original T3 fallback condition stays unchanged. No source review, driver exit, cached control, or screenshot grants a gate pass on its own.
++## Obtain independent evidence review
++
++Read every PW, CDP, server, initial, postloaded, control, and teardown row. Reconcile every attempt and terminal event with raw bodies and HTTP receipts. Preserve aggregate closure identity and exact selected-key maps. Inspect the mounted SVG geometry against saved current-unit raw values. Props alone grant no pixel credit.
++
++Lane 8 must record earlier response sequences when it uses app cache. No new HTTP response may be claimed for a zero-request action. Block the literal new-response claim if it cannot be met. Do not change the oracle wording or predicate. Root must countersign any independent interpretation of the original coverage.
++
++Retain actual companion PNGs and finalized video hashes. Hash `artifact-sha256.json` after the observer returns. The inventory excludes itself. Nonregular temporary entries are listed without following them. Do not infer gate credit from a zero exit or source parse.
++
++The separate T3 visible journey remains required, with its own run and tab identity. The T3 fallback rule is unchanged. Companion media gives no T3 or R4 acceptance. CI, review, runtime evidence, merge, and Max acceptance remain separate. No merge is authorized.
+--- v1/proof-spec.md
++++ v2/proof-spec.md
+@@ -1,119 +1,83 @@
+-# Independent proof specification
++# Independent proof requirements
+ 
+-This package has runtime UNRUN and gates PENDING. The driver writes raw evidence and local assertions. It never writes a gate PASS. A zero exit is not an independent evidence verdict.
++The package is SOURCEONLY. Runtime is UNRUN. Every runtime predicate, independent fix diff review, and root countersign is PENDING. Source controls give no runtime credit.
+ 
+ Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.
+ 
+-## Preserve the original predicates
++## Keep both proofs
+ 
+-`predicates.json` copies lanes 7 and 8 action and demand text, common evidence, and the exact demand accounting from `r3-live-coverage-prep-v1/coverage.json`. Only HEAD identity is retained in the copy. Baseline identity fields are omitted. The original files remain authoritative. The relevant original text is at lines 593-683 and 827-835 of that file. The live server guide also names separate closed Players, opened Players, and Data and sources phases in `r3-live-server-ledger-fix-v4/commands.md`.
++The measurement companion owns a separate Playwright context, page CDP session, and fixture server. A separate T3 visible journey remains required. Companion events never belong to a T3 tab. This package changes no T3 fallback rule. Root must retain both run and tab identities and compare source, fixture, generation, selected IDs, and predicate evidence. Neither proof replaces the other.
+ 
+-The exact demand statements in the retained coverage source are these.
++`predicates.json` is unchanged from v1. It preserves the original lane 7 and lane 8 statements and common evidence. The original coverage file remains authoritative. Baseline fields in the copy remain null, as disclosed in v1. This package has no baseline or ABAB claim.
+ 
+-> Opening a comparison is a separate selected-history phase. Expect only uncached required history root, selected scope/shard/record dependencies for selected ids. Exact count remains pending the actual emitted mapping/cache state.
++## Require exact identity and bounded writes
+ 
+-> Opening detail is a separate single-team phase. Players stay closed with zero player-directory requests. Opening Players separately permits its directory dependency closure. Data and sources is local markup and expects zero artifacts.
++Only the canonical root `/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610` is permitted. Require HEAD `d38add5f228e67022a3001e27a820ad76657f37f` and tree `10c19882806045f340674c6627b4715929ee020e`. Retain clean source and committed byte identity before and after.
+ 
+-The tracked browser test supplies the actions. Its lines 203-217 choose zero-based rows 5, 6, and 7, compare their dynamic codes, remove the first, and compare the remaining two. Lines 219-233 open first-row detail, keep Players closed until its separate disclosure action, close detail, and choose rows 8 and 9. Lines 185-190 disable IntersectionObserver in the test. This companion does not copy that override.
++The seven existing dependency metadata pins and four existing tool pins are unchanged. The `.pnpm` store is shared at `/home/codex/work/lol-esports-ranking/node_modules/.pnpm`. `loaded-dependency-pins.json` adds realpaths and every regular file hash for the exact installed dependency closure of the named runtime packages. It covers 98 packages and 20,011 files. It grants no request allowance. Nothing was imported to make those pins.
+ 
+-The selected guides are `.agents/skills/verify-lol-esports/features/l3.md`, `l4.md`, and `l14.md` at the exact source root named in `predicates.json`. They require selected entity identity, stable comparison labels, and separate player demand. L14 step 3 requires that hidden board history does not compete with detail. They do not grant a new attempt-count exception.
++Verify those pins before the tsx loader starts, again in the driver, and after cleanup. Each package must have the same realpath, package JSON, complete file list, and code bytes. Root must verify that no package manager writes to the shared store during this allocation. Both canonical process snapshots reject package manager processes. No install, cache copy, warmup, new dependency allowance, or repin is authorized.
+ 
+-The 11 ABAB actions are out of this package. No baseline is part of this package. No timeout, abort, retry, HTTP error, or unknown event is accepted as a zero. If the original predicate cannot be measured without a product behavior change, report BLOCKED with the exact reason. Keep every failed output.
++The launcher creates only the new output's `.tmp` sibling with mode 0700. TMPDIR, TMP, TEMP, tsx IPC, Node compile cache, and Playwright profiles and artifacts use that directory. TSX_DISABLE_CACHE is exactly 1. Node compile caching is disabled. The driver verifies ownership and mode before starting. The Vite config uses its runner loader to avoid `.vite-temp` bundle files. The existing optimizer remains in the pinned root. Every optimizer file is pinned in optimizer-pins.json and hashed before and after. It must remain unchanged. A changed optimizer fails. No optimizer warmup or rebuild is an exception.
+ 
+-## Keep the two provenances separate
++The output, temporary files, package hashes, loaded dependencies, optimizer, actual Node argv, heap limit, browser executable, PID, version, and source must be retained. The instrument hash walk includes every package file and subdirectory. It does not write into the package. The outer observer records nonregular temporary entries without following or reading them.
+ 
+-The companion owns a newly launched Playwright context, a page CDP session, and an isolated address91 fixture server. T3 retains control of the separate visible journeys. The companion does not attach to a T3 tab. It does not establish a passive T3 bridge, satisfy the original fallback condition, or prove that either run shared a tab, cache, server, generation, or time interval.
++## Bind the canonical admission
+ 
+-Root must retain both run IDs, both tab identities, and both source and fixture identities. Compare generated fixture input, generation mapping, selected team IDs, and the specific predicates across the two results. A mismatch blocks combined credit. T3 visible screenshots cannot fill missing companion attempts. Companion screenshots cannot replace T3 visible flow evidence. R4 media and Max's media signoff remain separate.
++Only `/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py` is accepted. Its SHA256 is `ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b`.
+ 
+-## Required source and fixture identity
++Root assigns a fresh before directory and an actual numeric command exit receipt for each allocation. The driver reads the real `before-native.json`. Require phase before, ready true, empty errors, exact head and tree, clean status, 680 tracked blobs, both process samples, empty process inspection errors, no active matches, and verified nonblocking acquired and released locks. The heavy lock path is derived from the actual canonical Git common directory. The browser lock is fixed. Resources must satisfy PSI full avg60 at most 5%, available memory at least 1536 MiB, and free disk at least 4 GiB.
+ 
+-Require the exact reviewed inventory digest, a new independent full source approval, and Root's new countersign. The retained ABAB countersign is background only. Verify source and instrument hashes before and after the real unit.
++Freshness comes only from the JSON `at` field. Its age must be between zero and 30 seconds. Release-typed approved and observedAt fields give no proof. The inspector path, bytes, before path, before body hash, actual command array, numeric exit zero, and null signal must all match. `record-native.mjs` records the canonical command's actual status. It is not a replacement inspector. No inspector was called during this repair.
+ 
+-Require HEAD `d38add5f228e67022a3001e27a820ad76657f37f` and tree `10c19882806045f340674c6627b4715929ee020e`. Require clean tracked state and exact committed bytes. Require all seven head dependency pins and the four runtime tool source pins. Reject source overrides, VITE environment changes, workspace overrides in either case, shared whole `node_modules`, shared `.vite`, or tool drift. Retain the actual browser executable path, SHA256, PID, version, and catalog revision. Retain raw driver argv, raw Node cap, V8 heap size, and exact server PID and root. The server and driver are one process in this design.
++After the actual caller ends, run that same canonical inspector with the same metadata directory and phase after. Retain the actual command, numeric status, signal, JSON, and source blob receipts. Require actual owned port closure, no surviving owned compute, and both locks free. Do not infer cleanup from a driver summary.
+ 
+-`address91-recipe.ts` retains the literal fixture declaration slice from the tracked test. Its placeholder changes only the erased type import path at future execution. It uses the same round-robin expressions, MSI record, empty rosters, generatedAt `2026-07-01T00:00:00.000Z`, and `seeded-sample` mode. The expected cardinality is 2 times 45 plus 1 input matches and 20 teams. No recipe ran during authoring. The author inspected five named retained real fixture input files. Each had 98 matches and five teams. No retained address91 input was located there.
++## Preserve the fixture and limits
+ 
+-Retain the future `fixture-input.json`, full write plan, root manifest, generation manifest, canonical immutable objects, logical payloads, and logical-to-object and child mapping. Hash the exact bytes. Record schema, model, config hash, source, coverage, and generation. Label the data as synthetic seeded sample throughout the evidence. No official-data claim is allowed.
++The `.mts` recipe has the same bytes as v1's `.ts` recipe. Only the extension changes. It preserves the exact tracked test slice, 20 teams, 91 matches, empty rosters, generatedAt `2026-07-01T00:00:00.000Z`, and seeded-sample mode. Nothing was generated in this task. Old plain Node syntax exit 1 remains FAILED in retained receipts. The new `.mts` syntax result is separate.
+ 
+-The server owns every `/data/` and `/tournament-data/` response before product middleware. Unknown artifact paths produce retained 404 responses. They never reach ignored local ranking data or the live feed service. The fixture prerender uses the generated write plan. Other assets use the exact product configuration. The manifest has no-store and no ETag. Immutable objects have public, max-age=31536000, immutable. This fixture does not claim production manifest revalidation equivalence. HTTP request receipt is a Node HTTP/1 serialized header plus body, not a packet capture.
++Keep the 15-minute outer timeout, 1536 MiB driver heap, PSI and memory and disk limits, 900-second readiness ceiling with at most 30 samples, nonblocking heavy lock, and browser lock inside heavy-check. The existing 780-second driver budget and 30-second action and quiet bounds are unchanged. A readiness sample never extends a deadline. No retry or warmup is authorized. No heavy-check or flock redesign is included.
+ 
+-## Require natural geometry and the exact selection
++## Require continuous absence and exact bags
+ 
+-The fixed initial viewport is 1280 by 900, the tracked browser test's viewport. The driver does not resize it, move the pointer to the trajectory, disable IntersectionObserver, or change focus or scroll to suppress demand. Each normal Playwright click can perform its usual scroll and focus. Those effects are part of the measured action.
++PW context listeners and page CDP Network listeners are armed before the first goto. Retain every request attempt, redirect hop, duplicate, failure, abort, response, cache indication, terminal event, and raw payload. There is no abort allowance. Server arrivals alone cannot prove zero. Keep initial, setup, every action, control, teardown, and failed cleanup evidence in raw totals.
+ 
+-Before any row action or scroll, retain the trajectory card rectangle, viewport, device pixel ratio, scroll position, address, and active element. The trajectory card is the nearest `data-slot=card` ancestor of the `Power over time` heading. This follows `src/components/ui/panel.tsx` and `card.tsx`. `TeamsView.tsx:306-320` sets `rootMargin` to `420px 0px`. The card must be below viewport height plus 420, or wholly above minus 420. Missing or intersecting geometry blocks the natural offscreen precondition. Do not change the viewport, CSS, focus, scroll, or observer to obtain the condition.
++Before the first comparison input, no history or player closure member may appear in either PW or CDP. The driver checks this continuously on each attempt and rechecks immediately before input. A passive trusted click record also fixes the actual input time. The final audit compares PW request timing and CDP request wall time against that record. A request that starts while Playwright waits to click still fails if it precedes the actual input. A missing time or input record blocks proof. At lane7-open-comparison, the required closure must be nonempty. The semantic cache before that input must be disjoint from that full closure. Both bags must equal the full required bag. A previous load cannot make the expected bag empty.
+ 
+-Repeat geometry before and after each row pick, and before lane 7 opens comparison. Retain all geometry facts. An auto-scroll that invalidates the condition blocks the flow. The attempt streams must also show no initial team-history closure attempt, through the initial window and its late events. A rectangle alone does not prove absence of demand.
++The final audit visits the union of every observed phase and every planned phase, including setup, initial-navigation, sensitivity-control, and teardown. Planned phases must have their exact bags. Unplanned phases must have zero history and player closure attempts. Every unplanned postloaded phase must have zero artifact attempts of any kind. The audit still runs after cleanup failures. Delayed attempts after phase close stay in the final phase bag.
+ 
+-Retain all 20 actual row names and their emitted standing team IDs. Map codes from the exact fixture profiles. Save initial rows 0 through 4. Require rows 5 through 7 to be distinct and outside that set. Compare exactly those three IDs and labels. Remove row 5's team and require only rows 6 and 7. Clear picks with the public control.
++For later history and Players phases, only the required closure minus fully captured successful semantic objects is allowed. Cache inference retains the existing 128-entry and 8 MiB conservative limit. It does not infer HTTP cache hits from no server traffic. Each action records actual PW and CDP counts, cache-before members, selected IDs, and source response sequences. Extra attempts always fail.
+ 
+-Open row 0's detail. Retain its actual Power chart series and raw point map before opening Players. Prove that Players is closed and has no directory-closure attempts. Open Players in its own phase. Permit exactly its as-yet-uncached directory closure. Close detail and retain the close event and resulting address. Choose rows 8 and 9 through normal row controls. Require both IDs to differ from the old detail ID. Compare exactly those two IDs and labels. The raw chart series and point map must exclude the old detail team. A label-only check is insufficient.
++`demand-source-trace.md` fixes the legitimate logical detail and Players closure before release. Future emitted closure receipts list each logical path, aggregate or archive storage, member URL, digest, and full raw emitted body path. A closure request alone does not prove selection. There is no selected-only byte claim for aggregate bodies.
+ 
+-Close comparison, then open Data and sources with a normal click. The entire click, including any normal scroll and focus, belongs to the zero-artifact disclosure phase. Do not move an artifact caused by that action into a separate setup phase. Late artifact attempts in this phase still violate zero.
++## Keep natural geometry and navigation
+ 
+-## Derive the exact closure before each action
++The viewport stays 1280 by 900. The trajectory must remain naturally beyond its 420px root margin. Do not change IntersectionObserver, viewport, pointer, focus, CSS, or scroll to suppress demand. Normal public actions keep their normal scroll and focus effects.
+ 
+-`logical-mapping.json`, immutable objects, and `write-plan.json` are the future oracle inputs. The source currently computes no numeric request count.
++Capture geometry before any row input, before and after each pick, before every history phase, and after every close. Capture viewport, rectangle, pointer position, active focus, scroll, and address. A passive pointer listener records actual pointer events. It does not change app demand. The geometry reader includes the background heading while a modal hides it from the accessibility tree. It changes no DOM state.
+ 
+-For history, resolve the emitted team-history index and its `All__All__All` scope entry. Include the index root and its archive children. Include the selected scope root and archive children required by the `/series` record-key selection. Traverse every required branch. Do not assume one request per team. Small inline scope artifacts can physically contain more teams than the projected selected view. That is allowed only when the original archive and projection rules demand those exact bytes. Unselected UI histories or an unnecessary scope or record dependency remain a failure.
++Any main-frame document request or navigation after the first goto blocks the instrument. Hash changes from normal controls are same-document changes. They remain in the address ledger. Workers, child frames, extra pages, unknown targets, uncovered transient targets, and unexpected disconnects block coverage. Retain browser target discovery events and inventories at every boundary. Source absence of workers on this ranking path remains scoped to this exact source. Do not disable a worker to make coverage possible.
+ 
+-For Players, resolve the emitted player directory and all required archive children. `usePublicArtifacts.ts:186-205` calls it only after `loadPlayers`. The fixture has empty rosters, so the returned content can be empty. Empty content does not remove its request predicate.
++## Map raw bodies and mounted charts
+ 
+-Derive semantic cache membership only from fully retained successful immutable responses whose raw bytes match the generated digest. The source basis is `artifactIdentity.ts:178-281` and `semanticCache.ts`. The cache keys include URL, digest, byte length, transport encodings, and fetcher identity. The app's fetcher is never replaced. Cumulative completed immutable responses must remain within 128 unique entries and 8 MiB. This conservative bound proves that prior successful entries could not have been evicted. It does not infer a browser cache hit from zero server arrivals. A failure, oversized entry, unexplained cache state, extra caller, or capacity breach blocks that inference. The independent reviewer must also inspect all raw attempts, including unfinished ones, for possible capacity or lifecycle changes.
++Lane 7 selects rows 5, 6, and 7 outside the first five. It removes the first team and requires only the remaining two IDs. Lane 8 opens row 0 detail, separately opens Players, closes detail, and selects rows 8 and 9. The old detail ID cannot replace either new pick.
+ 
+-The exact expected attempt bag is the required object closure minus source-proved semantic cache entries. It is emitted before the action. The driver asserts that both PW and CDP URL bags equal that exact bag. URLs retain their origin and full query. No retry, redirect hop, failure, or duplicate is deduplicated. A browser HTTP cache hit still adds an attempt. No after-the-fact closure change can absorb an extra attempt.
++Expected values are decoded from newly captured full browser response bodies in this same actual unit. Each body must match its immutable digest and saved full bytes. The saved index must map to the selected All scope. Archive reconstruction follows only the selected record ranges. Each point map records the exact actual selected keys, raw keys present in the body, logical mapping, request sequence, response sequence, body sequence, phase, output identity, and raw body path. No old run is imported.
+ 
+-After lane 7 opens comparison, removing the first pick must retain only the two requested chart series. Already loaded shared objects can cause the correct request delta to be zero. Closing controls and later picks have separate raw phases. If their actual behavior invalidates a source assumption, preserve the failure and return for review. Do not change product behavior or enlarge a bag during the run.
++Expected points independently group saved raw tuples by date, keep the last finite value, sort dates, and parse timestamps. They are compared with the mounted chart's exact series IDs, labels, and values. The saved DOM includes mounted SVG stroke paths, lengths, stroke attributes, bounding rectangles, dots with cx and cy, direct labels, and legend labels. Props equality alone gives no rendered-point or selection credit.
+ 
+-## Reconstruct both complete streams
++Exact pixel attribution remains PENDING until an independent reviewer proves the mounted stroke and dot geometry maps to those saved raw values. If that cannot be proved, keep the predicate PENDING. Do not claim that an SVG's existence or props prove pixels.
+ 
+-Every `events.jsonl` row has a consecutive sequence, process monotonic clock, wall clock, phase, source, and kind. Server events also have their own consecutive `serverSeq`. A write failure is sticky. A missing sequence or ledger fault blocks coverage. Raw reconstruction, not the driver's summary, decides the verdict.
++Lane 8 can reuse the same unit's earlier lane 7 responses only with valid full raw evidence and source attribution. Zero actual requests from app cache are recorded separately. They are not new HTTP responses. The literal claim that lane 8 made new responses is BLOCKED when it used app cache. Do not rename that oracle or waive the wording. Root and independent evidence review must resolve the exact original claim.
+ 
+-PW context request, response, finished, failed, serviceworker, page, console, web error, and close listeners are armed before the first navigation. Each PW request object has a unique ID. Keep method, full URL, headers, resource type, navigation flag, redirect parent, frame URL, and service-worker attribution. Response rows keep status and headers. Finished artifact responses retain actual browser body bytes and their SHA256. Failed rows retain the exact failure. An absent terminal event is not a zero.
++## Reconcile the evidence and cleanup
+ 
+-The page CDP session subscribes before `Network.enable` and the first navigation. Keep the complete raw payloads for requestWillBeSent, requestWillBeSentExtraInfo, requestServedFromCache, responseReceived, responseReceivedExtraInfo, loadingFinished, and loadingFailed. WebSocket lifecycle and frame errors remain in the ledger. CDP request IDs can repeat across redirects. Each requestWillBeSent is one attempt. A redirect response closes its prior hop. Never collapse hops by URL or CDP request ID. Preserve cache flags, canceled flags, protocol timestamps, frame and loader IDs, initiators, ExtraInfo, errors, and retry attempts.
++Reconstruct PW and CDP one to one by full URL, method, observed order, redirect chain, control tag, response, cache facts, and terminal event. Every noncached attempt needs its server arrival and raw HTTP receipt. Every body needs its digest and browser bytes. Missing evidence is BLOCKED. An actual extra request is FAIL.
+ 
+-Match PW and CDP attempts one to one by method, full URL, observed order, redirect chain, control tag, and response facts. Identical repeated URLs remain separate attempts. Resolve every terminal. Match noncached attempts to server arrivals and raw HTTP receipts. Verify receipt hashes, status, headers, and browser body bytes. Record cached attempts with their actual CDP flag and corresponding browser body. An unmatched observer, server receipt, response, cache flag, or terminal is BLOCKED. An actual extra attempt with complete evidence is FAIL. Missing events never mean zero.
++The tagged sensitivity control uses one actual initial immutable body outside history and Players. Require one tagged PW attempt, one tagged CDP attempt, status 200, full matching body, explicit CDP cache indication, terminal events, and zero tagged server arrivals. No untagged app artifact may occur. Keep the control in all raw totals. It grants no app predicate credit.
+ 
+-Retain every phase. Initial setup and navigation are part of the raw total. Each action starts before its input and covers readiness, at least three seconds of artifact quiet, both protocol barriers, and late events until the next phase. The quiet wait has a 30-second bound. A later phase cannot absorb a prior action's late demand. Final phase bags include events that arrive after `phase-close`. Control and teardown stay inside raw totals. Report inclusive PW, CDP, and server totals, then the exact tagged control contribution, then app-only counts. Never report app-only counts as raw totals.
++Retain the actual companion PNGs and finalized video with hashes. They grant no T3 media or R4 acceptance. Retain actual caller, observed heavy child, launcher driver, and cleanup exits separately. Never replace a missing numeric exit with zero.
+ 
+-The barrier retains both evaluation replies and the host monotonic interval. This orders observation. It does not prove that PW, CDP, server, and browser clocks are simultaneous. The server and driver share one host clock. Retain their actual phase and arrival records rather than guessing a cross-process boundary.
++Cleanup closes only owned context, browser, and server. The launcher always attempts owned cleanup after temporary allocation, even after preloader failure. It inventories all owned temporary entries and checks retained process identities and temporary-path references. It deletes no failure evidence and sends no signals. Its lock status remains PENDING until the canonical after receipt. An orphan holding an inherited heavy lock fails cleanup. No shared custodian work is authorized.
+ 
+-All HTTP status codes at least 400, failed requests, page errors, console errors, font statuses, external URLs, blocked origins, and resource shortages remain explicit. The driver makes these fail closed. There is no broad StrictMode, abort, font, fixture-feed, or teardown error allowance. A Root classification must be part of independent evidence review. It cannot remove an attempt.
+-
+-## Prove the worker and frame boundary
+-
+-A page CDP session does not cover every worker or out-of-process frame. This package does not claim otherwise.
+-
+-The inspected application source has one `new Worker`, in `src/lib/worldsWorkerClient.ts:14`. `WorldsTournamentPanel.tsx:43` calls it. `TournamentsView.tsx:187` mounts that component only for its Worlds forecast branch. `App.tsx:63` loads that view lazily. The companion remains on Rankings and never navigates to Tournaments. The inspected `src` source has no iframe, service-worker registration, SharedWorker, or worklet use. `index.html` and `main.tsx` add no worker or frame. This is a source-scoped absence claim. It is not proof about all future code or arbitrary injected code.
+-
+-Before first navigation, browser-level target discovery records targetCreated, targetInfoChanged, targetDestroyed, attachedToTarget, and detachedFromTarget. Page and context listeners record dedicated workers, service workers, pages, frame attachments, navigations, and removals. Inventory before navigation and at every boundary retains all browser targets, context pages, frames, workers, and service workers. Require exactly the owned page, one main frame, no worker, and no extra target that can issue requests. Review transient events as well as snapshots. A transient unsupported target cannot disappear from the evidence because the next inventory is empty.
+-
+-Any worker, child frame, extra page, unknown target, unexpected disconnect, or missed inventory blocks this instrument. Keep the raw stream, then stop. Do not disable a worker, block a request, alter the app, or attach late and claim full coverage. A new capability or product behavior requires a new source review and allocation.
+-
+-## Require the tagged sensitivity control
+-
+-After all app phases, issue one direct fetch of an immutable URL actually loaded during initial navigation. Use the normal cache policy and `X-R3-Lanes78-Control` with a fresh UUID. Consume its entire response body. This is a named instrument control, not an app action or warmup. It does not wrap or replace fetch. It stays in the raw totals.
+-
+-Require exactly one tagged PW attempt and one tagged CDP attempt for that exact full URL. Require PW response status 200, its finished event, retained browser bytes matching the initial candidate and immutable digest, CDP response status 200, a terminal event, and an explicit CDP cache flag. Require zero tagged server arrivals and no tagged HTTP response receipt. Retain the candidate's original raw server HTTP receipt and immutable cache header as the HTTP cache-policy evidence. Reconcile all observations. Status 200 with zero server arrivals alone is not sensitivity proof.
+-
+-Require no untagged app artifact attempt during the control phase. Retain every extra request. Require teardown coverage until context and browser close. The control exemption removes exactly the one tagged attempt from each observer's app predicate count. It removes no duplicate or neighboring request. An uncached, unobserved, failed, redirected, or duplicated control blocks sensitivity credit.
+-
+-## Check the actual point values and media
+-
+-The chart observation is passive. It reads the mounted DOM node's React fiber ancestors to obtain the committed `series` props. It changes no function, observer, state, style, or global. It saves the full chart DOM, accessible label, summary, traversal names, IDs, labels, colors, and every numeric t/y point. The SVG must exist. If the actual runtime does not expose that shape, retain BLOCKED. Do not substitute expected values for actual values.
+-
+-The expected points come from retained emitted history tuples, separately grouped by date. For each finite score, keep that date's last tuple. Sort dates by code-unit order and compare its parsed timestamp and unrounded score with every actual chart point. This follows the observable transformation in `teamHistoryChart.ts` and `timelineCompaction.ts` without importing those production functions as the value oracle. `CompareAnalysis.tsx:470-493` constructs comparison IDs, labels, and series. `TeamsView.tsx:1396-1405` constructs detail series. The independent reviewer must link the logical point source to actual browser bodies through the immutable mapping and archive references. The write plan alone does not prove which body the page loaded.
+-
+-The passive React observation is a proposed capability, not runtime proof of rendered pixels. Independently inspect the retained SVG and visible labels and confirm that the saved props belong to that mounted chart. If full point attribution cannot be established from that evidence, point-value credit stays BLOCKED. No product instrumentation is authorized to fill the gap.
+-
+-Require new `receipts/r3-lane-7.png` and `receipts/r3-lane-8.png` from the actual companion run. Require SHA256 of each actual PNG. Finalize the video by closing the context before hashing its actual path. Do not reuse an old failure image. These companion media files do not grant R4 or T3 media credit.
+-
+-## Require all exits and cleanup
+-
+-Require the actual caller code and signal, observed heavy-check child close, actual launcher inner exit, each cleanup result, source-after and dependency-after receipts, instrument-after hashes, and finalized media inventory. An early refusal or timeout can leave some files absent. Preserve that output and report the exact missing proof. Do not infer a zero exit from an end record or a shell prompt.
+-
+-The driver closes only its own context, browser, and Vite server. The independent native inspector must confirm the owned port, processes, resource samples, and both locks after close. Its command or tool remains Root-assigned. Do not issue outside process signals or an HTTP cleanup probe. A timer, awaited close, or process name alone is not cleanup proof.
+-
+-Only a new independent raw-evidence verdict plus Root countersign can close a predicate gate. CI, source review, runtime review, merge, and Max acceptance stay separate. Every unresolved capability or semantic question remains explicit. No merge is authorized.
++An independent fix diff review and root countersign are required before any allocation. A separate independent raw-evidence verdict is required after it. Source checks, CI, review, runtime, merge, and Max acceptance remain separate. No merge is authorized.
+--- /dev/null
++++ v2/demand-source-trace.md
+@@ -0,0 +1,34 @@
++# Detail and Players demand
++
++This is a source trace at HEAD `d38add5f228e67022a3001e27a820ad76657f37f` and tree `10c19882806045f340674c6627b4715929ee020e`. No fixture was generated. Actual object digests and raw body receipts remain UNRUN.
++
++## History has one index and one selected scope
++
++`App.tsx:148-150,180-183,300-307,473-482` keeps Players and history demand separate. Opening comparison supplies its actual team keys. Opening detail supplies the detail team through `TeamsView.tsx:295-341`. Closing detail does not clear the comparison keys.
++
++`usePublicArtifacts.ts:140-144,210-234,518-550` loads the history index and then the `All__All__All` scope with `/series` selected record keys. No other history family is requested by this sequence. `writePlan.ts:58-61,130-132,149-151,166-169` supplies the logical paths. They are the following paths.
++
++- `/data/history/team-series/index.json` is the index.
++- The emitted index entry `scopeIndex.All__All__All.url` is the scope. Its filename follows `schema.ts:842-848`.
++- Every archive member reachable from the index is required.
++- Every archive member reachable from the scope under the actual `/series` key selection is required. An index, record wrapper, or archive catalog needed to reach a selected leaf is part of this closure.
++
++The closure walker follows the same reference paths and key ranges as `archive.mjs:122-165`. A small object stays inline under `archive.mjs:16`. An inline All scope contains aggregate team series. Its request cannot identify the selected teams. No selected-only byte claim is made.
++
++Lane 7 requires the full nonempty history closure and no earlier member in the observed semantic cache. Both request streams must show no history before the first comparison input. Removing the first team can use the already retained objects. It still requires the exact remaining chart IDs and values.
++
++Opening the old detail in lane 8 requires only its uncached index and All scope members. Opening the new comparison requires only its uncached selected history members. These sets can be empty after lane 7. Each action records its actual zero-request cache reuse separately. Earlier response sequence numbers remain attached to every oracle value. They belong to this same actual unit, never an imported run.
++
++## Players has one directory closure
++
++`TeamsView.tsx:1592-1597` invokes `onRequestPlayers` only when the Players disclosure opens. `App.tsx:148,300,548` connects that callback to `loadPlayers`. `usePublicArtifacts.ts:185-206` fetches the player directory once that flag is true.
++
++The full legitimate closure is `/data/entities/players.json`, or its emitted `playerDirectoryUrl`, plus every reachable archive member. The directory includes both `players` and `currentLineups`. It has no separate lineup request. Closed Players permits none of that closure in either stream. Empty fixture rosters do not remove the directory request requirement.
++
++## Other actions permit zero artifact requests
++
++Row picks, comparison and detail close controls, clearing picks, and Data and sources permit zero new artifact attempts. Initial ranking summary, ranking scope prefetches, and tournament movement index demand remain in the initial ledger. They are not a new allowance for any later action. The tagged sensitivity fetch uses an actual initial immutable object outside every history and player closure. It permits exactly that one tagged attempt in each stream and no server arrival.
++
++The source closure above is fixed before future admission. The driver saves the full actual emitted logical path, member URL, digest, storage type, and raw emitted body path before browser start. Its pre-action plans record the actual selected IDs and cache intersection. Every extra attempt fails. Neither the logical list nor an aggregate request proves selection. Mounted chart labels, series keys, raw values, and pixel mapping are separate requirements.
++
++Root must review this logical closure before release. Actual emitted closure receipts are still PENDING. If an extra legitimate artifact is found, preserve the failed output and request a new source review. Do not add an allowance during a run.
+--- v1/release.template.json
++++ v2/release.template.json
+@@ -1,7 +1,7 @@
+ {
+   "status": "TEMPLATE_ONLY_UNEXECUTED",
+   "packageInventorySha256": "PENDING_NEW_ROOT_COUNTERSIGN",
+-  "root": "PENDING_CANONICAL_RUNTIME_ROOT",
++  "root": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610",
+   "output": "PENDING_NEW_RUN_DIRECTORY/driver",
+   "head": "d38add5f228e67022a3001e27a820ad76657f37f",
+   "tree": "10c19882806045f340674c6627b4715929ee020e",
+@@ -10,8 +10,28 @@
+   "rootCountersign": "PENDING",
+   "runtimeAllocation": "PENDING",
+   "expiresAt": null,
+-  "review": { "path": "PENDING", "sha256": "PENDING" },
+-  "countersign": { "path": "PENDING", "sha256": "PENDING" },
+-  "nativeAdmission": { "path": "PENDING", "sha256": "PENDING", "observedAt": null, "approved": false },
+-  "standingMergeRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run."
++  "review": {
++    "path": "PENDING",
++    "sha256": "PENDING"
++  },
++  "countersign": {
++    "path": "PENDING",
++    "sha256": "PENDING"
++  },
++  "nativeAdmission": {
++    "directory": "PENDING_FRESH_ROOT_ASSIGNED_BEFORE_DIRECTORY",
++    "path": "PENDING_FRESH_ROOT_ASSIGNED_BEFORE_DIRECTORY/before-native.json",
++    "sha256": "PENDING",
++    "inspector": {
++      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-native-admission-fix-v2/inspect.py",
++      "sha256": "ea94e43a4ab50b7b9db16657cba1fde6e9f988a0a922dfe7077f0e80dcaffb4b"
++    },
++    "exitReceipt": {
++      "path": "PENDING_ROOT_CAPTURED_NUMERIC_EXIT_RECEIPT",
++      "sha256": "PENDING"
++    }
++  },
++  "standingMergeRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.",
++  "heavyLock": "PENDING_ROOT_ASSIGNED_EXACT_CANONICAL_HEAVY_LOCK_PATH",
++  "sharedStoreOwnerCheck": "PENDING_ROOT_EXCLUSIVE_STORE_WRITER_ADMISSION"
+ }

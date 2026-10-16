@@ -1,0 +1,76 @@
+{
+  "kind": "source-only-static-checks",
+  "at": "2026-10-16T23:16:21.665589+00:00",
+  "runtime": "UNRUN",
+  "nativeInspector": "NOT_CALLED",
+  "originalInventory": {
+    "status": "PASSED",
+    "sha256": "928f0ad70074a0572715b3f622cd60d34fc0cea1830da789ac11d77625f469c3"
+  },
+  "unchangedPredicatesAndMetadataPins": {
+    "status": "PASSED",
+    "files": [
+      "predicates.json",
+      "head-dependency-pins.json",
+      "runtime-tool-pins.json"
+    ]
+  },
+  "recipeBytesUnchanged": {
+    "status": "PASSED",
+    "old": "address91-recipe.ts",
+    "new": "address91-recipe.mts",
+    "sourceSha256": "46975d20010cc1867420e09ae18af6f57b723f90eb41816fd209bc76dd86d0be"
+  },
+  "currentSyntax": {
+    "status": "PASSED",
+    "nodeSyntaxChecks": 9,
+    "bashSyntaxChecks": 1,
+    "receipt": "syntax-checks.json",
+    "nodeSyntaxCommands": 12,
+    "uniqueCurrentNodeSources": 9
+  },
+  "oldPlainNodeRecipe": {
+    "status": "FAILED",
+    "exit": 1,
+    "mustRemainFailed": true
+  },
+  "historicalTypeStripParse": "Separate PARSE_ONLY record retained. It does not supersede the plain Node failure.",
+  "sourceControls": {
+    "status": "PASSED",
+    "count": 44,
+    "receipt": "receipts/source-controls-final/source-controls.json",
+    "nativeOrProductModulesExecuted": false
+  },
+  "staticDependencyIdentity": {
+    "status": "PASSED",
+    "packages": 98,
+    "files": 20011,
+    "receipt": "receipts/final-source-checks.json",
+    "productOrDependencyImports": false
+  },
+  "inputHashes": {
+    "status": "PASSED",
+    "receipt": "receipts/final-source-checks.json"
+  },
+  "sourceHeadTree": {
+    "status": "PASSED",
+    "receipt": "receipts/final-source-checks.json"
+  },
+  "sourceLookupFailures": {
+    "status": "FAILED_SOURCE_LOOKUP_CORRECTED_WITH_EXISTING_BUNDLE_PATHS",
+    "count": 2,
+    "receipt": "receipts/source-lookup-failures.json"
+  },
+  "runtimePredicates": "ALL_PENDING_NO_CREDIT",
+  "independentFixDiffReview": "PENDING",
+  "rootCountersign": "PENDING",
+  "ci": "NOT_RUN",
+  "merge": "NONE_NOT_AUTHORIZED",
+  "maxAcceptance": "NONE",
+  "optimizerSourcePins": {
+    "status": "PASSED_STATIC_HASH_CAPTURE_ONLY",
+    "files": 47,
+    "path": "optimizer-pins.json",
+    "runtime": "UNRUN"
+  }
+}

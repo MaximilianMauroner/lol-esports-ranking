@@ -1,0 +1,157 @@
+{
+  "allocationId": "r3-abab-actual-v2-baseline1",
+  "verdict": "BLOCKED",
+  "release": "FINALRELEASE",
+  "at": "2026-10-16T23:24:11.304452+00:00",
+  "workloadExecutions": 0,
+  "launchAttempts": 0,
+  "retries": 0,
+  "outputExists": false,
+  "actualCommandCodes": {
+    "external-pin": 0,
+    "input-self-sha256.txt": 0,
+    "input-sha256.txt": 0,
+    "inventory-self-sha256.txt": 0,
+    "inventory-sha256.txt": 0,
+    "native-before": 1,
+    "native-after": 1,
+    "workspace-env-actual": 0
+  },
+  "actualSignals": {
+    "external-pin": null,
+    "input-self-sha256.txt": null,
+    "input-sha256.txt": null,
+    "inventory-self-sha256.txt": null,
+    "inventory-sha256.txt": null,
+    "native-before": null,
+    "native-after": null,
+    "workspace-env-actual": null
+  },
+  "blocker": "Canonical before inspector found active source/heavy process. No launch permitted.",
+  "beforeMatches": [
+    {
+      "pid": 1053839,
+      "ppid": 980791,
+      "cwd": "/home/codex",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053842,
+      "ppid": 1053839,
+      "cwd": "/home/codex",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053843,
+      "ppid": 1053839,
+      "cwd": "/proc/1053844/fdinfo",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053845,
+      "ppid": 1053843,
+      "cwd": "/proc/1053844/fdinfo",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053861,
+      "ppid": 1053842,
+      "cwd": "/home/codex",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1053863,
+      "ppid": 1053839,
+      "cwd": "/home/codex",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1192990,
+      "ppid": 1053845,
+      "cwd": "/proc/1053844/fdinfo",
+      "executable": "/home/codex/.t3/tools/chrome-headless-shell/linux64/154.0.8037.92/chrome-headless-shell",
+      "reason": "positive family CPU delta",
+      "familyPid": 1053839,
+      "familyCpuDelta": 1
+    },
+    {
+      "pid": 1213619,
+      "ppid": 1213593,
+      "cwd": "/home/codex/.t3/worktrees/fleet/heavy-check-memory-floor",
+      "executable": "/usr/bin/bash",
+      "reason": "executable/script role",
+      "familyPid": null,
+      "familyCpuDelta": null
+    }
+  ],
+  "afterMatches": [
+    {
+      "pid": 1213619,
+      "ppid": 1213593,
+      "cwd": "/home/codex/.t3/worktrees/fleet/heavy-check-memory-floor",
+      "executable": "/usr/bin/bash",
+      "reason": "executable/script role"
+    }
+  ],
+  "ownedInspectorPIDAbsence": {
+    "1213995": true,
+    "1214195": true
+  },
+  "ownedWorkloadPIDs": [],
+  "ownedWorkloadGroups": [],
+  "ownedListener": null,
+  "locksAfter": [
+    {
+      "path": "/run/user/1000/codex-heavy-check/e0d36a6f58a17460b80541caf783382f36e8bf2e6f62f6a6d0c27645219d15d7.lock",
+      "acquiredNonblocking": true,
+      "released": true
+    },
+    {
+      "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/browser.lock",
+      "acquiredNonblocking": true,
+      "released": true
+    }
+  ],
+  "nativeAfterPassed": false,
+  "foreignProcessesUntouched": true,
+  "callerOutcome": null,
+  "hostOutcome": null,
+  "innerOutcome": null,
+  "sourceAfterOutcome": null,
+  "notExecutedReason": "Admission failed before observer/heavy-check/driver/host/browser launch.",
+  "strictWindowIntegerNanos": [],
+  "requestCounts": null,
+  "controlOutcome": "UNRUN",
+  "runtimeCap": "UNRUN",
+  "runtimeInstrumentSources": "UNRUN",
+  "runtimeDependencyBeforeAfter": "UNRUN",
+  "noInstallRuntimeCheck": "UNRUN",
+  "ABABCredit": false,
+  "comparatorExecuted": false,
+  "CI": "UNRUN",
+  "sourceReview": "APPROVE SOURCE ONLY, root countersigned",
+  "merge": "UNAUTHORIZED and not performed",
+  "MaxAcceptance": "PENDING",
+  "nextOwner": "Root",
+  "nextAction": "Inspect this terminal zero-execution handoff and obtain fresh native proof before any future allocation. No automatic retry.",
+  "MaxOwns": "R4 media review and explicit merge go",
+  "standingRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run."
+}

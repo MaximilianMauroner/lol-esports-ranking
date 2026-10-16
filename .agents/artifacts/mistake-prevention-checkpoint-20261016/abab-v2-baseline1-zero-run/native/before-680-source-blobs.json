@@ -1,0 +1,3402 @@
+{
+  ".agents/artifacts/design-directions.html": {
+    "gitBlob": "74d29a353242911af7c2a0747525fb55f545db96",
+    "actualBlob": "74d29a353242911af7c2a0747525fb55f545db96",
+    "sha256": "1f504dd40b6319b90e44d5d4e397eb2a37c3c6d8abf3608b9b77eaeb4fb7fc34"
+  },
+  ".agents/artifacts/design-language-review.html": {
+    "gitBlob": "f33c2ab34329c29603b067f22f8b8c1816d8b536",
+    "actualBlob": "f33c2ab34329c29603b067f22f8b8c1816d8b536",
+    "sha256": "f77063d2ce0154b25b342150e2f36dfdd3d27bb702eb263b1f8e1b61d39c988a"
+  },
+  ".agents/artifacts/live-vs-dev.html": {
+    "gitBlob": "3d628b3a2c63e9dfe8a235310234230cf5873d24",
+    "actualBlob": "3d628b3a2c63e9dfe8a235310234230cf5873d24",
+    "sha256": "54763ab07c856f672eafd318e8d331ad8cd3a469e572fe9b5da3f2c81a5f7e68"
+  },
+  ".agents/artifacts/plans/rust-refresh-worker/log.md": {
+    "gitBlob": "1e628f5f1a6e02e7ce77b0ee011d1fdaac14faf6",
+    "actualBlob": "1e628f5f1a6e02e7ce77b0ee011d1fdaac14faf6",
+    "sha256": "43ec9fb23ba9e6b054c32452603a19e473ec23fe5a68177161b988d2abd9a365"
+  },
+  ".agents/artifacts/ranking-calculation-repair-microplan.html": {
+    "gitBlob": "0cb3549b20e80ad6fef86265ad7d7dbbc422ddd1",
+    "actualBlob": "0cb3549b20e80ad6fef86265ad7d7dbbc422ddd1",
+    "sha256": "ca9841a015cebf682546507136ffb1f2ec72b5c5fd9b08961f509201431c39e7"
+  },
+  ".agents/artifacts/roster-reliability-accuracy-microplan.html": {
+    "gitBlob": "0009755d2fdd8ffce5d432b0be244bdc1a9b2361",
+    "actualBlob": "0009755d2fdd8ffce5d432b0be244bdc1a9b2361",
+    "sha256": "4269f8df74f864cb9dbfbad43a904635ab1f5ad6a02ee4dbfa5b7de5d3100e29"
+  },
+  ".agents/skills/verify-lol-esports/SKILL.md": {
+    "gitBlob": "34107364f18fa83a1861e90550d24212617165cc",
+    "actualBlob": "34107364f18fa83a1861e90550d24212617165cc",
+    "sha256": "f0a05f330680f0e293eb6437ef56b93271dcaa531358b61360765d93d6a3a3b8"
+  },
+  ".agents/skills/verify-lol-esports/features/README.md": {
+    "gitBlob": "ca2a88b7be29b62492cc495adcf368e9f0fa36a9",
+    "actualBlob": "ca2a88b7be29b62492cc495adcf368e9f0fa36a9",
+    "sha256": "b5b6116fcdd537de0c57bf2215fe1fbb5b9f39612649751fecc5ea292201d7de"
+  },
+  ".agents/skills/verify-lol-esports/features/l1.md": {
+    "gitBlob": "c223294e712068a3661524c5031b0307dba30904",
+    "actualBlob": "c223294e712068a3661524c5031b0307dba30904",
+    "sha256": "da969fe7f3c868c2b84b8264b17cfc31b02900f711ecde83309467cc0995fbbc"
+  },
+  ".agents/skills/verify-lol-esports/features/l10.md": {
+    "gitBlob": "ccb981a207d7701202389abf49e9af31dfb9b0a0",
+    "actualBlob": "ccb981a207d7701202389abf49e9af31dfb9b0a0",
+    "sha256": "746f81cb34474734b88fe8c9ad44af7e12801fe77aea57658ce4ed37054dbc0d"
+  },
+  ".agents/skills/verify-lol-esports/features/l11.md": {
+    "gitBlob": "7dd43833697bd7a6293a0e7bc34e67d0d0dfecd8",
+    "actualBlob": "7dd43833697bd7a6293a0e7bc34e67d0d0dfecd8",
+    "sha256": "9d6c69f5d7a0d4a969a246c5b7fada01599992102b3843f33f8599a7cab6eafc"
+  },
+  ".agents/skills/verify-lol-esports/features/l12.md": {
+    "gitBlob": "1c77d665c71f786d2083807524bab89df468a65b",
+    "actualBlob": "1c77d665c71f786d2083807524bab89df468a65b",
+    "sha256": "5f466cb9f371a8ecbd4135072c4c6cbaaeb345c72674731503b8233ded969fbf"
+  },
+  ".agents/skills/verify-lol-esports/features/l13.md": {
+    "gitBlob": "771b04de74540a76876c63e5ea34d84743012a51",
+    "actualBlob": "771b04de74540a76876c63e5ea34d84743012a51",
+    "sha256": "06c77556ec29ace84a1d1666967df6386651e67703a96287ac64fa7bdbcec750"
+  },
+  ".agents/skills/verify-lol-esports/features/l14.md": {
+    "gitBlob": "f908563dd1ac327ddf6b96b3c53e68530c070748",
+    "actualBlob": "f908563dd1ac327ddf6b96b3c53e68530c070748",
+    "sha256": "ee57fe41935201659339a34b616b035ecbda710d4496015e18aafee5e795ce84"
+  },
+  ".agents/skills/verify-lol-esports/features/l2.md": {
+    "gitBlob": "7b485eae9fb5aba7a747761d1d39cf14e28d1bcf",
+    "actualBlob": "7b485eae9fb5aba7a747761d1d39cf14e28d1bcf",
+    "sha256": "6e80d6724b504a72e6c3e385f6570d0cb0cf17504fdd36d71df23f4fef105a2f"
+  },
+  ".agents/skills/verify-lol-esports/features/l3.md": {
+    "gitBlob": "095adbff6cdb07769bedfb1dc83415bd3347a12a",
+    "actualBlob": "095adbff6cdb07769bedfb1dc83415bd3347a12a",
+    "sha256": "9c673db21fa271d79b1e6bdc2fa4afcf10def4ce7de9eb802559c0c18ccc72a2"
+  },
+  ".agents/skills/verify-lol-esports/features/l4.md": {
+    "gitBlob": "159158de1897afeba3351f43915285797e8dbc80",
+    "actualBlob": "159158de1897afeba3351f43915285797e8dbc80",
+    "sha256": "7de9a0d7e4e6ac6ca43ee7724334a4d3ca5238dc396ce6e97f80166300baee6e"
+  },
+  ".agents/skills/verify-lol-esports/features/l5.md": {
+    "gitBlob": "84447e5e2acd5a5af7bfd4efb216749d733aa65d",
+    "actualBlob": "84447e5e2acd5a5af7bfd4efb216749d733aa65d",
+    "sha256": "65f81a9c160d200b738593a0fc9b9a3d7ec1b84432a4dda6ea22099d007e61b8"
+  },
+  ".agents/skills/verify-lol-esports/features/l6.md": {
+    "gitBlob": "d167b017b087b078f6b8e5ccd59aee0376df4500",
+    "actualBlob": "d167b017b087b078f6b8e5ccd59aee0376df4500",
+    "sha256": "d49e753fdcda6a0cd4225f25f9cc6f19fda47fe6f3e8a6c138f949c14f011a10"
+  },
+  ".agents/skills/verify-lol-esports/features/l7.md": {
+    "gitBlob": "50a02886386ebb3955c8fc1610dd1531995569aa",
+    "actualBlob": "50a02886386ebb3955c8fc1610dd1531995569aa",
+    "sha256": "c6ee0fb49ea4fae1927b11b018ce4c1bff7dc3495cc0872c6a1a2d3ad64cc923"
+  },
+  ".agents/skills/verify-lol-esports/features/l8.md": {
+    "gitBlob": "89103219a648b3d9206c2fd6df2e5c41494b9245",
+    "actualBlob": "89103219a648b3d9206c2fd6df2e5c41494b9245",
+    "sha256": "852e2bcd73c213dfad8c8ba20c10ece226e99eb2b1424e9a038744b26e76464d"
+  },
+  ".agents/skills/verify-lol-esports/features/l9.md": {
+    "gitBlob": "538dcca011767e9b3c54246772cd08f9a10e1d71",
+    "actualBlob": "538dcca011767e9b3c54246772cd08f9a10e1d71",
+    "sha256": "079400068b1ee2b2bc7701dcab55abcc68221d6a53d20421a4ad056da8f806f8"
+  },
+  ".github/workflows/checks.yml": {
+    "gitBlob": "907816f1cb41592856a534745feebe4e748236aa",
+    "actualBlob": "907816f1cb41592856a534745feebe4e748236aa",
+    "sha256": "616c2d9483736e8cf718eef0a5b61de70c5ae05041ccf54009e37ba6b59e7676"
+  },
+  ".github/workflows/railway-deploy.yml": {
+    "gitBlob": "5e68f257a56d74a436124eb9b1712b52538a02da",
+    "actualBlob": "5e68f257a56d74a436124eb9b1712b52538a02da",
+    "sha256": "c7870b3686de41fd9b649df22a46580f90f1d7582000a6cd234adca196747c1c"
+  },
+  ".gitignore": {
+    "gitBlob": "539e9b345757919652df1c50c9c77b7b9882ad00",
+    "actualBlob": "539e9b345757919652df1c50c9c77b7b9882ad00",
+    "sha256": "5fcb28e66ae4fffe4f076919e0da1daf1a821682d9a1c05ecae4e1f3f87f5a6e"
+  },
+  "AGENTS.md": {
+    "gitBlob": "23b3504c45ff83b17cab6895125b67bca835fccf",
+    "actualBlob": "23b3504c45ff83b17cab6895125b67bca835fccf",
+    "sha256": "0caf8e1ce268e545dc49631fddaf02b6812c84883a3090fcde73921382fcb294"
+  },
+  "Dockerfile.refresh": {
+    "gitBlob": "244dbbf17b2b228af856eeb5d706d288c10cbd64",
+    "actualBlob": "244dbbf17b2b228af856eeb5d706d288c10cbd64",
+    "sha256": "3287a4e8795064eb4e2a2df5e2677c5d6b200d479c59993afa2d6e82e5c2d09a"
+  },
+  "Dockerfile.refresh.dockerignore": {
+    "gitBlob": "64349153575a80eb783ce2ac7281f83da763aae9",
+    "actualBlob": "64349153575a80eb783ce2ac7281f83da763aae9",
+    "sha256": "506f5a1498e9f82ba018ea5c44caa807cf4e70edb8ce9d92a490afb9ef03d80b"
+  },
+  "LICENSE": {
+    "gitBlob": "df9e55745b8edac531d7723b647564c8bc86b2aa",
+    "actualBlob": "df9e55745b8edac531d7723b647564c8bc86b2aa",
+    "sha256": "d113dfa2c0fa959f3928e4bf5ee5a312fa5ff178aeee439bc38c5f2f62f29217"
+  },
+  "README.md": {
+    "gitBlob": "7953897e0db360046bb1ab267e23746aabac0d08",
+    "actualBlob": "7953897e0db360046bb1ab267e23746aabac0d08",
+    "sha256": "e45746b5cfafc9a813ad4a82a78c321c13e12af4fc4a90f931e3e14d09345e7d"
+  },
+  "components.json": {
+    "gitBlob": "437421dfedf21a8df8af93bb30afefa3b4bf6d7b",
+    "actualBlob": "437421dfedf21a8df8af93bb30afefa3b4bf6d7b",
+    "sha256": "d1315ef1787fb2b906b8712d8d939635e4203c87e148989454fcf3b0994fde16"
+  },
+  "data/raw/manifest.json": {
+    "gitBlob": "442c034971222b66ac0e5bfd390c7a15270702c2",
+    "actualBlob": "442c034971222b66ac0e5bfd390c7a15270702c2",
+    "sha256": "3e6754f42698001197ce43d14da7f2f78c0d22a4b0d6d30e1a677869df114b5d"
+  },
+  "docs/automatic-tournament-ingestion.md": {
+    "gitBlob": "bdf8c01e44e32b7d6cc738b901f71348033b6745",
+    "actualBlob": "bdf8c01e44e32b7d6cc738b901f71348033b6745",
+    "sha256": "ddd5ed3a3e069836f7fcea2358bc3e9a44151a8922a56bb57dd1b4de792fb3ed"
+  },
+  "docs/benchmark-diagnostics.md": {
+    "gitBlob": "ec22874172da2e267527c17ca954dc9b6b6143c4",
+    "actualBlob": "ec22874172da2e267527c17ca954dc9b6b6143c4",
+    "sha256": "dd7c2993c50ba86309f8f2e13cf8f1767940004046697420e7ee0a6f275cb9a0"
+  },
+  "docs/brand-assets.md": {
+    "gitBlob": "7ce85dd78ddf04504f7d9051753319e990f6fc86",
+    "actualBlob": "7ce85dd78ddf04504f7d9051753319e990f6fc86",
+    "sha256": "6736af7e11f7a4634e01a5948876b25587ea9aaa0a4c1768c60f17dff071fd9f"
+  },
+  "docs/conditional-power-previews-56.md": {
+    "gitBlob": "e6d31ec345964332b75a88a6e57a06f7536e9c24",
+    "actualBlob": "e6d31ec345964332b75a88a6e57a06f7536e9c24",
+    "sha256": "38cab0f8f9bf9a0d8404f2ef2413e2b66572e673afcf70d18c4c4f3d6f9148ec"
+  },
+  "docs/incremental-gate-runner-calibration.md": {
+    "gitBlob": "d351cbd38ac2790b3c228e8032e90c4f5b8715c2",
+    "actualBlob": "d351cbd38ac2790b3c228e8032e90c4f5b8715c2",
+    "sha256": "874bc20ae897f244d8017a33f2636d7ddb2b0f3ffffffd39bdc1654bfc4a5ad1"
+  },
+  "docs/incremental-ledger-performance.md": {
+    "gitBlob": "0712ccde4a0174aed064d47adf89005005b76ade",
+    "actualBlob": "0712ccde4a0174aed064d47adf89005005b76ade",
+    "sha256": "07e3d8d63aa42ec223ea489b5301f1c49ff3da5f5e25ec2c0fc45091ac5706bc"
+  },
+  "docs/local-data.md": {
+    "gitBlob": "09bc2f2a96762ccbc387cfc6f2e8406045c583a4",
+    "actualBlob": "09bc2f2a96762ccbc387cfc6f2e8406045c583a4",
+    "sha256": "9555c1543c1ef1b6b6c18d9af72e93227db02e03600524d86b397d7235de5773"
+  },
+  "docs/offline-forecast-cohort-55.md": {
+    "gitBlob": "d811f1116e79891b37f2da0f5e1c3bee13e84760",
+    "actualBlob": "d811f1116e79891b37f2da0f5e1c3bee13e84760",
+    "sha256": "f96d402e60ccc7af55a0eadae7ce659f894a202b330f3bb229d345ac201abcac"
+  },
+  "docs/plans/ranking-accuracy/evidence.json": {
+    "gitBlob": "419b35e5305a9fe2f72ad111305ed9306b562cc0",
+    "actualBlob": "419b35e5305a9fe2f72ad111305ed9306b562cc0",
+    "sha256": "b6ae76f827d5c151a0a475ba10ca241d16b4aee1129f9a8530dcb9a26f244f49"
+  },
+  "docs/plans/ranking-accuracy/experiments.md": {
+    "gitBlob": "569931784eea2d0c49d1671a4cda61080196453b",
+    "actualBlob": "569931784eea2d0c49d1671a4cda61080196453b",
+    "sha256": "d9293cbb799a2c548403ead9fa894fb5ab38be33ccad395e974482319949f3bc"
+  },
+  "docs/plans/ranking-accuracy/log.md": {
+    "gitBlob": "a234dfc52cbbad1baa872a24bd78e8a4ad28affc",
+    "actualBlob": "a234dfc52cbbad1baa872a24bd78e8a4ad28affc",
+    "sha256": "9dd959d5b55d2b14bb063ec223fcd9dd68a1a56b85132303fa71b2fd2ab24cc3"
+  },
+  "docs/plans/ranking-accuracy/protocol.json": {
+    "gitBlob": "8a0c4d7d09364381bc814d7d8a3ef3361ab1b01f",
+    "actualBlob": "8a0c4d7d09364381bc814d7d8a3ef3361ab1b01f",
+    "sha256": "81fd82e6d43af7e028d08022573df6e4d6dc4c3ad1ddcac555eaa23815803041"
+  },
+  "docs/plans/ranking-accuracy/report.md": {
+    "gitBlob": "5e2210354e716e0e0cef1a01316d3d84c916830d",
+    "actualBlob": "5e2210354e716e0e0cef1a01316d3d84c916830d",
+    "sha256": "b70bae9fbfb3d572ca293af0314312deded856cc2de6570ce6f8f9793a6d3f79"
+  },
+  "docs/refresh-health-80.md": {
+    "gitBlob": "a2ccea85c2df038925957df208f67cbccb81237d",
+    "actualBlob": "a2ccea85c2df038925957df208f67cbccb81237d",
+    "sha256": "102cdd5c1d626c0487ece7f33dacdede51c041c81f93ec574813d0dddcd416ea"
+  },
+  "docs/rust-worker-acceptance-84.md": {
+    "gitBlob": "305f9671686c1a951c18eb08fbee636442b2f94f",
+    "actualBlob": "305f9671686c1a951c18eb08fbee636442b2f94f",
+    "sha256": "b805ef561a30e316e8470485cae26bec1b5913498aa71b9ee59ddbabced9cc84"
+  },
+  "docs/rust-worker.md": {
+    "gitBlob": "38b53cac189f0ddba808c50484e2b631c8c719bb",
+    "actualBlob": "38b53cac189f0ddba808c50484e2b631c8c719bb",
+    "sha256": "d0d4a991332f5f9ee9c43c1e4a6ac7950e0d577223f0dac29e1563c8b4c43f79"
+  },
+  "docs/season-history-lead-in.md": {
+    "gitBlob": "c83a5d1bdc005064efe696a333fc58f34528ee2c",
+    "actualBlob": "c83a5d1bdc005064efe696a333fc58f34528ee2c",
+    "sha256": "5d70a198a6d84d205bb7286d394624764615814dfffb895bef3d6ab5eca82ade"
+  },
+  "docs/storage-identity.md": {
+    "gitBlob": "e1fa3a2c42ffdc9d3845eea8e41416fb9e67ecc8",
+    "actualBlob": "e1fa3a2c42ffdc9d3845eea8e41416fb9e67ecc8",
+    "sha256": "da3cab2c5feb03f0489e9af837d5f83eff24f019f76d36ccd2bba23d006fdf44"
+  },
+  "docs/swiss-scenario-preview.md": {
+    "gitBlob": "db9b50a67f8c452115f92a8ab11ae066307e2045",
+    "actualBlob": "db9b50a67f8c452115f92a8ab11ae066307e2045",
+    "sha256": "c764686e69bc56917e20f9371227c71908811f299d7cfef2d802134a2261c3c5"
+  },
+  "docs/tournament-source-acceptance-45-46.md": {
+    "gitBlob": "9a1708a9ca2ec14307517d0074d01511ff94de86",
+    "actualBlob": "9a1708a9ca2ec14307517d0074d01511ff94de86",
+    "sha256": "22a0ec3e3a3ab518b7fc5b788200884bca12d4c338904de3377fbd16dcbf0410"
+  },
+  "docs/tournament-team-mapping-review-46.json": {
+    "gitBlob": "cbea4d721cb1365bc0008f6503420c6ef0265de4",
+    "actualBlob": "cbea4d721cb1365bc0008f6503420c6ef0265de4",
+    "sha256": "6f68bdec1e908eaa754742a49f028dc4c4947b09e47a357d6eb09454302db3ac"
+  },
+  "docs/tournament-weighting-panel.md": {
+    "gitBlob": "a2cf13fc18308fb45ae57e9e5a8364641750a199",
+    "actualBlob": "a2cf13fc18308fb45ae57e9e5a8364641750a199",
+    "sha256": "8d5fba875c14ca380cf0448802920cd588dfbe0ebdace896b7018e3981a5c00c"
+  },
+  "docs/worlds-2022-observed-groups-47.md": {
+    "gitBlob": "439cab319de899aa4174d10ce36b8273afd8037d",
+    "actualBlob": "439cab319de899aa4174d10ce36b8273afd8037d",
+    "sha256": "6e9a3773506dd419da4fcd190a62efe909473d706a985780bb7b3c3d7f8d31bd"
+  },
+  "docs/worlds-2026-knockout-47.md": {
+    "gitBlob": "cdfeb194c3c593944fa55021868d1831e3ef07a5",
+    "actualBlob": "cdfeb194c3c593944fa55021868d1831e3ef07a5",
+    "sha256": "d2067cf1b9b51b2838bde3c7549959444f2f52d9930ec6da435794acbd4aed16"
+  },
+  "docs/worlds-2026-play-in-47.md": {
+    "gitBlob": "d43f152ddada3a3847b0f36115403b883228b399",
+    "actualBlob": "d43f152ddada3a3847b0f36115403b883228b399",
+    "sha256": "3ca16c01819cdffeb3cf7249105abf5acbeb4810fa34c54ce1bc01a4b4711e58"
+  },
+  "docs/worlds-observed-bracket-47.md": {
+    "gitBlob": "7bd8ebf137aea2168ec6ee47fe64bfef602cb26a",
+    "actualBlob": "7bd8ebf137aea2168ec6ee47fe64bfef602cb26a",
+    "sha256": "428872a046b50474c3d21d237b5bdf73fb2e2aa2fc5c2be7d4cbb3fd3aeb4d4e"
+  },
+  "docs/worlds-observed-rules-47.md": {
+    "gitBlob": "ba01d3a6baad3f993e14ac63cf88e21c9bf7ec6f",
+    "actualBlob": "ba01d3a6baad3f993e14ac63cf88e21c9bf7ec6f",
+    "sha256": "3a82301d61f7b89725f6b032143c2754f63916309de7565124063980c3e4f98a"
+  },
+  "docs/worlds-simulation-47.md": {
+    "gitBlob": "7be7ccf51fe336a081be600e7961a033a5a90424",
+    "actualBlob": "7be7ccf51fe336a081be600e7961a033a5a90424",
+    "sha256": "770d499a611a7a67f19f367a36603372d8f174f569a37847b74de84b05f505ad"
+  },
+  "docs/year-partitioned-artifacts.md": {
+    "gitBlob": "509362e6c3590e4f1d89a9b750cc163bee493c7b",
+    "actualBlob": "509362e6c3590e4f1d89a9b750cc163bee493c7b",
+    "sha256": "a54b7964bad466144a91c07a40efb0197e5f8912601bffa3944ecd049f74605f"
+  },
+  "eslint.config.js": {
+    "gitBlob": "2c2a2c344efcd3cd5183c10cd2bd044bb4f25ac4",
+    "actualBlob": "2c2a2c344efcd3cd5183c10cd2bd044bb4f25ac4",
+    "sha256": "558083acc8ddf9ea160ba98e017a0a5cce1eec84fcf2d0582d945c76fe76b3b6"
+  },
+  "index.html": {
+    "gitBlob": "5a3deb72557eb21624de2e8d79cd62a4abff3ea2",
+    "actualBlob": "5a3deb72557eb21624de2e8d79cd62a4abff3ea2",
+    "sha256": "a8f5b84f41079f2a1cffe0b209ea955a09e55bc4bbd67ea5f7c3e51c5560914b"
+  },
+  "ops/ranking-restart/baseline-receipt.json": {
+    "gitBlob": "f602c2806b8150da2f5d19beb4338ba7bf3febd2",
+    "actualBlob": "f602c2806b8150da2f5d19beb4338ba7bf3febd2",
+    "sha256": "fceb1a3e321a4a9164d1ed6b6137ca53d24c58bcde63842bef44d6916e6dcf09"
+  },
+  "ops/ranking-restart/incident-ledger.json": {
+    "gitBlob": "646df9b6f8e72a1adb36f4b7a6f95446fb26f929",
+    "actualBlob": "646df9b6f8e72a1adb36f4b7a6f95446fb26f929",
+    "sha256": "f9c5c78c87e2b4b132bf28d4b2efc22d9c2fc6b73c6b30f17e49f6ec967c7642"
+  },
+  "package.json": {
+    "gitBlob": "2539f1eb6d4329983b2b45913d0233f60af5a4cf",
+    "actualBlob": "2539f1eb6d4329983b2b45913d0233f60af5a4cf",
+    "sha256": "b2f8bb513ec10a4bf36c28198288e61e234890f4e7c7850d07fc00001c594cce"
+  },
+  "pnpm-lock.yaml": {
+    "gitBlob": "5c11bfac1fad625b9e954c43a12860c0d4c4b1e2",
+    "actualBlob": "5c11bfac1fad625b9e954c43a12860c0d4c4b1e2",
+    "sha256": "3887d73689714304614674614fd51bd5c62f5f704050a5ca7dea4f4b8fc9c0e9"
+  },
+  "pnpm-workspace.yaml": {
+    "gitBlob": "9af1dfcf1fd3953285cb9ddab2e2f5b8d9dcdbd8",
+    "actualBlob": "9af1dfcf1fd3953285cb9ddab2e2f5b8d9dcdbd8",
+    "sha256": "dad6d0d0c2a58fce70bb566123424ef6c566169cdaacee163c3059d66a2a006e"
+  },
+  "public/apple-touch-icon.png": {
+    "gitBlob": "45e867e1028c101485e22623daf530f2da289bcf",
+    "actualBlob": "45e867e1028c101485e22623daf530f2da289bcf",
+    "sha256": "05eb8e7f734dd03319b1f7f3c436e4c2bab3f87512633b45837904fd85a0a6db"
+  },
+  "public/favicon.ico": {
+    "gitBlob": "0589552e806206997082bdf8d4d8f9867455422c",
+    "actualBlob": "0589552e806206997082bdf8d4d8f9867455422c",
+    "sha256": "7cecd44eb8c08279000debab8a09b705c4674a5a67cab281019906e590191893"
+  },
+  "public/favicon.png": {
+    "gitBlob": "3905560c49eeff3fe198a7f537a07f899121401e",
+    "actualBlob": "3905560c49eeff3fe198a7f537a07f899121401e",
+    "sha256": "7e783254fea7ca573e8f3d3872fa5c9ea41d8c5e5dcd135817aa807b07a9c63f"
+  },
+  "public/favicon.svg": {
+    "gitBlob": "e4f9baa8ff12a7af6aed27f2ae1f6080b0064f8d",
+    "actualBlob": "e4f9baa8ff12a7af6aed27f2ae1f6080b0064f8d",
+    "sha256": "cb7bdf426a294f189c0d77cccdfb2bb1eba6e66a2e7a7dbe23fef55618b1e858"
+  },
+  "public/icon-192.png": {
+    "gitBlob": "26123485029ad39d2ece29535c4487fd08a01b75",
+    "actualBlob": "26123485029ad39d2ece29535c4487fd08a01b75",
+    "sha256": "88cd1997be7bc06a885f2745ffb15964af871cb191c0b8c0c00753d3f11337d9"
+  },
+  "public/icon-512-maskable.png": {
+    "gitBlob": "9c02cef88ce31be57851920ffb62915593c805d6",
+    "actualBlob": "9c02cef88ce31be57851920ffb62915593c805d6",
+    "sha256": "d9c32276b90460c9126f16fa41a3b470adb4f8c3b1b96e794f9599e02b8d7cd7"
+  },
+  "public/icons.svg": {
+    "gitBlob": "fd49d9bd95b1f31353afd5cc799de21dbc957ee3",
+    "actualBlob": "fd49d9bd95b1f31353afd5cc799de21dbc957ee3",
+    "sha256": "35c10a3941038081b360d0e392dda1b5becb3eeca249e22b6b83f18f874cbf45"
+  },
+  "public/league-icons/cblol.png": {
+    "gitBlob": "ec562f51a6a1094c87aa325338c5433f19055fde",
+    "actualBlob": "ec562f51a6a1094c87aa325338c5433f19055fde",
+    "sha256": "70d8cd441a44e1104dfa27eb79663e0e6a8fe6a6293c7efe71126f25d29c4665"
+  },
+  "public/league-icons/lck.png": {
+    "gitBlob": "19a7c89df22349d020a2aac3559cea643ed49943",
+    "actualBlob": "19a7c89df22349d020a2aac3559cea643ed49943",
+    "sha256": "d97747ed5ac0e34ae3dad6fe6af8ea071a95aed1c576d5ab20e560acc7f43eac"
+  },
+  "public/league-icons/lcp.png": {
+    "gitBlob": "98b14996e2f2d8efa4d458e11da7a2c525dbfc4d",
+    "actualBlob": "98b14996e2f2d8efa4d458e11da7a2c525dbfc4d",
+    "sha256": "5535080c139a218c03eb5ba14ebb62c6f0c54765084a825f4c9a7b80ff812bb3"
+  },
+  "public/league-icons/lcs.png": {
+    "gitBlob": "504b75bf7e18d2f68e55eaede22dab89e6c49c92",
+    "actualBlob": "504b75bf7e18d2f68e55eaede22dab89e6c49c92",
+    "sha256": "ffdc9457270e18bd063e04d9aa03bb4cdfc0fbaa13037ec9bb131cd745662b9a"
+  },
+  "public/league-icons/lec.png": {
+    "gitBlob": "f99e4740a7df4ec160b92139b082bcea31424c99",
+    "actualBlob": "f99e4740a7df4ec160b92139b082bcea31424c99",
+    "sha256": "1c5e23b16367e05d24c05bf12f98efbc5c434d0587ba967d31074fe208c2797f"
+  },
+  "public/league-icons/lpl.png": {
+    "gitBlob": "4f17cd4e95f9496893a282737e675da614922cd0",
+    "actualBlob": "4f17cd4e95f9496893a282737e675da614922cd0",
+    "sha256": "57211d3a78502cd9e4b920811cdd688a9d88709eed8f17af044295e7c5222a60"
+  },
+  "public/llms.txt": {
+    "gitBlob": "7483e74b098f4850f71860c81ef40eaccb7b7d01",
+    "actualBlob": "7483e74b098f4850f71860c81ef40eaccb7b7d01",
+    "sha256": "3d7b96c0331e9b76e47dc8593b700b0e28012fabe0db3e7fec51d7d51776333c"
+  },
+  "public/logo.png": {
+    "gitBlob": "3fd03f9dd7aaeb6e61f20969c05132e04549fbac",
+    "actualBlob": "3fd03f9dd7aaeb6e61f20969c05132e04549fbac",
+    "sha256": "1a93f3bab97798d5cc900f7d68d4ae942c7bcd4f0d166bde4dbabe86b4559ad8"
+  },
+  "public/logo.svg": {
+    "gitBlob": "fa78eb2aad53eb6fb28c2eafbec93bf390461697",
+    "actualBlob": "fa78eb2aad53eb6fb28c2eafbec93bf390461697",
+    "sha256": "7b81a19827ed9dfa7682300e964784a43737ac22a71ad943e3bea9a40981b0ec"
+  },
+  "public/og-image.png": {
+    "gitBlob": "ead9768ef50e66f2b1dcc588d0c4790a99e8f067",
+    "actualBlob": "ead9768ef50e66f2b1dcc588d0c4790a99e8f067",
+    "sha256": "67eb26bf3997fec1a41402bcc069700e8d2fe9c4068ce672d0c11d857125f960"
+  },
+  "public/og-image.svg": {
+    "gitBlob": "8f2ca72f1da98779efbc1e5f53492a4d17fb1cb7",
+    "actualBlob": "8f2ca72f1da98779efbc1e5f53492a4d17fb1cb7",
+    "sha256": "a3592cae14862312d4f3f28ca625aee0fd494cec2a435ad39c649e2b2d143cca"
+  },
+  "public/robots.txt": {
+    "gitBlob": "90f1b494d1c4338952113731b2a965ca9b9eb73a",
+    "actualBlob": "90f1b494d1c4338952113731b2a965ca9b9eb73a",
+    "sha256": "adcfa5142a852e5abe470632917825c1fdf7ace30cd2281933e33262e030e22e"
+  },
+  "public/site.webmanifest": {
+    "gitBlob": "461eb450b8d3a3c740f3a9ec8e02a35c5bd73e9e",
+    "actualBlob": "461eb450b8d3a3c740f3a9ec8e02a35c5bd73e9e",
+    "sha256": "0cea0e9713b2024522a3a54285d36b3fe7b035d10eb3b9fb60186207876f69d3"
+  },
+  "public/sitemap.xml": {
+    "gitBlob": "2bce35a0ffc8cede432b8a543f995f3e146794c9",
+    "actualBlob": "2bce35a0ffc8cede432b8a543f995f3e146794c9",
+    "sha256": "1509c2ca5e3a52e1b2851e3d2d605e5430deed2e60bc25eef9e3bedc0dacbf02"
+  },
+  "public/team-logos/9z-globant.png": {
+    "gitBlob": "4891525e6d9cd0a48ec037bc46ceb445cd00c9ce",
+    "actualBlob": "4891525e6d9cd0a48ec037bc46ceb445cd00c9ce",
+    "sha256": "61a18b6603dd49ad1e02cee9768202970007c75bd026046f4be0f92f663f04a8"
+  },
+  "public/team-logos/anyone-s-legend.png": {
+    "gitBlob": "cf71c74c2e195cebef6967b10bbca81bae04d202",
+    "actualBlob": "cf71c74c2e195cebef6967b10bbca81bae04d202",
+    "sha256": "310261f68cacf39da5bc9f9c0bf1e3a7156ed795252db1b57b263be7c5a8d804"
+  },
+  "public/team-logos/berlin-international-gaming.png": {
+    "gitBlob": "6d0e058dfec396c3c8eceff07b4597691df5262f",
+    "actualBlob": "6d0e058dfec396c3c8eceff07b4597691df5262f",
+    "sha256": "e8bb765d4757a0a46d354e03848be3f8555fb3d256c7f8f6ec020ee0f855146e"
+  },
+  "public/team-logos/bilibili-gaming.png": {
+    "gitBlob": "68e4eec1b5adb4b4bbc3ad407458a9d65598daa9",
+    "actualBlob": "68e4eec1b5adb4b4bbc3ad407458a9d65598daa9",
+    "sha256": "af814289d51a813cad39488c20c7f19dcb2aa58f01ee0345fcbf88b994da8805"
+  },
+  "public/team-logos/bnk-fearx.png": {
+    "gitBlob": "5713320b0d40d2253b116a94fe59a1c97a7af27a",
+    "actualBlob": "5713320b0d40d2253b116a94fe59a1c97a7af27a",
+    "sha256": "9cf76b56487053a155dcb5001b78af4c24fcef745250a32b9b87a60a2a97bb3a"
+  },
+  "public/team-logos/boostgate-esports.webp": {
+    "gitBlob": "4b8d60a349457b8929c8a9eca2f514f157b5ac89",
+    "actualBlob": "4b8d60a349457b8929c8a9eca2f514f157b5ac89",
+    "sha256": "5f393927ed468a4589d26c7d00d9a374eb3158427ffe52c9b22e7e8307c68368"
+  },
+  "public/team-logos/chiefs-esports-club.webp": {
+    "gitBlob": "86e1beaf7f05ae05b3a8d9a2ba9661de51a4b41d",
+    "actualBlob": "86e1beaf7f05ae05b3a8d9a2ba9661de51a4b41d",
+    "sha256": "d09f378d45839039fb5ed8538c4dce6fbf28a15bded3402350435315fcfe4a13"
+  },
+  "public/team-logos/cloud9.png": {
+    "gitBlob": "076766e0b1c5e3d49732a26204c7287903c109d2",
+    "actualBlob": "076766e0b1c5e3d49732a26204c7287903c109d2",
+    "sha256": "da447879b293cfea652c0bb312c055978fb69e0a8769802b902b1d9cb2fed4b5"
+  },
+  "public/team-logos/ctbc-flying-oyster.png": {
+    "gitBlob": "31d741feb2f86d5f8ffffc003932f8e705e4d468",
+    "actualBlob": "31d741feb2f86d5f8ffffc003932f8e705e4d468",
+    "sha256": "c0cd2b0c406ab9b2313621280f424fd94e8a9fbac2bf67e1a78f527da89f35b5"
+  },
+  "public/team-logos/cupid-esports.jpg": {
+    "gitBlob": "f548691d448721b5e04938535cb80b232f03126a",
+    "actualBlob": "f548691d448721b5e04938535cb80b232f03126a",
+    "sha256": "f4cc89edf97b67ddd06ed48c9fc7af58cfe6056fc5f8b018f63b30e2677eb8b7"
+  },
+  "public/team-logos/deep-cross-gaming.png": {
+    "gitBlob": "0a05e4e63589f9dbde42ff3ecb1144b28bc40fd8",
+    "actualBlob": "0a05e4e63589f9dbde42ff3ecb1144b28bc40fd8",
+    "sha256": "2601a52646971968ed21b275c5a2a22f84fc05b70c3f33ff827044fc2e9f0333"
+  },
+  "public/team-logos/detonation-focusme.png": {
+    "gitBlob": "0e71cce51ddb299b3fda3728628c30d1f2517f86",
+    "actualBlob": "0e71cce51ddb299b3fda3728628c30d1f2517f86",
+    "sha256": "7042a8a64f1844a38638c30a2aefd966a56d090d31114f3072082dae47088bee"
+  },
+  "public/team-logos/dignitas.png": {
+    "gitBlob": "ccfc5fe3797831f18b73d8e8451471c9a126f1cc",
+    "actualBlob": "ccfc5fe3797831f18b73d8e8451471c9a126f1cc",
+    "sha256": "08e1a2274271e9908cab6f2c8c73a266c6feb47339afd317a19f15c5cde0a269"
+  },
+  "public/team-logos/disguised.png": {
+    "gitBlob": "9a4f211dcb0875cd63cff080ad64c7537aa513c4",
+    "actualBlob": "9a4f211dcb0875cd63cff080ad64c7537aa513c4",
+    "sha256": "b0f4ef84d2dbbfa1049fc2b6f71fbc72401c050d13e24a64470499b48a9de85e"
+  },
+  "public/team-logos/dn-soopers.webp": {
+    "gitBlob": "a6b17b3ea91a4760ef4555191485458097228052",
+    "actualBlob": "a6b17b3ea91a4760ef4555191485458097228052",
+    "sha256": "22bb3e74ed56b6c3e41cf29068cd03e7616b884978c6e1d77cce35b8e2954dc1"
+  },
+  "public/team-logos/dplus-kia.png": {
+    "gitBlob": "001c1e99ecf21cc44f8ac30ae0d1507a0536d69e",
+    "actualBlob": "001c1e99ecf21cc44f8ac30ae0d1507a0536d69e",
+    "sha256": "1ddbefc83eaed09671307e0dd1a2ed8b815f86bb5f4fa8355cf9b7a1d896375b"
+  },
+  "public/team-logos/edward-gaming.png": {
+    "gitBlob": "6eabae0b22b76fd39986a560e7385060294a635f",
+    "actualBlob": "6eabae0b22b76fd39986a560e7385060294a635f",
+    "sha256": "68c5966109d0b8c6b055161956c814861e2a405cf0aee2abbfb486695792f5fe"
+  },
+  "public/team-logos/estral-esports.png": {
+    "gitBlob": "91552294cac84ea8ec012b9484c02bf1b632e373",
+    "actualBlob": "91552294cac84ea8ec012b9484c02bf1b632e373",
+    "sha256": "7eeda7d10e6772a2061e2433c8c72843ba9e80c775acd27d68ee5e316531f807"
+  },
+  "public/team-logos/faerie-charm-singaporean-team.webp": {
+    "gitBlob": "2edd2f60af7c7a9a6ab1939328d2a602cac3fc68",
+    "actualBlob": "2edd2f60af7c7a9a6ab1939328d2a602cac3fc68",
+    "sha256": "e631b209f36a4700e3a52d9427d449fc1170f57eebae621d9d50224fc1e7aa01"
+  },
+  "public/team-logos/fluxo-w7m.png": {
+    "gitBlob": "d11fd19a5f9c9eb7e9b63f29648f6fe08e104216",
+    "actualBlob": "d11fd19a5f9c9eb7e9b63f29648f6fe08e104216",
+    "sha256": "b10bc332de33d1bbe9876935b17b5aa0dae5549e54cfcedc7185a655b54e6578"
+  },
+  "public/team-logos/flyquest.png": {
+    "gitBlob": "3a8e2f34c50a35e2590f1864640e13b1135b61be",
+    "actualBlob": "3a8e2f34c50a35e2590f1864640e13b1135b61be",
+    "sha256": "62b59d4a8d830a0a09a869861d11dc42855318f0097cb4014fbea53e6866a672"
+  },
+  "public/team-logos/fnatic.webp": {
+    "gitBlob": "30cf6317d5e5384a870107216b4867ab9b6ec35f",
+    "actualBlob": "30cf6317d5e5384a870107216b4867ab9b6ec35f",
+    "sha256": "ad3f8fa392ab59743acb2345a4b16a97cd643dd8babfa9aa7426e8a595c25ebd"
+  },
+  "public/team-logos/fuego.png": {
+    "gitBlob": "0d5cb1654ad81b4fb972a6f4832723aed55a208d",
+    "actualBlob": "0d5cb1654ad81b4fb972a6f4832723aed55a208d",
+    "sha256": "871105e4423de420c2f0affbe1dcc60748efdc6779fce32838a79b684e23694e"
+  },
+  "public/team-logos/fukuoka-softbank-hawks-gaming.png": {
+    "gitBlob": "c4e5fba110438dfb473266b9457ebd8aa3b80c77",
+    "actualBlob": "c4e5fba110438dfb473266b9457ebd8aa3b80c77",
+    "sha256": "238726604a5a1a417a933ee29b9fbdd4883192cf033f14a26ac88d0d052e1f24"
+  },
+  "public/team-logos/full-sense.webp": {
+    "gitBlob": "8ba4e97ec083741ea4d0378a9205406f3b7b1241",
+    "actualBlob": "8ba4e97ec083741ea4d0378a9205406f3b7b1241",
+    "sha256": "9703639f0eed9225c483510ec9596d68c2be963feacb43ba9dae4fc98b72ef1d"
+  },
+  "public/team-logos/furia.png": {
+    "gitBlob": "4cb668981abae11ca7aa2ce17edf5246f727a02b",
+    "actualBlob": "4cb668981abae11ca7aa2ce17edf5246f727a02b",
+    "sha256": "02f32d5adc2ffc21fe9759a99d4c6ccaf6f2c0e356132f8457f7922d158fcb3b"
+  },
+  "public/team-logos/g2-esports.png": {
+    "gitBlob": "73fa66ffa7e82a4221425592306aacbfb45905fe",
+    "actualBlob": "73fa66ffa7e82a4221425592306aacbfb45905fe",
+    "sha256": "e6b79b7c6b5c2145c1d27c24974d906af8d63ac3e76cd6772ce968540ea219ba"
+  },
+  "public/team-logos/gam-esports.png": {
+    "gitBlob": "e0fc2961c3eb5cc2052bdade76a40d40873cfea3",
+    "actualBlob": "e0fc2961c3eb5cc2052bdade76a40d40873cfea3",
+    "sha256": "47c0292e4510ae6892cae97895bd6375c02a45f1dda8495a373fbbca7e5ef277"
+  },
+  "public/team-logos/geekay-esports.webp": {
+    "gitBlob": "ef86512332a6d678567a47a4741df53fa2a86142",
+    "actualBlob": "ef86512332a6d678567a47a4741df53fa2a86142",
+    "sha256": "4af0ea0112283b8e56aea3ccb537e3a9dc6472edf1b561f5727209500b16c9c0"
+  },
+  "public/team-logos/gen-g.png": {
+    "gitBlob": "e9012207d4b19cd39c5f6f9229c0bb142cda5bd8",
+    "actualBlob": "e9012207d4b19cd39c5f6f9229c0bb142cda5bd8",
+    "sha256": "3219e8cc52124a0a6dc83c023959679339e8c737df24875965b735492422061f"
+  },
+  "public/team-logos/giantx.png": {
+    "gitBlob": "f2c70134579246d680eb24ae024e2879b0d8da13",
+    "actualBlob": "f2c70134579246d680eb24ae024e2879b0d8da13",
+    "sha256": "a528366429aed6a9eb075ccdfbdc5f7f9e279aa9953de40d012c20c5c72bab7a"
+  },
+  "public/team-logos/golden-lions.png": {
+    "gitBlob": "9377bb4142bb327ba93ae0877b75d74d4176312d",
+    "actualBlob": "9377bb4142bb327ba93ae0877b75d74d4176312d",
+    "sha256": "c6760f34a433c3cfd017df030d66948b23b03561f095eafcc4ad460447f55c2d"
+  },
+  "public/team-logos/ground-zero-gaming.png": {
+    "gitBlob": "45a0dc1035c3dd0ba787b434aeaa034aca22152e",
+    "actualBlob": "45a0dc1035c3dd0ba787b434aeaa034aca22152e",
+    "sha256": "f13fbc8b245bff9b0374fe987a88f2bad374a853b696cca8f0994214b0fb4c82"
+  },
+  "public/team-logos/hanjin-brion.png": {
+    "gitBlob": "75ced1d817e55f61acd29192852df20072239abe",
+    "actualBlob": "75ced1d817e55f61acd29192852df20072239abe",
+    "sha256": "534899681a452535c0f4f2094bf5095a1bb9d871675ec889d742d98045830a18"
+  },
+  "public/team-logos/hanwha-life-esports.png": {
+    "gitBlob": "93bc39297d52c632fa2b09eda637adfb10c5811f",
+    "actualBlob": "93bc39297d52c632fa2b09eda637adfb10c5811f",
+    "sha256": "e6e3ebe47dc0d4982e32107b67adf51ef27f7281f8640fb8d915c6eadc045974"
+  },
+  "public/team-logos/high-tempo-gaming.webp": {
+    "gitBlob": "172c66d9168a7575aab4cbfd1dae29a5f4ce53e3",
+    "actualBlob": "172c66d9168a7575aab4cbfd1dae29a5f4ce53e3",
+    "sha256": "b7ac30fd9f2ec1b312df9dfc6fab13c5d5422f41cba8e89e480640226e036f1e"
+  },
+  "public/team-logos/inferno-esports-filipino-team.webp": {
+    "gitBlob": "e79f468aa253d3f71d79f5c7cb0aa286e516e0e2",
+    "actualBlob": "e79f468aa253d3f71d79f5c7cb0aa286e516e0e2",
+    "sha256": "f7617a9a9d44714b5081055ce8bb688f0f3e9d98c0a06b83ba8eba9f84810c64"
+  },
+  "public/team-logos/invictus-gaming.png": {
+    "gitBlob": "3a9c4db59e28476274356287ce493ddd3b974881",
+    "actualBlob": "3a9c4db59e28476274356287ce493ddd3b974881",
+    "sha256": "74224b445208f340801524e939f21d86da88bbbfe3ba8911815b64ec3a7a2437"
+  },
+  "public/team-logos/jd-gaming.png": {
+    "gitBlob": "459afd441a0d8f9eceb1da3f7a7e155cbcfa588d",
+    "actualBlob": "459afd441a0d8f9eceb1da3f7a7e155cbcfa588d",
+    "sha256": "468c49c770e41455779c4b6af33cac3970a758bd9176d378cca74ce62af12067"
+  },
+  "public/team-logos/karmine-corp-blue.png": {
+    "gitBlob": "4b69a6287663fcd6e5fe504389561c7fc35cd3c5",
+    "actualBlob": "4b69a6287663fcd6e5fe504389561c7fc35cd3c5",
+    "sha256": "2e51e93a9b3867063afba55d8ff9f2c9759d629c2091205a9c52553754edfd4f"
+  },
+  "public/team-logos/karmine-corp.png": {
+    "gitBlob": "72704f739fc4e07d1ea59bf3aa5a36dd6ee70266",
+    "actualBlob": "72704f739fc4e07d1ea59bf3aa5a36dd6ee70266",
+    "sha256": "c64aa930856d9bc63bcf1af7c36fa20a33949fc7cf1641ea269f034dda209677"
+  },
+  "public/team-logos/kiwoom-drx.png": {
+    "gitBlob": "b854b70731cee88a2986c754df7b5acac1cfc070",
+    "actualBlob": "b854b70731cee88a2986c754df7b5acac1cfc070",
+    "sha256": "e0080f9b0403065d2b25b536e03e5bf2452973a83fda3442827912f16fce9085"
+  },
+  "public/team-logos/kt-rolster.png": {
+    "gitBlob": "7a2996241b65dcad6afc8f1f4c171fc26761aafa",
+    "actualBlob": "7a2996241b65dcad6afc8f1f4c171fc26761aafa",
+    "sha256": "ccb7fc19215410d0b1e0f0688ec8776e9885a0959bb511541d53d8d6d22435b5"
+  },
+  "public/team-logos/l-s.png": {
+    "gitBlob": "5d479317c5f9e3510143039553f5c5edcd79b9a8",
+    "actualBlob": "5d479317c5f9e3510143039553f5c5edcd79b9a8",
+    "sha256": "80b9dfdc333ee0bf8cc9cd609c51fc94e49153c75295b6cb20c047fde73e84ed"
+  },
+  "public/team-logos/leviatan.png": {
+    "gitBlob": "7e9305593b829da6d43ffad0fcbbdb7d978ec560",
+    "actualBlob": "7e9305593b829da6d43ffad0fcbbdb7d978ec560",
+    "sha256": "f5a03877dbd715f613f16f10440ecfc623860c468507bccf836b1116bb8e864c"
+  },
+  "public/team-logos/lgd-gaming.png": {
+    "gitBlob": "3ad857007b14fcfd8dedb9ab107df0014644ffa0",
+    "actualBlob": "3ad857007b14fcfd8dedb9ab107df0014644ffa0",
+    "sha256": "afca55ad1aa466f86c065043960453022dfcf4c5195078654935df5b359b9f8d"
+  },
+  "public/team-logos/lng-esports.png": {
+    "gitBlob": "02bcfacb45075b5064e85c14031df35cb19145e3",
+    "actualBlob": "02bcfacb45075b5064e85c14031df35cb19145e3",
+    "sha256": "71e31d6e45eec39767df79f1bf5da8179bfef7e73149dcfd08243c862822d20f"
+  },
+  "public/team-logos/los-ratones.webp": {
+    "gitBlob": "e7e2952d3aea9e4ee83cd68a799ea4bf96280881",
+    "actualBlob": "e7e2952d3aea9e4ee83cd68a799ea4bf96280881",
+    "sha256": "acb86e41b7c11a7bf4ac504a07c2fc5a6e8195ff5bb6d87227471c45fd094d3f"
+  },
+  "public/team-logos/loud.png": {
+    "gitBlob": "2d980c646406c728fe8605fa5bb015ff600f7bd3",
+    "actualBlob": "2d980c646406c728fe8605fa5bb015ff600f7bd3",
+    "sha256": "5b2dcb7f374218fba8dbbd193d8321987447fc5930945ab5d4ee3d65b2c642dc"
+  },
+  "public/team-logos/lyon.png": {
+    "gitBlob": "c65201ba9c624827bfe4a4ecc960b56ef651ee21",
+    "actualBlob": "c65201ba9c624827bfe4a4ecc960b56ef651ee21",
+    "sha256": "8c3e01eb0b81c06b2ad926c0c56f78f333880f6ffc462c78a654c135661cfc53"
+  },
+  "public/team-logos/maryville-university.png": {
+    "gitBlob": "0036db19d910d455ba149caf70181aea8a598efc",
+    "actualBlob": "0036db19d910d455ba149caf70181aea8a598efc",
+    "sha256": "2110efae26a48a66a03cc44ce18215c467f8ce27eeb5ac07084fdd42114cce05"
+  },
+  "public/team-logos/mgn-vikings-esports.webp": {
+    "gitBlob": "fcebbaa6b021de6c4152c3b4ceb050a737581dfa",
+    "actualBlob": "fcebbaa6b021de6c4152c3b4ceb050a737581dfa",
+    "sha256": "d2cad7714e8ff8a88f8bc3160cb5d47f2b696a0a527260bdaafe92cce20e5921"
+  },
+  "public/team-logos/movistar-koi.png": {
+    "gitBlob": "1c2415cc4b2ee7017433d8338dfb78e9c561fe09",
+    "actualBlob": "1c2415cc4b2ee7017433d8338dfb78e9c561fe09",
+    "sha256": "81e2ba56865e0015f201872db5098479621a356d44fe0b6b62971a6da4916660"
+  },
+  "public/team-logos/mvk-esports.png": {
+    "gitBlob": "13f86e2b8ed2f2bcf0f69e4e8ea13603e647aff7",
+    "actualBlob": "13f86e2b8ed2f2bcf0f69e4e8ea13603e647aff7",
+    "sha256": "cffe1e69014d686298cf61149dcd1e85312ec1ce25b06fe0380526a85e2606fa"
+  },
+  "public/team-logos/natus-vincere.png": {
+    "gitBlob": "46933e2d4458612d82f01fd809c3bfbf0b5e5ac5",
+    "actualBlob": "46933e2d4458612d82f01fd809c3bfbf0b5e5ac5",
+    "sha256": "600aa0ca6128e3b6a4b6847df129f4eb6fd0931a2b8a619601ca1c17e0f72e1f"
+  },
+  "public/team-logos/ninjas-in-pyjamas.png": {
+    "gitBlob": "c3d303b104140f8078ca862f382fa0128e5a2a5a",
+    "actualBlob": "c3d303b104140f8078ca862f382fa0128e5a2a5a",
+    "sha256": "f71a1856e33d005cd1b3aa7aed74b19d3532a409266924906265fe9b6f0290cb"
+  },
+  "public/team-logos/nongshim-redforce.png": {
+    "gitBlob": "5985fa782774f7f745933678a439a35170d480de",
+    "actualBlob": "5985fa782774f7f745933678a439a35170d480de",
+    "sha256": "09780738544ac549c948c871b51b139929371e368db24881be142e8564d49ef7"
+  },
+  "public/team-logos/oh-my-god.webp": {
+    "gitBlob": "b2527bf874cbaddc8e5ad75b3b5b6c1df3d0d36f",
+    "actualBlob": "b2527bf874cbaddc8e5ad75b3b5b6c1df3d0d36f",
+    "sha256": "81ace806a45334921e13bd0395b602336786cbde09da0fea2c8503fc7c4e40c5"
+  },
+  "public/team-logos/pain-gaming.png": {
+    "gitBlob": "cb5aa3f0000da1aa756c6e9f94e838d823453a7a",
+    "actualBlob": "cb5aa3f0000da1aa756c6e9f94e838d823453a7a",
+    "sha256": "a27d30d150ecfcf33fa1c3e7352dae532e8af5bdd7cb6d76c7508b7261babdcb"
+  },
+  "public/team-logos/psg-talon.webp": {
+    "gitBlob": "dc75cb186649f6e2cb45657cb4ec8a1e9dd59de1",
+    "actualBlob": "dc75cb186649f6e2cb45657cb4ec8a1e9dd59de1",
+    "sha256": "3f3a1968dad1c1674bb63f845b4b10a5d073495ad07d1cbdf572900ff754a4dc"
+  },
+  "public/team-logos/qt-dig.webp": {
+    "gitBlob": "a01417b6f078d27c00f86e183a8fb98ff2431b50",
+    "actualBlob": "a01417b6f078d27c00f86e183a8fb98ff2431b50",
+    "sha256": "e7ddafcf7d32ba26f327782c331dc385a5a7619cf152b0f641f8922be12210c5"
+  },
+  "public/team-logos/red-canids.png": {
+    "gitBlob": "0e2db05fa86a3a56bdb97b17fa792c3a16bad2d9",
+    "actualBlob": "0e2db05fa86a3a56bdb97b17fa792c3a16bad2d9",
+    "sha256": "180df3d1c1c7bccacf2864be6e87253545b014c25acfe24228c3540902f5b1f9"
+  },
+  "public/team-logos/rogue.webp": {
+    "gitBlob": "ba7eee0a3bc4ab5b09b88d2111f0e0f0e8dfa2ed",
+    "actualBlob": "ba7eee0a3bc4ab5b09b88d2111f0e0f0e8dfa2ed",
+    "sha256": "d7e4b7e1ba87f1661074b5ccdabb75ebbc79c2afe74bc2b43315018471a0fb94"
+  },
+  "public/team-logos/royal-never-give-up.webp": {
+    "gitBlob": "7fc7b83e218adb585226ff00bc66db688e9716c2",
+    "actualBlob": "7fc7b83e218adb585226ff00bc66db688e9716c2",
+    "sha256": "9c2a258ecae6b4c52d19523c54a8d8b19efa3a22d84bd021699a92f29558b640"
+  },
+  "public/team-logos/s8ul-esports.webp": {
+    "gitBlob": "72c8d36ec78c9475d5fa2c109b472c6847367ba0",
+    "actualBlob": "72c8d36ec78c9475d5fa2c109b472c6847367ba0",
+    "sha256": "9449d845697f7270390ff4e00770cfbd54c216dc0e75d185b28092ac46739ea9"
+  },
+  "public/team-logos/saigon-dino.png": {
+    "gitBlob": "20e171f4f0436f71cc2ebce1e89ced585db166a7",
+    "actualBlob": "20e171f4f0436f71cc2ebce1e89ced585db166a7",
+    "sha256": "b0cbb4a441fd229168bbfd5e98734623746fa4603fb740618ac2e17c0a767381"
+  },
+  "public/team-logos/saving-oce.webp": {
+    "gitBlob": "9431e4518b9da188e03651e28b1b14414d4ae41b",
+    "actualBlob": "9431e4518b9da188e03651e28b1b14414d4ae41b",
+    "sha256": "cbd1158c4122b63b529873d8e0ff3d3917e8a06c9a8a87e851627c8be4771473"
+  },
+  "public/team-logos/senshi-esports-benelux-team.webp": {
+    "gitBlob": "f4554badd30eabd8d0a84375def6bf00a298fc6b",
+    "actualBlob": "f4554badd30eabd8d0a84375def6bf00a298fc6b",
+    "sha256": "92766801aad428a4ca53087876b7081043d4ab07c478932028dc30a545602ee0"
+  },
+  "public/team-logos/sentinels.png": {
+    "gitBlob": "908824097b3802127766bc7431341e8e45b75864",
+    "actualBlob": "908824097b3802127766bc7431341e8e45b75864",
+    "sha256": "fca3419f15cc8d2e593ec0e0a061e1e530f4a822bf70c0a7e7fcef9fd080df24"
+  },
+  "public/team-logos/shifters.webp": {
+    "gitBlob": "3e368ee3bc535f648ccbec9c5f030b428d5672c4",
+    "actualBlob": "3e368ee3bc535f648ccbec9c5f030b428d5672c4",
+    "sha256": "d7cbee48e021776fbde086233960ba0bd3047c1d28cf395da7d28afda1bef2d3"
+  },
+  "public/team-logos/shopify-rebellion.png": {
+    "gitBlob": "d69971db74be871d1b2f275e4ae9ba63f20afc20",
+    "actualBlob": "d69971db74be871d1b2f275e4ae9ba63f20afc20",
+    "sha256": "1f7fd5146a1da1e76e1efd5b152d85ac5a8de7e9d1d352b51f8e572e16dc3163"
+  },
+  "public/team-logos/sk-gaming.webp": {
+    "gitBlob": "bf311a665e75bf6491ebeea034d1384d6b37ab31",
+    "actualBlob": "bf311a665e75bf6491ebeea034d1384d6b37ab31",
+    "sha256": "360e1456cb6ff62f5122ae2840ca0192541f14f759963c7a6d4f1ffff15a9722"
+  },
+  "public/team-logos/t1.png": {
+    "gitBlob": "fea04e8d9870c6eb55dd6112c97badcc0e900970",
+    "actualBlob": "fea04e8d9870c6eb55dd6112c97badcc0e900970",
+    "sha256": "63c06a90cb09e90ee81a7eabe343ada0b533aa520986eaadeba66a80597e3f33"
+  },
+  "public/team-logos/team-bds.webp": {
+    "gitBlob": "c0df7e246e11e40957ac169cfd3e4f9ede482087",
+    "actualBlob": "c0df7e246e11e40957ac169cfd3e4f9ede482087",
+    "sha256": "b979a436b4ca03176fac542b2cb25b740ba43e3133da11536336226309bd3e8f"
+  },
+  "public/team-logos/team-heretics.webp": {
+    "gitBlob": "140d6b045eff016d862cdcc29e5c1dd92df928d7",
+    "actualBlob": "140d6b045eff016d862cdcc29e5c1dd92df928d7",
+    "sha256": "ef93147b782fda259400f586d2626d2e5118bcbb4c30b29cc456751ffb51db3c"
+  },
+  "public/team-logos/team-liquid.png": {
+    "gitBlob": "33c4d0d5862fc9c67690d7ae2b4f19745a02208a",
+    "actualBlob": "33c4d0d5862fc9c67690d7ae2b4f19745a02208a",
+    "sha256": "e43b51316e876b5a21d50481036eeed4b9794f154665f4bf1ef7bbbb1a59090d"
+  },
+  "public/team-logos/team-secret-whales.png": {
+    "gitBlob": "0b373faf66e80d8395b833297e46829acc71782c",
+    "actualBlob": "0b373faf66e80d8395b833297e46829acc71782c",
+    "sha256": "0940e23ade777b3e3787d371a2adbb9b426b8ddd07b879d774686a67bc797de9"
+  },
+  "public/team-logos/team-secret.png": {
+    "gitBlob": "b23a01c8681f6aaaaac1a9d43387e3a573530f54",
+    "actualBlob": "b23a01c8681f6aaaaac1a9d43387e3a573530f54",
+    "sha256": "3c83f0ca26721b497e28ac11f394451346b093fbb1a841f8405238347ddc71bb"
+  },
+  "public/team-logos/team-vitality.png": {
+    "gitBlob": "7b99379fed25f8436c31ad11acff7e08d5dce23f",
+    "actualBlob": "7b99379fed25f8436c31ad11acff7e08d5dce23f",
+    "sha256": "f8dc5f123de830dd2bc14ae74e97094380ea2632bb17437ef0196a114c2e5d13"
+  },
+  "public/team-logos/team-we.png": {
+    "gitBlob": "592832b2333b3dac4a1a3cccb5043ef73bd104a1",
+    "actualBlob": "592832b2333b3dac4a1a3cccb5043ef73bd104a1",
+    "sha256": "1c1f91624118a6cfb630d6698335dac82a2fef8764d59725fb5077d0cd693c9f"
+  },
+  "public/team-logos/thundertalk-gaming.png": {
+    "gitBlob": "636370be122859a8552d760b3345eccda0604bc2",
+    "actualBlob": "636370be122859a8552d760b3345eccda0604bc2",
+    "sha256": "dad8951fbebe2455b202450925fb9e290d30bb8a0d6bba7f2d8826323794bd21"
+  },
+  "public/team-logos/top-esports.png": {
+    "gitBlob": "1c4b53aaca808ee3a3bd1802b254d60f645cb9b3",
+    "actualBlob": "1c4b53aaca808ee3a3bd1802b254d60f645cb9b3",
+    "sha256": "f0bbeab108cfe8943e2c680b0d10f8f00815c193bd690aab3df30d9d30321b28"
+  },
+  "public/team-logos/ultra-prime.webp": {
+    "gitBlob": "79177570715ab46990fa7a8ff68d3377a57b96f9",
+    "actualBlob": "79177570715ab46990fa7a8ff68d3377a57b96f9",
+    "sha256": "4b181e5c37e775e876440f79f635f09ac5c1f8124e4ac204d47cb7a5624ae2d1"
+  },
+  "public/team-logos/vivo-keyd-stars.png": {
+    "gitBlob": "07aba2912ba80c2a0fab4e334d36a1b19bbd9178",
+    "actualBlob": "07aba2912ba80c2a0fab4e334d36a1b19bbd9178",
+    "sha256": "4ebc4669588579a7eb86e03aa3b70221706c534b6dbcba95b140150d529bcef7"
+  },
+  "public/team-logos/weibo-gaming.png": {
+    "gitBlob": "93ff83273131ec463d2436059ba18e4f0ee68040",
+    "actualBlob": "93ff83273131ec463d2436059ba18e4f0ee68040",
+    "sha256": "520d221eb4fdfd390e588bfdd4c24cc0405d8e807c37493742390fe0f2cf7c8f"
+  },
+  "public/team-logos/yang-dae-pal-korean-bbq-restaurant.webp": {
+    "gitBlob": "227d06da2919723b0134377d4590d935fe731d6e",
+    "actualBlob": "227d06da2919723b0134377d4590d935fe731d6e",
+    "sha256": "d1ffaa6127d25f25f690b93641728450d2e0dfb85c7956b275e9897bead1a568"
+  },
+  "public/team-logos/zeu5-esports.png": {
+    "gitBlob": "ceabf6af62761eafa941e8dfe770bb9ff22e2a1a",
+    "actualBlob": "ceabf6af62761eafa941e8dfe770bb9ff22e2a1a",
+    "sha256": "cf59fe02c76adc12ea749a8706e85b5754144bde224d014a090bfd69d43d7af8"
+  },
+  "railway.refresh.toml": {
+    "gitBlob": "2215541661dac0e570372ae52bf6d514fbc6753c",
+    "actualBlob": "2215541661dac0e570372ae52bf6d514fbc6753c",
+    "sha256": "0722690f667252f5e09e8ea10d038fc9cb0e9b8bcdaa4cd0cdea34fd4ad67cb4"
+  },
+  "railway.toml": {
+    "gitBlob": "cd8ca8ab48b6b2da4502c3ca9e3209fb15d9b738",
+    "actualBlob": "cd8ca8ab48b6b2da4502c3ca9e3209fb15d9b738",
+    "sha256": "94ab5fcd2aac7ed8755cf8087d49fb3f7ebba770b38f645d4822cb142ea11607"
+  },
+  "reports/msi-team-stats.html": {
+    "gitBlob": "13221424627e90f3f2f759bb372bdf80f9cc19db",
+    "actualBlob": "13221424627e90f3f2f759bb372bdf80f9cc19db",
+    "sha256": "3024322a6a24890576f1afa62014d4097c4dfb1b2e840e36c818ad8d12caba56"
+  },
+  "research/player-performance-stats.md": {
+    "gitBlob": "90a98b8618779264b96dd39e6697ac6cc86ad5fd",
+    "actualBlob": "90a98b8618779264b96dd39e6697ac6cc86ad5fd",
+    "sha256": "da56ceb0c2556e2a357a14547c30cef9cc6a284f9f8d6c61c538fb531d7041cc"
+  },
+  "scripts/audit-player-performance.ts": {
+    "gitBlob": "7eb4077d65a089fc5222a73f20a5a206b86a8830",
+    "actualBlob": "7eb4077d65a089fc5222a73f20a5a206b86a8830",
+    "sha256": "3631094c414db7586d5521ad77e685d598103a01d781ce4ae1e26f51d5a44077"
+  },
+  "scripts/audit-public-artifacts.ts": {
+    "gitBlob": "a01af4aa05d2467bb267cad42999c8df672b0269",
+    "actualBlob": "a01af4aa05d2467bb267cad42999c8df672b0269",
+    "sha256": "c84f68c773c43ff9133c57fde24f69282e526548b8ec0aa9da01512f19a63507"
+  },
+  "scripts/audit-tournament-source.ts": {
+    "gitBlob": "8ea5cb14b45de0c6d7094045d387933bd1fac60a",
+    "actualBlob": "8ea5cb14b45de0c6d7094045d387933bd1fac60a",
+    "sha256": "454d74cc2d79c35f90d2adec37eddb54809c5af277cd82116f62b5c920641c89"
+  },
+  "scripts/benchmark-calibration.ts": {
+    "gitBlob": "1ddbf33779fec883108776a395c9f5d43af906ba",
+    "actualBlob": "1ddbf33779fec883108776a395c9f5d43af906ba",
+    "sha256": "522ab826946d4b3fb3db05e4d165079e3c6503a39260b69f7a1feed7e6c2ee86"
+  },
+  "scripts/benchmark-diagnostics.d.mts": {
+    "gitBlob": "520172702469fe9aad5d9d69d1ba4765c1194975",
+    "actualBlob": "520172702469fe9aad5d9d69d1ba4765c1194975",
+    "sha256": "93f884ae361244bf4b1eb02a9e5b601710e356c800893cd1531577f2a41fd3b4"
+  },
+  "scripts/benchmark-diagnostics.mjs": {
+    "gitBlob": "3995fbc0c07d7ff5e62f01cb8dc3c54b39095951",
+    "actualBlob": "3995fbc0c07d7ff5e62f01cb8dc3c54b39095951",
+    "sha256": "6c15554d5aff0ec6bcada46534f081fd8134a3b78b5e5268dd9e9003c18368cb"
+  },
+  "scripts/benchmark-incremental-ranking.ts": {
+    "gitBlob": "e500c5a829cbfc19909f68a91441a82dc49afc5a",
+    "actualBlob": "e500c5a829cbfc19909f68a91441a82dc49afc5a",
+    "sha256": "4a8df4f2b462d463f2daa409226fa3f5e05c21612bb18d9a0ff626bd24721dee"
+  },
+  "scripts/build-brand-assets.ts": {
+    "gitBlob": "29902a675951698642f153d4eeb042a55ac1c706",
+    "actualBlob": "29902a675951698642f153d4eeb042a55ac1c706",
+    "sha256": "f36ce80eaf857ef5548c268fa50edb64ac3daa1a25683d406974eb7235713937"
+  },
+  "scripts/build-static-snapshot.ts": {
+    "gitBlob": "7049f98f64d2cd75dda8fde78f03f3a82b64eee5",
+    "actualBlob": "7049f98f64d2cd75dda8fde78f03f3a82b64eee5",
+    "sha256": "12f1f387646c8e14a8bd27d987f081188118d48b79787eb6974fe2877dbbfd9a"
+  },
+  "scripts/check-bundle-size.mjs": {
+    "gitBlob": "c81f538f379dcd0522ebc926f79900159ec0591a",
+    "actualBlob": "c81f538f379dcd0522ebc926f79900159ec0591a",
+    "sha256": "5ef7ff5bd97418c8d337aae3984e5d4a501e9953824fa611ee203da0628f54e4"
+  },
+  "scripts/check-rust-parity.ts": {
+    "gitBlob": "2128a675b2fadce52264914eaca98ec73640e1e6",
+    "actualBlob": "2128a675b2fadce52264914eaca98ec73640e1e6",
+    "sha256": "b662a549f03502d26bca712ec16ab888a339ac21e9a92eb7ff87f8bb7a4fe479"
+  },
+  "scripts/ci-affected-paths.mjs": {
+    "gitBlob": "6bb11c96d227a1f556cf26cc6b253c8dc3ce51cd",
+    "actualBlob": "6bb11c96d227a1f556cf26cc6b253c8dc3ce51cd",
+    "sha256": "9d1d6998b67664b9fb508f3e1c8379d0fbe3c092000c31281ac882c28f7f75d3"
+  },
+  "scripts/compare-riot-gpr.ts": {
+    "gitBlob": "8fb681d05c9701b84026b319fd20e317ceaa89c5",
+    "actualBlob": "8fb681d05c9701b84026b319fd20e317ceaa89c5",
+    "sha256": "a21699b3e745a46ca72b88ffc7ac8bab39e0099bfc8f7c45c3e38ff73e374c19"
+  },
+  "scripts/compare-series-evidence.ts": {
+    "gitBlob": "0b835d8fe9e5a0973e3e2e3cf952a06a5e067e28",
+    "actualBlob": "0b835d8fe9e5a0973e3e2e3cf952a06a5e067e28",
+    "sha256": "7be1435bae5a39d3cf108f7951383572caf930820b3d9caed3ca5facc9876566"
+  },
+  "scripts/diagnostic-profile-lifecycle.mjs": {
+    "gitBlob": "40d2d3f6e6a2855b09ceeb33a8242a692fc08ded",
+    "actualBlob": "40d2d3f6e6a2855b09ceeb33a8242a692fc08ded",
+    "sha256": "fd06df8eae211804dcae44c844ffbbf2a2e8212fff297b6e2f608c351a0396e3"
+  },
+  "scripts/download-local-data.mjs": {
+    "gitBlob": "380db899c8ca9c2fd520f96ae38229791cd4e0c0",
+    "actualBlob": "380db899c8ca9c2fd520f96ae38229791cd4e0c0",
+    "sha256": "b6130f0bae00158282efdc515ce6ea3d4b3722a54dc57894e72463a1ddcdc540"
+  },
+  "scripts/download-reference-public-data.ts": {
+    "gitBlob": "d16895c32a74f195f6093697e7b5148aa82abe6f",
+    "actualBlob": "d16895c32a74f195f6093697e7b5148aa82abe6f",
+    "sha256": "47a10d4d306eedd600e7388f84e0fc0c89a04fa02d4dd2c6dd48fe97353eb9b0"
+  },
+  "scripts/evaluate-ranking-hypotheses.ts": {
+    "gitBlob": "30dfc899a4a633e7f3f96192198bd02aac111491",
+    "actualBlob": "30dfc899a4a633e7f3f96192198bd02aac111491",
+    "sha256": "56feeacfb39917b867c078da506a3d04562ccd56f1f83fb2eee8ce475bab748c"
+  },
+  "scripts/export-parity-fixtures.ts": {
+    "gitBlob": "b6aec840aee8cb71388ad86cb0784051dd36324a",
+    "actualBlob": "b6aec840aee8cb71388ad86cb0784051dd36324a",
+    "sha256": "d38e4edb01a0c6cccf697614cb7e9b6107c25b6c750dc68134ad6f12a081d1fa"
+  },
+  "scripts/export-ranking-predictions.ts": {
+    "gitBlob": "70f28f3e6bd9d0e0b4ee8911ce7df7c2fb775823",
+    "actualBlob": "70f28f3e6bd9d0e0b4ee8911ce7df7c2fb775823",
+    "sha256": "9823ffe7273bc246354eb5a36a72b6a9e76d42b4fcf9581a85673af3ff9449d6"
+  },
+  "scripts/fetch-leaguepedia.mjs": {
+    "gitBlob": "cf097d792315d3d1c426b48fd93227ec171581e4",
+    "actualBlob": "cf097d792315d3d1c426b48fd93227ec171581e4",
+    "sha256": "0a65001e1fa8cd83567dacb8f3799c6444195a67a9bbf0140d26ab1163a49458"
+  },
+  "scripts/fetch-lolesports-schedule.mjs": {
+    "gitBlob": "367f9082c7c4ae48d4045d695f37ac7aaae6368f",
+    "actualBlob": "367f9082c7c4ae48d4045d695f37ac7aaae6368f",
+    "sha256": "741259fd752113962528cd825aab259ead60ede6c81805b1df8d88d5c063925e"
+  },
+  "scripts/fetch-riot-gpr-snapshot.mjs": {
+    "gitBlob": "86bd63a2539ca9fe088fe2d4d34a236f5977044e",
+    "actualBlob": "86bd63a2539ca9fe088fe2d4d34a236f5977044e",
+    "sha256": "ea5c586a7c6e5689208cc58cd89a44852ed6863d24383bbd40f070efb2e0d5e4"
+  },
+  "scripts/full-audit-storage.d.mts": {
+    "gitBlob": "109257d237541e4fe1c1b5aa76f942ed5e143fe5",
+    "actualBlob": "109257d237541e4fe1c1b5aa76f942ed5e143fe5",
+    "sha256": "63cc39a287b51f8cd8c3da55f9a5a74c4cdea0d34cd912e7067243ee809bf441"
+  },
+  "scripts/full-audit-storage.mjs": {
+    "gitBlob": "0a8c15854fe3df198d211c45b51f5831fcbecf70",
+    "actualBlob": "0a8c15854fe3df198d211c45b51f5831fcbecf70",
+    "sha256": "8211f51350785d5812e4ba0d633e49a2fd6ce9a28b270bd94b807a24494f1006"
+  },
+  "scripts/generation-publication.d.mts": {
+    "gitBlob": "bbc9eb3b8c276a57406443f35485e9e43e1f8214",
+    "actualBlob": "bbc9eb3b8c276a57406443f35485e9e43e1f8214",
+    "sha256": "8e2fb8f3bf89be2bf502e1e8f078d4ffebe6d7dccf1d0ae9a94279fac4309dd3"
+  },
+  "scripts/generation-publication.mjs": {
+    "gitBlob": "fed596aedadcdb7f2352f18b520f6755acb6a0af",
+    "actualBlob": "fed596aedadcdb7f2352f18b520f6755acb6a0af",
+    "sha256": "d142ecb0404d11acc205b19d85bde1b808dc27ba2cc6769581e74a03134fbc57"
+  },
+  "scripts/incremental-benchmark-assertions.ts": {
+    "gitBlob": "5a2c3d8da85ec4cbb4b34044113622f13c889d96",
+    "actualBlob": "5a2c3d8da85ec4cbb4b34044113622f13c889d96",
+    "sha256": "a03f255b74da40a8020b3e8aecd244f4568cec99790f36ca5320bd5f54ee7964"
+  },
+  "scripts/incremental-ranking-orchestrator.ts": {
+    "gitBlob": "79d66f04f84e8907a9d7efcfa41080cd91bc28d2",
+    "actualBlob": "79d66f04f84e8907a9d7efcfa41080cd91bc28d2",
+    "sha256": "7cb3845c1a44496b0c221e1e7a9c89b0ade1788db1043fd7319d4ae878c05989"
+  },
+  "scripts/incremental-state-storage.d.mts": {
+    "gitBlob": "08f2c1b83fe6274e102d2593e7b069c642156db3",
+    "actualBlob": "08f2c1b83fe6274e102d2593e7b069c642156db3",
+    "sha256": "11cd68a245b5dfe0397270552667a7d0100f16261f85430003610d9814c04e30"
+  },
+  "scripts/incremental-state-storage.mjs": {
+    "gitBlob": "6b9dcb0c8603c8c00f910763db14ce88138904c0",
+    "actualBlob": "6b9dcb0c8603c8c00f910763db14ce88138904c0",
+    "sha256": "efd2012776919c9445908a1ce48c9b7347fdda3d545c2e08059a7fc4ead830b3"
+  },
+  "scripts/leaguepedia-tournament-feed.ts": {
+    "gitBlob": "7954eee4d62b0e4a369b0b5693929434897a0558",
+    "actualBlob": "7954eee4d62b0e4a369b0b5693929434897a0558",
+    "sha256": "a110da2501fc3de210eb3d0b54fd994cb782ca9f396053435f6f050f72cffb2b"
+  },
+  "scripts/lib/hierarchical-leagues.ts": {
+    "gitBlob": "6b9885744ae9551315e591de6e4c591248c0eced",
+    "actualBlob": "6b9885744ae9551315e591de6e4c591248c0eced",
+    "sha256": "a2434e35e9939218e2f7d01a9ba76d11571a106145a48eb17e04a58f709a1b79"
+  },
+  "scripts/lib/public-board-ablation.ts": {
+    "gitBlob": "947fb22c467f81c9fa7a0b562622e1ee0e150914",
+    "actualBlob": "947fb22c467f81c9fa7a0b562622e1ee0e150914",
+    "sha256": "dbd6db2d727bfca648466f625f423b55951c52b202f3002a8a7d9040998df17b"
+  },
+  "scripts/lib/ranking-experiments.ts": {
+    "gitBlob": "ae0a719316ad584b00bdd8d4ed92697afd11b8cd",
+    "actualBlob": "ae0a719316ad584b00bdd8d4ed92697afd11b8cd",
+    "sha256": "9d4c89781678f93107be7a3b653308186253989f713837d5797c9210b10777ef"
+  },
+  "scripts/lib/ranking-simulations.ts": {
+    "gitBlob": "4667961b6928939dc9022cf3f6b8db637b4e1403",
+    "actualBlob": "4667961b6928939dc9022cf3f6b8db637b4e1403",
+    "sha256": "f20762c0023e5c5346285b3b1bedb299ae67e548df80c75eb81999465e084f6d"
+  },
+  "scripts/local-data-manifest.d.ts": {
+    "gitBlob": "c80af40291aeb8ac049aab6c61a547eec8a2c548",
+    "actualBlob": "c80af40291aeb8ac049aab6c61a547eec8a2c548",
+    "sha256": "fa3d1335d9ef55abf845862e29ef2287a14b2ddfae360626944670b207b54f8f"
+  },
+  "scripts/local-data-manifest.js": {
+    "gitBlob": "47ef8d1bbcf785d908d92789bf1b3f57d3d24c99",
+    "actualBlob": "47ef8d1bbcf785d908d92789bf1b3f57d3d24c99",
+    "sha256": "eaca200f14b5aeba68989d71126b6c885be656ef177b8f5260eebf83dca9c410"
+  },
+  "scripts/lolesports-schedule-probe.d.mts": {
+    "gitBlob": "e68e03d78f8dacf0103108b6216bf222598ddf90",
+    "actualBlob": "e68e03d78f8dacf0103108b6216bf222598ddf90",
+    "sha256": "63fe46412b46b17975a087707483166cd152a485c0f9cc07dd311ae02d2ee240"
+  },
+  "scripts/lolesports-schedule-probe.mjs": {
+    "gitBlob": "b532e40cb6911d01ed1aae2a5cc8d649c112ec70",
+    "actualBlob": "b532e40cb6911d01ed1aae2a5cc8d649c112ec70",
+    "sha256": "2cb907e44d885115085b5faef6fc12b154faefa3acf15c515985ce4349a8cba6"
+  },
+  "scripts/paired-prediction-calibration.ts": {
+    "gitBlob": "a7d1a3cb0df5fa0d1296c95fb3e2fd9344b8e96a",
+    "actualBlob": "a7d1a3cb0df5fa0d1296c95fb3e2fd9344b8e96a",
+    "sha256": "34aaf9f7f3883d0bbdb22c9d9cef856fe007f89dd4b2e01956efed0f980845de"
+  },
+  "scripts/parity-fixtures.ts": {
+    "gitBlob": "14c628a1c77e25c3f6dbd81923ebfd517470e2a6",
+    "actualBlob": "14c628a1c77e25c3f6dbd81923ebfd517470e2a6",
+    "sha256": "304089370991044bd908bffd25bd7da748dac02b6885f4d21230b7d1cb3d3f18"
+  },
+  "scripts/probe-refresh-coordination.d.mts": {
+    "gitBlob": "dc5b272206e9f9c2969f3f52b87d77beefdfeb7c",
+    "actualBlob": "dc5b272206e9f9c2969f3f52b87d77beefdfeb7c",
+    "sha256": "bacaac849f228084f3116075191254e522a10d3b5e04233caf011f716f5ec6cc"
+  },
+  "scripts/probe-refresh-coordination.mjs": {
+    "gitBlob": "94a02470a439efabf8c7db1fbcd53af707bd4e14",
+    "actualBlob": "94a02470a439efabf8c7db1fbcd53af707bd4e14",
+    "sha256": "629362cf32c579c2b2fef3209069c12307e455fc3d7919b1f37e6a4835c3935f"
+  },
+  "scripts/provider-fetch-retry.d.mts": {
+    "gitBlob": "aa855822171a844cfc1658d4d87a503aba8e4417",
+    "actualBlob": "aa855822171a844cfc1658d4d87a503aba8e4417",
+    "sha256": "05989c46715feda5366d7bf536c0171a97b739d0b77655417de6b9109b364621"
+  },
+  "scripts/provider-fetch-retry.mjs": {
+    "gitBlob": "61f0bc6b5b273eaf4c73f4e327646374819148d8",
+    "actualBlob": "61f0bc6b5b273eaf4c73f4e327646374819148d8",
+    "sha256": "26cf2cdfca8d273ecb2db61665205ea89c8f0bbb7ffcd93c977c40ebfd175edb"
+  },
+  "scripts/provider-fetch-worker-command.d.mts": {
+    "gitBlob": "17013cddbfd3f27a42fead26ca7610e021e9f251",
+    "actualBlob": "17013cddbfd3f27a42fead26ca7610e021e9f251",
+    "sha256": "3575943af1cb237d2c1f800e1e11f94739d0baf5805d910f5246cf09af11d832"
+  },
+  "scripts/provider-fetch-worker-command.mjs": {
+    "gitBlob": "3d453b7cb4017e794c88a75b6f1a1495f57830c7",
+    "actualBlob": "3d453b7cb4017e794c88a75b6f1a1495f57830c7",
+    "sha256": "3a8a5ce0489f9d9ad1ce6663619933f9bd5c67e14da43589d90014a22dec3568"
+  },
+  "scripts/public-artifact-materialization.d.mts": {
+    "gitBlob": "4d62a8c5a6fd8ca532483220bb067f745ff74097",
+    "actualBlob": "4d62a8c5a6fd8ca532483220bb067f745ff74097",
+    "sha256": "e770d0268f48fadb27584b1165a1d5a7235e6b57f30d31a6afdc903216c5367f"
+  },
+  "scripts/public-artifact-materialization.mjs": {
+    "gitBlob": "49a661eb953f9df8c95870783bffe5491e9f458b",
+    "actualBlob": "49a661eb953f9df8c95870783bffe5491e9f458b",
+    "sha256": "307aab05895ad2de36a7f3440e74b6e6c9faf15d765d1ff3d4da5dd906feddbd"
+  },
+  "scripts/public-artifact-storage.d.mts": {
+    "gitBlob": "8c37ef449c4d00c539c7ba6f788e110ef9d4b367",
+    "actualBlob": "8c37ef449c4d00c539c7ba6f788e110ef9d4b367",
+    "sha256": "7a8af95efaa8893083e241af0d6679d7e5cbec7b29c1fd06d0d44acb0dc842ff"
+  },
+  "scripts/public-artifact-storage.mjs": {
+    "gitBlob": "1ca732b52db3641684b3c502230cba66c38c99fc",
+    "actualBlob": "1ca732b52db3641684b3c502230cba66c38c99fc",
+    "sha256": "4d0cfb0160d30ebdd5d2e5b0fae6c8aedc500635f9ebfefb5b6b3bbb6ab27663"
+  },
+  "scripts/railway-bucket.d.mts": {
+    "gitBlob": "73f7283ae0ec3363db2630ea83db4a225f7b0311",
+    "actualBlob": "73f7283ae0ec3363db2630ea83db4a225f7b0311",
+    "sha256": "3564f1bc30334355043b45d4b0197339caec1c6370d8defe68b0225d8de84088"
+  },
+  "scripts/railway-bucket.mjs": {
+    "gitBlob": "f788e8a0c2dbb20163ac8a19e6c4105ff610819a",
+    "actualBlob": "f788e8a0c2dbb20163ac8a19e6c4105ff610819a",
+    "sha256": "f0694bf4b59765e269fd8c5aebf6be1e909be3ae7dc296f7f2b29627ac994a12"
+  },
+  "scripts/railway-server.mjs": {
+    "gitBlob": "b88585145877e310addc4079a670a5909bb6b7ea",
+    "actualBlob": "b88585145877e310addc4079a670a5909bb6b7ea",
+    "sha256": "8fd236cd69b92572efb4dfbddd8fc88cf689dad89ca80c739bb745c21fe63e86"
+  },
+  "scripts/ranking-bucket-gc.d.mts": {
+    "gitBlob": "fa1edd74a9e02fa657207265ff5b2c421342791d",
+    "actualBlob": "fa1edd74a9e02fa657207265ff5b2c421342791d",
+    "sha256": "6e25cb5f37bc7283467d0de8ddb755badd656d2ba5cebedfe33d2c3ff4d72a0a"
+  },
+  "scripts/ranking-bucket-gc.mjs": {
+    "gitBlob": "ecad747884980e1906907f8ad62d341d6988ba70",
+    "actualBlob": "ecad747884980e1906907f8ad62d341d6988ba70",
+    "sha256": "754a0c3473c164cd1b918d43a4188b58d1c62533a3857e5c00374023c7068a68"
+  },
+  "scripts/ranking-refresh-outcome-contract.d.mts": {
+    "gitBlob": "dd936ef175fb4875bad5b147271ede6faddffb05",
+    "actualBlob": "dd936ef175fb4875bad5b147271ede6faddffb05",
+    "sha256": "a56411af000888f0133d8bfffee52b840034cc1407e423dc0fe7d5176407ada1"
+  },
+  "scripts/ranking-refresh-outcome-contract.mjs": {
+    "gitBlob": "443b6c943c311a1f8ccb1a9360bb6cb117f69094",
+    "actualBlob": "443b6c943c311a1f8ccb1a9360bb6cb117f69094",
+    "sha256": "1f85e7a4f2d03879d01319f7438918b74c26864dc11ecf57231b785121c612a4"
+  },
+  "scripts/ranking-restart-baseline.d.mts": {
+    "gitBlob": "b922eb9c2610d38cb58b092899176e1be23ce4b5",
+    "actualBlob": "b922eb9c2610d38cb58b092899176e1be23ce4b5",
+    "sha256": "b77e77ae6b7c415822d8a7dd29738aae4464288911182bf38f14a475e4f47f9f"
+  },
+  "scripts/ranking-restart-baseline.mjs": {
+    "gitBlob": "865baf937113e4a412aa36912919db7ea9d73b4f",
+    "actualBlob": "865baf937113e4a412aa36912919db7ea9d73b4f",
+    "sha256": "ef878bf4956601006aed156e4fff08529da5c68f29ca364c95f8ae7f6f137a61"
+  },
+  "scripts/ranking-source-authority.d.mts": {
+    "gitBlob": "22091c6e0fddaee4bbf9e31de105039ce25b0019",
+    "actualBlob": "22091c6e0fddaee4bbf9e31de105039ce25b0019",
+    "sha256": "3c876735227fe8578740bf4e1d1c6c3ad638f05f76ba3d99d314bc6a50249163"
+  },
+  "scripts/ranking-source-authority.mjs": {
+    "gitBlob": "383cf33f44e0456bd040ddf112beb70a130589e1",
+    "actualBlob": "383cf33f44e0456bd040ddf112beb70a130589e1",
+    "sha256": "8d66e04ca2f11456317b407ce06939fa605d86c382854739ccd7ca7371be6ea3"
+  },
+  "scripts/ranking-source-import.ts": {
+    "gitBlob": "9c88fc9b99bb2739cc47f68b9770d161f799cd8c",
+    "actualBlob": "9c88fc9b99bb2739cc47f68b9770d161f799cd8c",
+    "sha256": "1082542363671366568ec0819e0a2ba7f2cab8efd1500df0f377a23179ea2a89"
+  },
+  "scripts/raw-manifest-freshness.ts": {
+    "gitBlob": "133055dd044a1f46eb93daf7c106072d241058a8",
+    "actualBlob": "133055dd044a1f46eb93daf7c106072d241058a8",
+    "sha256": "fe761cd5fa4648ddf38112977e40e07224295b38e975480fd3282cb6034c7626"
+  },
+  "scripts/raw-source-generation.d.mts": {
+    "gitBlob": "5ff8ba2fb12d1aed40ecacd8cc3714ed48056858",
+    "actualBlob": "5ff8ba2fb12d1aed40ecacd8cc3714ed48056858",
+    "sha256": "657f69f0251c74d28cccdc0b814fa05fb9bde9d68601a2cd61619e84c0e11649"
+  },
+  "scripts/raw-source-generation.mjs": {
+    "gitBlob": "ec4f8dc87f327f81b985c6b35fc00ac2b29e20fd",
+    "actualBlob": "ec4f8dc87f327f81b985c6b35fc00ac2b29e20fd",
+    "sha256": "fa4e511ec8932ce69b26716764ac97c3014e3875be0012678c57ac78b9b0b558"
+  },
+  "scripts/raw-source-storage.d.mts": {
+    "gitBlob": "cff1fcb46db24de25ce25b070df36e993a88ef8d",
+    "actualBlob": "cff1fcb46db24de25ce25b070df36e993a88ef8d",
+    "sha256": "966ab7f6548c5b1fc32e115a3a56a5955509028b3b71ae782b3fdb71a79d5fab"
+  },
+  "scripts/raw-source-storage.mjs": {
+    "gitBlob": "d894ec961826a7627264ccae0445999ab587a453",
+    "actualBlob": "d894ec961826a7627264ccae0445999ab587a453",
+    "sha256": "daae9b6c4a6075c027447a79b29153ddf55f157d56bf41b3d8ca187760924a09"
+  },
+  "scripts/raw-source-worker-command.d.mts": {
+    "gitBlob": "99158f36193d14801cec5d11f47618e0a482c18d",
+    "actualBlob": "99158f36193d14801cec5d11f47618e0a482c18d",
+    "sha256": "3f6618ccf1aed6d8987d21164c6ba60fac2c10c8998eac8286756a78d1af7670"
+  },
+  "scripts/raw-source-worker-command.mjs": {
+    "gitBlob": "ed59d39174336030e773aca7cdd5587e50ab7ba9",
+    "actualBlob": "ed59d39174336030e773aca7cdd5587e50ab7ba9",
+    "sha256": "05669a54faffacab112ca6702e13f33ae02d2b189df0c9c61534afc50d0d7a10"
+  },
+  "scripts/raw-source-worker.mjs": {
+    "gitBlob": "67523267495682233d1a6143b24b206d0d15f2f6",
+    "actualBlob": "67523267495682233d1a6143b24b206d0d15f2f6",
+    "sha256": "28d9d315d3b8dd9e4f77e9e542dde2e9f43c40f3cb0ecbf39ea1848398801818"
+  },
+  "scripts/reference-public-data.d.mts": {
+    "gitBlob": "0be3cd2a25f6899626e52ea7813ad2370934e390",
+    "actualBlob": "0be3cd2a25f6899626e52ea7813ad2370934e390",
+    "sha256": "00e51e38ea2e0e746e1eef6af53f03d032a86ac2cb181b5ca3ca0eb511798856"
+  },
+  "scripts/reference-public-data.mjs": {
+    "gitBlob": "7451dbd0360927ea1383b9f4bd24b71bd7f0f482",
+    "actualBlob": "7451dbd0360927ea1383b9f4bd24b71bd7f0f482",
+    "sha256": "6e68aae62f6483fce7d83c1835167b59e240be4f67195e161f5b8175f147b6fd"
+  },
+  "scripts/refresh-data-if-changed.mjs": {
+    "gitBlob": "20ca8f4b21b00898df0008c556f25987387c79f8",
+    "actualBlob": "20ca8f4b21b00898df0008c556f25987387c79f8",
+    "sha256": "cd201c4e100214b72e55b760a5acd1de89810d846e35b6831ea2ea3c75c8daf9"
+  },
+  "scripts/refresh-metrics.d.mts": {
+    "gitBlob": "b1cc26b13495835d993eddaa34b731013a3f6bf7",
+    "actualBlob": "b1cc26b13495835d993eddaa34b731013a3f6bf7",
+    "sha256": "f7ef8fc18ec610d68f168893c33bc5a79ade736649f458b89b8a0cf7f401cd2c"
+  },
+  "scripts/refresh-metrics.mjs": {
+    "gitBlob": "e541ea9a24f4baf46c3672d7a2062dbe9a28c533",
+    "actualBlob": "e541ea9a24f4baf46c3672d7a2062dbe9a28c533",
+    "sha256": "2a54b52d53d75625a9e82e1383cbd310881b9d2f91875a207e7ac9f3fae8fdd1"
+  },
+  "scripts/refresh-once.d.mts": {
+    "gitBlob": "c44bffff7e69b19e245ba4daf2e89a0763f3d27f",
+    "actualBlob": "c44bffff7e69b19e245ba4daf2e89a0763f3d27f",
+    "sha256": "3894bfb20f88b6b2687113dbd1e111d80f3e2d36f117b50265d4ea93ae9f3300"
+  },
+  "scripts/refresh-once.mjs": {
+    "gitBlob": "9518cb655efe187a1f3f5b05481c048ebe4d2420",
+    "actualBlob": "9518cb655efe187a1f3f5b05481c048ebe4d2420",
+    "sha256": "186d87d6ccc46cdff1f332a0efe81178ba9a1c9a377c647316ad22d153e2660b"
+  },
+  "scripts/refresh-trigger-state.d.mts": {
+    "gitBlob": "01ac1d2cc9fac7aaa2909046e5b89b27979359c6",
+    "actualBlob": "01ac1d2cc9fac7aaa2909046e5b89b27979359c6",
+    "sha256": "2dcd4f3d83d688c95bbbdff258af7f88914ba605aa5a9819ec36a86c1de99557"
+  },
+  "scripts/refresh-trigger-state.mjs": {
+    "gitBlob": "8dac58a7635e47f7625bc0721fe5d8799bc0f3d6",
+    "actualBlob": "8dac58a7635e47f7625bc0721fe5d8799bc0f3d6",
+    "sha256": "a1c37d36776aeb0ac414e00aca7a2201ad99ca4edb8615442fa166b1454b324a"
+  },
+  "scripts/refresh-worker-memory.d.mts": {
+    "gitBlob": "3614e5d3276569c2ebe3d0fc3d139c97f52ae712",
+    "actualBlob": "3614e5d3276569c2ebe3d0fc3d139c97f52ae712",
+    "sha256": "d70dfa01f6d7124c89234565a3d3f1422c203676c298518111052eef495572e8"
+  },
+  "scripts/refresh-worker-memory.mjs": {
+    "gitBlob": "c985af5024cd257215dd8d0ea58935cff825ede6",
+    "actualBlob": "c985af5024cd257215dd8d0ea58935cff825ede6",
+    "sha256": "b8003c169c72d64a38efea573ebff74e2b7756dd902c23bcd2738fca8097d09c"
+  },
+  "scripts/regen-derived.mts": {
+    "gitBlob": "b8e5d5d86226fe47eeb22190d41ff2e4b69bf579",
+    "actualBlob": "b8e5d5d86226fe47eeb22190d41ff2e4b69bf579",
+    "sha256": "4c7d7870d465bcba217b9897fbdd18a0d6b95535f073a0d5c3ffd5a516aa60f0"
+  },
+  "scripts/replace-directory.ts": {
+    "gitBlob": "e96dfda1b133d5b0180ad984cb19cb890b557573",
+    "actualBlob": "e96dfda1b133d5b0180ad984cb19cb890b557573",
+    "sha256": "2359d4b68ee6abf43525e0e14a10cc50e8ed6dc4657df5e6dd60a82e2f7760e6"
+  },
+  "scripts/rollout-evidence.d.mts": {
+    "gitBlob": "c20326be1fa6ef92a595ba4777e11ed09ed43a1d",
+    "actualBlob": "c20326be1fa6ef92a595ba4777e11ed09ed43a1d",
+    "sha256": "bd66b5234945ba8b0bd979508fd128d5e12c64167cffcb9d8646700d36ce6c01"
+  },
+  "scripts/rollout-evidence.mjs": {
+    "gitBlob": "4123ceafa3083b592b68885e5e8f2e9be4cadd3d",
+    "actualBlob": "4123ceafa3083b592b68885e5e8f2e9be4cadd3d",
+    "sha256": "202e59b9b2e92335f9b631ad44acedf707d67661b2bfddab6a4c0066b8feb2e8"
+  },
+  "scripts/rollout-gate.d.mts": {
+    "gitBlob": "9ca60bfe05828c93c60816bca4bf98c4dfddb566",
+    "actualBlob": "9ca60bfe05828c93c60816bca4bf98c4dfddb566",
+    "sha256": "6a7987c091aba6f7ee90cf341b8edc62091b77f4bcd1de971cfdc9b4ddbac04d"
+  },
+  "scripts/rollout-gate.mjs": {
+    "gitBlob": "1bd8288933894882cf99444ca2e0dfcde7fb4cd7",
+    "actualBlob": "1bd8288933894882cf99444ca2e0dfcde7fb4cd7",
+    "sha256": "8e744542fc939bf3498e6de144bcc34e73f7fab783956286b99f47ef9c9f194e"
+  },
+  "scripts/rollout-implementation-evidence.d.mts": {
+    "gitBlob": "d15b3f64c0460d46abc6f9df9a204fcf8fd798ce",
+    "actualBlob": "d15b3f64c0460d46abc6f9df9a204fcf8fd798ce",
+    "sha256": "1f773a9d432ca45f091c4ad38efe7059812feed18bd41161d780868b08d08dc7"
+  },
+  "scripts/rollout-implementation-evidence.mjs": {
+    "gitBlob": "021e91383445764305c4ed781b3ded20a745b7f0",
+    "actualBlob": "021e91383445764305c4ed781b3ded20a745b7f0",
+    "sha256": "3687702199d824835f06f6a42f0cbc0d258980adaa8ac0cb7affcb9a82befb31"
+  },
+  "scripts/rollout-production-action.d.mts": {
+    "gitBlob": "c9cc9b5d3dcbb06125afbb9ba0b39227ec8e7eae",
+    "actualBlob": "c9cc9b5d3dcbb06125afbb9ba0b39227ec8e7eae",
+    "sha256": "84f50272d0870fd1e4027344c95ad12a6067bc8362d643879411401e8a61608c"
+  },
+  "scripts/rollout-production-action.mjs": {
+    "gitBlob": "a2fbcbd87889b1d6219a5bd0a5dfcf44a8dfa542",
+    "actualBlob": "a2fbcbd87889b1d6219a5bd0a5dfcf44a8dfa542",
+    "sha256": "0aca543ddbbb570c73da3d13b2d64ab1759ee91bfa890d3d325ec9d19ae933b1"
+  },
+  "scripts/rollout-production-evidence.d.mts": {
+    "gitBlob": "0116b937eb46b62b69a3ac7a15e960822af0d3d4",
+    "actualBlob": "0116b937eb46b62b69a3ac7a15e960822af0d3d4",
+    "sha256": "dc8ff7c8c889aeb2bdfe5422b080a15b7f1716014a6cea5cef442c66a1b732da"
+  },
+  "scripts/rollout-production-evidence.mjs": {
+    "gitBlob": "5e9240144d0b107ac9b37951b3ba37b44c9e8000",
+    "actualBlob": "5e9240144d0b107ac9b37951b3ba37b44c9e8000",
+    "sha256": "ce0a4ada2245bffb0fa9ac9971b031f6f68f1d7bd0828c8478125319240bd4b1"
+  },
+  "scripts/rollout-shadow-gate.d.mts": {
+    "gitBlob": "e6e9f37862078ed6872da50b9e12b1ea836abab1",
+    "actualBlob": "e6e9f37862078ed6872da50b9e12b1ea836abab1",
+    "sha256": "dcd05c40344e0bdcff89b4972fc8e250f55c96e1f9272b1389c4dd58e98d8e68"
+  },
+  "scripts/rollout-shadow-gate.mjs": {
+    "gitBlob": "2832dd12bcde0b8171e3894811085ea7cc27dcdb",
+    "actualBlob": "2832dd12bcde0b8171e3894811085ea7cc27dcdb",
+    "sha256": "2deb7c9b011395888e428874f3de27c0b73dc0ebdb31244c4113c3444e0dae8a"
+  },
+  "scripts/run-refresh-worker.mjs": {
+    "gitBlob": "328cd43d2c53f1425b3472a8b4db4570b9af1750",
+    "actualBlob": "328cd43d2c53f1425b3472a8b4db4570b9af1750",
+    "sha256": "a597904a58bf287f46705eecfe6c155d63e4c1c1e3b52ea1b4deb5a0b27ad244"
+  },
+  "scripts/run-tests.mjs": {
+    "gitBlob": "90878beb37cfbc492933fc9974a0cf5028eaaec1",
+    "actualBlob": "90878beb37cfbc492933fc9974a0cf5028eaaec1",
+    "sha256": "7f9bcec4927685985019fb3ef3df3d72b92bc2585fbbc98c866300196d088588"
+  },
+  "scripts/s3-put-retry.d.mts": {
+    "gitBlob": "0e6c21f237d51e833a4b3f96af5314c7bd132312",
+    "actualBlob": "0e6c21f237d51e833a4b3f96af5314c7bd132312",
+    "sha256": "06d05e576cff05bd880cec0c82cfa83dcc70ec313b9372cf8b7708d01a0ed983"
+  },
+  "scripts/s3-put-retry.mjs": {
+    "gitBlob": "3744ff7baef965b9b4cc6e6ef40d3e44009f27ff",
+    "actualBlob": "3744ff7baef965b9b4cc6e6ef40d3e44009f27ff",
+    "sha256": "c13ae03aed81a3ed36d6d64f4d3a785c8d4b4301223f54e6e33c4ae717715245"
+  },
+  "scripts/search-ranking-model.ts": {
+    "gitBlob": "244c6825c7c897b6cafea5ad87961c2195237009",
+    "actualBlob": "244c6825c7c897b6cafea5ad87961c2195237009",
+    "sha256": "cbb0f6b4aa5ba331e7f2d8f68d44dfbc1ecc62215bef1cd79f1203e1f3f02e8c"
+  },
+  "scripts/select-ranking-model.ts": {
+    "gitBlob": "ec97f5fb2bb5c70ae2dcad30300e5533590b1395",
+    "actualBlob": "ec97f5fb2bb5c70ae2dcad30300e5533590b1395",
+    "sha256": "760da33b3a72e7c6ca40fcb488484711f6ca52a1273b838f9c413d545d07ca1d"
+  },
+  "scripts/seo-prerender.ts": {
+    "gitBlob": "4689879dec7f4cacc5e8881cdaf650521115eeeb",
+    "actualBlob": "4689879dec7f4cacc5e8881cdaf650521115eeeb",
+    "sha256": "045b79d71ecb4c60242c2fc8e04641c759e194e73fbd4e9aa68c29e6db02c5fd"
+  },
+  "scripts/stable-json-digest.ts": {
+    "gitBlob": "ad3974f7d1cc2b429fbfb4eb0849e51b93ef29b2",
+    "actualBlob": "ad3974f7d1cc2b429fbfb4eb0849e51b93ef29b2",
+    "sha256": "6656b5b4a74c5cf2bd265f6cfa1a4dd1ca0b64fa58ddf31b30d3dafa16a364c6"
+  },
+  "scripts/sync-team-branding.mjs": {
+    "gitBlob": "77e8a22a68aa4db8ba079ecafb7d5794cd0373b1",
+    "actualBlob": "77e8a22a68aa4db8ba079ecafb7d5794cd0373b1",
+    "sha256": "2fbca6b0301ac9f7d7bae02decaf61b010409f7e3ec53f5102434342bb439ea2"
+  },
+  "scripts/team-logo-image.mjs": {
+    "gitBlob": "da3f81f7143ab1f40ae20dd0e81b648a03431485",
+    "actualBlob": "da3f81f7143ab1f40ae20dd0e81b648a03431485",
+    "sha256": "3797bcf6dbc57a9564e60734c6fbaafafe72fa64e2a3640ef062989c1548c05f"
+  },
+  "scripts/team-logo-treatment.mjs": {
+    "gitBlob": "6570b5242324f99a8487a75dd31048a2523500f8",
+    "actualBlob": "6570b5242324f99a8487a75dd31048a2523500f8",
+    "sha256": "c7711722ab30090e2a982db65b7185c58927df81cbc09a5934fac87351338d0c"
+  },
+  "scripts/tournament-feed-collector.ts": {
+    "gitBlob": "57905d9c99b18563ceb87cbe7aa0e2273881577c",
+    "actualBlob": "57905d9c99b18563ceb87cbe7aa0e2273881577c",
+    "sha256": "d2d9f7302cd26b304982a83188feb778c45c20504650684c3c608a16866de017"
+  },
+  "scripts/tournament-feed-storage.ts": {
+    "gitBlob": "3f2070a5288fc700838e098ec891c57f9d9347a2",
+    "actualBlob": "3f2070a5288fc700838e098ec891c57f9d9347a2",
+    "sha256": "0800eea00ddf9c315d05ea36a145909b176ba87269aead0638acb0069d418ac7"
+  },
+  "scripts/tournament-forecast-delivery.ts": {
+    "gitBlob": "60282e5ca7bf6b6db3d3defdda2e85cd85339d94",
+    "actualBlob": "60282e5ca7bf6b6db3d3defdda2e85cd85339d94",
+    "sha256": "ceebc5e901d6f99ad73687f3ffa7dc75f3a749c116d8dc87758aa0f5b01bf014"
+  },
+  "scripts/tournament-forecast-receipts.ts": {
+    "gitBlob": "4715f0f0be8c76f5ae2159fcc4b951e99b1d7073",
+    "actualBlob": "4715f0f0be8c76f5ae2159fcc4b951e99b1d7073",
+    "sha256": "8c150dca970e389aff85c4f326847f7ebb965c8f6c35b1d0567b9f82c61a127d"
+  },
+  "scripts/validate-rollout-gate.d.mts": {
+    "gitBlob": "7f2c4152bbc5b0de4f4eebd3bd158b129d361f50",
+    "actualBlob": "7f2c4152bbc5b0de4f4eebd3bd158b129d361f50",
+    "sha256": "51d37d573dcdf855945b89527581f86e0d144bd48cc2dbd1c4a820a040ff362f"
+  },
+  "scripts/validate-rollout-gate.mjs": {
+    "gitBlob": "40ab3b6d4e4ed50998352a4a84ac595e8c962cc1",
+    "actualBlob": "40ab3b6d4e4ed50998352a4a84ac595e8c962cc1",
+    "sha256": "0b626ae58ed660db915ff69ab83a093283bc5ca6997abeffba48224c831367bb"
+  },
+  "scripts/verify-rust-raw-source.ts": {
+    "gitBlob": "961d694ceeb20ca635efb169b93d000f1f4f76e6",
+    "actualBlob": "961d694ceeb20ca635efb169b93d000f1f4f76e6",
+    "sha256": "3287224a3dc5c73df27c3fa303369c58f1272b8da0e91361fbaf93fc5bf292d1"
+  },
+  "src/App.tsx": {
+    "gitBlob": "a1f3a10d3995691a6e09885d3c8f8ca50ccf8fa8",
+    "actualBlob": "a1f3a10d3995691a6e09885d3c8f8ca50ccf8fa8",
+    "sha256": "eaab70ac9e9ddcf9491f481d1c020665b8783e6dce728bae19cbac899d7e2437"
+  },
+  "src/components/CompareAnalysis.tsx": {
+    "gitBlob": "41f9052a3106e579cd59e95316a50c26e8942ec3",
+    "actualBlob": "41f9052a3106e579cd59e95316a50c26e8942ec3",
+    "sha256": "5cfb3b272b2c4da6ff6170ddf1ab90a17d266eb23065fec76b92b066e6d184c2"
+  },
+  "src/components/CompareDock.tsx": {
+    "gitBlob": "da4174c7e7366d000f01cda5dd12524206b83d5f",
+    "actualBlob": "da4174c7e7366d000f01cda5dd12524206b83d5f",
+    "sha256": "2449735ccf00ae6363be32f5f4e5f0a9388a2f2a1880a6e955c7d882638d67c7"
+  },
+  "src/components/CompareDrawer.tsx": {
+    "gitBlob": "56a7c59243e223dc769a5e7fd0ba1fbd25ed3df0",
+    "actualBlob": "56a7c59243e223dc769a5e7fd0ba1fbd25ed3df0",
+    "sha256": "ed0ef00f4a9f150f82df0c09abc379c18c0816d5140a30d76caf5523317f2c7c"
+  },
+  "src/components/CompareToggle.tsx": {
+    "gitBlob": "2e4a26a9a0fc1fcab5f4fd1da84fd56702b6fb56",
+    "actualBlob": "2e4a26a9a0fc1fcab5f4fd1da84fd56702b6fb56",
+    "sha256": "7efa575ceaba29c185eedc5b9e2d7345bad52a46285eacbfe32d4259f4588c6d"
+  },
+  "src/components/ConditionalPowerPreview.tsx": {
+    "gitBlob": "4ebb20881b07434d92c353764476e054a885dc0f",
+    "actualBlob": "4ebb20881b07434d92c353764476e054a885dc0f",
+    "sha256": "a8c18b70071e5eaa6a3efcfc937fc00ac4826e1e577e43aec50f05973cea6ac2"
+  },
+  "src/components/HeadToHead.tsx": {
+    "gitBlob": "27e54d6c5ef9a561119f904b34568dbc1585afa6",
+    "actualBlob": "27e54d6c5ef9a561119f904b34568dbc1585afa6",
+    "sha256": "be2283575ec0c8a0a5d11b926e3389a84163217b897745415f54022c10a5288f"
+  },
+  "src/components/LineChart.tsx": {
+    "gitBlob": "75efcf5bbb85d5ca07a55170b6e4a62ff4c78b75",
+    "actualBlob": "75efcf5bbb85d5ca07a55170b6e4a62ff4c78b75",
+    "sha256": "dabe6a05de4d95e0c15e0d3edc35dcb40bc09b8032c8bdb108d8f5e0d6cc31dd"
+  },
+  "src/components/PlayerPerformancePanel.tsx": {
+    "gitBlob": "4e9f58dce364b7f894bd9f9197246fe345960b4b",
+    "actualBlob": "4e9f58dce364b7f894bd9f9197246fe345960b4b",
+    "sha256": "916a7600a5e44a52f20216b0f435a06991f620e3d4d8f84b190dfdf68db617d4"
+  },
+  "src/components/PowerLadder.tsx": {
+    "gitBlob": "b8b7ccaa3b4ee665564c47771a0fc349ba1ada4c",
+    "actualBlob": "b8b7ccaa3b4ee665564c47771a0fc349ba1ada4c",
+    "sha256": "8db0273b158a91241dad3917d943ad274d0db71e82b368557c413fd7e0d5df66"
+  },
+  "src/components/RegionDepthChart.tsx": {
+    "gitBlob": "ab22786814a5fe5fdff3778ecd48e3840e37eba7",
+    "actualBlob": "ab22786814a5fe5fdff3778ecd48e3840e37eba7",
+    "sha256": "48633f0f1d83f29258fd92e17617133ecc50eec1fa925e67d6e847ea149e9215"
+  },
+  "src/components/ScopeBar.tsx": {
+    "gitBlob": "e9c67b63fc415c46c72ed1085841c60c845fbe8a",
+    "actualBlob": "e9c67b63fc415c46c72ed1085841c60c845fbe8a",
+    "sha256": "e044924d7c6a6a7a43349bacd2ae1515c07862e3c00069993d65bdf9bc02d939"
+  },
+  "src/components/SwissPreview.tsx": {
+    "gitBlob": "0ebb317e632a59c4802774278583b8c3b3b17d19",
+    "actualBlob": "0ebb317e632a59c4802774278583b8c3b3b17d19",
+    "sha256": "4a85e666bf74a43eae729ac0dc738c36a8905c1f711670972a11fc8fd9887eea"
+  },
+  "src/components/TeamHistoryLineChart.tsx": {
+    "gitBlob": "4650c50bfa7f5708d533b789b25fd48d830c49c4",
+    "actualBlob": "4650c50bfa7f5708d533b789b25fd48d830c49c4",
+    "sha256": "247a6b2239f51a0867dbd71168a65b753f07e0562e0b5ed0e90b53957bf58286"
+  },
+  "src/components/TeamMark.tsx": {
+    "gitBlob": "72c35d32e0a4aa75594473af7851f3858875202d",
+    "actualBlob": "72c35d32e0a4aa75594473af7851f3858875202d",
+    "sha256": "f72199aae508957e4ba159ecd154192fbbd0f51121c27899bc186e643d9de3d1"
+  },
+  "src/components/TournamentBracket.tsx": {
+    "gitBlob": "a9e9dd957a224e047bd1ea7fca8b94bab4d6af92",
+    "actualBlob": "a9e9dd957a224e047bd1ea7fca8b94bab4d6af92",
+    "sha256": "7eae01b9804309bc8aaf86825dec4623889ab1cba4a329340341609f28fecc28"
+  },
+  "src/components/WhatChanged.tsx": {
+    "gitBlob": "35bab5901165d52708c92dac1cef9c3e6b6b2ecd",
+    "actualBlob": "35bab5901165d52708c92dac1cef9c3e6b6b2ecd",
+    "sha256": "7eed935304d47384ae0b9534addd27e97a095fb65a4a85ecc294ad0bfd09d742"
+  },
+  "src/components/WorldsTournamentPanel.tsx": {
+    "gitBlob": "ab6461f9f56fe61a3f5ecf4bf0eae240ea828df6",
+    "actualBlob": "ab6461f9f56fe61a3f5ecf4bf0eae240ea828df6",
+    "sha256": "28da06f03b2665b32139d23f788a36b78fc6c02fcaa71f6cf782be3ed990d0e7"
+  },
+  "src/components/compareAnalysisData.tsx": {
+    "gitBlob": "69346197015f0ee13f3b2a7f01a566a6642c43ee",
+    "actualBlob": "69346197015f0ee13f3b2a7f01a566a6642c43ee",
+    "sha256": "1c1692af52931c3300be567b14dff7e8b2832bdf55fb2d0ef2207f978224f2e1"
+  },
+  "src/components/matches/SeriesLedger.tsx": {
+    "gitBlob": "40c377d49784f13b891adf86128b9dd39eaaa8cd",
+    "actualBlob": "40c377d49784f13b891adf86128b9dd39eaaa8cd",
+    "sha256": "8b5364e03fa42e201625d574e730da5b9fbea29fd136761fc6a411b1dd307147"
+  },
+  "src/components/matches/seriesOutcome.ts": {
+    "gitBlob": "5fae724d5ce933a959801d2686b04068e3272d73",
+    "actualBlob": "5fae724d5ce933a959801d2686b04068e3272d73",
+    "sha256": "2d134edb309a0dad9833fd3ca17c904cf1a1ff3dec2fb2411c722d358f04e806"
+  },
+  "src/components/ui.tsx": {
+    "gitBlob": "edc022c6a4dfc600524572a07ccb4766f9921cbe",
+    "actualBlob": "edc022c6a4dfc600524572a07ccb4766f9921cbe",
+    "sha256": "e76a27abe50c2365fb5a9620765c67d27df0da072b64965fd0a7510c4871a678"
+  },
+  "src/components/ui/alert.tsx": {
+    "gitBlob": "343601ddf07713ce3797fcee460d02731fefe40b",
+    "actualBlob": "343601ddf07713ce3797fcee460d02731fefe40b",
+    "sha256": "b2fd1c8517b2af4ff7603de00df84c4b90d48eff1a2676546ee8580634834f71"
+  },
+  "src/components/ui/badge.tsx": {
+    "gitBlob": "9d3327fb3f662583d3a9ea974dafead2e3348c34",
+    "actualBlob": "9d3327fb3f662583d3a9ea974dafead2e3348c34",
+    "sha256": "455a2f306f07147194faed339bc6d13b7d7dd74dd902f8feebbeea27f408a2ba"
+  },
+  "src/components/ui/button.tsx": {
+    "gitBlob": "4954687b7628a843162a686af1eaf8d19f202a31",
+    "actualBlob": "4954687b7628a843162a686af1eaf8d19f202a31",
+    "sha256": "5c6d880d144bff9da5e8ad84402593f85e9508263c0e088b319ada4d31e3f80f"
+  },
+  "src/components/ui/card.tsx": {
+    "gitBlob": "602380631f72b172bf15b6b5249690b6c6b9e89a",
+    "actualBlob": "602380631f72b172bf15b6b5249690b6c6b9e89a",
+    "sha256": "e8d1d24622df82c8ce0a93df37a367cd9827f6a610dfa0d2657292b30fcb375c"
+  },
+  "src/components/ui/chart.tsx": {
+    "gitBlob": "36ac2d6d78625a88b80953ecc9f2f897bbcd7f77",
+    "actualBlob": "36ac2d6d78625a88b80953ecc9f2f897bbcd7f77",
+    "sha256": "2a05518ceb7a770e67995f4908f73d44e22282c3164de8207cbbe1de21a51d32"
+  },
+  "src/components/ui/hover-card.tsx": {
+    "gitBlob": "bee8495dacde0056bcc84adefcf5e5af043a35c6",
+    "actualBlob": "bee8495dacde0056bcc84adefcf5e5af043a35c6",
+    "sha256": "c37baa105982670214de14bbfba085f74502c8345f2d0c102506586582074fdc"
+  },
+  "src/components/ui/input.tsx": {
+    "gitBlob": "00bec9c1991bb6736552d34bb362f6dc8dcfdcad",
+    "actualBlob": "00bec9c1991bb6736552d34bb362f6dc8dcfdcad",
+    "sha256": "1c69e080018a28e829fcc235ec11ff33a6cb1a751a9da93b99e8aa741f72e194"
+  },
+  "src/components/ui/loading.tsx": {
+    "gitBlob": "f71db3d6fb351cec278616651ebcb53701c9f91f",
+    "actualBlob": "f71db3d6fb351cec278616651ebcb53701c9f91f",
+    "sha256": "b9a8003c8dfe50b0240aa642f750dc835fafff35d68bc277272e649cf8f30a4e"
+  },
+  "src/components/ui/page-shell.tsx": {
+    "gitBlob": "f8d5381f441ff699ef896b7d0ab83ac6a6f840c1",
+    "actualBlob": "f8d5381f441ff699ef896b7d0ab83ac6a6f840c1",
+    "sha256": "99188dec22a601d3cf4cb956aefc0fa5ebf13e5d38171ed9bbd3ee01382a40eb"
+  },
+  "src/components/ui/pager.tsx": {
+    "gitBlob": "9f2a134d024f31637b8ce84be59d5b02ce7c7cdf",
+    "actualBlob": "9f2a134d024f31637b8ce84be59d5b02ce7c7cdf",
+    "sha256": "dcd55dac8c1a4ff1a6ca3a2c63f0c2e01bee357c20b0b54323fd0aba9b31b0e9"
+  },
+  "src/components/ui/panel.tsx": {
+    "gitBlob": "82bf501e0e862f6b4d25671e12e76a8d529e58ca",
+    "actualBlob": "82bf501e0e862f6b4d25671e12e76a8d529e58ca",
+    "sha256": "6343ccbe3f808715140d38aeeca5e47760dd919befecb77c78296894a670003f"
+  },
+  "src/components/ui/select.tsx": {
+    "gitBlob": "7656d767329cd408257d7b45f0a823d386b70aab",
+    "actualBlob": "7656d767329cd408257d7b45f0a823d386b70aab",
+    "sha256": "7a718a1bedc1454044e8f164708e5a71bf621a618f319e6c0014e16a61f701cf"
+  },
+  "src/components/ui/sheet.tsx": {
+    "gitBlob": "8291ada5e60fe97b9fc672a47e587a43befef9ce",
+    "actualBlob": "8291ada5e60fe97b9fc672a47e587a43befef9ce",
+    "sha256": "2c701f6d4797b59b854594cd8909784cc92058917dd4102e7b1687a05f1e4ba0"
+  },
+  "src/components/ui/skeleton.tsx": {
+    "gitBlob": "c85ef18fa0d8671644b01cf3b3ed839a3742e8e0",
+    "actualBlob": "c85ef18fa0d8671644b01cf3b3ed839a3742e8e0",
+    "sha256": "a9d4d8718aee3588f2b5e70cc40aa7b0ad89d5b788a6fb08e7b84b3272b601b6"
+  },
+  "src/components/ui/table.tsx": {
+    "gitBlob": "c238a8892baabf24935d2420451ec2bc9238cf90",
+    "actualBlob": "c238a8892baabf24935d2420451ec2bc9238cf90",
+    "sha256": "e283877187af5e5e751740b742cd9d8264bf5314dc52503dd17820e8f04a309c"
+  },
+  "src/components/ui/tooltip.tsx": {
+    "gitBlob": "4213abb00ab68d15c63fc4d3e3c701089389d529",
+    "actualBlob": "4213abb00ab68d15c63fc4d3e3c701089389d529",
+    "sha256": "d4f2dcfe04277895b94eea3c4fb58ca798fc4d36d9fe932129343035587d1447"
+  },
+  "src/data/brandMark.ts": {
+    "gitBlob": "43aeeeef4f822aad80c18c55fcaad1dca6e16123",
+    "actualBlob": "43aeeeef4f822aad80c18c55fcaad1dca6e16123",
+    "sha256": "80ff6a7d6ba16f17b3ef58f982ddfa37e3bbcee60afd70226f74aa03525fce8d"
+  },
+  "src/data/competitionTaxonomy.ts": {
+    "gitBlob": "42082b8950a3f1041491f2031fa2b53df311681b",
+    "actualBlob": "42082b8950a3f1041491f2031fa2b53df311681b",
+    "sha256": "44f0990a53a6fadc32a1841280cf5c064a660a55cdac9d70737581cd93aa5f41"
+  },
+  "src/data/leagueTiers.ts": {
+    "gitBlob": "6e1142d20843dbf48e5482f3c490bad487a043eb",
+    "actualBlob": "6e1142d20843dbf48e5482f3c490bad487a043eb",
+    "sha256": "499d41c2a0a03b228ae913c196ddbe231edb40b56eb27c361c518af129b924e6"
+  },
+  "src/data/rankingConfig.ts": {
+    "gitBlob": "6de83a03dafd50a9ce6e1dd52d85db879033a1b3",
+    "actualBlob": "6de83a03dafd50a9ce6e1dd52d85db879033a1b3",
+    "sha256": "a84fafd738ae3af514e3bec59199504dd16746ecc53286ba77e81d11d3127731"
+  },
+  "src/data/regionTaxonomy.ts": {
+    "gitBlob": "9c9264b0444348295dfe79d7f2cb1cfa59dd735e",
+    "actualBlob": "9c9264b0444348295dfe79d7f2cb1cfa59dd735e",
+    "sha256": "9acd8210491a2d58b4fe59cadbf07d1ae2a91357a84e8b3e6f543568a29f7e27"
+  },
+  "src/data/teamBranding.generated.ts": {
+    "gitBlob": "e4a01f2aa443cb38a47b2b83225be3d843c8b41a",
+    "actualBlob": "e4a01f2aa443cb38a47b2b83225be3d843c8b41a",
+    "sha256": "6ff9b37e064c06b611d8081e87b965b9d564e3f20ba3212ceeff9b29eaee5b00"
+  },
+  "src/data/teamBranding.ts": {
+    "gitBlob": "8d65cf298e810ed1f5cf3a1d07de2eeff5414e35",
+    "actualBlob": "8d65cf298e810ed1f5cf3a1d07de2eeff5414e35",
+    "sha256": "332d8de62406ba300bc6b41db25ee87874925ba0fd2511f219bfcb89ad1e79c1"
+  },
+  "src/data/teamIdentity.ts": {
+    "gitBlob": "e4ff65e9e916ae7e50a1e5d9a22ed144879d1ed5",
+    "actualBlob": "e4ff65e9e916ae7e50a1e5d9a22ed144879d1ed5",
+    "sha256": "e24ba43695fe9dd48f66ec027d81f15c004b01d7d7838d7057b3698feb2b9252"
+  },
+  "src/hooks/useHistoryDetail.ts": {
+    "gitBlob": "3b1e20ec6dbcebaf285093c2436f8ed5b8d09902",
+    "actualBlob": "3b1e20ec6dbcebaf285093c2436f8ed5b8d09902",
+    "sha256": "459d6c1e6b51223517ffdeef7a7beb071de350084f99a0859713848c632c618b"
+  },
+  "src/hooks/usePublicArtifacts.ts": {
+    "gitBlob": "bbf3e991ef14e5fefa063edf24b00e264a91779f",
+    "actualBlob": "bbf3e991ef14e5fefa063edf24b00e264a91779f",
+    "sha256": "6183916d34c9a3561be9ebecb58a94fe8438b76c1d0585f917fab9e0eec48a8a"
+  },
+  "src/index.css": {
+    "gitBlob": "40ec66c07dde37269686422f7919d699aa6c5c91",
+    "actualBlob": "40ec66c07dde37269686422f7919d699aa6c5c91",
+    "sha256": "cff5f059bad88fad38950709617775a7519579d7d455aebe1a1680dd25eb1857"
+  },
+  "src/lib/binaryPredictionMetrics.ts": {
+    "gitBlob": "6d16f20884910075e4daa57a940e14adcae323c8",
+    "actualBlob": "6d16f20884910075e4daa57a940e14adcae323c8",
+    "sha256": "c71a3cd3725cbac6e749226a538c9f04b8e2a342313bfebb7dae0930576c2397"
+  },
+  "src/lib/boardHeadline.ts": {
+    "gitBlob": "267965f86fbe0b1056fffd476b9954a3d0deeab1",
+    "actualBlob": "267965f86fbe0b1056fffd476b9954a3d0deeab1",
+    "sha256": "a2f9ac6891232d478fee6fbc8c37baedc683fb481db2d190d9b118d348e4e30f"
+  },
+  "src/lib/bootstrap.ts": {
+    "gitBlob": "f71eca39d3fe52e50f4d95e1e36c3d976cfd79df",
+    "actualBlob": "f71eca39d3fe52e50f4d95e1e36c3d976cfd79df",
+    "sha256": "1e449e1fefff856940c8f0bcbad7f0495f18fe5fa86efce4b6931b10623e3f9c"
+  },
+  "src/lib/causalRecompute.ts": {
+    "gitBlob": "2d26434483a579368c9f026d9c04ad787255e570",
+    "actualBlob": "2d26434483a579368c9f026d9c04ad787255e570",
+    "sha256": "e7e645f981184dc68e7dd70ebe00ae6dda6835b3cdc1f7621d355e3c87236b09"
+  },
+  "src/lib/chartPoints.ts": {
+    "gitBlob": "679dbb4867dc615903f3cc3deb50c89a9954bf2b",
+    "actualBlob": "679dbb4867dc615903f3cc3deb50c89a9954bf2b",
+    "sha256": "35b97fb482a243a0fd7646c0621eff0cee4c233eaae369039198ee00acea734d"
+  },
+  "src/lib/chartTime.ts": {
+    "gitBlob": "3b5279047f470d604e4d8c0961ae5af35ade4d1b",
+    "actualBlob": "3b5279047f470d604e4d8c0961ae5af35ade4d1b",
+    "sha256": "f71b60e1ffc2150a416165a40aa9100477f731a8ab2119e9c0e0763d02355016"
+  },
+  "src/lib/codeUnitOrder.d.mts": {
+    "gitBlob": "66be02819390a8effe83da54787f78314389ab2c",
+    "actualBlob": "66be02819390a8effe83da54787f78314389ab2c",
+    "sha256": "d084b49f7ed680b23a9e96d2601b935df0b44fb1c70acc75a792e2b35062deb0"
+  },
+  "src/lib/codeUnitOrder.mjs": {
+    "gitBlob": "4ae5cf4cf2b27bf95ba984e77ee4d87599f5e531",
+    "actualBlob": "4ae5cf4cf2b27bf95ba984e77ee4d87599f5e531",
+    "sha256": "59f1f1b868d87ffc8331222a888129bc9bd94a51fb670adc1a08f2a6f8adf3d8"
+  },
+  "src/lib/colorSlots.ts": {
+    "gitBlob": "5d2134fb6e19aeb425f2cc7f1de47201c40b2525",
+    "actualBlob": "5d2134fb6e19aeb425f2cc7f1de47201c40b2525",
+    "sha256": "c5cb62c5307f720875229b1e70fed056563a0b85482cd73668d7a9ddac652762"
+  },
+  "src/lib/conditionalPowerPreview.ts": {
+    "gitBlob": "0d90166342ce463d4e55f94edd0b170d204d5210",
+    "actualBlob": "0d90166342ce463d4e55f94edd0b170d204d5210",
+    "sha256": "e3c8a8bacf2c4cd5bbc9d1977ca4cdbf20e5f4f659a5a29bf7753d373352830c"
+  },
+  "src/lib/conditionalPowerReplay.ts": {
+    "gitBlob": "f5a81e85318ea1960b304de093abe3d0fde6ebec",
+    "actualBlob": "f5a81e85318ea1960b304de093abe3d0fde6ebec",
+    "sha256": "d6c73b25aa716cc258eaa839d247d160426267a942694f47719bac95829f3ade"
+  },
+  "src/lib/conditionalPowerReplayBasis.ts": {
+    "gitBlob": "6fa03204a8331db0ebf3c0a820733b530db3b5df",
+    "actualBlob": "6fa03204a8331db0ebf3c0a820733b530db3b5df",
+    "sha256": "8c6e7c2d9bbc1fac9d59bc392756e8a18c40067827cac1b0f6f2e08a0cadf37f"
+  },
+  "src/lib/conditionalPowerResultComponent.ts": {
+    "gitBlob": "eac17804e4622e96fe4b16a3f903664b4d992b7d",
+    "actualBlob": "eac17804e4622e96fe4b16a3f903664b4d992b7d",
+    "sha256": "30531f6760f16bd89f0b9d74232049cb1a4e6a65a6b30fc7ae2671391819afe7"
+  },
+  "src/lib/conditionalPowerResultReceiptBuilder.ts": {
+    "gitBlob": "7f0bbaa3708f0fd1854acef1c8d23f07a0c1e93d",
+    "actualBlob": "7f0bbaa3708f0fd1854acef1c8d23f07a0c1e93d",
+    "sha256": "24cc18448247b9330b371f70e069ac345d009cbf2ae2f340f929b1f5e9c59772"
+  },
+  "src/lib/conditionalPowerResultReceipts.ts": {
+    "gitBlob": "c504a27447f8a2980734041f36faaf3c581de88c",
+    "actualBlob": "c504a27447f8a2980734041f36faaf3c581de88c",
+    "sha256": "63ecb49cceca84feee4f41d69e0f2af49106e2a915594d791465582e6aa60046"
+  },
+  "src/lib/defaultScope.ts": {
+    "gitBlob": "2f889b51bf1e5e22a79219514f54cdbfdfd56c98",
+    "actualBlob": "2f889b51bf1e5e22a79219514f54cdbfdfd56c98",
+    "sha256": "54d65be9c00d5029b0a17001d563d9b7360b1d39e3cc4d68913cd56099e08b4a"
+  },
+  "src/lib/deservedStanding.ts": {
+    "gitBlob": "dac13e10f795164a342ccf8303b36cff2e0033e6",
+    "actualBlob": "dac13e10f795164a342ccf8303b36cff2e0033e6",
+    "sha256": "2aee2979743f8a1f32d182dcc470fd7dd77112ba454ccadccf45c2af98c6bd36"
+  },
+  "src/lib/deservedStandingModel.ts": {
+    "gitBlob": "6a7f770bce285095b498b86f4a807b895168ff0c",
+    "actualBlob": "6a7f770bce285095b498b86f4a807b895168ff0c",
+    "sha256": "18606bb4decf81509538d57870fc8f61a5bba358d68201e80f208bf98ad427b1"
+  },
+  "src/lib/deservedStandingPublicComparison.ts": {
+    "gitBlob": "44e4aa7360a6996bcd928c32184ba996d8f14f62",
+    "actualBlob": "44e4aa7360a6996bcd928c32184ba996d8f14f62",
+    "sha256": "f9b0453a9f8725ae1006d10ea0444beee52e35a05bb04980fe8f143f3885b258"
+  },
+  "src/lib/deservedStandingRegions.ts": {
+    "gitBlob": "5b31ef2f5ba5a13ba2296e127638b8b9584c76a5",
+    "actualBlob": "5b31ef2f5ba5a13ba2296e127638b8b9584c76a5",
+    "sha256": "3d2c3fb852830b589a4ac1aff85053272af42b50ffe19fb850079a0ad82ce053"
+  },
+  "src/lib/display.ts": {
+    "gitBlob": "720b94c7039a1b628695a3df1b20ba859eb5cd1e",
+    "actualBlob": "720b94c7039a1b628695a3df1b20ba859eb5cd1e",
+    "sha256": "069ea6c2a271adf22f9f28e242651f6fd8d47f3156f355dc81fbee377a18b654"
+  },
+  "src/lib/eligibility.ts": {
+    "gitBlob": "c22242acee99cf2fac6cea580cf77e5d7ff49528",
+    "actualBlob": "c22242acee99cf2fac6cea580cf77e5d7ff49528",
+    "sha256": "5c3259c18d346ea6d5a19848093a0a89cc2bc1b1872e27296dbe8015214f7627"
+  },
+  "src/lib/evaluationBaselines.ts": {
+    "gitBlob": "97d655dc4e2c0f247bd7e8d9521e903b04649f0a",
+    "actualBlob": "97d655dc4e2c0f247bd7e8d9521e903b04649f0a",
+    "sha256": "1fe111ed70f7f5c1bd47b35a1cfb2156c1c849530fcde10fb19936b6f0f5a0f9"
+  },
+  "src/lib/eventWeighting.ts": {
+    "gitBlob": "f264cc84042a21500635d931fb3f9229bbcfe9fb",
+    "actualBlob": "f264cc84042a21500635d931fb3f9229bbcfe9fb",
+    "sha256": "ff95f4934b81e3d20a990a443f0485435dc87e15e0b0a7da2a91cbb4d76189db"
+  },
+  "src/lib/executionResidual.ts": {
+    "gitBlob": "fa9cf72a4a50bcf804ae6e8c22438a61d5e92bdf",
+    "actualBlob": "fa9cf72a4a50bcf804ae6e8c22438a61d5e92bdf",
+    "sha256": "0408d647f8cff56c9be20509790d6cd6db1be109223139edaedb2085b184bdf7"
+  },
+  "src/lib/format.ts": {
+    "gitBlob": "1a8d746308112e6f627ce5f8f1fd8d05f14cdd5b",
+    "actualBlob": "1a8d746308112e6f627ce5f8f1fd8d05f14cdd5b",
+    "sha256": "1ccc9d0f399ee64f6f6e50407b9bda0d1b988ee777a66eb55d12fa2d77f768c9"
+  },
+  "src/lib/importers/communitySources.ts": {
+    "gitBlob": "a23d1b151657c218e770968d9824c56f66219b0a",
+    "actualBlob": "a23d1b151657c218e770968d9824c56f66219b0a",
+    "sha256": "ad14949e13a627d7a478303b6cbfa613de46ea7473bb6f52480aa7f433ae0843"
+  },
+  "src/lib/importers/leaguepedia.ts": {
+    "gitBlob": "162e2af1ffcc161c91269ec09a31fc5d0f3496b6",
+    "actualBlob": "162e2af1ffcc161c91269ec09a31fc5d0f3496b6",
+    "sha256": "ea2c58e46fb53dd5c038247387e8525121e83a83f646f4f4bb09a529d4c38044"
+  },
+  "src/lib/importers/lolEsports.ts": {
+    "gitBlob": "6a260d27a4a4e0415b90ef20f6f5dbe2cc89f2e8",
+    "actualBlob": "6a260d27a4a4e0415b90ef20f6f5dbe2cc89f2e8",
+    "sha256": "d5f528b11e4829d849328d7876e2d5cbb4235a9860701b96b61e311d2a5e5796"
+  },
+  "src/lib/importers/oraclesElixir.ts": {
+    "gitBlob": "4a25e67354a328ef9941a0d9144a9f093be8b032",
+    "actualBlob": "4a25e67354a328ef9941a0d9144a9f093be8b032",
+    "sha256": "3bc8a74195cf3f26c692da98633c495262aa95cc42edd64078ed8bec90639a2f"
+  },
+  "src/lib/importers/providerTime.ts": {
+    "gitBlob": "10d8ce79cd566a09cd63d113e6a1a778d5128910",
+    "actualBlob": "10d8ce79cd566a09cd63d113e6a1a778d5128910",
+    "sha256": "3a3bd8c38945da3156b813dcece4d3d015de824e645392549e6033d5979d1094"
+  },
+  "src/lib/incremental/artifactDependencies.ts": {
+    "gitBlob": "5b61723d436e703c64f8f4569b171df3bdddf34f",
+    "actualBlob": "5b61723d436e703c64f8f4569b171df3bdddf34f",
+    "sha256": "0dd2c52bb794aa4d5f9d3360cbd8ab78718a56c94cb7cb8af9e4369bbf370bcd"
+  },
+  "src/lib/incremental/changeClassifier.ts": {
+    "gitBlob": "6c53f638b727afaf551b74c7ee3bc8b8a0a27feb",
+    "actualBlob": "6c53f638b727afaf551b74c7ee3bc8b8a0a27feb",
+    "sha256": "5b973fb43a2f4500f8ceeb4235a8bd0e2b3cd5868908efc8e99521b303463498"
+  },
+  "src/lib/incremental/externalCausalState.ts": {
+    "gitBlob": "969f8379a240b7373fbfb59ab21894a4e341bb5d",
+    "actualBlob": "969f8379a240b7373fbfb59ab21894a4e341bb5d",
+    "sha256": "eb2723a313afd5fbc67596441707c857d116634d30f2cba52e59b6599ccccaf3"
+  },
+  "src/lib/incremental/replayOrchestrator.ts": {
+    "gitBlob": "33ac107a305ff2007ccfb239b8bde97af11dd1f0",
+    "actualBlob": "33ac107a305ff2007ccfb239b8bde97af11dd1f0",
+    "sha256": "43411b8f04a2cbdd646c3416be05dfb6f4fbb3c16a59596d53af7e4306922572"
+  },
+  "src/lib/incremental/semanticParity.ts": {
+    "gitBlob": "a2e4a8aed035b37df386c08f97d54074170e08d2",
+    "actualBlob": "a2e4a8aed035b37df386c08f97d54074170e08d2",
+    "sha256": "b6f36c6f6c0ca1b4b8469a8eb11589420b90cf11a0ceae5953127fba9a76acbc"
+  },
+  "src/lib/incremental/types.ts": {
+    "gitBlob": "c30bd9daddb4d1ddcf3ec8e634c8aec9886afcb2",
+    "actualBlob": "c30bd9daddb4d1ddcf3ec8e634c8aec9886afcb2",
+    "sha256": "a915b14b359c174c1b141748d73881242a4088f10209df890b2db44428f46be3"
+  },
+  "src/lib/internationalTournaments.ts": {
+    "gitBlob": "8c874c147e42f4c87b6e1fa18d51b81597a14f2a",
+    "actualBlob": "8c874c147e42f4c87b6e1fa18d51b81597a14f2a",
+    "sha256": "d07973dc0876310474ec0c8c502aa4d5f1697760171925a0ea34372c93dde148"
+  },
+  "src/lib/leagueRatings.ts": {
+    "gitBlob": "07f378f8a4a128ba6c360f89c5aa6ae6ba7c1f2b",
+    "actualBlob": "07f378f8a4a128ba6c360f89c5aa6ae6ba7c1f2b",
+    "sha256": "78684adc71617958322de0aef1916a91ecc76a3d7146cf06501511db77c94b5f"
+  },
+  "src/lib/legal.ts": {
+    "gitBlob": "052ccaf86318463f087ac66394cff15ee314da84",
+    "actualBlob": "052ccaf86318463f087ac66394cff15ee314da84",
+    "sha256": "85cea2f15ea01852a5759b2e594bb74f94944942974eac69180a3516de33512f"
+  },
+  "src/lib/matchContext.ts": {
+    "gitBlob": "c1f940efc61fb2c1d46fc0cd66dd5c8ef8dde17f",
+    "actualBlob": "c1f940efc61fb2c1d46fc0cd66dd5c8ef8dde17f",
+    "sha256": "928f4e21a2eab210c3ec66a0085897dd2345efc79ef9644e8754ccb22de442d8"
+  },
+  "src/lib/matchEventGroups.ts": {
+    "gitBlob": "55f07cdcf5746d67f091f2aa900c8d2820b6786b",
+    "actualBlob": "55f07cdcf5746d67f091f2aa900c8d2820b6786b",
+    "sha256": "fecf165f84e07595e12426589809f54d20185504e759a8ba24379f29a04e138b"
+  },
+  "src/lib/matchFormat.ts": {
+    "gitBlob": "a2bcce3bb5eec66a1006984747672b2101eb33c7",
+    "actualBlob": "a2bcce3bb5eec66a1006984747672b2101eb33c7",
+    "sha256": "5ca3b218139b529bf2fdc0ae798b5b8fd32414ae98ca7204289165bfc4a3a763"
+  },
+  "src/lib/matchLedger.ts": {
+    "gitBlob": "4c2d11ce3674bf4b2c653f706edf2f75c0d85187",
+    "actualBlob": "4c2d11ce3674bf4b2c653f706edf2f75c0d85187",
+    "sha256": "ce2d90219111647a2470d1aa7426ba84d16d60e871453cc8bed0bb1a97cd957b"
+  },
+  "src/lib/matchupMath.ts": {
+    "gitBlob": "7d969cd4601f295979d8c0b28bcf728c1809516a",
+    "actualBlob": "7d969cd4601f295979d8c0b28bcf728c1809516a",
+    "sha256": "108d0c590704dcdecd4bb97b360ae4d0da132882cfe1c0a6c31400db7b2ce97d"
+  },
+  "src/lib/model.ts": {
+    "gitBlob": "632ffe2205076d177c7968c0de5aa1e3e9e90c8a",
+    "actualBlob": "632ffe2205076d177c7968c0de5aa1e3e9e90c8a",
+    "sha256": "bdb4d99274e7c9e8847d7645ddc9a0e0a042cd0eb4e31c3378c97014df024705"
+  },
+  "src/lib/modelConfig.ts": {
+    "gitBlob": "97b5109d59030b56847d1175969a4e577096d3da",
+    "actualBlob": "97b5109d59030b56847d1175969a4e577096d3da",
+    "sha256": "7d58a5c41210936a73b9beac92d6ecddee18751615379542a63353edc54832af"
+  },
+  "src/lib/modelSummaries.ts": {
+    "gitBlob": "0a723fa4d2a4778b59f657b5bdc08944499574c3",
+    "actualBlob": "0a723fa4d2a4778b59f657b5bdc08944499574c3",
+    "sha256": "ff358e0184fbcbe12d8dff4ad4c6059ad04aedaedbf72cae25002877377c2275"
+  },
+  "src/lib/nearTies.ts": {
+    "gitBlob": "de50f932ef9629df4b316fb076ee61760e234963",
+    "actualBlob": "de50f932ef9629df4b316fb076ee61760e234963",
+    "sha256": "09152d3427159f4d2dce05f925cbba1f6b6fcd4098122674c67ccb56409adbff"
+  },
+  "src/lib/offlineForecastCohort.ts": {
+    "gitBlob": "f561dd02ecd5436f85b6e43079e1b1abe11a097b",
+    "actualBlob": "f561dd02ecd5436f85b6e43079e1b1abe11a097b",
+    "sha256": "979edca0ae797bc3d4fc2ad63af88691369b0b459c4bbd9c4310fd95e86506d0"
+  },
+  "src/lib/offlineForecastMetrics.ts": {
+    "gitBlob": "7f4f51463a146b5d39398bb5531eb2f54aaeda05",
+    "actualBlob": "7f4f51463a146b5d39398bb5531eb2f54aaeda05",
+    "sha256": "b7522a06a5f81a00168f38012bf7449689a10fb1b83f4ad80f54577c25cc09cc"
+  },
+  "src/lib/placementResiduals.ts": {
+    "gitBlob": "3ef5d3aabab03f12f0222c4abf203137cf881797",
+    "actualBlob": "3ef5d3aabab03f12f0222c4abf203137cf881797",
+    "sha256": "41621808a2f8114cf0b02c426a86bdb6ae3a9b96ee68414cc75195166fc68e3c"
+  },
+  "src/lib/playerModel.ts": {
+    "gitBlob": "78a12448403455b65d28f4122a7fa593f381c0f1",
+    "actualBlob": "78a12448403455b65d28f4122a7fa593f381c0f1",
+    "sha256": "712621a57df83a2343c0d6a426bbc551f48b2683a1e46276e1183915eafc2c89"
+  },
+  "src/lib/playerPerformance.ts": {
+    "gitBlob": "b4bc430ceb7527c947718c82fc09ebc08bc86f52",
+    "actualBlob": "b4bc430ceb7527c947718c82fc09ebc08bc86f52",
+    "sha256": "847beef3f3656a647f131038946ecd1b84c336131ed8db58b62a81a2ea6b1a78"
+  },
+  "src/lib/playerResumeLedger.ts": {
+    "gitBlob": "b2d79ed84d0778784caa274468e7d87172d23347",
+    "actualBlob": "b2d79ed84d0778784caa274468e7d87172d23347",
+    "sha256": "8835bcf64adc4ce7735406b3d591f30e7b2d8ff966369efea45b9e1ab8988247"
+  },
+  "src/lib/playerScopes.ts": {
+    "gitBlob": "48b1581bccf105f298c9525c2bf2e048775f5a1b",
+    "actualBlob": "48b1581bccf105f298c9525c2bf2e048775f5a1b",
+    "sha256": "1948dd31936df7e8184031d11495c07b722a90d9a2c12a04c078dcd2397cdb3d"
+  },
+  "src/lib/predictionContext.ts": {
+    "gitBlob": "0170b55b572d09cfaca8656633cf3de7a78ca77d",
+    "actualBlob": "0170b55b572d09cfaca8656633cf3de7a78ca77d",
+    "sha256": "a80f86d0ace04d8e78df3cb4b62dbb0f91142e88ddea7c64aea70b73e6305321"
+  },
+  "src/lib/predictionFeaturePolicy.ts": {
+    "gitBlob": "d878b0583645b781e19f3c59f615b0d620fbd1c5",
+    "actualBlob": "d878b0583645b781e19f3c59f615b0d620fbd1c5",
+    "sha256": "fb1010d780fd1ddac405ae40739d911c30a7cb59f3845831033eb7a68054142a"
+  },
+  "src/lib/predictionModel.ts": {
+    "gitBlob": "8ec0f770fe78fe492cfa5fba510637e55d3af528",
+    "actualBlob": "8ec0f770fe78fe492cfa5fba510637e55d3af528",
+    "sha256": "e927dd4128c4e65d85faef7da5290b71d20519b9915ec34ae1d934fe33aabed6"
+  },
+  "src/lib/predictionVariants.ts": {
+    "gitBlob": "9e28ad9f67b63afb637a571d74f44fcb6f261493",
+    "actualBlob": "9e28ad9f67b63afb637a571d74f44fcb6f261493",
+    "sha256": "d2fcfd63bb40edae07a3069e38684eed9c7ef27d15862af746d4af709645fc06"
+  },
+  "src/lib/prefetch.ts": {
+    "gitBlob": "023a6811fba2d10cff6d59baae7ca39413c0e911",
+    "actualBlob": "023a6811fba2d10cff6d59baae7ca39413c0e911",
+    "sha256": "729adc31613f61cb58bca8b49915261f44e543baafc1c0f42f7c489d1b424954"
+  },
+  "src/lib/publicArtifacts/archive.d.mts": {
+    "gitBlob": "f5fbd606e4eb23c3f4d73f040649b34e22e52fd2",
+    "actualBlob": "f5fbd606e4eb23c3f4d73f040649b34e22e52fd2",
+    "sha256": "a4b4c095c693f3a9e0dc3b3cac41acff6e1ac13869699a377cb7117e4cc299d5"
+  },
+  "src/lib/publicArtifacts/archive.mjs": {
+    "gitBlob": "65f7e968ed44945e3e6328d70d9e9c30e842dea9",
+    "actualBlob": "65f7e968ed44945e3e6328d70d9e9c30e842dea9",
+    "sha256": "daf8a0aadfe63a24f181bb6b416f8d5c514d7f3632049e25b48b0d85a361551a"
+  },
+  "src/lib/publicArtifacts/artifactIdentity.ts": {
+    "gitBlob": "eabba19e8c484ff767ecf082c9e4feeed7c79d92",
+    "actualBlob": "eabba19e8c484ff767ecf082c9e4feeed7c79d92",
+    "sha256": "adf90ee55ac21257a0f2b6c9ebedbbe5a0207ba8f54962952f0ec79324859f46"
+  },
+  "src/lib/publicArtifacts/logicalPath.d.mts": {
+    "gitBlob": "77f9d246cf611d7ebae62efedab506b6ab877832",
+    "actualBlob": "77f9d246cf611d7ebae62efedab506b6ab877832",
+    "sha256": "980ac7344eaa76244d8fb0545da341a562d276dac8344929835356e61a238ab3"
+  },
+  "src/lib/publicArtifacts/logicalPath.mjs": {
+    "gitBlob": "e1265f3b14c9b25cdf3467a0c957c7037149459d",
+    "actualBlob": "e1265f3b14c9b25cdf3467a0c957c7037149459d",
+    "sha256": "e29b5680f73c9bfbbec87c6497e2540a1c055cc44b067dc25d31dbd25f6d08b4"
+  },
+  "src/lib/publicArtifacts/logicalReferences.d.mts": {
+    "gitBlob": "3632cef7c8592d9a07b86b89ca82ed99d819772b",
+    "actualBlob": "3632cef7c8592d9a07b86b89ca82ed99d819772b",
+    "sha256": "39c593ee8e67cb9ed33c95755fe91430c720d5642555c6500ba2bf9507ae9cac"
+  },
+  "src/lib/publicArtifacts/logicalReferences.mjs": {
+    "gitBlob": "da4a51629de2d4052ef96682229a24ae4aa37f4d",
+    "actualBlob": "da4a51629de2d4052ef96682229a24ae4aa37f4d",
+    "sha256": "c1ed40c1302afe903daa0051a7510381185f4f8d58ede0f98d892841feb96b82"
+  },
+  "src/lib/publicArtifacts/manifestLoader.ts": {
+    "gitBlob": "4784efe1c73945097c6a1ca14a3715b8890fbb7a",
+    "actualBlob": "4784efe1c73945097c6a1ca14a3715b8890fbb7a",
+    "sha256": "6b771182264b204fecbb2cb17c7ddf86c960ac94dc2ebc611c778f8c37e9800d"
+  },
+  "src/lib/publicArtifacts/resolver.ts": {
+    "gitBlob": "eae628680cab2ffc7e33d8bac059800d1d3e1cb7",
+    "actualBlob": "eae628680cab2ffc7e33d8bac059800d1d3e1cb7",
+    "sha256": "637736a539f4b78126a5fe4ecf4ec87592a23a9c57af9367fbc73a28d0750555"
+  },
+  "src/lib/publicArtifacts/schema.ts": {
+    "gitBlob": "b2e36b1c073d8328a73c88cc29e82f38ecf47301",
+    "actualBlob": "b2e36b1c073d8328a73c88cc29e82f38ecf47301",
+    "sha256": "e86e109e8f3de82212c9dc7491da693ffbf0dcb27c0623a1f0f5d3f0cb8d94ae"
+  },
+  "src/lib/publicArtifacts/semanticCache.ts": {
+    "gitBlob": "3d2ee92afd456d896b3fd9856e03ffef741796ad",
+    "actualBlob": "3d2ee92afd456d896b3fd9856e03ffef741796ad",
+    "sha256": "1b3a13aa7f476670e3706641021e7044d6a2ef3609545709f34cb965b6fff850"
+  },
+  "src/lib/publicArtifacts/urlResolver.ts": {
+    "gitBlob": "e5cc085820203945cb48da246002a234f344a26f",
+    "actualBlob": "e5cc085820203945cb48da246002a234f344a26f",
+    "sha256": "3bc2ef3257e9c2bf3af3b5db9b24bcfb91e7241846e648d9fd0f14bcbb857262"
+  },
+  "src/lib/publicArtifacts/writePlan.ts": {
+    "gitBlob": "71f13c5313ed3be70c615a593af7e545a6ba6e46",
+    "actualBlob": "71f13c5313ed3be70c615a593af7e545a6ba6e46",
+    "sha256": "9a197942719aae1ce20992f2f316e07c93763ace2beafdd69000968f08ef84f5"
+  },
+  "src/lib/publicMatchup.ts": {
+    "gitBlob": "810ba959e9eb475a719792df4569491cc45d7c55",
+    "actualBlob": "810ba959e9eb475a719792df4569491cc45d7c55",
+    "sha256": "d3e77a062e831fb7968f1300882e5488da605fe3f94bfdda78a5dec5ac13e2a1"
+  },
+  "src/lib/publishedRatingArtifacts.ts": {
+    "gitBlob": "dff4091bd609d72498ddf00cd1a3305855f57441",
+    "actualBlob": "dff4091bd609d72498ddf00cd1a3305855f57441",
+    "sha256": "186679d8fd11cb5e4f61573de6d6f45ae4d4896c10c5e6f77d2eb6be830999db"
+  },
+  "src/lib/rankingBoard.ts": {
+    "gitBlob": "3da47ab976627c550d76e81847eed180d4dda4a9",
+    "actualBlob": "3da47ab976627c550d76e81847eed180d4dda4a9",
+    "sha256": "86d2397cd6511a1f529764745f4c6bd72e173bffd87a9db2c2233d9d189b63ed"
+  },
+  "src/lib/rankingEvaluation.ts": {
+    "gitBlob": "3fcaef2da3a3401d5d9672d9f6b7eea3c8967f9f",
+    "actualBlob": "3fcaef2da3a3401d5d9672d9f6b7eea3c8967f9f",
+    "sha256": "61280eb885f3077d4bfb87da27c7cd83c473ebefbca44860cba6c99cab5caed7"
+  },
+  "src/lib/rankingEvaluationData.ts": {
+    "gitBlob": "04fda9b4d9dc629568077d4fe25f427f51aeae7e",
+    "actualBlob": "04fda9b4d9dc629568077d4fe25f427f51aeae7e",
+    "sha256": "7420f4d116c065782c20002fcfcc931e65058687572906a75ebe2f2ec338a051"
+  },
+  "src/lib/rankingExplanations.ts": {
+    "gitBlob": "836225e873c55446ee14ea256896eef8fb4d076e",
+    "actualBlob": "836225e873c55446ee14ea256896eef8fb4d076e",
+    "sha256": "526a5c4229fd4c16c2d499ab476b1c3330547b37ee29361157a7a831f7604c94"
+  },
+  "src/lib/rankingFlair.ts": {
+    "gitBlob": "8643964edbba2d7d7e2cb9ec31149d87847081cc",
+    "actualBlob": "8643964edbba2d7d7e2cb9ec31149d87847081cc",
+    "sha256": "3c47c5ec291be62cc1f38d1bfbd80d40e5f159b6c9b683c258fd80e56e7abe63"
+  },
+  "src/lib/rankingScopeLabel.ts": {
+    "gitBlob": "cca941973c7a7c7c60901a2a91d54119c07542ea",
+    "actualBlob": "cca941973c7a7c7c60901a2a91d54119c07542ea",
+    "sha256": "475c9384007ef6e7ead1891d52d5a96fe433050eb526c40b938dd54023866eaa"
+  },
+  "src/lib/ratingCalculations.ts": {
+    "gitBlob": "8e5263dec15a383837b48b6e108a7bb0a6fd9c5a",
+    "actualBlob": "8e5263dec15a383837b48b6e108a7bb0a6fd9c5a",
+    "sha256": "0a231bdde60a536f05f0270f7bf555392c9fbfb1859f1cd4adb861a4b54ce554"
+  },
+  "src/lib/ratingCheckpoint.ts": {
+    "gitBlob": "8fb2ef8364cebbd37f02e75c84b9b739c125b952",
+    "actualBlob": "8fb2ef8364cebbd37f02e75c84b9b739c125b952",
+    "sha256": "9e77e7fa53530a614da3f17347061dc7e997d9b8bf28a4371a1f15ac1ca81e85"
+  },
+  "src/lib/ratingCheckpointInventory.ts": {
+    "gitBlob": "31f36022dee5123513459a66940d9a193b2baefa",
+    "actualBlob": "31f36022dee5123513459a66940d9a193b2baefa",
+    "sha256": "afbaec65e3fe48006217b5d58d2bc2d62384925186c1c74ba1960966c53be939"
+  },
+  "src/lib/ratingComponentLabels.ts": {
+    "gitBlob": "44504e07091a8ea46f301f52893e1111cbfdcd26",
+    "actualBlob": "44504e07091a8ea46f301f52893e1111cbfdcd26",
+    "sha256": "5d4c3982e5aa7f6632936cf2be20f517e355db22bdebc56155f7b3ff6b8cb26b"
+  },
+  "src/lib/ratingContext.ts": {
+    "gitBlob": "545ca6e2c0b59186c67178d0295eedd0b8be2027",
+    "actualBlob": "545ca6e2c0b59186c67178d0295eedd0b8be2027",
+    "sha256": "9b68baf866431a20947fecadf67bb27956b859b763a8e396aee3005237a4b004"
+  },
+  "src/lib/ratingRunState.ts": {
+    "gitBlob": "f18bfa595b88a9ff004b44dd161fa02b86d10167",
+    "actualBlob": "f18bfa595b88a9ff004b44dd161fa02b86d10167",
+    "sha256": "fb37bd245578889268a174309950723c63fc575188258b4673f8a394bb36e2ec"
+  },
+  "src/lib/ratingSeriesEngine.ts": {
+    "gitBlob": "44b47bf136e46d4bc4ed9aae7d110dfc872df1de",
+    "actualBlob": "44b47bf136e46d4bc4ed9aae7d110dfc872df1de",
+    "sha256": "7952b642e971d998d1d2a5427118a5ef691ef0f0e1caa18e5996288ecb372c53"
+  },
+  "src/lib/ratingUniverse.ts": {
+    "gitBlob": "decbad67fb04532af0f305a6e53a791a44214729",
+    "actualBlob": "decbad67fb04532af0f305a6e53a791a44214729",
+    "sha256": "4b6d6c3c8587c351f03088f58ee203b9eece610396f652432fc848840a0739ac"
+  },
+  "src/lib/receipts.ts": {
+    "gitBlob": "e2c2b67554fefe18d5b057f19e09a70034d1bf48",
+    "actualBlob": "e2c2b67554fefe18d5b057f19e09a70034d1bf48",
+    "sha256": "e38d035f4de7385538d7179f15bda0a8059be626b6bd116455b41e61748a2057"
+  },
+  "src/lib/regionStrength.ts": {
+    "gitBlob": "2da97a72c0607e48f4a0d2aee65b383c908f333b",
+    "actualBlob": "2da97a72c0607e48f4a0d2aee65b383c908f333b",
+    "sha256": "074d075f647d12d373ca17316b5ebdccd1acba5038163a398595277fdb25405f"
+  },
+  "src/lib/rosterContinuityRating.ts": {
+    "gitBlob": "a790336e82f4f76c135b3c40def69d3618647cc1",
+    "actualBlob": "a790336e82f4f76c135b3c40def69d3618647cc1",
+    "sha256": "af752bfa562f3597b5926034f1d067ee82dadb6516de1e172b30e46638183435"
+  },
+  "src/lib/rosterEras.ts": {
+    "gitBlob": "db2dc7f6418c700a8e2abfd24e504516e177fa1e",
+    "actualBlob": "db2dc7f6418c700a8e2abfd24e504516e177fa1e",
+    "sha256": "9700a4fbcd2a75027077a14ef8d5bb5d7b51603acfdc64a99dc01aa35316d0c9"
+  },
+  "src/lib/rosters.ts": {
+    "gitBlob": "517791a8222249e0ff7911ec3e1377829a90a5ba",
+    "actualBlob": "517791a8222249e0ff7911ec3e1377829a90a5ba",
+    "sha256": "be040af684a5fdbbc0b6db9d858eb4a02ae2cecdf9f46bd38710e366eef48b79"
+  },
+  "src/lib/seasonHistory.ts": {
+    "gitBlob": "d86098914f7cdeb6110df12e807e0df9f6c8d4eb",
+    "actualBlob": "d86098914f7cdeb6110df12e807e0df9f6c8d4eb",
+    "sha256": "9c48753cd1177eb067f896f37891feba75dd28fca837c4708f328c503ed5336e"
+  },
+  "src/lib/seriesResolver.ts": {
+    "gitBlob": "07008f070100f07a3af5b71b480737133cc4d2f0",
+    "actualBlob": "07008f070100f07a3af5b71b480737133cc4d2f0",
+    "sha256": "4a7a2cc12e61a810025262c55587e9d5394122eb1d3fa8742b2c7ce0932179dc"
+  },
+  "src/lib/seriesResultUpdate.ts": {
+    "gitBlob": "00fbf68a1310a1bce621a4c095456834982dd347",
+    "actualBlob": "00fbf68a1310a1bce621a4c095456834982dd347",
+    "sha256": "22c7ee820f3c20836d0929f12617f217a341f56167d0e65274f89f90c0102884"
+  },
+  "src/lib/sideAdjustments.ts": {
+    "gitBlob": "c92df406be166d62038a4cda44005431496febe0",
+    "actualBlob": "c92df406be166d62038a4cda44005431496febe0",
+    "sha256": "211db7596e8467a9ce5c85907620429a9f6920b3fc8b8d72a409e731472fddea"
+  },
+  "src/lib/snapshot.ts": {
+    "gitBlob": "c8744c7af9cadb70476edc3f8ee1c62a68d06078",
+    "actualBlob": "c8744c7af9cadb70476edc3f8ee1c62a68d06078",
+    "sha256": "ad16ed7dbe2e9d635ff4842b8e1a854e4f566d6dc3ac6be7facaf3fa5d4691aa"
+  },
+  "src/lib/sourceFreshness.ts": {
+    "gitBlob": "d7ae1d0493cadd8bd885e40476c0abc7cd66d50d",
+    "actualBlob": "d7ae1d0493cadd8bd885e40476c0abc7cd66d50d",
+    "sha256": "92e77b674cf121a54983f558086cd21e30beca9db1f164f2b3f7a13b21eda689"
+  },
+  "src/lib/swissScenario.ts": {
+    "gitBlob": "c691307d4dcfb7dea09e65dfb988ec3670f059b3",
+    "actualBlob": "c691307d4dcfb7dea09e65dfb988ec3670f059b3",
+    "sha256": "f16e748cfa58b0d01c76725e3e25d1147c15b3b77dca185786d2f9460cc5c57e"
+  },
+  "src/lib/teamHistoryChart.ts": {
+    "gitBlob": "5bcfe116285ca8bb6632bc5b64bd4ff9cb630143",
+    "actualBlob": "5bcfe116285ca8bb6632bc5b64bd4ff9cb630143",
+    "sha256": "edd93d9dd4e2a9f05cf68512f54e67b6e2502af1c4899600169bfeae72f5ee40"
+  },
+  "src/lib/teamLogo.d.mts": {
+    "gitBlob": "e3b6616e53d8ef26cd822862c5d9248fa1df903d",
+    "actualBlob": "e3b6616e53d8ef26cd822862c5d9248fa1df903d",
+    "sha256": "610c2df4347df9a4e6a67c5c2657bb42eac3298aff7439c67717772af7439b13"
+  },
+  "src/lib/teamLogo.mjs": {
+    "gitBlob": "87691b79231a4fdebc4a69159bd3760b65b8c549",
+    "actualBlob": "87691b79231a4fdebc4a69159bd3760b65b8c549",
+    "sha256": "228c34acfc19bb518700d5a3be6bb74182e762d1082ea8117f90c66d005357eb"
+  },
+  "src/lib/teamProfiles.ts": {
+    "gitBlob": "8643835e40b0017202d3d0cfad31e41e63188870",
+    "actualBlob": "8643835e40b0017202d3d0cfad31e41e63188870",
+    "sha256": "bddcf986f09653c9594fafdf253270b4c837515497bdb34a521c7593cb066cd1"
+  },
+  "src/lib/timelineCompaction.ts": {
+    "gitBlob": "37814845fb5f70a80d8b76ddee9e5bffcfcb2a7d",
+    "actualBlob": "37814845fb5f70a80d8b76ddee9e5bffcfcb2a7d",
+    "sha256": "a121c858a49df974404ed1c736c72f8e4c8940b7996ed0a58960818bba3c5291"
+  },
+  "src/lib/tournamentBracket.ts": {
+    "gitBlob": "14fea0ea5c7ae936e41d56ee72195f3986820ea8",
+    "actualBlob": "14fea0ea5c7ae936e41d56ee72195f3986820ea8",
+    "sha256": "e3fcafdacc8bf0a61d7e9e25fd10dc356f0d02230c82d10194b7d7aa980c40ff"
+  },
+  "src/lib/tournamentFeed.ts": {
+    "gitBlob": "d5429d326b29d950db2a5afc1d99f242f82d5f84",
+    "actualBlob": "d5429d326b29d950db2a5afc1d99f242f82d5f84",
+    "sha256": "558834f48f309135e908ed19455933c981a26be8ee09e76fef017313919fb441"
+  },
+  "src/lib/tournamentForecast.ts": {
+    "gitBlob": "377c01f06abea4d91abd430d0a569d63333d0652",
+    "actualBlob": "377c01f06abea4d91abd430d0a569d63333d0652",
+    "sha256": "e79b5c7333bd98ddd64ede240a7f1eb59cbd015cea12ee9cc1b8ba5f5833d355"
+  },
+  "src/lib/tournamentForecastArtifacts.ts": {
+    "gitBlob": "f9f8e87ddc69f481668cc485c447d0a921d51b2e",
+    "actualBlob": "f9f8e87ddc69f481668cc485c447d0a921d51b2e",
+    "sha256": "b496ec95819986230a88ab91ae887a6ba2a4b948671e0cb8fb3af251f47d83f7"
+  },
+  "src/lib/trajectory.ts": {
+    "gitBlob": "14e407ab25f6ad64f5db5eea7615a252d206f2a3",
+    "actualBlob": "14e407ab25f6ad64f5db5eea7615a252d206f2a3",
+    "sha256": "2d03f9f278c026d6d3d838fc24d326dc9494a7b3ee9c1d0b09b2e49fb959e660"
+  },
+  "src/lib/upset.ts": {
+    "gitBlob": "667889e67bbc56418645ced1605d51b64bdbce77",
+    "actualBlob": "667889e67bbc56418645ced1605d51b64bdbce77",
+    "sha256": "3cf42ae893f1e5e8b9a17bf4c155d5314c4b70bc1066517584e28c057aacbb9d"
+  },
+  "src/lib/urlState.ts": {
+    "gitBlob": "0499f3e3c17ee2e88c07419a75346c901a85d725",
+    "actualBlob": "0499f3e3c17ee2e88c07419a75346c901a85d725",
+    "sha256": "3e37e10a476349971775be4530ef6f0f5b6bdd54c1f4de496b3af778cdf723ea"
+  },
+  "src/lib/utils.ts": {
+    "gitBlob": "0496cc18d057f07fac7eadc974407a8348b4a0b0",
+    "actualBlob": "0496cc18d057f07fac7eadc974407a8348b4a0b0",
+    "sha256": "e83b3eb1b1c163fb7137fad96abca8b6095ffaf460d0f7445785d4aa844f3274"
+  },
+  "src/lib/winProbability.ts": {
+    "gitBlob": "0539657d2b9a3ce0a6917beef23d0661c999f351",
+    "actualBlob": "0539657d2b9a3ce0a6917beef23d0661c999f351",
+    "sha256": "6ffdce56155695d3f70fa72d845a9979ec56214a00500ed5990d65420ac70169"
+  },
+  "src/lib/worlds2022ObservedGroups.ts": {
+    "gitBlob": "6ce8c029be1d5e5f613e722e49a789b7af7074b2",
+    "actualBlob": "6ce8c029be1d5e5f613e722e49a789b7af7074b2",
+    "sha256": "81cd0ea97550d2dddf7a9c25b56f776391aa22b1a9c966f56cbc57c12aff0763"
+  },
+  "src/lib/worlds2026Knockout.ts": {
+    "gitBlob": "85d4c716930ff79452080b49a3d678f79f4ad49b",
+    "actualBlob": "85d4c716930ff79452080b49a3d678f79f4ad49b",
+    "sha256": "920eeee771fc7ae4a2119af3d4ecac16faf5c8eff9b005f4582560aaa02eff14"
+  },
+  "src/lib/worlds2026PlayIn.ts": {
+    "gitBlob": "a665370486e8a9b24a41b5f09252f88ccf10f22c",
+    "actualBlob": "a665370486e8a9b24a41b5f09252f88ccf10f22c",
+    "sha256": "19f714779b8634e7ee9187518a8a65012779845ce7d450760568e4608c0bf5a8"
+  },
+  "src/lib/worlds2026Swiss.ts": {
+    "gitBlob": "da3b829993a9d2c17db57b69c6c8457c568e518c",
+    "actualBlob": "da3b829993a9d2c17db57b69c6c8457c568e518c",
+    "sha256": "71597eab8a55be4471fd8b2d2e33cd45d7ef6a54eb96ddab688a5ba4809485fe"
+  },
+  "src/lib/worldsArtifacts.ts": {
+    "gitBlob": "94644329984170122d9870c90db1fed851cf8a9b",
+    "actualBlob": "94644329984170122d9870c90db1fed851cf8a9b",
+    "sha256": "f35c584bb47fee55dc06dec1999dd9a942c5be89e9bd8a505febc4cc654d3299"
+  },
+  "src/lib/worldsObservedBracket.ts": {
+    "gitBlob": "758d6c63f9ede16b598138fa6bd82f272b8ecb0e",
+    "actualBlob": "758d6c63f9ede16b598138fa6bd82f272b8ecb0e",
+    "sha256": "05d8eab7ef0423f1aaa75014327e42924018ea3709b2f489c40820e16c56ae77"
+  },
+  "src/lib/worldsObservedRules.ts": {
+    "gitBlob": "867a2ef697ba9ec7142225ccafd175416c9c3de6",
+    "actualBlob": "867a2ef697ba9ec7142225ccafd175416c9c3de6",
+    "sha256": "1d71002c33360c391e83a2f82d094caac1697c2a587808fa53b7b7dec8ede81e"
+  },
+  "src/lib/worldsSimulation.ts": {
+    "gitBlob": "331baf699cae1a993a0abc27bfb8c4b1d501ef0a",
+    "actualBlob": "331baf699cae1a993a0abc27bfb8c4b1d501ef0a",
+    "sha256": "838b1a8c604ba87e329db1cacd3ec797ed5ad25d204a86d41aef5e3452f36390"
+  },
+  "src/lib/worldsSimulationWorker.ts": {
+    "gitBlob": "40267826f74ae48db429cd64a0a1d110f20d3ed5",
+    "actualBlob": "40267826f74ae48db429cd64a0a1d110f20d3ed5",
+    "sha256": "103c2cf7ed42f519b188f8e5e9ba1444cf90fb3933ad073a2f5f8ef6c5537b60"
+  },
+  "src/lib/worldsWorkerClient.ts": {
+    "gitBlob": "e5ad8972ee5669ef6faf65b66b3da7cb97fa81fe",
+    "actualBlob": "e5ad8972ee5669ef6faf65b66b3da7cb97fa81fe",
+    "sha256": "66267783e32835e6fbe9e8fc8a433975a58887df7fa30407021b1bacdf630800"
+  },
+  "src/main.tsx": {
+    "gitBlob": "d44c2ecff0871dcce039331e07d549fbab6a1aeb",
+    "actualBlob": "d44c2ecff0871dcce039331e07d549fbab6a1aeb",
+    "sha256": "9a28472bffc42d6a3a3395351b688d3a30d2c92d3a7ad0c33c63251b2f155b4f"
+  },
+  "src/styles/base.css": {
+    "gitBlob": "5d10c5369f49010c040d5f276b6b137aadf62f50",
+    "actualBlob": "5d10c5369f49010c040d5f276b6b137aadf62f50",
+    "sha256": "0f07a44775117becaa4ba5584dd60441f244ed2b020aed5d2da0a3f3382e1077"
+  },
+  "src/styles/rankings.css": {
+    "gitBlob": "8b9ed33b658a095e6c1296985ad538ec77b4b09d",
+    "actualBlob": "8b9ed33b658a095e6c1296985ad538ec77b4b09d",
+    "sha256": "8129a21432e2796bafedb86edbf9c50e859aabb3dc61d67ae7df49d738581af2"
+  },
+  "src/types.ts": {
+    "gitBlob": "aaf40ed71c019bc75d59985cfebf492a3b933e9c",
+    "actualBlob": "aaf40ed71c019bc75d59985cfebf492a3b933e9c",
+    "sha256": "0256cc03b87fbf01c826cc221f3f481aaf2c5d0fbd5c5e02e16e74a466abe2c3"
+  },
+  "src/views/LegalPage.tsx": {
+    "gitBlob": "f0b937468bbfbe4f62fbeee50eafdf1b8d6e1808",
+    "actualBlob": "f0b937468bbfbe4f62fbeee50eafdf1b8d6e1808",
+    "sha256": "027adb85a7c1a1557b8d4f370ac007dca62d493fcec4f91554609c0af72cc28d"
+  },
+  "src/views/MatchesView.tsx": {
+    "gitBlob": "b095500525a77cdb930f39713c38dce4124d4cda",
+    "actualBlob": "b095500525a77cdb930f39713c38dce4124d4cda",
+    "sha256": "e0b0e59284c84b301a11d4d268a4b1d510ee4446ed61731c40e9eff588a8ca40"
+  },
+  "src/views/RegionsView.tsx": {
+    "gitBlob": "7bc3be62f5d0e98bf9cfe575fc2ff20720dd4a89",
+    "actualBlob": "7bc3be62f5d0e98bf9cfe575fc2ff20720dd4a89",
+    "sha256": "1054a65e1142e69bd7ea9c157df4f1b19a6c9da2af5d3c75d4546526d31e1d9a"
+  },
+  "src/views/TeamsView.tsx": {
+    "gitBlob": "f4698a62477f76fcbac75cf2701614a417ff5ad2",
+    "actualBlob": "f4698a62477f76fcbac75cf2701614a417ff5ad2",
+    "sha256": "12bed408fe44aa6b03f425f9494b6c88c607c9d903a5b8708d0c5e5883dc0990"
+  },
+  "src/views/TournamentsView.tsx": {
+    "gitBlob": "d21ac5326db631b3093bc537abce99458db2744a",
+    "actualBlob": "d21ac5326db631b3093bc537abce99458db2744a",
+    "sha256": "2b94d8a39f09d0a1e790d346e52f492ea6c84ddc83607f1357acb9352a6b6a9e"
+  },
+  "tests/artifact.test.ts": {
+    "gitBlob": "f5dee24ba6f452bde2467dddc762ff83fa8d0f27",
+    "actualBlob": "f5dee24ba6f452bde2467dddc762ff83fa8d0f27",
+    "sha256": "2438a53d170cb3b74c0d0c329a6e8a4b2cdbb48a473acad2c69ea42f6316f4b7"
+  },
+  "tests/auditTournamentSource.test.ts": {
+    "gitBlob": "2f64cb6ac6a8690561be6f82c81d667483a5f33b",
+    "actualBlob": "2f64cb6ac6a8690561be6f82c81d667483a5f33b",
+    "sha256": "1c8f78c6e4979570e81b37a2bb520f1d4093c883269d1e127c8276e29fe0b328"
+  },
+  "tests/automaticTournamentIngestion.test.ts": {
+    "gitBlob": "58f40ac13b9c01a82f265ec2c31bc020dfaa2ccf",
+    "actualBlob": "58f40ac13b9c01a82f265ec2c31bc020dfaa2ccf",
+    "sha256": "f144ab76ef315c8a158ae715d9a504bc48323d88d2ab03a20b3b087a91353000"
+  },
+  "tests/canonicalJsonText.test.ts": {
+    "gitBlob": "b657983c0933b518fb1e03bd50a1a37561cd42ec",
+    "actualBlob": "b657983c0933b518fb1e03bd50a1a37561cd42ec",
+    "sha256": "9fc6a994e8fabeccd22afb1ba3ac2cdfa2ecb97b8ebf27144ecb736d92a36ebf"
+  },
+  "tests/canonicalSeriesPublic.test.ts": {
+    "gitBlob": "49a8e71abaa95777b9ebcc9a1c90e25928606f1c",
+    "actualBlob": "49a8e71abaa95777b9ebcc9a1c90e25928606f1c",
+    "sha256": "3b567945d2a489c255e157779dfaed0a2679db311a22106ed07b852a4f004c74"
+  },
+  "tests/chartPoints.test.ts": {
+    "gitBlob": "bf64213810480dd1fd0fa0c1825f6d598113955f",
+    "actualBlob": "bf64213810480dd1fd0fa0c1825f6d598113955f",
+    "sha256": "1c7d86d9c23842ff2792f180e958365c138c6e8e934e8061cf49a5188ce1a903"
+  },
+  "tests/checkpointSemanticIdentity.test.ts": {
+    "gitBlob": "1b6bb1a0a7714f54ee9b388d981ecc4259601ba3",
+    "actualBlob": "1b6bb1a0a7714f54ee9b388d981ecc4259601ba3",
+    "sha256": "b120738dc9f12288984e164eb0402d867a95805545f476b15b4be1eff0884f4f"
+  },
+  "tests/ciAffectedPaths.test.mjs": {
+    "gitBlob": "e8033aa02e6d90baf91f57493cb9db2b6a89ca8e",
+    "actualBlob": "e8033aa02e6d90baf91f57493cb9db2b6a89ca8e",
+    "sha256": "845f1e406bd94d3c2e98e9d6f99126f8646e230fca2eb85ba2e0c9949d575d15"
+  },
+  "tests/codeUnitOrder.test.ts": {
+    "gitBlob": "250c7b5105afbf854a705dd5cd68d6982bf31250",
+    "actualBlob": "250c7b5105afbf854a705dd5cd68d6982bf31250",
+    "sha256": "0510df5bb4c1ecf2a603d9f08e415a9684169bde69048e9f39e5d30f80f1b30b"
+  },
+  "tests/colorSlots.test.ts": {
+    "gitBlob": "8c6e413596388036f3054ccc52230767ba571665",
+    "actualBlob": "8c6e413596388036f3054ccc52230767ba571665",
+    "sha256": "199aed7111aa669be7008b62147375b44c622d4ad39c04db72a6ce4ee8aca512"
+  },
+  "tests/compareClarity.test.ts": {
+    "gitBlob": "84e9e65f23e6ead9f2e6f599314576157db7b5cb",
+    "actualBlob": "84e9e65f23e6ead9f2e6f599314576157db7b5cb",
+    "sha256": "2d6cb98d2577ac265de7d7d7bc23ecfdf2fa93d8d4ccd54c8448be2d6f82ad83"
+  },
+  "tests/conditionalPowerReplay.test.ts": {
+    "gitBlob": "cb0bd3d1c945e2a9135b5b2c5fb0bba15f2898f0",
+    "actualBlob": "cb0bd3d1c945e2a9135b5b2c5fb0bba15f2898f0",
+    "sha256": "7a55216d2bd997a5b06f536b5d407585cf4320858bedfacace3d878fc8d20a92"
+  },
+  "tests/conditionalPowerReplayBasis.test.ts": {
+    "gitBlob": "d2ea9a1826bdaa3d354357bdf723789f2f0b07be",
+    "actualBlob": "d2ea9a1826bdaa3d354357bdf723789f2f0b07be",
+    "sha256": "d7243b91a2e6e0ce2d613799570c9c9408e1df15aa04925530f3858ea59575cb"
+  },
+  "tests/conditionalPowerResultBrowser.test.ts": {
+    "gitBlob": "3831f22ab3666b673127d777382be707a5719d70",
+    "actualBlob": "3831f22ab3666b673127d777382be707a5719d70",
+    "sha256": "7a85408afe05a544718ef059d6d9e45c4c4b5d4ddb301ac285c4849b21340061"
+  },
+  "tests/conditionalPowerResultComponent.test.ts": {
+    "gitBlob": "1e643dae9744786a373ad4720d6f4a939c2a0108",
+    "actualBlob": "1e643dae9744786a373ad4720d6f4a939c2a0108",
+    "sha256": "f9fc8f8df1c4bd4682ae256dd5657f222fd0bea0b705881c4ddb7ec29c24818d"
+  },
+  "tests/conditionalPowerResultReceipts.test.ts": {
+    "gitBlob": "f5e02d417d3b91115d83762afc451e1cf0101f32",
+    "actualBlob": "f5e02d417d3b91115d83762afc451e1cf0101f32",
+    "sha256": "ed5fa668bd3a5e4c8d65627613299916ec7ff9a7d7c61ccaa71c2331aef84f47"
+  },
+  "tests/dataSourcesPanel.test.ts": {
+    "gitBlob": "2e99b35d1c9ef4916d7c88b68aab0c9e2f5d1fef",
+    "actualBlob": "2e99b35d1c9ef4916d7c88b68aab0c9e2f5d1fef",
+    "sha256": "a5664ba7a7b8e46c90ef726f41193974ed2985e4785c8f2d647192cb55815e41"
+  },
+  "tests/deservedStanding.test.ts": {
+    "gitBlob": "47c79416c4dca85aa633f2a5a159c4d25b54c5e7",
+    "actualBlob": "47c79416c4dca85aa633f2a5a159c4d25b54c5e7",
+    "sha256": "374fdf950a6010a0632789da0ac4a533a66bd547379bb10609b5437232860c7b"
+  },
+  "tests/deservedStandingModel.test.ts": {
+    "gitBlob": "271265e85837dc90af891de51b41f309c3117764",
+    "actualBlob": "271265e85837dc90af891de51b41f309c3117764",
+    "sha256": "be3edaa6fd228265d81a887807d2bf07c17ebc6802c6898c24e32a9642084148"
+  },
+  "tests/deservedStandingPublicComparison.test.ts": {
+    "gitBlob": "595a03e01486eee96a286f04781bc79978119afb",
+    "actualBlob": "595a03e01486eee96a286f04781bc79978119afb",
+    "sha256": "12a741d7d1935c1ab6e960d40841517939ccd058927168c1422112f028278c69"
+  },
+  "tests/deservedStandingRegions.test.ts": {
+    "gitBlob": "d784eb3ad6895565bf85ea85b6fb6b06efa809e2",
+    "actualBlob": "d784eb3ad6895565bf85ea85b6fb6b06efa809e2",
+    "sha256": "caed2d17dcceca7e70a4c9439f5d66e2efced823e019f3d72abfeed092e42a1c"
+  },
+  "tests/diagnosticProfileLifecycle.test.mjs": {
+    "gitBlob": "3688aa4d71fd4f391e3b0106e00f42bd0b41773e",
+    "actualBlob": "3688aa4d71fd4f391e3b0106e00f42bd0b41773e",
+    "sha256": "a89d1204f712f9614db19952173494c55d9d58c311af9c832dc92b3e9e3f8bbf"
+  },
+  "tests/downloadLocalData.test.ts": {
+    "gitBlob": "3f12b4415bc46202531bf03aea571fad0fb3321c",
+    "actualBlob": "3f12b4415bc46202531bf03aea571fad0fb3321c",
+    "sha256": "e189ac912cdd6707fae2ca1ff7272947235c334796c0c1afe896683e077e9ae1"
+  },
+  "tests/eligibility.test.ts": {
+    "gitBlob": "943e40f52514170e51e5f9cd8fabd4dd3ce7e9a1",
+    "actualBlob": "943e40f52514170e51e5f9cd8fabd4dd3ce7e9a1",
+    "sha256": "6ebc17ea0787010c9da2296cd642b03412d8367e4e4e89f311d0ea09f33883bf"
+  },
+  "tests/evaluationBaselines.test.ts": {
+    "gitBlob": "4ff56616f3e4df39083ef88b371fe2606b31ff04",
+    "actualBlob": "4ff56616f3e4df39083ef88b371fe2606b31ff04",
+    "sha256": "f39839245fed82e97a8d1c37032b1d91b5662063bf4b83a87cc5ee554b26bf2c"
+  },
+  "tests/eventWeighting.test.ts": {
+    "gitBlob": "87e4307b91ab9cc4598bee617111d1a61fd26a7c",
+    "actualBlob": "87e4307b91ab9cc4598bee617111d1a61fd26a7c",
+    "sha256": "708583e865c636658d799318fd866a6c15a70f171da174d7d99b5277dbad6a0d"
+  },
+  "tests/executionResidual.test.ts": {
+    "gitBlob": "53e16abff93ed6be72b276e4b3e8bf9d3260ac0b",
+    "actualBlob": "53e16abff93ed6be72b276e4b3e8bf9d3260ac0b",
+    "sha256": "a75e377fd536f10f6da0d6eead3e3c172d42044716fd85daad66a1742dc42612"
+  },
+  "tests/externalStateCausality.test.ts": {
+    "gitBlob": "93ad281ef6c692fbea9f6523f53ca36f5da0871b",
+    "actualBlob": "93ad281ef6c692fbea9f6523f53ca36f5da0871b",
+    "sha256": "c28c47789d14f836a9a5792f5245ad979b7e098d63e6c98774d96370539af8e8"
+  },
+  "tests/fixtures/conditionalPowerFixtures.ts": {
+    "gitBlob": "39c8c6ef66f236d75d524034df235df79f5876a3",
+    "actualBlob": "39c8c6ef66f236d75d524034df235df79f5876a3",
+    "sha256": "fb31cb7edf7dac1486d1817aba27641820b247356e56d840e75b20809d5a626f"
+  },
+  "tests/fixtures/demaciaCup2026.json": {
+    "gitBlob": "536f40ac4107634050b0112c140f21f1c446be67",
+    "actualBlob": "536f40ac4107634050b0112c140f21f1c446be67",
+    "sha256": "42e29e3a56b96cdbf93a9f0b8887c1a045733509f6ffb5f1df6784b34fb2629e"
+  },
+  "tests/fixtures/offlineForecastFixtures.ts": {
+    "gitBlob": "cfa547d2da9faedf05241585906a644b28bacf9d",
+    "actualBlob": "cfa547d2da9faedf05241585906a644b28bacf9d",
+    "sha256": "8e56e07394423c41dd22e1fe10e78d0416dc8a86df9a1c78c3eeebaa5bf59586"
+  },
+  "tests/fixtures/parity/contracts.json": {
+    "gitBlob": "1163c7beb5fd82ec5b7d8a451ec430b0f92fc1a9",
+    "actualBlob": "1163c7beb5fd82ec5b7d8a451ec430b0f92fc1a9",
+    "sha256": "0ee4964a10f9ddf6f7a752aa6d33df1c9f74e0ef2d92d96aabaee4fcad1422ea"
+  },
+  "tests/fixtures/rankingFixtures.ts": {
+    "gitBlob": "c5d7cbfb264f8ce91fa9a65b2daebf2e94fcf9fb",
+    "actualBlob": "c5d7cbfb264f8ce91fa9a65b2daebf2e94fcf9fb",
+    "sha256": "5359d425dfc2e7423b000d7ca05a439c5bd2a1bf17e05a5f363e0658eb7c2954"
+  },
+  "tests/fixtures/worldsBrowserFixture.ts": {
+    "gitBlob": "316389db2cfcb11e455f2c6eed01366ece9ac08c",
+    "actualBlob": "316389db2cfcb11e455f2c6eed01366ece9ac08c",
+    "sha256": "cda9cc1c06966a25684efbefb1544fb37acb4b52d8f87c64c331a1f89f1770f7"
+  },
+  "tests/fixtures/worldsFixtures.ts": {
+    "gitBlob": "5405d6182a9175b8b8191f9f0cc78359ffe47948",
+    "actualBlob": "5405d6182a9175b8b8191f9f0cc78359ffe47948",
+    "sha256": "b92a131b8fd4c19492dd389f3eafab8397e3bedc23bab0dfeec1ba1d45ca7b38"
+  },
+  "tests/fullAuditStorage.test.ts": {
+    "gitBlob": "a9f1b9f6cee591031803f0abe96f0f7885ac5681",
+    "actualBlob": "a9f1b9f6cee591031803f0abe96f0f7885ac5681",
+    "sha256": "e3bdaf0e70b533e12e4094b9e90a249ce7b09748bc590dabee4b31e48b17e190"
+  },
+  "tests/hierarchicalLeagues.test.ts": {
+    "gitBlob": "56295b12e321a25bb88a7177ad4d1661436df1f6",
+    "actualBlob": "56295b12e321a25bb88a7177ad4d1661436df1f6",
+    "sha256": "076edc7e1574f4c63899a202e207be7319051e6aa2dca246aa0419a97f1479d1"
+  },
+  "tests/implementationEvidenceTestFixtures.ts": {
+    "gitBlob": "d36da4b794e6cbe2b68bb83734a23ba706c4d60e",
+    "actualBlob": "d36da4b794e6cbe2b68bb83734a23ba706c4d60e",
+    "sha256": "c4ae4282dfb71353144f8295d32f1aea18f34dc8c78a1965778a467dc1bd95c8"
+  },
+  "tests/importers.test.ts": {
+    "gitBlob": "d73b3fb3dfbae4b5c23a252702efe797ba8ceb03",
+    "actualBlob": "d73b3fb3dfbae4b5c23a252702efe797ba8ceb03",
+    "sha256": "843a175cebf670c2cbca044b0c3051d57cd7b9e85150f77f5ab8577d53546eb9"
+  },
+  "tests/incrementalArtifactPatch.test.ts": {
+    "gitBlob": "ef82c796f3b0ab46312e5584818242b17affe3e0",
+    "actualBlob": "ef82c796f3b0ab46312e5584818242b17affe3e0",
+    "sha256": "cefd7ad0cc354b17ec83cbffa7c515493bca2f1f03752ee891fa67d2a2fe9481"
+  },
+  "tests/incrementalArtifacts.test.ts": {
+    "gitBlob": "7c54ac18aa749037aff7e4d438637c10398c8d10",
+    "actualBlob": "7c54ac18aa749037aff7e4d438637c10398c8d10",
+    "sha256": "bbb6f0214051049390982fa59f6dad69a2a1e07844800d38d96ee1dbb7ae2498"
+  },
+  "tests/incrementalBenchmarkAssertions.test.ts": {
+    "gitBlob": "a4003ac7dc85ec9262b481ff61c9f73de2d5b167",
+    "actualBlob": "a4003ac7dc85ec9262b481ff61c9f73de2d5b167",
+    "sha256": "533bedac65c8e42f5eba6b6a999d430c18d78809acb9d86e2fac88f7f714f064"
+  },
+  "tests/incrementalChangeClassifier.test.ts": {
+    "gitBlob": "0de5ff37611cd9b3c56c64ebd893d8f625dcab96",
+    "actualBlob": "0de5ff37611cd9b3c56c64ebd893d8f625dcab96",
+    "sha256": "c6811f6939f6a5a0b3bdf85a70eba4298b1d22944759b429d9261f2017c3e462"
+  },
+  "tests/incrementalCheckpointCausality.test.ts": {
+    "gitBlob": "02cf98001191a8016a13f3d9b945bb855b82b9a2",
+    "actualBlob": "02cf98001191a8016a13f3d9b945bb855b82b9a2",
+    "sha256": "4540d3e72fdb88e8b1c4b84b04ab4f6860db3459d734fa5bd83087ef61d4e32f"
+  },
+  "tests/incrementalRankingIntegration.test.ts": {
+    "gitBlob": "9253c065b0bda9ce69067c0ab5c9fc67fd643c79",
+    "actualBlob": "9253c065b0bda9ce69067c0ab5c9fc67fd643c79",
+    "sha256": "6faa8139fa16315f97c3747f9be04b3234698fa18b1fa0df5019bcce25cf5298"
+  },
+  "tests/incrementalReplayDomain.test.ts": {
+    "gitBlob": "4f2176bbc0fe879eb5c26d0babd36b460678a62b",
+    "actualBlob": "4f2176bbc0fe879eb5c26d0babd36b460678a62b",
+    "sha256": "05262faf88860e2860082a0cbb0e25f6bad649a0073d7b0217a0be5c75b60aa9"
+  },
+  "tests/incrementalStateStorage.test.ts": {
+    "gitBlob": "cd9e58cb2aefbbccc41864fbb9539b3fac313448",
+    "actualBlob": "cd9e58cb2aefbbccc41864fbb9539b3fac313448",
+    "sha256": "7a201e5b9eeba25c34708645d54204155d71088db1aa7e06d216f790198be38b"
+  },
+  "tests/internationalTournaments.test.ts": {
+    "gitBlob": "1e4f20969193962344d333d182c024db16f7bb12",
+    "actualBlob": "1e4f20969193962344d333d182c024db16f7bb12",
+    "sha256": "e5f13185716d44e6b488fd45a07df0f1a0155643a88d5d04726d85afdb99ea3d"
+  },
+  "tests/leaguepediaTournamentFeed.test.ts": {
+    "gitBlob": "4f853f15233aed98bb7ce6a32f51c18a81cdbc50",
+    "actualBlob": "4f853f15233aed98bb7ce6a32f51c18a81cdbc50",
+    "sha256": "b656570e1ab4c512b9526ea252ab9cb005978560061cb98e572a411230c865c4"
+  },
+  "tests/legal.test.ts": {
+    "gitBlob": "aa9ee2f91e70fe2f0980bdbec002aca136cd80f1",
+    "actualBlob": "aa9ee2f91e70fe2f0980bdbec002aca136cd80f1",
+    "sha256": "35cc8582e41d982d72540c25d1a55c54a384ea12df95c03ebc874143852e2a76"
+  },
+  "tests/lineChart.test.ts": {
+    "gitBlob": "1627e0dea3e0bda525b2bd229b459e24584bc3da",
+    "actualBlob": "1627e0dea3e0bda525b2bd229b459e24584bc3da",
+    "sha256": "352166534d371264aa4a32d7b4a4feead21a5a88433c7be4e0ddf4d313eaa8b6"
+  },
+  "tests/localDataManifest.test.ts": {
+    "gitBlob": "de34b6c581e5c6aec7fc476b8a50792467a227e3",
+    "actualBlob": "de34b6c581e5c6aec7fc476b8a50792467a227e3",
+    "sha256": "5fbe48bcf673a50bfee2f5324767c091375cf2cf926081224c0373739370e116"
+  },
+  "tests/lolesportsScheduleProbe.test.ts": {
+    "gitBlob": "8e1417301c9db358a5dcecb788370eb7f2473a10",
+    "actualBlob": "8e1417301c9db358a5dcecb788370eb7f2473a10",
+    "sha256": "35aea639a0355f7ac1ce42535865e1ea5ace234f3870a99bbd08806b91c8bf79"
+  },
+  "tests/matchEventGroups.test.ts": {
+    "gitBlob": "62119fead144a89c3d0130abb5f079b936399f50",
+    "actualBlob": "62119fead144a89c3d0130abb5f079b936399f50",
+    "sha256": "2a45168edb13b065df337119b2abd75973b158cb590a8794f2ceeae3fa71e789"
+  },
+  "tests/matchHistory.test.ts": {
+    "gitBlob": "390d00cd9a79a23fa8f3d1365b3af8a4d25321e5",
+    "actualBlob": "390d00cd9a79a23fa8f3d1365b3af8a4d25321e5",
+    "sha256": "3af868de95e35d4ad47d8348cc2dd9a9c96eae37201971ec746453602cf04edf"
+  },
+  "tests/matchLedger.test.ts": {
+    "gitBlob": "295f1803e88e710c7e7a4b59082a9d17212b438f",
+    "actualBlob": "295f1803e88e710c7e7a4b59082a9d17212b438f",
+    "sha256": "28855c031a156b55482f4239b972788b990d00befad7e508e90f7a00e3a01922"
+  },
+  "tests/matchPagePrefetchBrowser.test.ts": {
+    "gitBlob": "5bad046845e26450a2f16a85c08726a137aa6046",
+    "actualBlob": "5bad046845e26450a2f16a85c08726a137aa6046",
+    "sha256": "9c754768166519909623bfaa78e81bb0e1e6ebcf965d95ee19f604604e23287c"
+  },
+  "tests/matchesAddressBrowser.test.ts": {
+    "gitBlob": "681c8805e2455815484daf79f3e3b6f8743e4fdf",
+    "actualBlob": "681c8805e2455815484daf79f3e3b6f8743e4fdf",
+    "sha256": "173bcc8cf916a701246d93ef659e851ab84a8ba8699e7f3ed6a604c7c5ea39fa"
+  },
+  "tests/matchesViewOutcome.test.ts": {
+    "gitBlob": "bc7c4b3f4e7bb0f301c41142ecf0b9487c177d4f",
+    "actualBlob": "bc7c4b3f4e7bb0f301c41142ecf0b9487c177d4f",
+    "sha256": "dbcce79da7b799a4c506c459524ae65bf0f253ec60fbb35c2d02a75dcdc8a0d3"
+  },
+  "tests/metadata.test.ts": {
+    "gitBlob": "96f109321d686aff3198dd18f2b9e5579de6892d",
+    "actualBlob": "96f109321d686aff3198dd18f2b9e5579de6892d",
+    "sha256": "10e7790084f7797cfafc421e0024f6c96ce9f2f66b8f6e7de4655c07dfa3b576"
+  },
+  "tests/model.test.ts": {
+    "gitBlob": "be1d7cde653a301cafd9ce28f08df24af88b1801",
+    "actualBlob": "be1d7cde653a301cafd9ce28f08df24af88b1801",
+    "sha256": "e3c89734f4552bdca35da8db72be68eb9576a2e2ed98bc528a29d901a27a4519"
+  },
+  "tests/nearTies.test.ts": {
+    "gitBlob": "525b75884108de1f92031e764c8f6f167d2ddf71",
+    "actualBlob": "525b75884108de1f92031e764c8f6f167d2ddf71",
+    "sha256": "18f3f13dc93f7e8be709321544b22d676951fcabbbfb02083235b1ef4d4dc2f4"
+  },
+  "tests/offlineForecastCohort.test.ts": {
+    "gitBlob": "e108bbd1bb4ee72d24387cf6b30e4690ad658cd9",
+    "actualBlob": "e108bbd1bb4ee72d24387cf6b30e4690ad658cd9",
+    "sha256": "e3b3d256e46ab18d51c65555778d4f4abdb0953398757cd38ad3e129b0f1c449"
+  },
+  "tests/offlineForecastMetrics.test.ts": {
+    "gitBlob": "49eb0d1bc090ed615fcb77320013b15e6de4cb0f",
+    "actualBlob": "49eb0d1bc090ed615fcb77320013b15e6de4cb0f",
+    "sha256": "35d8e402684471709a7e543786ae65b904a6984acb2c6a69f7a51dbd4ce4e29d"
+  },
+  "tests/parityFixtures.test.ts": {
+    "gitBlob": "c91957ec314590796b7e0f69f45a40e941242e7b",
+    "actualBlob": "c91957ec314590796b7e0f69f45a40e941242e7b",
+    "sha256": "a331beaf96ebfb0c7923c90c43828253e4388097b33ff11a4b5a15c815a94232"
+  },
+  "tests/playerPerformance.test.ts": {
+    "gitBlob": "4d626d1ba4c0d30d348fc0349443f44518dfe11e",
+    "actualBlob": "4d626d1ba4c0d30d348fc0349443f44518dfe11e",
+    "sha256": "0271a0b03f2ecd01b94a216735a3d0b25d072c0af7ac19b83b5f06c545acabe9"
+  },
+  "tests/playerResumeLedger.test.ts": {
+    "gitBlob": "4bc828da8e7c3da82659acc915662b0883d71372",
+    "actualBlob": "4bc828da8e7c3da82659acc915662b0883d71372",
+    "sha256": "4675efe40f17c1d652c247537ea7fdba203386222299cb09a16ab27eb2d55a65"
+  },
+  "tests/predictionModel.test.ts": {
+    "gitBlob": "1b7abf987bf267b1f3855937252e338fe82e316b",
+    "actualBlob": "1b7abf987bf267b1f3855937252e338fe82e316b",
+    "sha256": "68319cdcf387aae8d21df178bb8ec845049570a9f6f6c1dbb22aab84c9d35f6d"
+  },
+  "tests/probeRefreshCoordination.test.ts": {
+    "gitBlob": "72db16640ea8de03fb0c1c2ee2a6fd6676d480c2",
+    "actualBlob": "72db16640ea8de03fb0c1c2ee2a6fd6676d480c2",
+    "sha256": "f00599400a701c6bb2d1d9dd2bf7783b48e4fb3b9e22f76523f0b90a7515f541"
+  },
+  "tests/providerFetchCallSites.test.ts": {
+    "gitBlob": "140eaa57597c7ed4b258c32c4f60a2ef1570abe8",
+    "actualBlob": "140eaa57597c7ed4b258c32c4f60a2ef1570abe8",
+    "sha256": "7dee396c7d48fcb22a8786c7c32af36ecb8c1515f41c1f7b72c2de023424a68f"
+  },
+  "tests/providerFetchRetry.test.ts": {
+    "gitBlob": "a2b6e44cd18a71683492490ced2de95308317b2b",
+    "actualBlob": "a2b6e44cd18a71683492490ced2de95308317b2b",
+    "sha256": "df8650595d15d868c01c626998d8e887859e3bf53305314afc06a332368b3cfd"
+  },
+  "tests/publicArchive.test.ts": {
+    "gitBlob": "9715315d572e84741f676ac5bc0e972e2eeaa345",
+    "actualBlob": "9715315d572e84741f676ac5bc0e972e2eeaa345",
+    "sha256": "57afe008f341bfa7604b70b0bcf666b8a04ac0954cf0e9805312c26d29ab69c1"
+  },
+  "tests/publicArtifactBudget.test.ts": {
+    "gitBlob": "31bba8004ec6e9e974fee70ae6aef8e20d03cd18",
+    "actualBlob": "31bba8004ec6e9e974fee70ae6aef8e20d03cd18",
+    "sha256": "f46f351aa65852c983a836459463a4e516af430d400dcaec27f22f673167c7a0"
+  },
+  "tests/publicArtifactIdentity.test.ts": {
+    "gitBlob": "4ccecd1cf5ef039456cf622802f3a0df48846fc4",
+    "actualBlob": "4ccecd1cf5ef039456cf622802f3a0df48846fc4",
+    "sha256": "488288e59b424fb225b47d15d660dee2e21a188248e8ba066edfeebb1611940f"
+  },
+  "tests/publicArtifactLoading.test.ts": {
+    "gitBlob": "4916e7274906c7a3b7f8bc213bbf1d5d93396751",
+    "actualBlob": "4916e7274906c7a3b7f8bc213bbf1d5d93396751",
+    "sha256": "2439d6707b6d2c0a9af3b6ee2513ba8ca76997304d5c31dcdd1cb38ad58b633e"
+  },
+  "tests/publicArtifactSchema.test.ts": {
+    "gitBlob": "45b9eba0530c6ca03f2c72eeb0ff84981952e29c",
+    "actualBlob": "45b9eba0530c6ca03f2c72eeb0ff84981952e29c",
+    "sha256": "7199c4b005ab347c841b1770ad1bd8b42afbbbf73000340438407ab290cbc2c2"
+  },
+  "tests/publicMatchup.test.ts": {
+    "gitBlob": "99edcdcbbcc9083d2d7e461a99ffa49cebd585d1",
+    "actualBlob": "99edcdcbbcc9083d2d7e461a99ffa49cebd585d1",
+    "sha256": "7141e81083a20c10512bb73766c04b456cb5822454d849e04da60ccd404253a0"
+  },
+  "tests/publicSnapshotResolver.test.ts": {
+    "gitBlob": "f3b5bc8529398180e80e86b2baa5906d344750d2",
+    "actualBlob": "f3b5bc8529398180e80e86b2baa5906d344750d2",
+    "sha256": "3468b0d10b799a19a53f0e9503ae97575ce868731e9ac245174aacbfeacae048"
+  },
+  "tests/publishedRatingScale.test.ts": {
+    "gitBlob": "fe72a1da728b571228be9126b2664736a2e044f3",
+    "actualBlob": "fe72a1da728b571228be9126b2664736a2e044f3",
+    "sha256": "482549fa5924b319c84b1f001ab0f875e5acdbefa99ed3f0d0c6d94d19cce20f"
+  },
+  "tests/railwayBucketPresigning.test.ts": {
+    "gitBlob": "5d9578fb476d09c1efcc375c976351907e6d7ef8",
+    "actualBlob": "5d9578fb476d09c1efcc375c976351907e6d7ef8",
+    "sha256": "364d3f163ead9f3583fa48c4993691e7c7415ce777beaa00852ea02646f43ce0"
+  },
+  "tests/railwayBucketState.test.ts": {
+    "gitBlob": "ad00e760d76d95d5e92e0ce81263a916655f9b6b",
+    "actualBlob": "ad00e760d76d95d5e92e0ce81263a916655f9b6b",
+    "sha256": "96520efffe98997f96c7b1d00e053aed157971425715a720ffca518d3e9162dc"
+  },
+  "tests/railwayRefresh.test.ts": {
+    "gitBlob": "aa00258b804e0ac18008a4c8fa5e942338f5cde2",
+    "actualBlob": "aa00258b804e0ac18008a4c8fa5e942338f5cde2",
+    "sha256": "73c4d711a6031900943ed9b39f2f0400ea2b77be263cdadd39294aebca401661"
+  },
+  "tests/railwayServer.test.ts": {
+    "gitBlob": "f190968c50faf2639b483886c4dd235ca8df267e",
+    "actualBlob": "f190968c50faf2639b483886c4dd235ca8df267e",
+    "sha256": "9acf7ebd1cb37593d9d47d549913130c16a80ef9e43d8a1bc6bf0364bf4deb7e"
+  },
+  "tests/rankingArchiveBrowser.test.ts": {
+    "gitBlob": "99c9907a3a4f0c436704fcac3c0f9604793c7a68",
+    "actualBlob": "99c9907a3a4f0c436704fcac3c0f9604793c7a68",
+    "sha256": "9b7b8bedf90473b7e8ef01460f0299bc03c4246caa2ae70a0c1478a9bd9c39f8"
+  },
+  "tests/rankingBoardAddressBrowser.test.ts": {
+    "gitBlob": "c6f893556135bee6e2d55743870055cb56cc3f6c",
+    "actualBlob": "c6f893556135bee6e2d55743870055cb56cc3f6c",
+    "sha256": "8d96f97660b81b812b54b4b140bc8157ed267e6d7eb2b55048ac18e62ba7fc31"
+  },
+  "tests/rankingBucketGc.test.ts": {
+    "gitBlob": "94f0c238dd1bf7a66247466590798c959786c2c4",
+    "actualBlob": "94f0c238dd1bf7a66247466590798c959786c2c4",
+    "sha256": "faf6a62fd86c74c1036f150ea93a9f7757e00b149d9ef4fcb338bd704f390c2d"
+  },
+  "tests/rankingEvaluation.test.ts": {
+    "gitBlob": "825ea605af05eeaf04d2c047d62cba66f88b1002",
+    "actualBlob": "825ea605af05eeaf04d2c047d62cba66f88b1002",
+    "sha256": "3309443e8c45b72a12c19a59ff38cf9d5f2b17ea44e73d9a03e8ec89fb04686b"
+  },
+  "tests/rankingExperiments.test.ts": {
+    "gitBlob": "febdcea5893c3eaf62a3453e10b4561d9c5cc363",
+    "actualBlob": "febdcea5893c3eaf62a3453e10b4561d9c5cc363",
+    "sha256": "35045889c6d67b78b0cc0ff7bfde8a93bcdcd9935b303aec21f61eaa3a9061f8"
+  },
+  "tests/rankingExplanations.test.ts": {
+    "gitBlob": "1d6dbd553820867edbeb23747d100744a6fbedfb",
+    "actualBlob": "1d6dbd553820867edbeb23747d100744a6fbedfb",
+    "sha256": "465f3eb94a630e9adb6e93c25ef8ccb515e0668772cd0e9b8cb647f1c1a1f13b"
+  },
+  "tests/rankingFlair.test.ts": {
+    "gitBlob": "753b8c3a7c42cbd343a46c7731f91d8b3025ba7f",
+    "actualBlob": "753b8c3a7c42cbd343a46c7731f91d8b3025ba7f",
+    "sha256": "d2251c8d709b8efd2886fdcabb6d54cfc92b3a5e917f2c0e1128499f2d3a5550"
+  },
+  "tests/rankingRefreshOutcomeContract.test.ts": {
+    "gitBlob": "3c91c6bca2634d5a0ae66f598bf460b05db43523",
+    "actualBlob": "3c91c6bca2634d5a0ae66f598bf460b05db43523",
+    "sha256": "8575a8192c5ca3c8d85603d30dc8a6c7e10fd523bede0dd50e310a72c246ab14"
+  },
+  "tests/rankingRestartBaseline.test.ts": {
+    "gitBlob": "b11ae30b1bfd2175a6ce38a0719acb9a80a683d0",
+    "actualBlob": "b11ae30b1bfd2175a6ce38a0719acb9a80a683d0",
+    "sha256": "c8628120d4bfa9261dc68bcf70a9732a566e733dd671d02893507c6e7eb43725"
+  },
+  "tests/rankingScopeLabel.test.ts": {
+    "gitBlob": "efd596f5f137d90fcf2980cab3093fee483a1033",
+    "actualBlob": "efd596f5f137d90fcf2980cab3093fee483a1033",
+    "sha256": "51ed4584cfdab9e5c3f635ab8033941468fa0dc9d116d0a4e24e0d319bf0a9b3"
+  },
+  "tests/rankingSourceAuthority.test.ts": {
+    "gitBlob": "5e57a55c3012dbb11af028c9bbee616cb1c65ccd",
+    "actualBlob": "5e57a55c3012dbb11af028c9bbee616cb1c65ccd",
+    "sha256": "52c3722ad4af9a0fdc0af327c597820bfdd8d549e876573171667477da88271e"
+  },
+  "tests/rankingSourceImport.test.ts": {
+    "gitBlob": "d6d1ff23afb4904f3d657b10b4dbae13ad5b74b5",
+    "actualBlob": "d6d1ff23afb4904f3d657b10b4dbae13ad5b74b5",
+    "sha256": "fc756074e72a9be98a346df4701374d6f5c4c425d8bd3f8f573e7904f71cad10"
+  },
+  "tests/rankingTournamentBoardBrowser.test.ts": {
+    "gitBlob": "518a0800f1febe1966805a4a0d784812b683a00d",
+    "actualBlob": "518a0800f1febe1966805a4a0d784812b683a00d",
+    "sha256": "342eee3f4e0d0e3f4729f740455f2fbe1b27c29e615a8fcdd26a3e0e60b062b3"
+  },
+  "tests/rankingsBoardPanels.test.ts": {
+    "gitBlob": "4a77cf820bc19f1d6fd23c2c880993d3a373a1bb",
+    "actualBlob": "4a77cf820bc19f1d6fd23c2c880993d3a373a1bb",
+    "sha256": "7d9f9dbb860bf9193c5e23abe63eb5852d621f104692d7f96528393560ddfd84"
+  },
+  "tests/ratingCheckpoint.test.ts": {
+    "gitBlob": "b56c020a6d26a8e776673d428fa9a063836f0e5c",
+    "actualBlob": "b56c020a6d26a8e776673d428fa9a063836f0e5c",
+    "sha256": "12f5ba0dcbf2fcbcd9cb99a745e7545a4a91040eb2fc993195c6d2e1a1b0a8d3"
+  },
+  "tests/ratingContext.test.ts": {
+    "gitBlob": "b580d10ea1f6ba8f140664e178a29a3a101aa1fe",
+    "actualBlob": "b580d10ea1f6ba8f140664e178a29a3a101aa1fe",
+    "sha256": "403cf421460618ce0d31c09b32372a7e9c7e0333868785ba50ec2253d63559d1"
+  },
+  "tests/ratingUniverse.test.ts": {
+    "gitBlob": "1caf6fe73eced4a5460e05f704d0ed7fea3a182a",
+    "actualBlob": "1caf6fe73eced4a5460e05f704d0ed7fea3a182a",
+    "sha256": "ee1f20bc979e27c297d1b9b01fbe96e2ecc15b2be7cd14db0c9b3738ee298be0"
+  },
+  "tests/rawManifestFreshness.test.ts": {
+    "gitBlob": "eace19de0551a08f6bbe15d0a19ee473b2bac102",
+    "actualBlob": "eace19de0551a08f6bbe15d0a19ee473b2bac102",
+    "sha256": "688909d2495f23c0693a49c295c3d0513384a1c9f84a4824c07378ff436231b0"
+  },
+  "tests/rawSourceGeneration.test.ts": {
+    "gitBlob": "63f25a9d65b49514399b1d29e7573725e2e3e621",
+    "actualBlob": "63f25a9d65b49514399b1d29e7573725e2e3e621",
+    "sha256": "cb448949cfd7ca1a367011697bf6fee7d6e6fbb5e681a7869ed08cf0424b0efe"
+  },
+  "tests/rawSourceStorage.test.ts": {
+    "gitBlob": "1a2650bb2e7c699a98fb2ddd04f9446dbd966a1f",
+    "actualBlob": "1a2650bb2e7c699a98fb2ddd04f9446dbd966a1f",
+    "sha256": "ae05dc199e81a8b581296d3595cca8f09bff8edfd5811c1326691d76d316ae27"
+  },
+  "tests/receipts.test.ts": {
+    "gitBlob": "ae84e19e1e545cc3bfa4d0b10428101fcb98ed6c",
+    "actualBlob": "ae84e19e1e545cc3bfa4d0b10428101fcb98ed6c",
+    "sha256": "52b781b61d5c58a810605681b0f5899b25241f38183079d7d2cc595be5b3180c"
+  },
+  "tests/referencePublicData.test.ts": {
+    "gitBlob": "93ae6548323aef33164578a83e9f852e04860386",
+    "actualBlob": "93ae6548323aef33164578a83e9f852e04860386",
+    "sha256": "5b0052cc3a059c93032f52133131b05ad7e277a1432d74fdf9bc7f4b73b0cebe"
+  },
+  "tests/refreshMetrics.test.ts": {
+    "gitBlob": "55f74d4f9ac3118ba005a61675bc3dbb2b846f55",
+    "actualBlob": "55f74d4f9ac3118ba005a61675bc3dbb2b846f55",
+    "sha256": "6adf7abbad329d2a775959828c5532275ff2779748145d3e91938645895fdeb6"
+  },
+  "tests/refreshOnce.test.ts": {
+    "gitBlob": "ff9c1038f0c368b14118948e9e5d6948d3d3a38c",
+    "actualBlob": "ff9c1038f0c368b14118948e9e5d6948d3d3a38c",
+    "sha256": "dc98de0c67ff41c7f01403a944110f06491e1a0d8f52e73810fc63f52e93388a"
+  },
+  "tests/refreshOnceEarlyReceipts.test.ts": {
+    "gitBlob": "5e99f49221d81d734444a36e29df359a53ee7adf",
+    "actualBlob": "5e99f49221d81d734444a36e29df359a53ee7adf",
+    "sha256": "a4fec01e523388c2531058cd851ae9476ca1b6938e58966e9d201c4637b11d4d"
+  },
+  "tests/refreshTriggerState.test.ts": {
+    "gitBlob": "026bb84275b8d22c6181891a01b28787147e63e4",
+    "actualBlob": "026bb84275b8d22c6181891a01b28787147e63e4",
+    "sha256": "f2509a1279aabbd926339491007994c8e14b39eabe5bf48395ba49822c95bda1"
+  },
+  "tests/refreshWorkerMemory.test.ts": {
+    "gitBlob": "9408abe49a5157dc30822d1525a8bd2b7457426b",
+    "actualBlob": "9408abe49a5157dc30822d1525a8bd2b7457426b",
+    "sha256": "9d9cd9587e067e723f08ead21f7c92e8f0ffa5f523f63efd9f65ea15d3bc5fe1"
+  },
+  "tests/regionDepthChart.test.ts": {
+    "gitBlob": "8657eaaf5501d714aa3a1c8011d2e9979b27301b",
+    "actualBlob": "8657eaaf5501d714aa3a1c8011d2e9979b27301b",
+    "sha256": "824fb8bf418183cd830a039303aef4d1634d2e24aab19ac30fc5714a64fb1727"
+  },
+  "tests/regionStrength.test.ts": {
+    "gitBlob": "48462b4d5c1674fed0c052bd5f48aaa16b9e512d",
+    "actualBlob": "48462b4d5c1674fed0c052bd5f48aaa16b9e512d",
+    "sha256": "f30c5f79170a186e417dd546f3f2e7937e1e8c1e2454d77d5a77e7d543d32e90"
+  },
+  "tests/replaceDirectory.test.ts": {
+    "gitBlob": "86e9943d27c32ba6e8a14ad01705e7c04ddccd8f",
+    "actualBlob": "86e9943d27c32ba6e8a14ad01705e7c04ddccd8f",
+    "sha256": "676a196d6b0077fd7c34de0cf7e275b2772e96619375bb524687120fa03533e2"
+  },
+  "tests/riotGprBenchmark.test.ts": {
+    "gitBlob": "63e11ae7dd5f271db9b15e7748a1f774b1d4931d",
+    "actualBlob": "63e11ae7dd5f271db9b15e7748a1f774b1d4931d",
+    "sha256": "3c1027619eb8fae7b7c903174e9996f84cad58cbac99a32e7c769a1f71bf7be8"
+  },
+  "tests/rollingMovement.test.ts": {
+    "gitBlob": "3040338c2833101c613e251a77c2d3722edd4c0e",
+    "actualBlob": "3040338c2833101c613e251a77c2d3722edd4c0e",
+    "sha256": "87cdf8787ba70fb625bb6abb2f6ce85e604794bdbed95016b1930764924e6f1c"
+  },
+  "tests/rolloutEvidence.test.ts": {
+    "gitBlob": "a91bfa99318ae5a18eade57615904da2ac92cf0a",
+    "actualBlob": "a91bfa99318ae5a18eade57615904da2ac92cf0a",
+    "sha256": "a722c9d3f53428b4bb3265f078cd86a090135e383b14cce402ab3d22a7fbaac9"
+  },
+  "tests/rolloutGate.test.ts": {
+    "gitBlob": "450fb469be045f5ec2e9c1722dd641e1616a541e",
+    "actualBlob": "450fb469be045f5ec2e9c1722dd641e1616a541e",
+    "sha256": "6f7806dd82c75fb7d22eb88e35984fdde8bc2a020d374ecf56903831bfafd3df"
+  },
+  "tests/rolloutImplementationEvidence.test.ts": {
+    "gitBlob": "e8f1d73f47f9da8f83b0402010c85bbdca185351",
+    "actualBlob": "e8f1d73f47f9da8f83b0402010c85bbdca185351",
+    "sha256": "9e236f085314ec20435e671b3f3b375f4f300c8ede7e2a5e66417419b9210907"
+  },
+  "tests/rolloutProductionAction.test.ts": {
+    "gitBlob": "aeebe2a8fc8b6e2dc7cc028599b0a0fc2d671f1d",
+    "actualBlob": "aeebe2a8fc8b6e2dc7cc028599b0a0fc2d671f1d",
+    "sha256": "113ce4c66ee6d5b8ab258b24fddb6c2a349245c797cea58268ca35464bd307b1"
+  },
+  "tests/rolloutProductionEvidence.test.ts": {
+    "gitBlob": "60e4cba2fc7876c143844d16018c13f36f39b386",
+    "actualBlob": "60e4cba2fc7876c143844d16018c13f36f39b386",
+    "sha256": "af6b86a8d5057d38f28d46eae18532a50c02b46ff4a8737e07b0b42619ce8e62"
+  },
+  "tests/rolloutShadowGate.test.ts": {
+    "gitBlob": "03a51401ca0d53c837e34ca8b16c5d599d9e34ee",
+    "actualBlob": "03a51401ca0d53c837e34ca8b16c5d599d9e34ee",
+    "sha256": "59c1ce3df9a97d500ed324434c0ff92a7bdb6ef3b35cdda09676084652fd6702"
+  },
+  "tests/rolloutTestFixtures.ts": {
+    "gitBlob": "579e0d328badd953653f7d05420a7ddb62985647",
+    "actualBlob": "579e0d328badd953653f7d05420a7ddb62985647",
+    "sha256": "cddc910bc77b0817cfa5f942ed9dd21ccd8808dfda79b562687c7f958251f497"
+  },
+  "tests/rosterEras.test.ts": {
+    "gitBlob": "21f8edfdd267a51e555125e973b8be93eed2eded",
+    "actualBlob": "21f8edfdd267a51e555125e973b8be93eed2eded",
+    "sha256": "967a645f5fccdef115194ea82412a9b5209a62df59e8b8993f49e34ba15e4813"
+  },
+  "tests/rosters.test.ts": {
+    "gitBlob": "3c219c23e86bf3ab1a61598598fd4abb5df17e43",
+    "actualBlob": "3c219c23e86bf3ab1a61598598fd4abb5df17e43",
+    "sha256": "160e326e5dedebbc1c2b90eb16225b7930e9453d3b778df2f7dc62729151f079"
+  },
+  "tests/rustProviderFetchParity.test.ts": {
+    "gitBlob": "ee4a215d3f58879cf3bdfb214e75d020930c769c",
+    "actualBlob": "ee4a215d3f58879cf3bdfb214e75d020930c769c",
+    "sha256": "e595936c1c9a4c5067cf344b0e04a31d389225bf91ecf671ae222f33ee74c14b"
+  },
+  "tests/rustRawSourceParity.test.ts": {
+    "gitBlob": "8c354c001b48530ca68479446468a4576f1bfe30",
+    "actualBlob": "8c354c001b48530ca68479446468a4576f1bfe30",
+    "sha256": "9f6b3d06721af9ad982432dd3f67e8c306848af80df627ca085adeb05670960a"
+  },
+  "tests/rustStorageMinio.test.ts": {
+    "gitBlob": "d20f3f08fd9cbb58835deb3e3e8afc199c1a86e5",
+    "actualBlob": "d20f3f08fd9cbb58835deb3e3e8afc199c1a86e5",
+    "sha256": "72ee3d8e2b28d30e81cae7c36e16b160b5947c6f9af045d001e7acdb2e9dfa9a"
+  },
+  "tests/s3PutRetry.test.ts": {
+    "gitBlob": "a481f1141460437f70fa055e01b6495140d64d55",
+    "actualBlob": "a481f1141460437f70fa055e01b6495140d64d55",
+    "sha256": "ffe390b6bb07d34816011b315baee10bd6b9b452263b78deb5dbc6140cb66bc4"
+  },
+  "tests/semanticCache.test.ts": {
+    "gitBlob": "3c1dd15c6b183fd65059135558a1d2888670f1d1",
+    "actualBlob": "3c1dd15c6b183fd65059135558a1d2888670f1d1",
+    "sha256": "8c74453434581a283cb5a7829c0fd970c7ae70d31489981bd530be38788da718"
+  },
+  "tests/seoPrerender.test.ts": {
+    "gitBlob": "8cac55d9ffba48f27ee4b51dab9f213d9d823629",
+    "actualBlob": "8cac55d9ffba48f27ee4b51dab9f213d9d823629",
+    "sha256": "b1c9181f3820bb58671edd9f0d042bb5f5b8ef2c0513b9767b3d8b7b27ce22c7"
+  },
+  "tests/seriesResolver.test.ts": {
+    "gitBlob": "456980bfb16423aa1d1c106e569f38698fae9dd4",
+    "actualBlob": "456980bfb16423aa1d1c106e569f38698fae9dd4",
+    "sha256": "89c55f8da39605bfb0e53ae5b8be4c1b9630c163730bf2b4c87d39c27114a73e"
+  },
+  "tests/snapshot.test.ts": {
+    "gitBlob": "10d6eb1d8d8ae6cddffa1b2639514774f1dfc6d3",
+    "actualBlob": "10d6eb1d8d8ae6cddffa1b2639514774f1dfc6d3",
+    "sha256": "db04d439662e621d13325e0921fe0960ba1f52141c8ff883a0131a74b7d82d5e"
+  },
+  "tests/stableJsonDigest.test.ts": {
+    "gitBlob": "e0d1563ef7a02df5faf1a31329953b04896ffe09",
+    "actualBlob": "e0d1563ef7a02df5faf1a31329953b04896ffe09",
+    "sha256": "21726a0cf9d621e20c7855d57ec4ea28dd7399651bfb029e83a84e67b9d7c8b5"
+  },
+  "tests/stableMatchPagination.test.ts": {
+    "gitBlob": "96c21a138356b453c203b62fb304b2f37feab533",
+    "actualBlob": "96c21a138356b453c203b62fb304b2f37feab533",
+    "sha256": "84ad1390f57109981ba3e1b64a79f5f84daf3e9a5cde5bf629e788faab47acea"
+  },
+  "tests/swissPreviewBrowser.test.ts": {
+    "gitBlob": "dbf56bc8468b43d9ad19cfe9670f0fc44f94de8e",
+    "actualBlob": "dbf56bc8468b43d9ad19cfe9670f0fc44f94de8e",
+    "sha256": "2dd8da54e7a3e1660d97c1ff865198cf62626416cdc62debdd8ebe3244a69eae"
+  },
+  "tests/swissScenario.test.ts": {
+    "gitBlob": "15fff08658ef4dde2d11b4b8df9592b95667c268",
+    "actualBlob": "15fff08658ef4dde2d11b4b8df9592b95667c268",
+    "sha256": "a4be4f8f41d1183c316e097109e56bc2c1b9a7f13c027b93fffc10cd41c06180"
+  },
+  "tests/teamBranding.test.ts": {
+    "gitBlob": "586df506d3ef6c45136344c02dc8015f35ccf4ee",
+    "actualBlob": "586df506d3ef6c45136344c02dc8015f35ccf4ee",
+    "sha256": "573ea3c9c84e6b5f7c22064d4037e3acef71819a0a7f94802aced51c3c266923"
+  },
+  "tests/teamHistoryChart.test.ts": {
+    "gitBlob": "16f6069d78e73b4d5b1426bf36e3ffdbd0f04b06",
+    "actualBlob": "16f6069d78e73b4d5b1426bf36e3ffdbd0f04b06",
+    "sha256": "317c900ddae5ffb539a09594a89e352e5f151b1c240deebb648c18ce70a40320"
+  },
+  "tests/teamLogo.test.ts": {
+    "gitBlob": "a1b678c2c7a81d94ee2bfcf37b426b5aea984cf8",
+    "actualBlob": "a1b678c2c7a81d94ee2bfcf37b426b5aea984cf8",
+    "sha256": "e79f4537a99bed6ae3ca92f626524ebe4d4e1a8d225b646176b9d712a63ec52e"
+  },
+  "tests/teamProfiles.test.ts": {
+    "gitBlob": "33b1985247527128e43bfc2c289fb1af37b005eb",
+    "actualBlob": "33b1985247527128e43bfc2c289fb1af37b005eb",
+    "sha256": "1ff723ef6c36753a5d9259be83ea684c704c641fef8d6777d8b188a038aa6e3b"
+  },
+  "tests/timelineCompaction.test.ts": {
+    "gitBlob": "cd2127a6276eb673eab2ccf33c59a5e00622838c",
+    "actualBlob": "cd2127a6276eb673eab2ccf33c59a5e00622838c",
+    "sha256": "9fe223f50f49d0221504f81e09bd750169b8e793a35595edc6175dad5a23e73d"
+  },
+  "tests/tournamentBracket.test.ts": {
+    "gitBlob": "edf68786a1ac321623b89512bb80447ca06916bf",
+    "actualBlob": "edf68786a1ac321623b89512bb80447ca06916bf",
+    "sha256": "ebc711a284f993d393633adafe855eb930f27cf7ef0a507d5e74fcbf0923ae54"
+  },
+  "tests/tournamentBracketView.test.ts": {
+    "gitBlob": "bdcb0e2da8b8c05bb45f762281350f9385ad6abf",
+    "actualBlob": "bdcb0e2da8b8c05bb45f762281350f9385ad6abf",
+    "sha256": "df38e23a7d6ecf52fd7edffc767555db3e91bf3ad46f816db1ee60b518c2c0b3"
+  },
+  "tests/tournamentBrowser.test.ts": {
+    "gitBlob": "7c7e4f8971b470d10c83d5e36140b256ebcc7b2e",
+    "actualBlob": "7c7e4f8971b470d10c83d5e36140b256ebcc7b2e",
+    "sha256": "b373d0a933bd0f09402cb11f562ca9b0868dc9afc5861a2c847a5b9f76eee737"
+  },
+  "tests/tournamentFeed.test.ts": {
+    "gitBlob": "3d99455893da5c8fd6c77fdfc8ab1731e0fede75",
+    "actualBlob": "3d99455893da5c8fd6c77fdfc8ab1731e0fede75",
+    "sha256": "f8b063afa3ccca08d22c6192e461d82cf77a07e0de7b48c14b2ef0e7b173ef3d"
+  },
+  "tests/tournamentFeedStorage.test.ts": {
+    "gitBlob": "01a8ff9bc65e2167b4ad8a0af6450532a139f82e",
+    "actualBlob": "01a8ff9bc65e2167b4ad8a0af6450532a139f82e",
+    "sha256": "ef01208dd5b222aa2e8e5ab852a4ceac4fb777b70bca7548f061fdc7faa4a8e5"
+  },
+  "tests/tournamentForecast.test.ts": {
+    "gitBlob": "04dc7bf8e202c839f47efce53454ac44a411ac66",
+    "actualBlob": "04dc7bf8e202c839f47efce53454ac44a411ac66",
+    "sha256": "f1c3e2c63c63478466b18a4fa378f07a46e9b7ec70d7e78e8efcc182798e3851"
+  },
+  "tests/tournamentForecastBrowser.test.ts": {
+    "gitBlob": "bfd77d701bb9fc48081bc3b4288e9b7e125e61a2",
+    "actualBlob": "bfd77d701bb9fc48081bc3b4288e9b7e125e61a2",
+    "sha256": "d4ddcce4c40715b54e0b3d12f50a7d72e593a6215efd23198d75414f3dd04159"
+  },
+  "tests/trajectory.test.ts": {
+    "gitBlob": "830666e35f2eee89e5f7062cbc4fe00f23124598",
+    "actualBlob": "830666e35f2eee89e5f7062cbc4fe00f23124598",
+    "sha256": "d5fc1b15749c56e03202fbab385a3be0bd182adb24de6dd102bc1cbb82703327"
+  },
+  "tests/viteTournamentFeed.test.ts": {
+    "gitBlob": "00bea36f6af444316fb1c1d7971b799fdd5299d1",
+    "actualBlob": "00bea36f6af444316fb1c1d7971b799fdd5299d1",
+    "sha256": "c1a7576034a2f837b2b399b330b530e8276f66d3a4eb780d2bdae4d91ce61669"
+  },
+  "tests/winProbability.test.ts": {
+    "gitBlob": "5071a8fe30adc2c154cc900d11013d3506873bfc",
+    "actualBlob": "5071a8fe30adc2c154cc900d11013d3506873bfc",
+    "sha256": "18b1f1322dfb5f5f923bcb35bae36af7cd991537644b456c713307962c3208ad"
+  },
+  "tests/worlds2022ObservedGroups.test.ts": {
+    "gitBlob": "47bdfd57669d56ca6f056bdb4ed66a80732fdb97",
+    "actualBlob": "47bdfd57669d56ca6f056bdb4ed66a80732fdb97",
+    "sha256": "1169e9e80964ab60f6ebe7891f585b6a1e9f80a9aaa999f07fe7532e3fdecdfa"
+  },
+  "tests/worlds2026Knockout.test.ts": {
+    "gitBlob": "66f1f7d817a2721e83a6ab19fa5ff3327548f54b",
+    "actualBlob": "66f1f7d817a2721e83a6ab19fa5ff3327548f54b",
+    "sha256": "761d904ca3e29d6e04f25ba46e269a3c03879ded8f027c73fdab59b2086eb361"
+  },
+  "tests/worlds2026PlayIn.test.ts": {
+    "gitBlob": "637813bfc97a19ac6f5f314e75b1049e91ff04ff",
+    "actualBlob": "637813bfc97a19ac6f5f314e75b1049e91ff04ff",
+    "sha256": "0fc43fb24460d020cf24016fccc546a90310894acca2e2c01cb5992edbda82e2"
+  },
+  "tests/worldsObservedBracket.test.ts": {
+    "gitBlob": "2201e119454d7c58c3053b3b87083fa2991538eb",
+    "actualBlob": "2201e119454d7c58c3053b3b87083fa2991538eb",
+    "sha256": "d4606bd2920fed9e1b153adf20851739fdd534e154ad82134368a537701b2db3"
+  },
+  "tests/worldsObservedRules.test.ts": {
+    "gitBlob": "47c84e69d1bab10e35228fd78325461efd07a052",
+    "actualBlob": "47c84e69d1bab10e35228fd78325461efd07a052",
+    "sha256": "373ff73e7ce2ff6c860155e8055d31c558080909db698e128a791e0dc9c0d839"
+  },
+  "tests/worldsSimulation.test.ts": {
+    "gitBlob": "290225e3b5290dd5f2c2cc7027a098dbf6ac53f0",
+    "actualBlob": "290225e3b5290dd5f2c2cc7027a098dbf6ac53f0",
+    "sha256": "a1657318d69898e1844e313cbcac8bc8c681e4035561bb552fe3f9f7738f16a0"
+  },
+  "tests/worldsSimulationBrowser.test.ts": {
+    "gitBlob": "8c3121966fe9ae6c0cefa25e2677313c7f027ba3",
+    "actualBlob": "8c3121966fe9ae6c0cefa25e2677313c7f027ba3",
+    "sha256": "a890247146ca40adfcc1402c8971835d311731aec1b6bbf20c0ae8e6b425f5de"
+  },
+  "tests/worldsWorkerClient.test.ts": {
+    "gitBlob": "8456e79f8b0c7dd24cc060376115910903063e1f",
+    "actualBlob": "8456e79f8b0c7dd24cc060376115910903063e1f",
+    "sha256": "5c28ae4f6ce1113230ddcff3647f230fa93414e90d1bb89fa405ada6de34b045"
+  },
+  "tsconfig.app.json": {
+    "gitBlob": "28c9bc2634b795890e2bde87642379709175b391",
+    "actualBlob": "28c9bc2634b795890e2bde87642379709175b391",
+    "sha256": "91357db5283078bed67713f64c283459e9398498a1ac1e1bba15482e316efd9e"
+  },
+  "tsconfig.json": {
+    "gitBlob": "01490aab43e52fabf4e1c19d986c32c9ecdf1a5b",
+    "actualBlob": "01490aab43e52fabf4e1c19d986c32c9ecdf1a5b",
+    "sha256": "5531770701c29131aba5c07dfeee109f6fc0c1561af3e28d43fe184a49711f72"
+  },
+  "tsconfig.node.json": {
+    "gitBlob": "4a122294c3a6804dc37d6510a4402f6c6f0788ea",
+    "actualBlob": "4a122294c3a6804dc37d6510a4402f6c6f0788ea",
+    "sha256": "53dac363c1aa0768a86efadfcf77cadd8ae3d2c43e4503dce947cc9844646e4b"
+  },
+  "tsconfig.test.json": {
+    "gitBlob": "0dea6b8c69b771bf8808527d811c06ce43823275",
+    "actualBlob": "0dea6b8c69b771bf8808527d811c06ce43823275",
+    "sha256": "98a9f926170ada5a3891f3072bfd16bcf2f9776ba9ef9449518b8c0feec6e74c"
+  },
+  "vite.config.ts": {
+    "gitBlob": "d8cd1d03b281b7a1705f9583a8c8e03d029db383",
+    "actualBlob": "d8cd1d03b281b7a1705f9583a8c8e03d029db383",
+    "sha256": "ca2360dabca6c4626ceaa6ff3f39694f7655bd3d098426e0cdd52c43a24f156a"
+  },
+  "worker/Cargo.lock": {
+    "gitBlob": "c5dfded6f173f1d10b5d3989d3029a0d376470f3",
+    "actualBlob": "c5dfded6f173f1d10b5d3989d3029a0d376470f3",
+    "sha256": "b207bce53870289a4b4340404b5b366ba6231e4ef126cc1f632bf5d17b47181e"
+  },
+  "worker/Cargo.toml": {
+    "gitBlob": "5d3af4fad516492b4cd36f623ce644a0e78c3f44",
+    "actualBlob": "5d3af4fad516492b4cd36f623ce644a0e78c3f44",
+    "sha256": "dbf2f63597a8e0ca5317173cb1efa8951d6cc7edb5e57a4eb1bc3c0ea0e3b576"
+  },
+  "worker/THIRD_PARTY_NOTICES.md": {
+    "gitBlob": "4fbebe48c7cf31e95167092cb97f75a222dc1202",
+    "actualBlob": "4fbebe48c7cf31e95167092cb97f75a222dc1202",
+    "sha256": "90c8f1da7a2b698d92d71d091f8cb253a7ac831f08673d96d9f152bdd7154063"
+  },
+  "worker/ranking-contracts/Cargo.toml": {
+    "gitBlob": "55064e469ad05b8558320c273add83e3a679aa9c",
+    "actualBlob": "55064e469ad05b8558320c273add83e3a679aa9c",
+    "sha256": "c062f1bc99b302e6e343c52c76f69c0110f26014466f07986cea337cb20f2c0f"
+  },
+  "worker/ranking-contracts/src/json.rs": {
+    "gitBlob": "0f15961eb8dcf5d8021ee39fcb2d28b8974e164b",
+    "actualBlob": "0f15961eb8dcf5d8021ee39fcb2d28b8974e164b",
+    "sha256": "08f4b71ee70e488012903bc6e0b0605f9b6d150477792e35e64614f7d596ec87"
+  },
+  "worker/ranking-contracts/src/lib.rs": {
+    "gitBlob": "3860adf267848e8d97c88a5316b46c4c2ea80316",
+    "actualBlob": "3860adf267848e8d97c88a5316b46c4c2ea80316",
+    "sha256": "001f27870d37b116cb81b37076a2f2224144956e21795484d207d30c875bba3c"
+  },
+  "worker/ranking-contracts/src/model-config.json": {
+    "gitBlob": "690663f79ac6ed83019d709432e4ab8d26ccf430",
+    "actualBlob": "690663f79ac6ed83019d709432e4ab8d26ccf430",
+    "sha256": "6af8f4e3155eadb224a56c3e59d4c464f0cdf8ac2c6aa6ef0c8352464b659a4a"
+  },
+  "worker/ranking-contracts/src/model.rs": {
+    "gitBlob": "073ee5e44689be6821d026455fa95488dc9e1acf",
+    "actualBlob": "073ee5e44689be6821d026455fa95488dc9e1acf",
+    "sha256": "cd8cb7f9637f83d9b41dbbe0b7dc44a26ea4eda180149fe2d4127d694954625d"
+  },
+  "worker/ranking-contracts/src/numeric.rs": {
+    "gitBlob": "2cb30b6b6b6d12a5d189b52549a17a0a9af1ad1e",
+    "actualBlob": "2cb30b6b6b6d12a5d189b52549a17a0a9af1ad1e",
+    "sha256": "e32e5568c3997367595b873fa1cb3f02d08b91a13f3380a9689b83efeb89a2d1"
+  },
+  "worker/ranking-contracts/src/time.rs": {
+    "gitBlob": "89ecc2c6ad46d08824fc9fd6fda62ddcfa126e7a",
+    "actualBlob": "89ecc2c6ad46d08824fc9fd6fda62ddcfa126e7a",
+    "sha256": "c2bd781c2789e14947e656dee136d28ccd60c4a7096d10125030781bf6faf088"
+  },
+  "worker/ranking-contracts/src/utf16_json.rs": {
+    "gitBlob": "625db498d4ce55c22c977303213ac998fee24574",
+    "actualBlob": "625db498d4ce55c22c977303213ac998fee24574",
+    "sha256": "7168ff27f40609fd51696e4cf79b200b50bc8b181f5bb40380d5d569ed34c731"
+  },
+  "worker/ranking-contracts/src/v8_math.rs": {
+    "gitBlob": "358d8dd22e952cd5ae7f93bd0eb14d448415cbc1",
+    "actualBlob": "358d8dd22e952cd5ae7f93bd0eb14d448415cbc1",
+    "sha256": "8bef90977dcf1e9424e10f6069b617d414b49f6a4691907adf40ca56783605e2"
+  },
+  "worker/ranking-contracts/tests/node_contracts.rs": {
+    "gitBlob": "49d492c1eaf006c55d831100d773d842bcabdc83",
+    "actualBlob": "49d492c1eaf006c55d831100d773d842bcabdc83",
+    "sha256": "28a4347eb1a0ccfac6837080ad58a473958e15f7afe6eca3ab36b6e6fb03cd7e"
+  },
+  "worker/ranking-fetch/Cargo.toml": {
+    "gitBlob": "3066ce5a1f54285425579b30e084da7acc1ee986",
+    "actualBlob": "3066ce5a1f54285425579b30e084da7acc1ee986",
+    "sha256": "f085f9325bd23fbbba2227b6dd9532056e16073c73bdf70eeab6e9da8f1e9d1b"
+  },
+  "worker/ranking-fetch/src/http.rs": {
+    "gitBlob": "2462ff3ab6ba84f15849daffb9dc460b3f3427fb",
+    "actualBlob": "2462ff3ab6ba84f15849daffb9dc460b3f3427fb",
+    "sha256": "b87d4de4fb704193620a2d1e848dab5db079dee14417eacb147ab82a4b1c8810"
+  },
+  "worker/ranking-fetch/src/leaguepedia.rs": {
+    "gitBlob": "2505ba408a130dc53016495ed9f39377cd9ab847",
+    "actualBlob": "2505ba408a130dc53016495ed9f39377cd9ab847",
+    "sha256": "643bc232a3a6a9c35a6611ec29a04385356f8f94755ff48812ddb56c637af64e"
+  },
+  "worker/ranking-fetch/src/lib.rs": {
+    "gitBlob": "e17cff18ff58cf3f95058b7aafea00d4fef26408",
+    "actualBlob": "e17cff18ff58cf3f95058b7aafea00d4fef26408",
+    "sha256": "9275cb9f4e9a97e48a4e0f80e70ab81606da73f3998bbc24d8d396e427227945"
+  },
+  "worker/ranking-fetch/src/lolesports.rs": {
+    "gitBlob": "e923b653fc8d9da3ba5d65fbe1b7ba688ca68340",
+    "actualBlob": "e923b653fc8d9da3ba5d65fbe1b7ba688ca68340",
+    "sha256": "701c327f36dc79fd4e7249f026e8831c09d2d89b7692e83a54d2c171a100e730"
+  },
+  "worker/ranking-fetch/src/oracle.rs": {
+    "gitBlob": "447325d89e733285a0beb893f59dd6287733914e",
+    "actualBlob": "447325d89e733285a0beb893f59dd6287733914e",
+    "sha256": "24b1282f8f07ae218d7d07bfab0211bb0220ec5388b45374d9840632caf05574"
+  },
+  "worker/ranking-raw-source/Cargo.toml": {
+    "gitBlob": "d08ebfacf57a8b5dfda25a4aea0c97ec9b9da8ba",
+    "actualBlob": "d08ebfacf57a8b5dfda25a4aea0c97ec9b9da8ba",
+    "sha256": "122ea0ffd40aff13a68f39d6ed477db2062a0d0962f89c526cd72ff7b1d6b00a"
+  },
+  "worker/ranking-raw-source/src/fs.rs": {
+    "gitBlob": "11ef843e233f5dd08c07f42e7637c005328a1a53",
+    "actualBlob": "11ef843e233f5dd08c07f42e7637c005328a1a53",
+    "sha256": "e787d9a81660d4316f1727fc589e1b3b93445533b7a8fef7ba194f0f21b31aef"
+  },
+  "worker/ranking-raw-source/src/lib.rs": {
+    "gitBlob": "dac58ec9dae1683d6a6928e5cb0697ade3578600",
+    "actualBlob": "dac58ec9dae1683d6a6928e5cb0697ade3578600",
+    "sha256": "5b8fdaebb152c343f01435c3dbef6c83bd7acb74fb578ae81119c4cb095e4e27"
+  },
+  "worker/ranking-raw-source/src/oracle.rs": {
+    "gitBlob": "42fa644d75fcbaf1148df7f7c3ff9828755db2a1",
+    "actualBlob": "42fa644d75fcbaf1148df7f7c3ff9828755db2a1",
+    "sha256": "e883bb1203b3cbd10dab3161ffc83aaec7e21c7cd386f594e103b859599d2263"
+  },
+  "worker/ranking-raw-source/src/types.rs": {
+    "gitBlob": "e6a86bad6733a838be48fde3277e337fe0b09b74",
+    "actualBlob": "e6a86bad6733a838be48fde3277e337fe0b09b74",
+    "sha256": "c81c0d99b366515350ed85d86e8b43f0cfb0dbe09afe80787bf20deaeb7342b4"
+  },
+  "worker/ranking-raw-source/src/validate.rs": {
+    "gitBlob": "06695719667c1ad62dac7d23a3e70fd264a592e0",
+    "actualBlob": "06695719667c1ad62dac7d23a3e70fd264a592e0",
+    "sha256": "ec813c3244f85a711208ff4f5bb8c42b2420f094dd160a0083f10f3e6d7c0c1c"
+  },
+  "worker/ranking-refresh/Cargo.toml": {
+    "gitBlob": "88d4953a3857b9d1a77bf3b6a6ee33e5cac79da0",
+    "actualBlob": "88d4953a3857b9d1a77bf3b6a6ee33e5cac79da0",
+    "sha256": "1984b39b95fcb3461d8bbf6068ccf38310539d519d9965987fb307e3096f345d"
+  },
+  "worker/ranking-refresh/src/main.rs": {
+    "gitBlob": "f1582142b4dfc398e3feb59aa979cc0387902b23",
+    "actualBlob": "f1582142b4dfc398e3feb59aa979cc0387902b23",
+    "sha256": "a4b5d2c66fc579cd968b96dd8305038824d3487195f8139cda32ecb85ad93efa"
+  },
+  "worker/ranking-storage/Cargo.toml": {
+    "gitBlob": "ecdc9a11ab38e72ce77bd7b774b9777d4a38b19f",
+    "actualBlob": "ecdc9a11ab38e72ce77bd7b774b9777d4a38b19f",
+    "sha256": "12393c3fe06638830fa7254a5b394a30c9913b19974c03f61d8fdcfd7af37e9c"
+  },
+  "worker/ranking-storage/src/lib.rs": {
+    "gitBlob": "f9d3047e8a712cd62246b4bc046cc3466e2f21a3",
+    "actualBlob": "f9d3047e8a712cd62246b4bc046cc3466e2f21a3",
+    "sha256": "d37914a1f311c5d767e681e3cb4d21e2ffaf35e4a8177f018539868c6444e70c"
+  },
+  "worker/ranking-storage/src/public_archive.rs": {
+    "gitBlob": "7820d0d5e58fa5eb1620b7ec24f9b8855cea4166",
+    "actualBlob": "7820d0d5e58fa5eb1620b7ec24f9b8855cea4166",
+    "sha256": "7ba9b838ceb31b5089986cbe680e736c2ca10ac7675dd96351ee7a0165aaa8e2"
+  },
+  "worker/ranking-storage/src/public_directory.rs": {
+    "gitBlob": "8143b2fc6e0c27a872feec87dc2f08cd25e76df6",
+    "actualBlob": "8143b2fc6e0c27a872feec87dc2f08cd25e76df6",
+    "sha256": "63b8a34ea9c378172842953768b4f2d3f85e9c7d49605bc3a8348fa6f7871972"
+  },
+  "worker/ranking-storage/src/public_generation.rs": {
+    "gitBlob": "616d422fb9e0273fff4bbb11e91e3ecb66dc9cf0",
+    "actualBlob": "616d422fb9e0273fff4bbb11e91e3ecb66dc9cf0",
+    "sha256": "34c9cfc6e94185d1c4110360be2668f38997058de02f36800389644889176b83"
+  },
+  "worker/ranking-storage/src/publication.rs": {
+    "gitBlob": "3f76f55ecfb980859f370868aa0bfdc396cfc392",
+    "actualBlob": "3f76f55ecfb980859f370868aa0bfdc396cfc392",
+    "sha256": "a39fd1f9bed6c0e7ef4baf0f94ae06e896b88c7ccf9825b7a8f3607e90fabc31"
+  },
+  "worker/ranking-storage/src/raw_generation.rs": {
+    "gitBlob": "129122365a5dc5714722717a694d52648bfe4044",
+    "actualBlob": "129122365a5dc5714722717a694d52648bfe4044",
+    "sha256": "49976bdf95b83c2e7e16dd95a8a1ddf362f8205fd21441fee488c94659bba4fb"
+  },
+  "worker/ranking-storage/src/s3.rs": {
+    "gitBlob": "bf9e9aa650dda928f7ce73a2e409e03b1fa9a4b2",
+    "actualBlob": "bf9e9aa650dda928f7ce73a2e409e03b1fa9a4b2",
+    "sha256": "3c516268e1dcf96ebce168114620a59c5e067d55dfb0b53190a0f36b212acea1"
+  },
+  "worker/ranking-storage/src/state_generation.rs": {
+    "gitBlob": "a379961145925de12da3b63037451d404e7efdb7",
+    "actualBlob": "a379961145925de12da3b63037451d404e7efdb7",
+    "sha256": "ad623d17c8f5ff07901416a8e03360ff4951b709183383771b2f0577c119b810"
+  },
+  "worker/rust-toolchain.toml": {
+    "gitBlob": "b36f60f5d6bc93abe70723ceec7951346e2544d2",
+    "actualBlob": "b36f60f5d6bc93abe70723ceec7951346e2544d2",
+    "sha256": "f2c82031ae793bfe2c19b2f9828259fbb6eb79081849cca5294706ab46ff2d32"
+  }
+}

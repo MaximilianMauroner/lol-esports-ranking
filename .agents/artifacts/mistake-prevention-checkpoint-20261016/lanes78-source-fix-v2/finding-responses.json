@@ -1,0 +1,72 @@
+[
+  {
+    "id": "B1",
+    "status": "SOURCE_REPAIR_IMPLEMENTED",
+    "response": "Owned 0700 TMPDIR sibling, tsx cache disabled, private Node compile path, Vite runner, preloader and driver assertions, inventory and owned cleanup after failure. Runtime remains UNRUN."
+  },
+  {
+    "id": "B2",
+    "status": "SOURCE_REPAIR_IMPLEMENTED",
+    "response": "Cold full nonempty history bag. Continuous PW and CDP prior absence. Actual trusted input boundaries and both request start times. Final audit of every observed or planned phase, including failed teardown. No abort allowance."
+  },
+  {
+    "id": "B3",
+    "status": "SOURCE_REPAIR_IMPLEMENTED",
+    "response": "Shared store disclosed. Exact realpaths and all 20011 regular files in 98 dependency packages pinned before tsx and before and after the unit. Root owns concurrent store writer admission. Existing seven metadata and four tool pins unchanged. The existing optimizer is separately pinned by all 47 file hashes. It must match before and after."
+  },
+  {
+    "id": "B4",
+    "status": "SOURCE_REPAIR_IMPLEMENTED",
+    "response": "Canonical inspector path and SHA pinned. Actual JSON phase, at, ready, errors, head, tree, locks, and resources verified. Exact numeric before command receipt required. Canonical after recorder and command documented. Inspector UNRUN."
+  },
+  {
+    "id": "S1",
+    "status": "FAILED_LABEL_PRESERVED",
+    "response": "Original plain Node recipe check exit 1 stays FAILED. Historical type-strip parse is separately labeled. New byte-identical .mts syntax result is separate."
+  },
+  {
+    "id": "S2",
+    "status": "SOURCE_REPAIR_IMPLEMENTED_SELECTION_PROOF_PENDING",
+    "response": "Closure members record inline or archive status, logical references, actual URL, digest, and full emitted body path. Selected raw keys have body JSON pointers and response sequences. Aggregate requests grant no selection or selected-only byte claim."
+  },
+  {
+    "id": "S3",
+    "status": "SOURCE_REPAIR_IMPLEMENTED",
+    "response": "Geometry before each history phase and after every close, with pointer, focus, scroll, rectangle and viewport. No IO or rootMargin change."
+  },
+  {
+    "id": "S4",
+    "status": "SOURCE_REPAIR_IMPLEMENTED",
+    "response": "Unexpected main-frame document request or Page.frameNavigated event blocks after first goto. Same-document public hash actions remain recorded."
+  },
+  {
+    "id": "S5",
+    "status": "PIXEL_PROOF_PENDING",
+    "response": "Mounted SVG stroke paths and dot cx/cy, labels and rectangles retained with raw key maps. Props equality grants no pixel credit. Exact pixel to raw-value proof stays PENDING."
+  },
+  {
+    "id": "S6",
+    "status": "SOURCE_TRACE_COMPLETE_ACTUAL_CLOSURE_UNRUN",
+    "response": "demand-source-trace.md lists the fixed logical history and Players closure. Future emitted actual member catalog is retained before browser start, with exact selected per-action bags. Extra requests fail. Actual digest catalog is UNRUN."
+  },
+  {
+    "id": "S7",
+    "status": "PROVENANCE_REPAIR_IMPLEMENTED_EXACT_CLAIM_BLOCKED_WHEN_CACHED",
+    "response": "Same actual unit saved raw response bodies and sequences form the oracle. Cache reuse and zero actual requests are separate. A cached action is never called a new HTTP response. Literal new-response wording remains BLOCKED when no new response exists."
+  },
+  {
+    "id": "N1",
+    "status": "ADDRESSED",
+    "response": "Bootstrap uses canonicalJsonFor plus newline, as the production serializer does."
+  },
+  {
+    "id": "N2",
+    "status": "ADDRESSED",
+    "response": "Active recipe is .mts with the exact original bytes. The old .ts is retained only as failed-check evidence."
+  },
+  {
+    "id": "N3",
+    "status": "DEFERRED_BY_SCOPE",
+    "response": "No heavy-check or flock redesign is authorized. Owned process inventory and canonical after lock proof remain required. An orphan holding the inherited lock fails cleanup, without outside signals."
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-16T23:24:55.261642+00:00",
+  "allocationId": "r3-abab-actual-v2-baseline1",
+  "ownerExplicitFINALRELEASE": true,
+  "rootMetadataManifestActualExit": 0,
+  "rootMetadataEntries": 37,
+  "rootObservedInspectorPIDAbsence": [
+    1213995,
+    1214195
+  ],
+  "rootObservedForeignPIDsAbsentNow": [
+    1213619,
+    1213593
+  ],
+  "foreignReleaseNotInferred": true,
+  "workloadExecutions": 0,
+  "launchAttempts": 0,
+  "outputAbsent": true,
+  "nativeBeforeActualExit": 1,
+  "nativeAfterActualExit": 1,
+  "runtimeCounts": null,
+  "notProductFailure": true,
+  "nextHeavyReleased": false,
+  "needs": "Identify foreignFleetowner and obtain agreed quietboundary plus freshcanonicalnativeproof",
+  "mergeAuthorized": false
+}
