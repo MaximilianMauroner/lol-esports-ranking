@@ -1,0 +1,13 @@
+{
+ "name": "old-new-compare",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+ "argv": [
+  "bash",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3/tools/compare.sh",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3"
+ ],
+ "exit": 0,
+ "stdoutSha256": "b7456f6cfea66e4433256fe82bc60be8ae905b8b3ad83aea2bb0d1ada19fb47d",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

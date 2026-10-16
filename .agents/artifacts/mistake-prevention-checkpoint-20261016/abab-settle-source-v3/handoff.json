@@ -1,0 +1,214 @@
+{
+  "status": "SOURCEONLY",
+  "runtime": "UNRUN",
+  "newCampaign": "UNRELEASED",
+  "independentFIXDIFFReview": "PENDING",
+  "rootCountersign": "PENDING",
+  "MaxAcceptance": "PENDING",
+  "mergeAuthorized": false,
+  "oldBaseline1": "BLOCKED, no retroactive credit",
+  "D1": "FAIL retained",
+  "sourcePackage": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/source-package.json",
+  "sourceDiff": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/diff.patch",
+  "metadataDiff": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/revision-metadata.diff",
+  "inputInventory": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/source-input-inventory.json",
+  "sourceInventory": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/inventory-sha256.txt",
+  "detachedInventoryDigest": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/inventory-self-sha256.txt",
+  "inventoryExcludes": [
+    "inventory-sha256.txt",
+    "inventory-self-sha256.txt"
+  ],
+  "externalPinOwner": "Root, author digest is not review approval",
+  "commands": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/commands.md",
+  "campaignCommandsExecuted": false,
+  "newLauncherExecuted": false,
+  "checks": [
+    {
+      "receipt": "checks/integrity-input-self-sha256.txt.json",
+      "argv": [
+        "sha256sum",
+        "--check",
+        "--strict",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/input-self-sha256.txt"
+      ],
+      "code": 0,
+      "stdoutSha256": "92a8d282a97cb5b5a8e3d864c1cae3f2ae575a9183356de0de0372009a6b1e75",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutLines": 2
+    },
+    {
+      "receipt": "checks/integrity-input-sha256.txt.json",
+      "argv": [
+        "sha256sum",
+        "--check",
+        "--strict",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/input-sha256.txt"
+      ],
+      "code": 0,
+      "stdoutSha256": "d47219d195ed599df63b1e3e85080c0ec32dc1a35ebaabec87e50e37e98f78a1",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutLines": 141
+    },
+    {
+      "receipt": "checks/new-early-0.507ms.json",
+      "argv": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+        "new",
+        "early-0.507ms"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "c8206bd3d6248976e935ab3de7ea08b1bb7b5994615a7b7557be81a3b0bef6bc",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/new-full-interval.json",
+      "argv": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+        "new",
+        "full-interval"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "858f2207a2b67c5775eed6b57116b95cbd4cbc21c43c250fdd60ffb6942e9983",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/new-repeated-early.json",
+      "argv": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+        "new",
+        "repeated-early"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "072f7711e1792810cb98b82fbbf74e9667cfce0db0f0ba52dd57a1e029ebe3e2",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/old-early-0.507ms.json",
+      "argv": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+        "old",
+        "early-0.507ms"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 1,
+      "expectedCode": 1,
+      "signal": null,
+      "stdoutSha256": "f6653fcef0749dd5aa1e18be146dcc6767aeca33451deade673828297fdef99c",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/old-full-interval.json",
+      "argv": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+        "old",
+        "full-interval"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "911fc26f35eace17bc6069a3e7206e4c8be820983f71e9cf8aa4c126efeff2e7",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/old-repeated-early.json",
+      "argv": [
+        "node",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+        "old",
+        "repeated-early"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 1,
+      "expectedCode": 1,
+      "signal": null,
+      "stdoutSha256": "9b68a350d4985abec98884044cee174ead73eee2040461ae3c6cd44731e33da7",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/source-audit.json",
+      "argv": [
+        "python3",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/source-audit.py"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "stdoutSha256": "d7df3a100a66f481e4d17a1d4a73b0e57144c83e65b7da2ea56c1dd8e5e11828",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/syntax-comparator.json",
+      "argv": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/compare-abab.mjs"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/syntax-control.json",
+      "argv": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/syntax-driver.json",
+      "argv": [
+        "node",
+        "--check",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/abab-driver.mjs"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "receipt": "checks/syntax-launcher.json",
+      "argv": [
+        "bash",
+        "-n",
+        "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/locked-abab.sh"
+      ],
+      "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+      "code": 0,
+      "expectedCode": 0,
+      "signal": null,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "finalFourIntegrity": "Run after package freeze. See final caller tool record. No package mutation afterward.",
+  "nextActionOwner": "Root",
+  "nextAction": "Fresh independent FIXDIFF review, then external countersign. Only afterward consider a NEW four-unit campaign and explicit one-unit allocation.",
+  "standingRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run."
+}

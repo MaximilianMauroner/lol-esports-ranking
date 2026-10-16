@@ -1,0 +1,13 @@
+{
+ "name": "adversarial-old",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3",
+ "argv": [
+  "node",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3/tools/adversarial.mjs",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/abab-driver.mjs",
+  "old"
+ ],
+ "exit": 1,
+ "stdoutSha256": "9acd21c9bd47959379bf6f8c46102060611f49a79ebab2fd94784a5c378a4e40",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

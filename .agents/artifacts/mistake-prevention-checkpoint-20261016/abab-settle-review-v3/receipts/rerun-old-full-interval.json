@@ -1,0 +1,13 @@
+{
+ "name": "rerun-old-full-interval",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3",
+ "argv": [
+  "node",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+  "old",
+  "full-interval"
+ ],
+ "exit": 0,
+ "stdoutSha256": "911fc26f35eace17bc6069a3e7206e4c8be820983f71e9cf8aa4c126efeff2e7",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

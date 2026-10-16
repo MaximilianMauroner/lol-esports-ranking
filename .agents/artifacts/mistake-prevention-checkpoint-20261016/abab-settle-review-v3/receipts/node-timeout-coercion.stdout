@@ -1,0 +1,25 @@
+class Timeout {
+  // Timer constructor function.
+  // The entire prototype is defined in lib/timers.js
+  constructor(callback, after, args, isRepeat, isRefed) {
+    if (after === undefined) {
+      after = 1;
+    } else {
+      after *= 1; // Coalesce to number or NaN
+    }
+
+    if (!(after >= 1 && after <= TIMEOUT_MAX)) {
+      if (after > TIMEOUT_MAX) {
+        process.emitWarning(`${after} does not fit into` +
+                            ' a 32-bit signed integer.' +
+                            '\nTimeout duration was set to 1.',
+                            'TimeoutOverflowWarning');
+      } else if (after < 0 && !warnedNegativeNumber) {
+        warnedNegativeNumber = true;
+        process.emitWarning(`${after} is a negative number.` +
+                            '\nTimeout duration was set to 1.',
+                            'TimeoutNegativeWarning');
+      } else if (NumberIsNaN(after) && !warnedNotNumber) {
+        warnedNotNumber = true;
+        process.emitWarning(`${after} is not a number.` +
+                            '\nTimeout duration was set to 1.',

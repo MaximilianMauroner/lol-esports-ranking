@@ -1,0 +1,138 @@
+[
+  {
+    "argv": [
+      "node",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+      "old",
+      "early-0.507ms"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 1,
+    "expectedCode": 1,
+    "signal": null,
+    "stdoutSha256": "f6653fcef0749dd5aa1e18be146dcc6767aeca33451deade673828297fdef99c",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+      "old",
+      "full-interval"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "911fc26f35eace17bc6069a3e7206e4c8be820983f71e9cf8aa4c126efeff2e7",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+      "old",
+      "repeated-early"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 1,
+    "expectedCode": 1,
+    "signal": null,
+    "stdoutSha256": "9b68a350d4985abec98884044cee174ead73eee2040461ae3c6cd44731e33da7",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+      "new",
+      "early-0.507ms"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "c8206bd3d6248976e935ab3de7ea08b1bb7b5994615a7b7557be81a3b0bef6bc",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+      "new",
+      "full-interval"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "858f2207a2b67c5775eed6b57116b95cbd4cbc21c43c250fdd60ffb6942e9983",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+      "new",
+      "repeated-early"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "072f7711e1792810cb98b82fbbf74e9667cfce0db0f0ba52dd57a1e029ebe3e2",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "--check",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/abab-driver.mjs"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "--check",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/compare-abab.mjs"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "node",
+      "--check",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "bash",
+      "-n",
+      "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/locked-abab.sh"
+    ],
+    "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+    "code": 0,
+    "expectedCode": 0,
+    "signal": null,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

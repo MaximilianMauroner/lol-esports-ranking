@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "bash",
+    "-n",
+    "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/locked-abab.sh"
+  ],
+  "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+  "code": 0,
+  "expectedCode": 0,
+  "signal": null,
+  "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

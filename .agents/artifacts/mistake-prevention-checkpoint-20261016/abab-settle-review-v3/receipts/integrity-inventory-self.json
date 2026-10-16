@@ -1,0 +1,12 @@
+{
+ "name": "integrity-inventory-self",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+ "argv": [
+  "sha256sum",
+  "--check",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/inventory-self-sha256.txt"
+ ],
+ "exit": 0,
+ "stdoutSha256": "a3c29e68ba57a4c0891ba262153556d611c4644403726590db4b88c0a3bc77b5",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

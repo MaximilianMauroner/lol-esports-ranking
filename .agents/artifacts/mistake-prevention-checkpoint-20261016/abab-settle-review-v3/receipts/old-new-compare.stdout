@@ -1,0 +1,44 @@
+DIFFERS abab-driver.mjs old=533e7bdb6ccfa1e3f0c1dce24b0709a94a4edb0a91145aeb4cfe1db25f00c83a new=269e4c84a225452dc48f494b12cfdecdbcf7955dc972a677da01d97e59957a7a
+DIFFERS locked-abab.sh old=40c402b2e7d47fcf76fdf85d0741bc07de4005a55781997ec38bb1d6cb1e79de new=15675cf1f39a70557540647485b0a0313f1871aac1a93397ff3694b47423b7ff
+IDENTICAL compare-abab.mjs 15ebf3383424b63ae2739d2afc63ca79849df2ae1ebfbfac3cbc1b2d5d2b99bf
+IDENTICAL dependency-state-pins.json d0493cdf74e8534e38b21d8f54347266070567f136a184515fa2ee7d80ef3b2c
+IDENTICAL input-manifest.json fe49e2dd8f030caaa983a3f5c41e1e9640db64e7184032d41a8e82c19029cd65
+IDENTICAL input-sha256.txt 6ebbf284cb3a72b0f41d35e62e2b687527ced929a3eb48bfc89ab0c2b732ab30
+DIFFERS input-self-sha256.txt old=9b4184dab3d77f5a2ddb742079c52bafa347e90bd1958084bd35d4ced86459c5 new=e24f70865d2d5e7df73b597706e2825bdbb5941f230f617ee98e1476f3ef0365
+DIFFERS commands.md old=6cea578a27b899270ec8a74f9c9e958f390a0a2381e377e839afce3470ef1719 new=09b257ec9a784d5419faf649abc733a16ab88c11fa5b5382b2544f949aec3c6d
+DIFFERS source-package.json old=c9c8f6bb61a0f1074ea012f6478d34fd0b32dd68b761d73638563185df23cb69 new=cc63c2c198dcc1aa62e525a9fef37f0fcd6ca3ec05eabf8179b0376a015e4c4a
+--- full driver diff
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/abab-driver.mjs	2026-10-16 21:16:24.019193401 +0000
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/abab-driver.mjs	2026-10-16 22:51:19.952543401 +0000
+@@ -69,7 +69,14 @@
+   try { const u = new URL(url); return /^\/(data|tournament-data)\//.test(u.pathname) }
+   catch { return false }
+ }
+-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
++const pause = async (ms) => {
++  const deadline = process.hrtime.bigint() + BigInt(ms) * 1_000_000n
++  let remaining = deadline - process.hrtime.bigint()
++  while (remaining > 0n) {
++    await new Promise((resolve) => setTimeout(resolve, Number(remaining) / 1_000_000))
++    remaining = deadline - process.hrtime.bigint()
++  }
++}
+ async function barrier() {
+   const hrBefore = String(process.hrtime.bigint())
+   const pagePerfNow = await page.evaluate(() => performance.now())
+--- full launcher diff
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/locked-abab.sh	2026-10-16 21:15:42.077870042 +0000
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/locked-abab.sh	2026-10-16 22:51:19.953543409 +0000
+@@ -6,7 +6,7 @@
+ out=$4
+ unit=$5
+ ordinal=$6
+-prep=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2
++prep=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3
+ cd "$root"
+ awk '/^full / { for(i=1;i<=NF;i++) if($i ~ /^avg60=/) { split($i,a,"="); value=a[2]; found=1 } } END { print "memory_full_avg60=" value; exit !(found && value <= 5) }' /proc/pressure/memory || { printf 'preflight_refusal stage=memory-psi exit=65\n' >&2; exit 65; }
+ awk '/^MemAvailable:/ { available=$2; found=1 } END { print "MemAvailable_MiB=" available/1024; exit !(found && available >= 1536*1024) }' /proc/meminfo || { printf 'preflight_refusal stage=available-memory exit=65\n' >&2; exit 65; }
+--- packaged diff.patch vs fresh diff (paths normalized)
+DIFFPATCH_MATCHES_FRESH
+--- metadata diff check
+METADIFF_MATCHES_FRESH

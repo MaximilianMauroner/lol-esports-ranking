@@ -1,0 +1,707 @@
+[
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-instrument-explain-v1-result.md",
+    "bytes": 23615,
+    "sha256": "8ea0c542486dc87afbbccffdfcc1e44566583fa98592abc524685e8978a8e933"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-instrument-root-design-v1.json",
+    "bytes": 4397,
+    "sha256": "10106b7802cd6b22a0fada56db80c1feef5b0c3aa07bdab74ac34a81e67e0ffd"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-root-countersign-v4.json",
+    "bytes": 5306,
+    "sha256": "d47688951272c0e2484ab0b380a9e76debe6a59be72c7691badac051af2b9a02"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-proof-fix-v2/observe.mjs",
+    "bytes": 2210,
+    "sha256": "3458676fdec2e12337e1d7a699e3d1f55e23db20655eff2babb4dbfef8493329"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-proof-fix-v2/source-identity.mjs",
+    "bytes": 3520,
+    "sha256": "3e84290e374284cded58cc330b5ddbaa6f78ec38602f133a3adc858de0d78ff9"
+  },
+  {
+    "path": "/home/codex/work/lol-esports-ranking/.agents/artifacts/mistake-prevention/plan.md",
+    "bytes": 61130,
+    "sha256": "62b2c1d9d25fe00028273abf7c6dc03a7363dc72d603a61412a33c80c1e8799c"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/authority.json",
+    "bytes": 937,
+    "sha256": "3cc7b4833441d9e483cb08a302e8586d039e4480f1139f49866b71d460174d6e"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/browser-observer.js",
+    "bytes": 2864,
+    "sha256": "872f1e3739d858ab416ef6f447cc9331774186d61bbdc05712190538558f26e5"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/commands.md",
+    "bytes": 20845,
+    "sha256": "a6acb18cb3d470586b6f38f210d4c87914b4923dc4cd99bc31e0bb98e3a13dd0"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/copy-receipts.json",
+    "bytes": 5404,
+    "sha256": "9a9e5d6a33ca493eeca163aece52d532d4d7250b0c0926c089cc276cd82d1519"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/final-source-helper-input-sha256.txt",
+    "bytes": 12938,
+    "sha256": "b4b100231e99c29b9089b64c231d8b27e97e913109020cc000dad85ba3871fe0"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/finalize-package.py",
+    "bytes": 21235,
+    "sha256": "393a14a17c17f8a57e46eb178c8938576cf97c6e60e690c8f27788fc72d53e13"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fix-response.json",
+    "bytes": 2934,
+    "sha256": "de5a6c65976d1560ba186610f96563e9e6562f152fa0143d0f22408ef3ed3e95"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fix-response.md",
+    "bytes": 2188,
+    "sha256": "3ffabb38f8f05bf4169b9258aa6a82212cc4b19d1a94d4c1320beb0600e65f5f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fixture-host.mjs",
+    "bytes": 23725,
+    "sha256": "0bd06eef1c5d8bc10889334a37b108e277e580f03a5ec6a1327531af6bbce2bf"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fixture-origins.json",
+    "bytes": 6713,
+    "sha256": "e3182bf2461f16657512c6092da2056cb2ceb1937d4c6d1e6c8f814f50f740f7"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/handoff.md",
+    "bytes": 3234,
+    "sha256": "3a859d042051573143b47930dc9274f605355285f778e547bebab66ef420c26b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/inventory-self-sha256.txt",
+    "bytes": 187,
+    "sha256": "fa7c6c3ca821e19e754640865645a29a9489ac88cd4b4a8e86178a745e46bb25"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/inventory-sha256.txt",
+    "bytes": 19874,
+    "sha256": "6cabfeae9427c03e26e1b7d4527ebfb484b5c8a97cfc0b5c074b608733e1407a"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/lane4-proposal.md",
+    "bytes": 2296,
+    "sha256": "7e140ac3b4a5a6f55bfcf6656da454740b2810ee65e8faa5a1f142207c91d8e3"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/locked-run.sh",
+    "bytes": 1371,
+    "sha256": "752e81b3019883361193db9f71e637988e7bd7019ede9c5168e9d972b889e175"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/native-check-carry.json",
+    "bytes": 7247,
+    "sha256": "f258a2b144fc6664d98b1a39719cba5996455f674695e2d7705c9ca00a1f5b9d"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/native-file-checks.json",
+    "bytes": 3752,
+    "sha256": "355d2c0651966c8d0ab076087795acd3f0818ef098bdf8a82819665484bc3159"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/control-results.json",
+    "bytes": 45361,
+    "sha256": "2e5ce171acbe66db4a2d1d6341ca0718b45f9160c2147133e44ebb5e0a0776a1"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-arrival.txt",
+    "bytes": 274,
+    "sha256": "3b0d6f2b4721b2cf03356d7170f850e8511a97cfd2465b5479eb7ec6f72c2cb1"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-close.txt",
+    "bytes": 143,
+    "sha256": "fa7d33caa9b44ee08fb7ebe6412a50d9ecaa12208229bd256ee83feccf1527df"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-exit.txt",
+    "bytes": 127,
+    "sha256": "e7316f195fbd13d5dc590b64f9b0212aa1b3415fff7560cbb41808565ef475a6"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-finish.txt",
+    "bytes": 881,
+    "sha256": "e82460bdfa50d3ca3e449eaba9d693fca8d4c6404d58b5194c4402cdf99f73bd"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-ledger.txt",
+    "bytes": 330,
+    "sha256": "555bf4682342e237032cdc10a00db59fca8ecb0a3d3c1bbb508b9c34b170d357"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-responseError.txt",
+    "bytes": 102,
+    "sha256": "03210c1c30c7fabd5dcb24b43fc45f2942352b181069fce827c54fa26c7e88cf"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/new-stop.txt",
+    "bytes": 397,
+    "sha256": "a303fe976c1283086d07c6c051a76ae7e1b47751c17bed9893f7569728754b4f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-arrival.txt",
+    "bytes": 274,
+    "sha256": "3b0d6f2b4721b2cf03356d7170f850e8511a97cfd2465b5479eb7ec6f72c2cb1"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-close.txt",
+    "bytes": 143,
+    "sha256": "fa7d33caa9b44ee08fb7ebe6412a50d9ecaa12208229bd256ee83feccf1527df"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-exit.txt",
+    "bytes": 127,
+    "sha256": "e7316f195fbd13d5dc590b64f9b0212aa1b3415fff7560cbb41808565ef475a6"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-finish.txt",
+    "bytes": 881,
+    "sha256": "e82460bdfa50d3ca3e449eaba9d693fca8d4c6404d58b5194c4402cdf99f73bd"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-ledger.txt",
+    "bytes": 240,
+    "sha256": "07d1d671356345949549af8faf1407d236f14ae994d891e678e043a8b9a47c17"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-responseError.txt",
+    "bytes": 102,
+    "sha256": "03210c1c30c7fabd5dcb24b43fc45f2942352b181069fce827c54fa26c7e88cf"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted/old-stop.txt",
+    "bytes": 397,
+    "sha256": "a303fe976c1283086d07c6c051a76ae7e1b47751c17bed9893f7569728754b4f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/extracted-functions.json",
+    "bytes": 4804,
+    "sha256": "b5b295bce68292e55f60ab3887c8f98ef65f7121787f87b09b55fe9bf05561b2"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/host-syntax.receipt.json",
+    "bytes": 1175,
+    "sha256": "8c9d8c9256d8c75eef4d0c3990d8063b8c36c9d1e97bd7c61fb0121a3f876ea4"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/host-syntax.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/host-syntax.stdout",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/ledger-control.mjs",
+    "bytes": 10035,
+    "sha256": "4a2cee552a3497f64087f0944fd6e32568381fbc45e7a0eb992dd33ffe5a15dd"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/ledger-control.receipt.json",
+    "bytes": 1341,
+    "sha256": "5c1ba55fae077df748df0409c30c1d46e7b5a1227eed39477abd3ef09a2aec40"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/ledger-control.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/ledger-control.stdout",
+    "bytes": 910,
+    "sha256": "e80d24a34bf416b8890879185e7a1483df38c9082df1ec730e47cb30fbcacd44"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-arrival-transient.mjs",
+    "bytes": 4980,
+    "sha256": "5dd63c3ec4ef4fd068c31c780a109eb9441dbdad893017d97668f0f3e53e8a55"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-arrival-transient.receipt.json",
+    "bytes": 3515,
+    "sha256": "1e2586db22db39723459aa505937e8df6e1bc76b89ac3d5c0874b3c753f4660c"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-arrival-transient.stderr",
+    "bytes": 629,
+    "sha256": "52cd391bfa9021c92d771d1ee0d8c17cb97ce5c0e793a067ece6dee10db7e20b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-arrival-transient.stdout",
+    "bytes": 1196,
+    "sha256": "5356a5cae2a4635a4a24a1ba91ca151bc422ec461c36c11c85a5220202fab587"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-close.mjs",
+    "bytes": 4968,
+    "sha256": "d56e70f03826b6fe832fdf1fa02a32d56020cb9207cd6029fbd2a26cea26e3de"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-close.receipt.json",
+    "bytes": 3467,
+    "sha256": "a879d8cd6485c4b6ad4db3ba828e78eaa067fe802c4943cfdfc9bdb834017413"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-close.stderr",
+    "bytes": 861,
+    "sha256": "41990bdd9b838d2688079cc13cd5ec208905e4e95cca55af3d494c42ab896d78"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-close.stdout",
+    "bytes": 1007,
+    "sha256": "5e67fc60e522d0c640259075a333e312017486dce07bfccc02244cc550597759"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-finish-close.mjs",
+    "bytes": 4975,
+    "sha256": "405a0e2f9e1692a384019c728742583860f374a50d5e7360c6a2f55cb0e576b4"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-finish-close.receipt.json",
+    "bytes": 3495,
+    "sha256": "91e6d4fbbc67f8bae15e9cc462cf88d95ecae30af08b70fbe2b7b050d2f874ec"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-finish-close.stderr",
+    "bytes": 2553,
+    "sha256": "ceba8dd2f790f5ab175d83cf038317a338cfb23bcd295b86fd31454ffc0c2c34"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-finish-close.stdout",
+    "bytes": 294,
+    "sha256": "f65884b34d4a2b2a13a690116bbc7de99d9976936fe06717cb6cc53b9e2f5185"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-response-error.mjs",
+    "bytes": 4977,
+    "sha256": "6b080c4376e513233ae36fb221e757ac3c10ccfcad4f17f27a24c4265d759d04"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-response-error.receipt.json",
+    "bytes": 3503,
+    "sha256": "976b81300c91e5d8f1f0eddef8b0c200bd9f87b02ecad5626b88dea6018f400f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-response-error.stderr",
+    "bytes": 906,
+    "sha256": "12c4641f156464a7b03b9840c0b364bc0ca9fcba88b2e0a2ba7104aeb1fa251d"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-response-error.stdout",
+    "bytes": 1196,
+    "sha256": "b3fc9e32f25fa6bdd2cf5a0ef7f00ddd53a6a9a700d4473a06a0f4c3bc25af9d"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-serialization.mjs",
+    "bytes": 4976,
+    "sha256": "33aa075cc0568af54f78a85417893689b61d72a4b80617f8d26c90d6fd7fcb12"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-serialization.receipt.json",
+    "bytes": 3499,
+    "sha256": "c9c14c5fb34d3b3f01c64c3bbd402f963310885bba29dab819544a4af54817c7"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-serialization.stderr",
+    "bytes": 581,
+    "sha256": "712ee7e2d9925d1813c9f6ead47ac6a3b4d320b0420bda91e4146fd774628dc2"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-serialization.stdout",
+    "bytes": 1196,
+    "sha256": "83bb450b0940e0541a8e40a7b513b83fa692241a806bfa57095dab25c5f9613c"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-success.mjs",
+    "bytes": 4970,
+    "sha256": "ac8a6d49285083f3172725617d776952f87f257f28a0b7f668d166c0eecadc24"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-success.receipt.json",
+    "bytes": 3475,
+    "sha256": "ef16030e1d5d9f110e944e4e64b61821a98a29c10e06b3a1d92d6efef207c456"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-success.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/new-success.stdout",
+    "bytes": 1196,
+    "sha256": "0aba13593406dc4ed43d406266c4d45c71d8f2f0ad267675b9d284221a006d1b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-arrival-transient.mjs",
+    "bytes": 4890,
+    "sha256": "86492808f4bf04e43267c7b8733ca5f384beb8fd5d3219208d5fb10c3a1cdde3"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-arrival-transient.receipt.json",
+    "bytes": 3515,
+    "sha256": "5a34e3d8ee1c7fd025b41a06a239db00fb16cc8eac321576fc368753e499a067"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-arrival-transient.stderr",
+    "bytes": 55,
+    "sha256": "9fed9ec6d3a64de1c3d0b28b83c2a99d648a873b4963cf0f7022ff81bb256dba"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-arrival-transient.stdout",
+    "bytes": 1195,
+    "sha256": "ee0f7d126501cc59b003052ea878b78b7a011fff3a32810dcebe581435c82c07"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-close.mjs",
+    "bytes": 4878,
+    "sha256": "1203076088227e54ec0e657a562049f3b482dce9f956e7c7d891c2f5c24090a4"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-close.receipt.json",
+    "bytes": 3467,
+    "sha256": "9ffaec0ab5fe3309e7f352c3f2162cdb542fff7b5b20c4342ede8aa7680da21e"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-close.stderr",
+    "bytes": 1082,
+    "sha256": "9e1730d6e5ee8ecf25c8eab21aad9f0b25d1a57da1ab43333537a5ee9811564e"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-close.stdout",
+    "bytes": 33,
+    "sha256": "e52509f55c4e74f3b6532d655a36a311589cd814da04e539c64b0d984ecd4e9b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-finish-close.mjs",
+    "bytes": 4885,
+    "sha256": "5c7549d3694f7a8b02866d758ef2395af6505430dfebd2b090856dbe72325a1f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-finish-close.receipt.json",
+    "bytes": 3495,
+    "sha256": "2f3437e3403c0e199dfcb6e012bbad90732067246762f92bd080defa2b308047"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-finish-close.stderr",
+    "bytes": 3957,
+    "sha256": "bb20260ee034a2207a7207bf59312dbe40cd0d539afa1c07bf5a535b8a239af2"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-finish-close.stdout",
+    "bytes": 33,
+    "sha256": "e52509f55c4e74f3b6532d655a36a311589cd814da04e539c64b0d984ecd4e9b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-response-error.mjs",
+    "bytes": 4887,
+    "sha256": "4a34a9d461874875dcf53a5f4df638eb86e371990606ce54ea965a4504795fa8"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-response-error.receipt.json",
+    "bytes": 3503,
+    "sha256": "de6a9c222ba2dd9d4e50267610fc43f1b745b728e1d36d80b6b9f97490e08cbd"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-response-error.stderr",
+    "bytes": 1136,
+    "sha256": "7471a6588b6fe342dd1c38f66672aaafeafa506a7d1e8168e788e5dd7ebe7df0"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-response-error.stdout",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-serialization.mjs",
+    "bytes": 4886,
+    "sha256": "2d902aea9d4e1bea842a117731dcf21813f72214d7e8452748adaefd10ce3890"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-serialization.receipt.json",
+    "bytes": 3499,
+    "sha256": "0fc61cead2749d4f23c3660663aee6806810bc058d50f12f97adb7809b71905c"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-serialization.stderr",
+    "bytes": 1082,
+    "sha256": "4f9691e9d167bc9a74d03e74724f5b2c90c5503b5957ee6fd29f25b47ae78bd7"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-serialization.stdout",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-success.mjs",
+    "bytes": 4880,
+    "sha256": "e4cf504b4b398097770b25208a9ef5919b4941f733f3cb024e861cba87f66faa"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-success.receipt.json",
+    "bytes": 3475,
+    "sha256": "a1c125bb10e58bb4847563bbc51a3735db527985ad3d9bfe302bf1b46dc7a647"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-success.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/old-success.stdout",
+    "bytes": 1196,
+    "sha256": "30354e5c977af662a50b6b29a13d75cb7c868aa11b54f23835756da3c0d08740"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/wrapper-syntax.receipt.json",
+    "bytes": 1158,
+    "sha256": "0be44b02032f1ed6bffb802a37dc756f9607ceaee9f6339c8fe3345a4f4c49e7"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/wrapper-syntax.stderr",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/nativechecks/wrapper-syntax.stdout",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/old-after.json",
+    "bytes": 17548,
+    "sha256": "039294567f9974581d4e2ccda597bf881c1a91bef722bb151cf600cf89d95d82"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/old-before.json",
+    "bytes": 17548,
+    "sha256": "039294567f9974581d4e2ccda597bf881c1a91bef722bb151cf600cf89d95d82"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/owned-file-inventory.json",
+    "bytes": 26555,
+    "sha256": "f447149891b7de878d5a0e3ef03032ddf715019069b54125bc63d8f8c2f7bbda"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/preview-tool-metadata.json",
+    "bytes": 40239,
+    "sha256": "3f23c7ea628c76a8cf0fe5231fefaca8a52bd0dc9ae1f04a341b228947c4b8d6"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/record5-rosters-origin.json",
+    "bytes": 1355,
+    "sha256": "53255dc1ae295f52426713cf9aa0c131902086b2881c4f057736f130be76e99a"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/region118-source-origin.json",
+    "bytes": 2614,
+    "sha256": "9ba6a8fa68c0f405d4f6f08cbc5364bbb7c043e92a24f00ec7994580547f0c70"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/source-input-sha256.txt",
+    "bytes": 8356,
+    "sha256": "cfa53fd7f3bd122f40d141f0dd677caca8c3aaff755f5818c3b305019251aecb"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/status.json",
+    "bytes": 1572,
+    "sha256": "fefcaffb58ff8ac7e2a3b618fdce198c4c0912fb2c831b0567eb51509328f0f3"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/trail.md",
+    "bytes": 2500,
+    "sha256": "3e861681c04443aaf714d6ad2d09ae6cf49ce4992462c8a819550b5594aac7b7"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/v3-to-v4-all-changes.diff",
+    "bytes": 9679,
+    "sha256": "aa9f8eb65ce9a204c2a446a067fdc6b2191a9d386199db757401b6a6093e008b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/v3-to-v4-functional-path.diff",
+    "bytes": 3506,
+    "sha256": "1c0684643ff5318d79ebcb1c37d7cf96116ae0687f4d1a7f267193865e0589dd"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/classifier-selfcheck.mjs",
+    "bytes": 2598,
+    "sha256": "028b3fcc127c69fa2a908b6ceffe1514a0869cd10a4705fba8d6f80196d72f1f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/classify-journey.mjs",
+    "bytes": 3626,
+    "sha256": "beb2e3920fc3f546129c52cb11a0fbd17b1db2d779037e5cdc917acf6802a00e"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/compare-requests.mjs",
+    "bytes": 1496,
+    "sha256": "ceae983ea20747530bac5910e008c9aa351d229c05708c40eeb4baf536c072e3"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/durable_launch.py",
+    "bytes": 3179,
+    "sha256": "d1e0a2bb44f042d552b1b207302af7200f9f27e2afb7415ad4494a0396ecd9a8"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/durable_runner.py",
+    "bytes": 5165,
+    "sha256": "05891d00f20051a05f248a10762d7742e6371c205d958d8b22e6b87005d5d998"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/locked-unit.sh",
+    "bytes": 1241,
+    "sha256": "ef7820799852f4915f9b9a098b5d7dbdb128ed8f1d3bdd43d2a2ed3b8ab2c790"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/preflight.sh",
+    "bytes": 411,
+    "sha256": "bc2bbba9964617808fc3c2dd96d60ba884f8865c1fd62d552c66dac1e1e8784d"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/prepare-sources.sh",
+    "bytes": 1321,
+    "sha256": "3d7fc376a88a5bdf21944a6e46b717fdb5e6947a4471665e430512206d7c5d4f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/request-receipts.mts",
+    "bytes": 9771,
+    "sha256": "dc007724b88bbefcff1a6bbc6efeb419677a52a66b6fdcfcf1b7d08b23afdc9f"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/runs.sh",
+    "bytes": 6165,
+    "sha256": "421c3e27e790e19102735134c64a3a6ab2c121741462484e6c5f105c90125986"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/scope-probe.mts",
+    "bytes": 9835,
+    "sha256": "d7a607fa65a29f2cf10b8452a4fa791769025160244927693bccccb308853797"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/verify-source.py",
+    "bytes": 2650,
+    "sha256": "315e7cf23f3527f4aea82eb5a1078444ded287bcf8ca9e5e1fbeb0f26df96540"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/verify-source.sh",
+    "bytes": 613,
+    "sha256": "9326c05285271e32cbc60b63a235ba658b233c081966d357451cf3bb140cc98b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/r3/v4/drivers/warm-up.mts",
+    "bytes": 9415,
+    "sha256": "d4de9de14e402c578bda24d43b592cc41b8bb8dbeeaf662dceb10b7897a8dab7"
+  },
+  {
+    "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/tests/rankingTournamentBoardBrowser.test.ts",
+    "bytes": 10688,
+    "sha256": "342eee3f4e0d0e3f4729f740455f2fbe1b27c29e615a8fcdd26a3e0e60b062b3"
+  },
+  {
+    "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/lib/prefetch.ts",
+    "bytes": 1151,
+    "sha256": "729adc31613f61cb58bca8b49915261f44e543baafc1c0f42f7c489d1b424954"
+  },
+  {
+    "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/src/App.tsx",
+    "bytes": 40627,
+    "sha256": "eaab70ac9e9ddcf9491f481d1c020665b8783e6dce728bae19cbac899d7e2437"
+  },
+  {
+    "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/playwright-core/package.json",
+    "bytes": 876,
+    "sha256": "f061c58427e47e843e26d201f0a57076c734e57c734ecbbd87d4a23b7a20db9b"
+  },
+  {
+    "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/playwright-core/browsers.json",
+    "bytes": 1137,
+    "sha256": "545d52f8382c391e605562c330e9c1c534a16045898203037a49bb8bd769a946"
+  },
+  {
+    "path": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610/node_modules/playwright-core/lib/coreBundle.js",
+    "bytes": 3477183,
+    "sha256": "549070af3acabb3efcc4f55bfe6210f9f7c2fcf633cf7eaa59bfe60719969171"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-author-v1-request.json",
+    "bytes": 10287,
+    "sha256": "95310fbd20939383ddb87c7a6b79226ed381fa8a8ea0c491ed49835c69ecb90b"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-review-v1/report.md",
+    "bytes": 17651,
+    "sha256": "429cee3692498d408c3639269bfea83db1afe76818e302d0fc0c3cb5bcdb032a"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-review-v1/verdict.json",
+    "bytes": 3642,
+    "sha256": "9bc0936a9d08fcba69dd7e08f8213cc9a2dd3f3a1cc39dd474a5e56a0e11fa3a"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-baseline-setup-root-countersign-v1.json",
+    "bytes": 2534,
+    "sha256": "27a6e74e15bf971dc40be4d3e2b09984f4997d2847dd9bcdd8201fa7aac93b10"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-baseline-source-prep-v1/dependency-identities.json",
+    "bytes": 3414,
+    "sha256": "58638e079f69ca89d42831edcb218c54746c5dd065de61509e605ce79fa97287"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/input-manifest.json",
+    "bytes": 31809,
+    "sha256": "34bf50eb1c8ff393b892005e627202d6e8c0d1d063ca97330fe04cf45d5a089e"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/inventory-sha256.txt",
+    "bytes": 1001516,
+    "sha256": "88478f5c4bfc580e564984321376e67999599f353523670eaadd8d76b12a5045"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/inventory-self-sha256.txt",
+    "bytes": 178,
+    "sha256": "8f11f843f84e9808e11293563e380f5efe412c0e55cc177b5f050f0e5f14c841"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/native-controls.mjs",
+    "bytes": 14555,
+    "sha256": "d7546dd955451556f3f93f8507e3e91fdf3c4c8f1e6206c0a78f5a0dc7dfaea1"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/native-controls-r3/results.json",
+    "bytes": 18390,
+    "sha256": "61bcc8903ab9115871930a96da7ae1dd63c9e3e01b0237bb386429d53a3ca2b3"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/abab-driver.mjs",
+    "bytes": 20080,
+    "sha256": "f7e359ac52a7aaf120037fe7ee6dce283b44fc9640236aacd884a8fb18707aa7"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/compare-abab.mjs",
+    "bytes": 28058,
+    "sha256": "7785e5a2ee05e6c0bf6e0471b0e6854abe78855fdca740a1ec982b169cbe4a5c"
+  },
+  {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1/locked-abab.sh",
+    "bytes": 1623,
+    "sha256": "13f21199215722a84f92cee16ffb9156b1f14fbc5df63b7a4b56a96317e94a00"
+  }
+]

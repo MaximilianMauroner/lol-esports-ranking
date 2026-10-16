@@ -1,0 +1,124 @@
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/commands.md
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/commands.md
+@@ -1,3 +1,15 @@
++# Source-only settle revision v3
++
++All commands below are UNEXECUTED for the new campaign. The old baseline ran once with code 0, but B1 remains BLOCKED. Its three short windows cannot be repaired retroactively. It supplies no unit to a future four-unit campaign. No automatic retry or next head is released.
++
++Root must first obtain fresh independent FIXDIFF review and a new external countersign of this package inventory. Root then chooses a NEW four-unit campaign output parent and gives a new explicit ONE-unit allocation. No campaign path or release is assigned by this package. The unchanged observer and host are referenced as source dependencies. No consumed launcher or runtime receipts are copied.
++
++Before each future admission, retain actual numeric exits for the external pin check and all four integrity commands. Check both uppercase and lowercase npm_config_workspace_dir names and require both absent without deleting an override. Compare all seven dependency paths against the side-specific unchanged pin map. Repeat the unchanged canonical native resource gate only under a future explicit allocation. No such inspector is run during this source task.
++
++The pause deadline starts at function entry after postcondition-met. It checks process.hrtime.bigint after each callback and waits for any remaining raw time. The minimum remains 3000 ms. Timer scheduling can overshoot, and the existing 15m outer and 13m host budgets remain hard limits. No cached-libuv-clock cause is asserted. No callback count or fixed additional delay replaces the elapsed-time check.
++
++Future metadata manifests must exclude their own hash file. A detached digest must be outside the covered inventory. Root hashes and countersigns the final inventory externally. D1 remains FAIL in the original metadata. This policy does not modify the original writer or metadata, recover an exit, or change an existing verdict.
++
+ # Run the four held R3 request-attempt units
+ 
+ All commands are HELD. This source package gives no runtime release. Run no browser, server, generator, HTTP probe, product test, build, or warmup during source review.
+@@ -17,7 +29,7 @@
+ Replace each placeholder with a root-assigned absolute path before execution. Each output parent must exist. Each unit output must not exist. The reviewed observer creates it. The driver creates driver and the unchanged host creates session. None of these commands was executed by the author.
+ 
+ ```bash
+-PREP=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2
++PREP=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3
+ OLD=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-proof-fix-v2
+ BROWSER_LOCK=/home/codex/.local/state/pstack/mistake-prevention-20261015/browser.lock
+ R3_BASELINE_ROOT='/root-assigned-adopted-baseline-path'
+@@ -27,18 +39,18 @@
+ R3_BASELINE_TREE=e0652c073d5308fb140a46a55335734d4b3bbaf8
+ R3_HEAD=d38add5f228e67022a3001e27a820ad76657f37f
+ R3_TREE=10c19882806045f340674c6627b4715929ee020e
+-R3_OUT_1='/root-assigned-existing-parent/new-baseline-1'
+-R3_OUT_2='/root-assigned-existing-parent/new-head-1'
+-R3_OUT_3='/root-assigned-existing-parent/new-baseline-2'
+-R3_OUT_4='/root-assigned-existing-parent/new-head-2'
+-R3_REPORT='/root-assigned-existing-parent/new-abab-report.json'
++R3_OUT_1='/root-assigned-NEW-campaign-parent/new-baseline-1'
++R3_OUT_2='/root-assigned-NEW-campaign-parent/new-head-1'
++R3_OUT_3='/root-assigned-NEW-campaign-parent/new-baseline-2'
++R3_OUT_4='/root-assigned-NEW-campaign-parent/new-head-2'
++R3_REPORT='/root-assigned-NEW-campaign-parent/new-abab-report.json'
+ ```
+ 
+ Before EACH admission and before the comparator, Root or its owner must perform the native pin check below. Obtain R3_REVIEWED_INVENTORY_SHA256 from a fresh independent review and Root countersign outside this package. Do not set it from this package's detached file or from a newly computed digest. Retain the actual command and exit evidence.
+ 
+ Run all four existing integrity commands after that pin check, before EACH admission and before the comparator. An input mutation means BLOCKED. Do not repin a living input, waive a mismatch, spend an allocation on a failed check, or replace the unit.
+ 
+-The inventory excludes only its own file and detached digest. input-sha256.txt preserves all 128 original pins and adds fix provenance. Old review and control receipts remain read-only provenance at their original paths. They give no ABAB credit.
++The new inventory excludes only itself and its detached digest. The 141 input pins are byte-identical to v2. The old 750-entry inventory stays read-only historical provenance at its original path. No living input is repinned. Old review and control receipts give no new campaign credit.
+ 
+ ```bash
+ set -euo pipefail
+@@ -110,4 +122,4 @@
+ 
+ The report includes initialLoadComparisons for baseline units 1 and 3 and head units 2 and 4. Each entry contains both initial real-load attempt multisets and their equality. A difference is reported. It does not block by itself. Initial failures, aborts, missing terminal or observer coverage, load quiet, and barrier gates still block. Loaded-boundary optimizer freeze and every postloaded attempt rule stay in force. No abort allowlist exists.
+ 
+-Do not run the native-controls script again in the frozen package. Full new synthetic inputs and raw exits are in native-controls-v2. The ten old controls remain historical at their pinned v1 paths. A change needs new concern-specific proof in a new owner namespace.
++The native-controls script is not copied into this revision. Do not run it from any old package. Full new synthetic inputs and raw exits are in native-controls-v2. The ten old controls remain historical at their pinned v1 paths. A change needs new concern-specific proof in a new owner namespace.
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/source-package.json
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/source-package.json
+@@ -1,16 +1,15 @@
+ {
+-  "version": 2,
+-  "state": "FROZEN SOURCE PACKAGE. ACTUAL ABAB UNRUN. ALL RUNTIME HELD.",
+-  "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2",
++  "version": 3,
++  "state": "FROZEN SOURCEONLY. Runtime UNRUN. New campaign UNRELEASED.",
++  "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+   "sources": {
+-    "abab-driver.mjs": "533e7bdb6ccfa1e3f0c1dce24b0709a94a4edb0a91145aeb4cfe1db25f00c83a",
+-    "locked-abab.sh": "40c402b2e7d47fcf76fdf85d0741bc07de4005a55781997ec38bb1d6cb1e79de",
+-    "compare-abab.mjs": "15ebf3383424b63ae2739d2afc63ca79849df2ae1ebfbfac3cbc1b2d5d2b99bf",
+-    "native-controls.mjs": "f75af625cff0ab5d7fbd3ed80597832bcdac6d6c870e30f40ef404e40a50a66c"
++    "abab-driver.mjs": "269e4c84a225452dc48f494b12cfdecdbcf7955dc972a677da01d97e59957a7a",
++    "locked-abab.sh": "15675cf1f39a70557540647485b0a0313f1871aac1a93397ff3694b47423b7ff",
++    "compare-abab.mjs": "15ebf3383424b63ae2739d2afc63ca79849df2ae1ebfbfac3cbc1b2d5d2b99bf"
+   },
+   "instrumentSources": {
+-    "abab-driver.mjs": "533e7bdb6ccfa1e3f0c1dce24b0709a94a4edb0a91145aeb4cfe1db25f00c83a",
+-    "locked-abab.sh": "40c402b2e7d47fcf76fdf85d0741bc07de4005a55781997ec38bb1d6cb1e79de",
++    "abab-driver.mjs": "269e4c84a225452dc48f494b12cfdecdbcf7955dc972a677da01d97e59957a7a",
++    "locked-abab.sh": "15675cf1f39a70557540647485b0a0313f1871aac1a93397ff3694b47423b7ff",
+     "compare-abab.mjs": "15ebf3383424b63ae2739d2afc63ca79849df2ae1ebfbfac3cbc1b2d5d2b99bf",
+     "input-manifest.json": "fe49e2dd8f030caaa983a3f5c41e1e9640db64e7184032d41a8e82c19029cd65",
+     "dependency-state-pins.json": "d0493cdf74e8534e38b21d8f54347266070567f136a184515fa2ee7d80ef3b2c"
+@@ -23,12 +22,13 @@
+     "bodyEdited": false
+   },
+   "priorPackage": {
+-    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-v1",
+-    "inventorySha256": "88478f5c4bfc580e564984321376e67999599f353523670eaadd8d76b12a5045",
++    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2",
++    "inventorySha256": "5c883638154d354e74af44511c7f4a85e2c23f46211489e1090d0bb39f150b4e",
++    "historicalInputPins": 141,
++    "historicalInventoryPins": 750,
+     "receiptsCopied": false
+   },
+   "inputPins": 141,
+-  "preservedOriginalInputPins": 128,
+   "runtimeUnitOrder": [
+     "baseline",
+     "head",
+@@ -45,7 +45,12 @@
+   },
+   "headRoot": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610",
+   "unitAllocationOwner": "Root",
+-  "nextGate": "Fresh independent FIX-DIFF review, then Root countersign and resource admission. No runtime approval from author.",
++  "nextGate": "Fresh independent FIXDIFF review and Root external countersign PENDING. New explicit one-unit allocation required.",
+   "mergeAuthority": false,
+-  "standingRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run."
++  "standingRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.",
++  "authorReviewApproval": false,
++  "runtime": "UNRUN",
++  "newCampaign": "UNRELEASED",
++  "oldBaseline1": "BLOCKED, no retroactive credit",
++  "metadataPolicy": "Inventory excludes itself and detached digest. Root pins final inventory externally. Original D1 FAIL retained."
+ }
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/input-self-sha256.txt
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/input-self-sha256.txt
+@@ -1,2 +1,2 @@
+-fe49e2dd8f030caaa983a3f5c41e1e9640db64e7184032d41a8e82c19029cd65  /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/input-manifest.json
+-6ebbf284cb3a72b0f41d35e62e2b687527ced929a3eb48bfc89ab0c2b732ab30  /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/input-sha256.txt
++fe49e2dd8f030caaa983a3f5c41e1e9640db64e7184032d41a8e82c19029cd65  /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/input-manifest.json
++6ebbf284cb3a72b0f41d35e62e2b687527ced929a3eb48bfc89ab0c2b732ab30  /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/input-sha256.txt

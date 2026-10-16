@@ -1,0 +1,13 @@
+{
+ "name": "rerun-new-early-0.507ms",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3",
+ "argv": [
+  "node",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+  "new",
+  "early-0.507ms"
+ ],
+ "exit": 0,
+ "stdoutSha256": "c8206bd3d6248976e935ab3de7ea08b1bb7b5994615a7b7557be81a3b0bef6bc",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

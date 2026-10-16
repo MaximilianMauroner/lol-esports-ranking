@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-16T22:50:27.234189+00:00",
+  "verdict": "BLOCKED B1, no scoped baseline1 gate credit",
+  "review": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-baseline1-evidence-review-v1/verdict.json",
+  "reviewSHA256": "a71c63389299d265aa1566d920ce0b682a6f340935580a52673ffe3003378a87",
+  "independentExternalManifestSHA256": "0c2948da0de63003c6328ab608bb8291edc3c79a4aa586a9b6a503fea8c6ce42",
+  "rootManifestStrictActualExit": 0,
+  "rootManifestEntriesChecked": 193,
+  "rootOwnRawIntervalChecks": {
+    "a06-region-lck": {
+      "postSeq": 1156,
+      "barrierSeq": 1157,
+      "postHr": "61056803623815",
+      "barrierHrBefore": "61059803539914",
+      "observedNs": 2999916099,
+      "requiredNs": 3000000000,
+      "pass": false
+    },
+    "a07-region-all": {
+      "postSeq": 1162,
+      "barrierSeq": 1163,
+      "postHr": "61060033917094",
+      "barrierHrBefore": "61063033667345",
+      "observedNs": 2999750251,
+      "requiredNs": 3000000000,
+      "pass": false
+    },
+    "tail": {
+      "postSeq": 1197,
+      "barrierSeq": 1198,
+      "postHr": "61079756727957",
+      "barrierHrBefore": "61082756220982",
+      "observedNs": 2999493025,
+      "requiredNs": 3000000000,
+      "pass": false
+    }
+  },
+  "B1Disposition": "Preserve failedactualbaseline1 unchanged. No tolerance/rounding/threshold/timeout/budget change. Fixdriverimplementation tofulfil existingminimum, freshsourcefixreview/rootcountersign before anynewcampaignallocation.",
+  "D1Disposition": "Acceptindependentexternalmanifest as additionalobservationofunchangedunderlyingfiles ONLY; originalselfhashclaim/remnantstrictrootexit1 remainsFAIL. No missing exit recovered. Unitintegrityfacts supportedby117runtime+35othermetadata; doesnotcloseB1.",
+  "actualRequestObservation": "PW8/CDP8initial, postloaded1eachONLYtaggedcontrol, noncontrol0; descriptiveonly validitygateblocked.",
+  "nextHeadUnit": "NOT RELEASED",
+  "newFourUnitCampaign": "SOURCE PREPARATION ONLY, all four actualunits UNRUN/unreleased after requiredsource review",
+  "automaticRetry": false,
+  "gateWaiver": false,
+  "mergeAuthorized": false,
+  "MaxAcceptance": "PENDING"
+}

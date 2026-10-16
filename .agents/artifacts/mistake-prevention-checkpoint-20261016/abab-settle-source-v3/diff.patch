@@ -1,0 +1,29 @@
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/abab-driver.mjs
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/abab-driver.mjs
+@@ -69,7 +69,14 @@
+   try { const u = new URL(url); return /^\/(data|tournament-data)\//.test(u.pathname) }
+   catch { return false }
+ }
+-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
++const pause = async (ms) => {
++  const deadline = process.hrtime.bigint() + BigInt(ms) * 1_000_000n
++  let remaining = deadline - process.hrtime.bigint()
++  while (remaining > 0n) {
++    await new Promise((resolve) => setTimeout(resolve, Number(remaining) / 1_000_000))
++    remaining = deadline - process.hrtime.bigint()
++  }
++}
+ async function barrier() {
+   const hrBefore = String(process.hrtime.bigint())
+   const pagePerfNow = await page.evaluate(() => performance.now())
+--- /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/locked-abab.sh
++++ /home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/locked-abab.sh
+@@ -6,7 +6,7 @@
+ out=$4
+ unit=$5
+ ordinal=$6
+-prep=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2
++prep=/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3
+ cd "$root"
+ awk '/^full / { for(i=1;i<=NF;i++) if($i ~ /^avg60=/) { split($i,a,"="); value=a[2]; found=1 } } END { print "memory_full_avg60=" value; exit !(found && value <= 5) }' /proc/pressure/memory || { printf 'preflight_refusal stage=memory-psi exit=65\n' >&2; exit 65; }
+ awk '/^MemAvailable:/ { available=$2; found=1 } END { print "MemAvailable_MiB=" available/1024; exit !(found && available >= 1536*1024) }' /proc/meminfo || { printf 'preflight_refusal stage=available-memory exit=65\n' >&2; exit 65; }

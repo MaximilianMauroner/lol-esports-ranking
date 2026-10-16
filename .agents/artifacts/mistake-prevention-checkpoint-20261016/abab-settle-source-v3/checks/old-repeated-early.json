@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "node",
+    "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/pause-control.mjs",
+    "old",
+    "repeated-early"
+  ],
+  "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+  "code": 1,
+  "expectedCode": 1,
+  "signal": null,
+  "stdoutSha256": "9b68a350d4985abec98884044cee174ead73eee2040461ae3c6cd44731e33da7",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

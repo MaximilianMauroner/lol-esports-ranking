@@ -1,0 +1,12 @@
+{
+ "name": "rerun-source-audit",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3",
+ "argv": [
+  "python3",
+  "-I",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3/source-audit.py"
+ ],
+ "exit": 0,
+ "stdoutSha256": "d7df3a100a66f481e4d17a1d4a73b0e57144c83e65b7da2ea56c1dd8e5e11828",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,13 @@
+{
+ "name": "inventory-coverage",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+ "argv": [
+  "python3",
+  "-I",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3/tools/coverage.py",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3"
+ ],
+ "exit": 0,
+ "stdoutSha256": "2c542733be187dc4b44303667d3e32fe591589cce98b898aec22c3befeda45c4",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

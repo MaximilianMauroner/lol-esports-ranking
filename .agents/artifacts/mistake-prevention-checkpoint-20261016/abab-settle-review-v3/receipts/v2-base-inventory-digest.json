@@ -1,0 +1,11 @@
+{
+ "name": "v2-base-inventory-digest",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2",
+ "argv": [
+  "sha256sum",
+  "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2/inventory-sha256.txt"
+ ],
+ "exit": 0,
+ "stdoutSha256": "f39c6427e99e55f44a76b5a67bd8b5dc228cd7e04c1f46f840e77ac24a4ace7c",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

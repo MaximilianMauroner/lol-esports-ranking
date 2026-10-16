@@ -1,0 +1,56 @@
+{
+  "version": 3,
+  "state": "FROZEN SOURCEONLY. Runtime UNRUN. New campaign UNRELEASED.",
+  "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+  "sources": {
+    "abab-driver.mjs": "269e4c84a225452dc48f494b12cfdecdbcf7955dc972a677da01d97e59957a7a",
+    "locked-abab.sh": "15675cf1f39a70557540647485b0a0313f1871aac1a93397ff3694b47423b7ff",
+    "compare-abab.mjs": "15ebf3383424b63ae2739d2afc63ca79849df2ae1ebfbfac3cbc1b2d5d2b99bf"
+  },
+  "instrumentSources": {
+    "abab-driver.mjs": "269e4c84a225452dc48f494b12cfdecdbcf7955dc972a677da01d97e59957a7a",
+    "locked-abab.sh": "15675cf1f39a70557540647485b0a0313f1871aac1a93397ff3694b47423b7ff",
+    "compare-abab.mjs": "15ebf3383424b63ae2739d2afc63ca79849df2ae1ebfbfac3cbc1b2d5d2b99bf",
+    "input-manifest.json": "fe49e2dd8f030caaa983a3f5c41e1e9640db64e7184032d41a8e82c19029cd65",
+    "dependency-state-pins.json": "d0493cdf74e8534e38b21d8f54347266070567f136a184515fa2ee7d80ef3b2c"
+  },
+  "unchangedHost": {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-live-server-ledger-fix-v4/fixture-host.mjs",
+    "sha256": "0bd06eef1c5d8bc10889334a37b108e277e580f03a5ec6a1327531af6bbce2bf",
+    "variant": "request65",
+    "bodyCopied": false,
+    "bodyEdited": false
+  },
+  "priorPackage": {
+    "path": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-attempts-fix-v2",
+    "inventorySha256": "5c883638154d354e74af44511c7f4a85e2c23f46211489e1090d0bb39f150b4e",
+    "historicalInputPins": 141,
+    "historicalInventoryPins": 750,
+    "receiptsCopied": false
+  },
+  "inputPins": 141,
+  "runtimeUnitOrder": [
+    "baseline",
+    "head",
+    "baseline",
+    "head"
+  ],
+  "baseline": {
+    "adoptedStaticRoot": "/home/codex/.t3/worktrees/lol-esports-ranking/verify-r3-baseline-exact-65749ff-v1",
+    "expectedHead": "65749ff73a401959d9bdc5b1e8e4001ce4464e0e",
+    "expectedTree": "e0652c073d5308fb140a46a55335734d4b3bbaf8",
+    "trackedBlobs": 679,
+    "runtimeProved": false,
+    "pathAssignableUntilRootRelease": true
+  },
+  "headRoot": "/home/codex/.t3/worktrees/lol-esports-ranking/t3-14557610",
+  "unitAllocationOwner": "Root",
+  "nextGate": "Fresh independent FIXDIFF review and Root external countersign PENDING. New explicit one-unit allocation required.",
+  "mergeAuthority": false,
+  "standingRule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run.",
+  "authorReviewApproval": false,
+  "runtime": "UNRUN",
+  "newCampaign": "UNRELEASED",
+  "oldBaseline1": "BLOCKED, no retroactive credit",
+  "metadataPolicy": "Inventory excludes itself and detached digest. Root pins final inventory externally. Original D1 FAIL retained."
+}

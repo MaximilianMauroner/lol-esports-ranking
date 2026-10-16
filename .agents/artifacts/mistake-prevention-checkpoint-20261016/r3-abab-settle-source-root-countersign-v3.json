@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-16T23:01:31.901882+00:00",
+  "verdict": "APPROVE SOURCE ONLY",
+  "reviewTaskId": "node:delegated-task:command%3Amcp%3A949a8f62-2c4e-44ef-ac1d-080007800e5c%3Adelegate-task%3Amistake-r3-abab-settle-fix-review-v3-20261016T2258",
+  "reviewVerdict": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3/verdict.json",
+  "sourcePackage": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-v3",
+  "reviewedInventoryDigest": "108e28b81227bfa3fd8879ff0869b3a43348b971464aa1ac1937725f5ce51de3",
+  "reviewManifestDigest": "045d0cf9b112bfba472adf1b9ad46eff97e752af03c7a304b4c54a5583f63cc0",
+  "rootObservedIntegrityExits": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "rootObservedReviewManifestExit": 0,
+  "rootObservedReviewManifestEntries": 76,
+  "acceptedScope": "Only monotonic minimum pause fix and revision path; comparator byte-identical, strict3000ms and allcaps/actions/requestdefinitions unchanged",
+  "oldBaseline1": "B1 BLOCKED, no retroactive credit",
+  "D1": "Original selfmanifest FAIL retained",
+  "runtime": "UNRUN",
+  "newCampaign": "UNRELEASED",
+  "MaxAcceptance": "PENDING",
+  "mergeAuthorized": false,
+  "rule": "Standing rule from Max: BEFORE ANY merge, whether GitHub or any local merge/land step, STOP, report a short tldr covering what changes, verification and risks, and WAIT for Max's explicit go. Include this exact rule in every future delegate_task brief. No merge of any kind is authorized in the current run."
+}

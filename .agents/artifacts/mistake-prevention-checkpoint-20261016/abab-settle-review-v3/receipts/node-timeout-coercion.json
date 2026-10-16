@@ -1,0 +1,13 @@
+{
+ "name": "node-timeout-coercion",
+ "cwd": "/home/codex/.local/state/pstack/mistake-prevention-20261015/max-update/r3-abab-settle-fix-review-v3",
+ "argv": [
+  "node",
+  "--expose-internals",
+  "-e",
+  "const s=require('internal/timers').Timeout.toString(); console.log(s.split('\\n').slice(0,25).join('\\n'))"
+ ],
+ "exit": 0,
+ "stdoutSha256": "aaa14cfee8a9e1704de78a719ed0dfa5a47f901f5bc95692fc7d7e3367abd27e",
+ "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

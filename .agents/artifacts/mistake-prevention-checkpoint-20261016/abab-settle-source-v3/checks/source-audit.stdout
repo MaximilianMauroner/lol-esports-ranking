@@ -1,0 +1,1 @@
+{"verdict": "PASS", "sourceDelta": ["pause body", "launcher revision path"], "comparatorByteIdentical": true, "fiveInstrumentSourceKeysUnchanged": true, "historicalInputPins": 141, "historicalInventoryPins": 750, "provenanceHashes": 18, "actualRuntimeReadOrRun": false}
