@@ -537,9 +537,9 @@ function RegionMatchRow({
       <div className="min-w-0">
         <p className="truncate text-xs text-muted-foreground" title={summary.event}>{summary.event}</p>
         <div className="mt-1.5 flex min-w-0 items-center gap-2 text-sm">
-          <strong className={cn('truncate', teamAIsRegional && 'text-[var(--text-strong)]')}>{summary.teamA.name}</strong>
+          <strong className={cn('truncate', teamAIsRegional && 'text-[var(--text-strong)]')} title={summary.teamA.name}>{summary.teamA.name}</strong>
           <span className="shrink-0 font-extrabold text-[var(--text-strong)] tabular-nums">{summary.seriesWinsA}–{summary.seriesWinsB}</span>
-          <strong className={cn('truncate', teamBIsRegional && 'text-[var(--text-strong)]')}>{summary.teamB.name}</strong>
+          <strong className={cn('truncate', teamBIsRegional && 'text-[var(--text-strong)]')} title={summary.teamB.name}>{summary.teamB.name}</strong>
         </div>
       </div>
       <div>
@@ -556,6 +556,7 @@ function RegionMatchRow({
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-l border-border pl-4 max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:pt-2.5 max-[820px]:pl-0">
         <ArrowRight className="size-4 text-[var(--faint)]" aria-hidden="true" />
         <div>
+          <span className="block text-2xs text-[var(--faint)]">Series</span>
           <strong className={cn('block text-sm tabular-nums', typeof directRegionEffect === 'number' && directRegionEffect > 0 ? 'text-[var(--up)]' : typeof directRegionEffect === 'number' && directRegionEffect < 0 ? 'text-[var(--down)]' : 'text-foreground')}>
             {typeof directRegionEffect === 'number'
               ? directRegionEffect === 0 ? 'No change' : `≈ ${formatSignedDecimal(directRegionEffect)} pts`
@@ -563,7 +564,7 @@ function RegionMatchRow({
           </strong>
           <small className="mt-0.5 block text-2xs text-[var(--faint)]">
             {movement
-              ? `Day ${formatSignedDecimal(movement.delta)} → ${formatRating(movement.score)}${contributingTeam ? ` · ${contributingTeam}` : ''}`
+              ? `Day total ${formatSignedDecimal(movement.delta)} → ${formatRating(movement.score)}${contributingTeam ? ` · ${contributingTeam}` : ''}`
               : '—'}
           </small>
         </div>

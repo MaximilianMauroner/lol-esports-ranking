@@ -136,7 +136,7 @@ export function CompareProfileChart<E>({
                   const isBest = best.has(columns[index].id)
                   return (
                     <div className={`grid min-w-0 grid-cols-[minmax(84px,0.8fr)_minmax(100px,2fr)_minmax(54px,auto)] items-center gap-2.5 text-muted-foreground max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-2.5 max-sm:gap-y-1.5${isBest ? ' text-[var(--text-strong)]' : ''}`} key={columns[index].id}>
-                      <span className="inline-flex min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm text-foreground">
+                      <span className="inline-flex min-w-0 items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm text-foreground" title={columns[index].name}>
                         <i className="size-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden="true" />
                         {columns[index].name}
                       </span>
