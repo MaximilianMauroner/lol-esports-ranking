@@ -22,11 +22,7 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
     if (!identityResponse.ok) throw new Error('No reviewed source-to-ranking team ID map is published.')
     const identityValue: unknown = await identityResponse.json()
     if (!isTournamentTeamIdentityMap(identityValue)) throw new Error('The source-to-ranking team ID map is invalid.')
-    const manifest = await createPublicRankingManifestLoader(MANIFEST_URL, boundedFetch)()
-    const key = manifest.defaultSnapshotKey
-    const entry = manifest.snapshotIndex[key]
-    if (!entry) throw new Error('The current default rating snapshot is unavailable.')
-    const snapshot = await fetchPublicSnapshotShard(resolvePublicArtifactUrl(entry.url, MANIFEST_URL), key, entry, manifest, { fetcher: boundedFetch })
+    const { manifest, key, snapshot } = await loadCurrentRatingSnapshot(boundedFetch)
     const response = await boundedFetch(POWER_PREVIEWS_URL, { cache: 'no-store' }).catch(() => null)
     const previewValue: unknown = response?.ok ? await response.json().catch(() => null) : null
     return { powerPreviews: isConditionalPowerResultLedger(previewValue) ? previewValue : null, basis: {
@@ -37,6 +33,16 @@ export async function loadTournamentForecastArtifacts(fetcher: typeof fetch = fe
   } catch (error) {
     return { basis: null, reason: error instanceof Error ? error.message : 'Forecast inputs are unavailable.' }
   }
+}
+
+/** The published default Power snapshot and the manifest that names it. */
+export async function loadCurrentRatingSnapshot(fetcher: typeof fetch = fetch) {
+  const manifest = await createPublicRankingManifestLoader(MANIFEST_URL, fetcher)()
+  const key = manifest.defaultSnapshotKey
+  const entry = manifest.snapshotIndex[key]
+  if (!entry) throw new Error('The current default rating snapshot is unavailable.')
+  const snapshot = await fetchPublicSnapshotShard(resolvePublicArtifactUrl(entry.url, MANIFEST_URL), key, entry, manifest, { fetcher })
+  return { manifest, key, snapshot }
 }
 
 export async function loadTournamentForecastLedger(fetcher: typeof fetch = fetch, timeoutMs = 15_000): Promise<ForecastLedger> {

@@ -263,7 +263,7 @@ export function worldsRandom(seed: number) {
     return ((value ^ value >>> 14) >>> 0) / 4294967296
   }
 }
-function shuffled<T>(values: T[], random: () => number) {
+export function shuffled<T>(values: T[], random: () => number) {
   const result = [...values]
   for (let index = result.length - 1; index > 0; index--) {
     const other = Math.floor(random() * (index + 1))
