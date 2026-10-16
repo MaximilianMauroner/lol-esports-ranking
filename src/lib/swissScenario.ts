@@ -115,9 +115,9 @@ export type TeamOutcome =
   | { state: 'eliminated'; wins: number; losses: number; placement: string }
   | { state: 'active'; wins: number; losses: number; nextBestOf: 1 | 3 }
 
-export function seedBaseline(playInRegion: PlayInRegion | null): SwissBaseline {
+export function seedBaseline(playInRegion: PlayInRegion | null, playInTeam?: string): SwissBaseline {
   const teams = WORLDS_2026_SWISS_RULES.pools.flat().map((seed): PreviewTeam => seed === 'PLAYIN'
-    ? { id: seed, label: 'Play-In winner', seed, region: playInRegion }
+    ? { id: seed, label: playInRegion && playInTeam ? playInTeam : 'Play-In winner', seed, region: playInRegion }
     : { id: seed, label: QUALIFIED_TEAMS[seed], seed, region: seed.replace(/\d+$/, '') })
   return { kind: 'seeds', teams, rounds: [] }
 }

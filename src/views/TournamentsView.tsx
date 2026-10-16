@@ -179,7 +179,9 @@ export function TournamentsView() {
       ) : shown === 'swiss' ? (
         <>
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">Worlds 2026 Swiss preview</h2>
-          <SwissPreview event={selected} checkedAt={state.health?.checkedAt ?? state.feed.fetchedAt} timezone={timezone} />
+          <SwissPreview event={selected}
+            playInEvent={events.find((event) => event.competition === 'worlds' && event.season === selected.season && /\/Play-In$/.test(event.sourceTournamentId))}
+            checkedAt={state.health?.checkedAt ?? state.feed.fetchedAt} timezone={timezone} />
         </>
       ) : (
         <>

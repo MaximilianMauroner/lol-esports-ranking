@@ -29,7 +29,7 @@ function fixtureFeed() {
       { id: mainId, sourceTournamentId: mainId, competition: 'worlds', label: 'Worlds 2026 Main Event', season: '2026',
         series: sizes.flatMap((size, index) => Array.from({ length: size }, (_, slot) => swissSeries(index + 1, slot))) },
       { id: playInId, sourceTournamentId: playInId, competition: 'worlds', label: 'Worlds 2026 Play-In', season: '2026',
-        series: [{ ...swissSeries(1, 0, [team('Sierra'), team('Tango')]), id: 'worlds-play-in', eventId: playInId, stage: 'Play-In', startTime: '2026-10-14T10:00:00.000Z' }] },
+        series: [{ ...swissSeries(1, 0, [team('Fnatic'), team('Tango')]), id: 'worlds-play-in', eventId: playInId, stage: 'Play-In', startTime: '2026-10-14T10:00:00.000Z' }] },
       { id: 'lcs:2027:promotion', sourceTournamentId: 'LCS/2027 Season/Promotion', competition: 'lcs', label: 'LCS 2027 Promotion', season: '2027',
         series: [{ ...swissSeries(1, 0, [team('Rook'), team('Pawn')]), id: 'lcs-promo', eventId: 'lcs:2027:promotion', stage: 'Finals', bestOf: 5 }] },
     ],
@@ -80,6 +80,14 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
     assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'the preview shows no odds')
 
+    await page.locator('#swiss-playin').selectOption('LEC')
+    assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
+    const playInPool = page.getByRole('list', { name: 'Round 1 pools' })
+    assert.match(await playInPool.getByTitle('Fnatic', { exact: true }).innerText(), /FNC[\s\S]*LEC/)
+    await page.reload()
+    await page.getByRole('heading', { name: 'Worlds 2026 Swiss preview' }).waitFor()
+    assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
+    assert.equal(await playInPool.getByTitle('Fnatic', { exact: true }).count(), 1)
     await page.locator('#swiss-playin').selectOption('LCS')
     // The whole bracket is visible before the draw: Round 1 offers the draw, later rounds wait for it.
     assert.equal(await fillButton(page, 1).count(), 1)
