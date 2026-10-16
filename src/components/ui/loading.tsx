@@ -43,7 +43,7 @@ export function LoadingState({
     >
       <div className="flex items-center gap-3">
         <BarChart3 className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <h2 className="text-sm font-bold text-[var(--text-strong)]">{label}</h2>
+        <p className="text-sm font-bold text-[var(--text-strong)]">{label}</p>
       </div>
       {presentation === 'rows' ? (
         <div className="mt-4 grid gap-px overflow-hidden rounded-md border border-border bg-border" aria-hidden="true">

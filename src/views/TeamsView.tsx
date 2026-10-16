@@ -1575,7 +1575,7 @@ function TeamDetailDrawer({
 
           <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))]" aria-label="Power over time">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-5 pt-4 pb-3">
-              <h3 className="text-base font-bold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
+              <h3 className="text-base font-semibold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
               {trendSummary ? (
                 <p className="text-xs text-muted-foreground tabular-nums">
                   From {formatRating(trendSummary.opening)} on {formatDate(trendSummary.startDate)} · net <b className={cn('font-semibold', trendSummary.netChange >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{formatRatingMovement(trendSummary.netChange)}</b> · peak {formatRating(trendSummary.peak.value)}{typeof trendSummary.bestRank === 'number' ? ` · best #${trendSummary.bestRank}` : ''}
@@ -1608,7 +1608,7 @@ function TeamDetailDrawer({
           {opponents.length > 0 ? (
             <section className="rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] px-5 py-4" aria-label={`${team.code ?? team.team} against the top teams`}>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-base font-bold text-[var(--text-strong)]">Chance to beat the top teams</h3>
+                <h3 className="text-base font-semibold text-[var(--text-strong)]">Chance to beat the top teams</h3>
                 <span className="text-xs text-[var(--faint)]">best of three, neutral side · model {formatModelVersion(model?.version)}</span>
               </div>
               <ul className="grid gap-2">
@@ -1628,7 +1628,7 @@ function TeamDetailDrawer({
 
           <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-5 max-[900px]:p-4" aria-label="Match results">
             <div className="flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 max-sm:flex-col">
-              <h3 className="text-base font-bold text-[var(--text-strong)]">Match results</h3>
+              <h3 className="text-base font-semibold text-[var(--text-strong)]">Match results</h3>
               <FormDots form={team.form} />
             </div>
             <RecentMatches
@@ -2059,7 +2059,7 @@ function summarizeTeamTrend(series?: TeamHistorySeries): TeamTrendSummary | null
   }
 }
 
-const detailCardClassName = 'min-w-0 overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-4 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--text-strong)]'
+const detailCardClassName = 'min-w-0 overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))] p-6 max-[900px]:p-4 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[var(--text-strong)]'
 const emptyPlayerRankCardClassName = cn(detailCardClassName, 'grid gap-3 px-5 py-4 [&_h3]:text-md [&>div:first-child]:border-0 [&>div:first-child]:pb-0')
 const playerRankCardHeadClassName = 'flex items-start justify-between gap-3.5 border-b border-[var(--line-strong)] pb-4 [&_h3]:flex [&_h3]:flex-wrap [&_h3]:items-center [&_h3]:gap-2 [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] max-sm:flex-col'
 const componentLedgerRowClassName = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-2 bg-[var(--detail-surface,var(--surface))] px-3 py-2.5 [&>b]:whitespace-nowrap [&>b]:text-md [&>b]:font-bold [&>b]:text-[var(--text-strong)] [&>b]:tabular-nums [&>b.down]:text-[var(--down)] [&>b.up]:text-[var(--up)] [&>span:first-child]:text-sm [&>span:first-child]:text-muted-foreground'
@@ -2230,7 +2230,7 @@ function ComponentBreakdown({ team }: { team: RankingSummaryStanding }) {
 
   return (
     <div className={cn(detailCardClassName, 'px-5 py-4')} aria-label={`${team.team} rating components`}>
-      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-sm [&>span]:font-bold [&>span]:text-muted-foreground [&>span]:tabular-nums">
+      <div className="mb-3.5 flex items-start justify-between gap-3 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-[var(--text-strong)] [&_p]:mt-1 [&_p]:text-sm [&_p]:leading-[1.4] [&_p]:text-[var(--faint)] [&>span]:shrink-0 [&>span]:text-sm [&>span]:font-bold [&>span]:text-muted-foreground [&>span]:tabular-nums">
         <h3>Power Score Breakdown</h3>
         <span>{formatRating(team.rating)} {formatUncertaintyBand(components.uncertainty)}</span>
       </div>
