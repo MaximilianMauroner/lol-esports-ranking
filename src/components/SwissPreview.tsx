@@ -7,7 +7,7 @@ import { Select } from './ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 import { TeamMark } from './TeamMark'
 import { teamBrandingFor } from '../data/teamBranding'
-import { canonicalTeamNameFor, teamCodeFor } from '../data/teamIdentity'
+import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../data/teamIdentity'
 import { cn } from '../lib/utils'
 import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
@@ -39,8 +39,21 @@ type BracketEdits = {
  * of a starting point; every choice lives in component state and the page address only. Live draws and results
  * are shown as given and cannot be edited.
  */
-export function SwissPreview({ event, checkedAt, timezone }: { event: TournamentEvent; checkedAt: string; timezone: string }) {
+export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { event: TournamentEvent; playInEvent: TournamentEvent | undefined; checkedAt: string; timezone: string }) {
   const live = useMemo(() => liveSwissBaseline(event), [event])
+  const playInTeams = useMemo(() => {
+    const regions = new Map<string, Set<string>>()
+    for (const entry of playInEvent?.series.flatMap((series) => series.teams) ?? []) {
+      if (!entry.name) continue
+      const name = canonicalTeamNameFor(entry.name)
+      const region = teamIdentityFor(name)?.region
+      if (!region) continue
+      const names = regions.get(region) ?? new Set<string>()
+      names.add(name)
+      regions.set(region, names)
+    }
+    return new Map([...regions].filter(([, names]) => names.size === 1).map(([region, names]) => [region, [...names][0]]))
+  }, [playInEvent])
   const liveReady = live.status === 'ready'
   const [address] = useState(() => readAddress(liveReady))
   const [start, setStart] = useState(address.start)
@@ -72,7 +85,8 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
   // Saved picks name teams by their index in one starting point. They are never read against another one, so
   // while live draws are missing the live scenarios stay in the address as written and no scenario is shown.
   const liveMissing = start === 'live' && live.status === 'unavailable'
-  const baseline: SwissBaseline = useMemo(() => start === 'live' && live.status === 'ready' ? live.baseline : seedBaseline(playIn), [start, live, playIn])
+  const baseline: SwissBaseline = useMemo(() => start === 'live' && live.status === 'ready' ? live.baseline
+    : seedBaseline(playIn, playIn ? playInTeams.get(playIn) : undefined), [start, live, playIn, playInTeams])
   const scenarios = useMemo(() => ({
     a: resolveScenario(baseline, decodeChoices(baseline, liveMissing ? '' : texts.a)),
     b: resolveScenario(baseline, decodeChoices(baseline, liveMissing ? '' : texts.b)),
@@ -171,10 +185,10 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
         {startControl}
         {baseline.kind === 'seeds' ? (
           <div className="grid gap-1">
-            <label htmlFor="swiss-playin" className="text-sm font-semibold">Play-In winner region</label>
+            <label htmlFor="swiss-playin" className="text-sm font-semibold">Play-In winner</label>
             <Select id="swiss-playin" className="w-full" value={playIn ?? ''} onChange={(event) => { setPlayIn(PLAY_IN_REGIONS.find((region) => region === event.target.value) ?? null); setNotice(null) }}>
               <option value="">Not chosen</option>
-              {PLAY_IN_REGIONS.map((region) => <option key={region} value={region}>{region}</option>)}
+              {PLAY_IN_REGIONS.map((region) => <option key={region} value={region}>{playInTeams.has(region) ? `${playInTeams.get(region)} (${region})` : region}</option>)}
             </Select>
           </div>
         ) : null}
@@ -247,13 +261,13 @@ function fullChoices(resolved: ResolvedScenario): DrawnRound[] {
 }
 
 function teamInfo(team: PreviewTeam): TeamInfo {
-  if (team.seed === 'PLAYIN') return { name: team.label, code: 'Play-In', slot: team.region, mark: null }
+  if (team.seed === 'PLAYIN' && team.label === 'Play-In winner') return { name: team.label, code: 'Play-In', slot: team.region, mark: null }
   const canonical = canonicalTeamNameFor(team.label)
   const branding = teamBrandingFor(canonical)
   return {
     name: team.label,
     code: teamCodeFor(team.label),
-    slot: team.seed?.replace(/(\d+)$/, ' $1') ?? null,
+    slot: team.seed === 'PLAYIN' ? team.region : team.seed?.replace(/(\d+)$/, ' $1') ?? null,
     mark: branding?.logo && branding.logoTreatment !== 'code' ? canonical : null,
   }
 }
