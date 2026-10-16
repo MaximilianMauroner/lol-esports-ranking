@@ -272,7 +272,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     main.series.filter((series) => series.stage === 'Round 2').forEach((series, slot) => { series.teams = [team(names[slot]), team(names[15 - slot])] })
     feed.fetchedAt = '2026-10-23T22:00:00.000Z'
     await page.getByRole('button', { name: 'Refresh' }).click()
-    await page.getByText(/Your live scenarios stay in the page address/).waitFor()
+    await page.getByText(/Your live picks stay in the page address/).waitFor()
     assert.match(await body(page), /Live draws are not available: Round 2 in the schedule does not follow the Swiss draw rules: Alpha and Papa: different record\./)
     assert.equal(await page.locator('#swiss-start').inputValue(), 'live')
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
@@ -320,7 +320,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     finished.delete('scenario')
     finished.set('a', playedOut(seedBaseline('LCS')))
     await page.goto(`${base}/#tournaments?${finished}`)
-    await page.getByText('Every Swiss match has a winner. The eight teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.').waitFor()
+    await page.getByText('Swiss stage complete. The eight Advanced teams go to the quarterfinals.').waitFor()
     assert.match(await page.getByRole('region', { name: 'Standings' }).innerText(), /Scenarios A and B differ for 16 teams\./)
 
     // The page fits from phone to desktop widths. Only the bracket scrolls sideways, inside its own region.

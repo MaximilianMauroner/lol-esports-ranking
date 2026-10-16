@@ -174,7 +174,7 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
       <div className="grid min-w-0 justify-items-start gap-4">
         {startControl}
         <Alert variant="warning" role="status">
-          Live draws are not available: {live.detail} Your live scenarios stay in the page address and come back when live draws return. Choosing qualified teams replaces them with two new scenarios.
+          Live draws are not available: {live.detail} Your live picks stay in the page address until live draws return.
         </Alert>
       </div>
     )
@@ -217,18 +217,16 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
         </div>
       </div>
 
-      <div className="grid gap-1.5 rounded-md border border-dashed border-[var(--preview-line)] bg-[var(--preview-soft)] px-3 py-2.5 text-sm leading-[1.5]">
-        <p><strong className="font-semibold text-[var(--preview)]">Preview.</strong> Winners with a dashed outline and draws marked “Your draw” are your choices. They stay on this page and in its address, and they never change the schedule or results. If you change an earlier winner, later draws stay only while their pairs still have the same records. Region odds come from the Power ratings and treat your picks as played.</p>
-        <p className="text-muted-foreground">
-          {baseline.kind === 'live'
-            ? <>Starts from the draws and results on Leaguepedia, checked {formatTournamentTime(checkedAt, timezone)}. {live.status === 'ready' && live.note ? live.note : ''}</>
-            : <>
-              Starts from the qualified teams before the Round 1 draw. Teams follow <a className="underline" href={SWISS_TEAM_SOURCES.primer} target="_blank" rel="noreferrer">Riot’s Worlds 2026 primer</a> and
-              the <a className="underline" href={SWISS_TEAM_SOURCES.cblolFinal} target="_blank" rel="noreferrer">CBLOL final</a>, checked {SWISS_TEAM_SOURCES.checkedAt}.
-              The Play-In winner is decided from 15 to 18 October. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}
-            </>}
-        </p>
-      </div>
+      <p className="text-sm leading-[1.5] text-muted-foreground">
+        Dashed outlines and “Your draw” mark your picks. They stay in the page address and never change real results.{' '}
+        {baseline.kind === 'live'
+          ? <>Draws and results from Leaguepedia, checked {formatTournamentTime(checkedAt, timezone)}. {live.status === 'ready' && live.note ? live.note : ''}</>
+          : <>
+            Teams from <a className="underline" href={SWISS_TEAM_SOURCES.primer} target="_blank" rel="noreferrer">Riot’s Worlds 2026 primer</a> and
+            the <a className="underline" href={SWISS_TEAM_SOURCES.cblolFinal} target="_blank" rel="noreferrer">CBLOL final</a>, checked {SWISS_TEAM_SOURCES.checkedAt}.
+            {live.status === 'unavailable' ? ` Live draws are not available: ${live.detail}` : ''}
+          </>}
+      </p>
       <div role="status" className="empty:hidden grid gap-1 text-sm">
         {notice ? <p>{notice}</p> : null}
         {liveNotice ? <p className="text-[var(--warn)]">{liveNotice}</p> : null}
@@ -278,13 +276,12 @@ function teamInfo(team: PreviewTeam): TeamInfo {
 /** What the scenario needs next. When a round can be drawn, also its draw rules. */
 function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: ResolvedScenario; drawPairs: [string, string][] | null; team: TeamLookup; playInOpen: boolean }) {
   const next = scenario.next
-  if (next.kind === 'complete') return <p className="text-sm text-muted-foreground">Every Swiss match has a winner. The eight teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.</p>
+  if (next.kind === 'complete') return <p className="text-sm text-muted-foreground">Swiss stage complete. The eight Advanced teams go to the quarterfinals.</p>
   if (next.kind === 'results') {
     const missing = scenario.rounds[next.round - 1].matches.filter((match) => !match.winnerId).length
-    const needs = missing === 1 ? 'One match needs' : `${missing} matches need`
     return (
       <p className="text-sm text-muted-foreground">
-        Round {next.round}: {needs} a winner {next.round === SWISS_ROUND_SIZES.length ? 'to finish the Swiss stage' : `before Round ${next.round + 1} can be drawn`}. Choose a team to make it the winner.
+        Round {next.round}: pick {missing === 1 ? 'one winner' : `${missing} winners`} {next.round === SWISS_ROUND_SIZES.length ? 'to finish the Swiss stage' : `before Round ${next.round + 1} is drawn`}.
       </p>
     )
   }
@@ -294,12 +291,12 @@ function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: Resolve
       <p className="text-muted-foreground">
         Round {next.round} is not drawn yet.{' '}
         {next.round === 1
-          ? 'Pool 1 meets Pool 4 and Pool 2 meets Pool 3. Two teams from the same region cannot meet.'
-          : 'Each team meets a team with the same record that it has not played yet.'}
-        {' '}“Fill a valid draw” takes the first valid pairing in team order. It is not the official draw and not a prediction. After the fill, use “Change pairings” to pick other valid opponents.
+          ? 'Pool 1 meets Pool 4, Pool 2 meets Pool 3, and teams from one region cannot meet.'
+          : 'Teams meet a new opponent with the same record.'}
+        {' '}“Fill a valid draw” is not the official draw.
       </p>
       {playInOpen && next.round === 1 ? <p className="text-muted-foreground">The Play-In winner’s region is not chosen, so it meets only {team('LCK1').name} or {team('LPL1').name}.</p> : null}
-      {waived.length ? <p className="text-[var(--warn)]">No draw for {waived.map((bucket) => bucket.record.replace('-', '–')).join(' or ')} avoids a rematch. Officials may then allow one (rule 4.3.3.2), so rematches are allowed there.</p> : null}
+      {waived.length ? <p className="text-[var(--warn)]">No draw for {waived.map((bucket) => bucket.record.replace('-', '–')).join(' or ')} avoids a rematch, so rematches are allowed there (rule 4.3.3.2).</p> : null}
       {!drawPairs ? <p className="text-[var(--warn)]">No valid draw exists for these records.</p> : null}
     </div>
   )
@@ -328,7 +325,7 @@ function SwissBracket({ scenario, team, pools, drawPairs, focusRound, onFocused,
             drawPairs={drawPairs} focus={focusRound === index + 1} onFocused={onFocused} edits={edits} />
           : (
             <div key="final" className="row-span-2 grid min-w-0 grid-rows-subgrid">
-              <ColumnHeader title="After Round 5"><span className="text-2xs text-muted-foreground">3–2 teams advance. 2–3 teams are out.</span></ColumnHeader>
+              <ColumnHeader title="After Round 5" />
               <div className="flex min-w-0 flex-col justify-between gap-3">
                 {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}><TeamSlots ids={withRecord(scenario.standings, box)} size={box.size} team={team} /></RecordBox>)}
               </div>
@@ -404,7 +401,7 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
   )
 }
 
-function ColumnHeader({ ref, title, titleId, badge = null, children }: { ref?: Ref<HTMLDivElement>; title: string; titleId?: string; badge?: ReactNode; children: ReactNode }) {
+function ColumnHeader({ ref, title, titleId, badge = null, children }: { ref?: Ref<HTMLDivElement>; title: string; titleId?: string; badge?: ReactNode; children?: ReactNode }) {
   // The scroll margin keeps a header that is scrolled into view below the sticky app header.
   return (
     <div ref={ref} className="grid scroll-mt-[calc(var(--app-nav-h)+0.75rem)] content-start gap-1.5 border-b border-border pb-2">
@@ -566,7 +563,7 @@ function StandingsPanel({ scenarios, slot, team }: { scenarios: Record<Slot, Res
   const names = (ids: string[]) => ids.map((id) => team(id).name)
   return (
     <Panel role="region" aria-labelledby={titleId} className="min-w-0 max-w-4xl min-[1700px]:max-w-none">
-      <PanelHeader titleId={titleId} title="Standings" description={`Scenario ${slot.toUpperCase()} is on the bracket. The table lists only teams whose record differs in scenario ${other.toUpperCase()}.`} />
+      <PanelHeader titleId={titleId} title="Standings" description={`Teams whose record differs in scenario ${other.toUpperCase()}.`} />
       <p className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-sm">
         <span>Advanced <strong className="font-mono font-semibold text-[var(--win)] tabular-nums">{count('advanced')}</strong> of 8</span>
         <span>Out <strong className="font-mono font-semibold text-[var(--loss)] tabular-nums">{count('eliminated')}</strong> of 8</span>
@@ -606,8 +603,7 @@ function StandingsPanel({ scenarios, slot, team }: { scenarios: Record<Slot, Res
         <p>{changed.length ? `Scenarios A and B differ for ${changed.length === 1 ? 'one team' : `${changed.length} teams`}.` : 'Scenarios A and B have the same records.'}</p>
         {knockout ? (
           <p>
-            Quarterfinal draw for scenario {slot.toUpperCase()}: {names(knockout.undefeated).join(' and ')} each meet one of {names(knockout.twoLosses).join(', ')}, on opposite halves of the bracket.
-            {' '}The other four teams are then paired by draw (rule 4.3.4).
+            Quarterfinals: {names(knockout.undefeated).join(' and ')} each meet one of {names(knockout.twoLosses).join(', ')}, on opposite halves. The rest are drawn (rule 4.3.4).
           </p>
         ) : null}
       </PanelFooter>

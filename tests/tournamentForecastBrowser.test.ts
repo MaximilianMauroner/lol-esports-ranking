@@ -98,7 +98,7 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   assert.match(await page.locator('body').innerText(), /Game win: T1 .* Gen\.G/)
   assert.match(await page.locator('body').innerText(), /Series win \(Bo5\): T1 .* Gen\.G/)
   assert.match(await page.locator('body').innerText(), /Only decisive Bo1, Bo3 and Bo5 are supported/)
-  assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
+  assert.match(await page.locator('body').innerText(), /Test fixture data\. Not official/)
   assert.match(await page.locator('body').innerText(), new RegExp(`Power data through ${ratingDate}`))
   // A new model basis resets the hypothetical selection instead of keeping a stale preview.
   await page.getByText('Conditional Power preview', { exact: true }).first().click()

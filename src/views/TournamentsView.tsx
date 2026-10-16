@@ -156,22 +156,21 @@ export function TournamentsView() {
         </div>
         <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>Times in {timezone}</span>
-          <span>Feed changed {formatTournamentTime(state.feed.fetchedAt, timezone)}</span>
           <span className="min-w-[30ch]">Checked {state.health ? formatTournamentTime(state.health.checkedAt, timezone) : state.healthPending ? 'checking…' : 'unknown'}</span>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>Refresh</Button>
         </div>
       </div>
       {stale ? <Alert variant="warning" role="status">
-        Schedule may be stale. Feed last changed: {formatFeedAge(state.feed.fetchedAt, now)} ({formatTournamentTime(state.feed.fetchedAt, timezone)}). Last collector check: {state.health ? formatFeedAge(state.health.checkedAt, now) : 'unavailable'}.
-        {state.error ? ` Latest browser check failed: ${state.error}` : ''}{state.health?.warnings.length ? ` Collector: ${state.health.warnings.join(' ')}` : ''}
-        <Button variant="outline" size="sm" className="ml-2" onClick={() => void refresh()}>Retry schedule</Button>
+        Schedule may be stale. Feed changed {formatFeedAge(state.feed.fetchedAt, now)}, last checked {state.health ? formatFeedAge(state.health.checkedAt, now) : 'unknown'}.
+        {[state.error, ...(state.health?.warnings ?? [])].filter(Boolean).map((warning) => ` ${warning}`).join('')}
+        <Button variant="outline" size="sm" className="ml-2" onClick={() => void refresh()}>Retry</Button>
       </Alert> : null}
-      {state.feed.dataMode === 'synthetic-fixture' ? <Alert variant="warning" role="status">Local synthetic fixture. These are not official LoL Esports fixtures or results.</Alert> : null}
+      {state.feed.dataMode === 'synthetic-fixture' ? <Alert variant="warning" role="status">Test fixture data. Not official LoL Esports results.</Alert> : null}
       {FORECASTS_ENABLED && forecastArtifacts.ledgerWarning ? <Alert variant="warning" role="status">{forecastArtifacts.ledgerWarning}</Alert> : null}
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}
-      {!selected ? <Card><CardContent>No supported tournament is in the available schedule window.</CardContent></Card> : shown === 'bracket' ? (
+      {!selected ? <Card><CardContent>No tournaments in the schedule window.</CardContent></Card> : shown === 'bracket' ? (
         <>
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">{selected.label}</h2>
           <TournamentBracket key={selected.id} series={selected.series} timezone={timezone} />
@@ -190,26 +189,21 @@ export function TournamentsView() {
             key={JSON.stringify([worldsFeedEventKey(selected), forecastArtifacts.basis?.snapshotId, forecastArtifacts.basis?.model.version,
               forecastArtifacts.basis?.model.configHash, forecastArtifacts.basis?.ratingDataAsOf, forecastArtifacts.basis?.ratingPublishedAt, forecastArtifacts.basis?.identityMap.revision])}
             event={selected} basis={forecastArtifacts.basis} fixtureFeed={state.feed.dataMode === 'synthetic-fixture'} /> : null}
-          {(['live', 'upcoming', 'results', 'unresolved'] as const).map((group) => <section key={group} aria-label={group} className="grid gap-2">
-            <h3 className="flex items-baseline gap-2 text-base font-semibold">{SECTION_TITLES[group]}{' '}<span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{grouped[group].length}</span></h3>
-            {grouped[group].length
-              ? <SeriesList series={grouped[group]} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />
-              : <p className="text-sm text-muted-foreground">{EMPTY_SECTION_MESSAGES[group]}</p>}
-          </section>)}
+          {SECTION_ORDER.some((group) => grouped[group].length > 0)
+            ? SECTION_ORDER.filter((group) => grouped[group].length > 0).map((group) => <section key={group} aria-label={group} className="grid gap-2">
+              <h3 className="flex items-baseline gap-2 text-base font-semibold text-[var(--text-strong)]">{SECTION_TITLES[group]}{' '}<span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{grouped[group].length}</span></h3>
+              <SeriesList series={grouped[group]} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />
+            </section>)
+            : <p className="text-sm text-muted-foreground">No series in the schedule window.</p>}
         </>
       )}
-      <p className="border-t border-border pt-3 text-xs leading-[1.6] text-muted-foreground"><SourceNote feed={state.feed} event={selected} /> Series results here are source reported and are separate from scored rankings. {FORECASTS_ENABLED ? 'Match estimates use a separately dated Power snapshot. Worlds advancement requires a coherent, reviewed per-season state companion.' : 'Forecast unavailable: rules not verified.'}</p>
+      <p className="border-t border-border pt-3 text-xs leading-[1.6] text-muted-foreground"><SourceNote feed={state.feed} event={selected} /></p>
     </div>
   )
 }
 
+const SECTION_ORDER = ['live', 'upcoming', 'results', 'unresolved'] as const
 const SECTION_TITLES = { live: 'Live', upcoming: 'Upcoming', results: 'Results', unresolved: 'Unresolved results' } as const
-const EMPTY_SECTION_MESSAGES = {
-  live: 'No live series in this schedule window.',
-  upcoming: 'No upcoming series in this schedule window.',
-  results: 'No completed series in this schedule window.',
-  unresolved: 'No series with unresolved results in this schedule window.',
-} as const
 
 function formatFeedAge(timestamp: string, now: number) {
   const age = now - Date.parse(timestamp)
@@ -299,8 +293,8 @@ function formatClock(value: string, timezone: string) {
   return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: timezone, timeZoneName: 'short' }).format(date) : 'Unknown time'
 }
 function SourceNote({ feed, event }: { feed: TournamentFeed; event: TournamentEvent | undefined }) {
-  if (feed.source === 'lolesports-persisted-site-api') return <>Source: LoL Esports public site schedule reference (unsupported API).</>
-  return <>Source: <a href={leaguepediaPageUrl(event?.sourceTournamentId ?? 'League of Legends Esports Wiki')} target="_blank" rel="noopener noreferrer" className="underline">Leaguepedia</a>, licensed under <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA 3.0</a>. Live status means the scheduled start has passed and no result is entered yet.</>
+  if (feed.source === 'lolesports-persisted-site-api') return <>Source: LoL Esports public schedule.</>
+  return <>Source: <a href={leaguepediaPageUrl(event?.sourceTournamentId ?? 'League of Legends Esports Wiki')} target="_blank" rel="noopener noreferrer" className="underline">Leaguepedia</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA 3.0</a>).</>
 }
 function leaguepediaPageUrl(page: string) {
   return `https://lol.fandom.com/wiki/${page.replaceAll(' ', '_').split('/').map(encodeURIComponent).join('/')}`
