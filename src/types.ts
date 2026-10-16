@@ -11,6 +11,8 @@ export type EventTier =
   | 'qualifier'
 
 export type Role = 'Top' | 'Jungle' | 'Mid' | 'Bot' | 'Support'
+/** Champion display names in role order: Top, Jungle, Mid, Bot, Support. `null` is a role the source did not record. */
+export type ChampionPicks = [string | null, string | null, string | null, string | null, string | null]
 export type Side = 'blue' | 'red'
 
 export type LeagueTierName = 'tier-one' | 'tier-two' | 'tier-three' | 'emerging' | 'unknown'
@@ -273,6 +275,8 @@ export type MatchRecord = {
   teamBSide?: Side
   teamARoster?: MatchRosterSnapshot
   teamBRoster?: MatchRosterSnapshot
+  teamAPicks?: ChampionPicks
+  teamBPicks?: ChampionPicks
   patch: string
   bestOf: number
   bestOfBasis?: Extract<SeriesFormatBasis, 'official' | 'provider' | 'fallback'>

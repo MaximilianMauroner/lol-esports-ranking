@@ -7,6 +7,7 @@ import {
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { championPicks, PICK_ROLES } from './championPicks'
 import { providerDate, providerDatetimeUtc } from './providerTime'
 
 type CsvRecord = Record<string, string>
@@ -149,6 +150,8 @@ function normalizeGame(
     teamBSide: 'red',
     teamARoster: rosterForSide(rows, 'blue', date),
     teamBRoster: rosterForSide(rows, 'red', date),
+    teamAPicks: picksForSide(rows, 'blue'),
+    teamBPicks: picksForSide(rows, 'red'),
     patch,
     bestOf: format.bestOf,
     bestOfBasis: format.basis,
@@ -198,6 +201,17 @@ function rosterForSide(rows: CsvRecord[], side: string, observedAt: string): Mat
     completeness: rosterCompleteness(players),
     players: players.sort((left, right) => roleOrder(left.role) - roleOrder(right.role)),
   }
+}
+
+function picksForSide(rows: CsvRecord[], side: string) {
+  const championByRole = new Map<Role, string>()
+  for (const row of rows) {
+    if (value(row, 'side').toLowerCase() !== side) continue
+    const role = roleForOraclePosition(value(row, 'position'))
+    const champion = value(row, 'champion').trim()
+    if (role && champion && !championByRole.has(role)) championByRole.set(role, champion)
+  }
+  return championPicks(PICK_ROLES.map((role) => championByRole.get(role)))
 }
 
 function canonicalOraclePlayerIdFor(row: CsvRecord) {
@@ -301,7 +315,7 @@ function rosterCompleteness(players: RosterPlayerAppearance[]): RosterCompletene
 }
 
 function roleOrder(role: Role) {
-  return ['Top', 'Jungle', 'Mid', 'Bot', 'Support'].indexOf(role)
+  return PICK_ROLES.indexOf(role)
 }
 
 function upsertTeam(teams: Record<string, TeamProfile>, teamName: string, league: string, region: Region) {

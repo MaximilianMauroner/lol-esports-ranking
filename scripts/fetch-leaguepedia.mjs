@@ -24,6 +24,8 @@ const fields = [
   'Team2Kills',
   'Team1Gold',
   'Team2Gold',
+  'Team1Picks',
+  'Team2Picks',
 ]
 
 const matches = []
@@ -112,7 +114,13 @@ function normalizeGame(row) {
     teamBKills: numberOrNull(row.Team2Kills),
     teamAGold: numberOrNull(row.Team1Gold),
     teamBGold: numberOrNull(row.Team2Gold),
+    teamAPicks: listOrEmpty(row.Team1Picks),
+    teamBPicks: listOrEmpty(row.Team2Picks),
   }
+}
+
+function listOrEmpty(value) {
+  return value ? value.split(',') : []
 }
 
 function numberOrNull(value) {
