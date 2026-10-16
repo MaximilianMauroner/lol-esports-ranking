@@ -51,7 +51,6 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
   const catalog = state.status === 'ready' ? state.data.catalog : undefined
   const refs = useMemo(() => catalog?.series ?? [], [catalog])
   const leagues = useMemo(() => unique(refs.map((match) => match.league)), [refs])
-  const events = useMemo(() => compatibleMatchEvents(refs, view.league), [refs, view.league])
   const eventGroups = useMemo(() => groupedMatchEvents(refs, view.league), [refs, view.league])
   const eventLabels = useMemo(() => matchEventFilterLabels(refs, view.league), [refs, view.league])
   const filtered = useMemo(() => refs.filter((entry) => matchesFilters(entry, view)), [refs, view])
@@ -59,6 +58,8 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
     () => filtered.reduce((total, entry) => total + entry.gameCount, 0),
     [filtered],
   )
+  const filteredLeagueCount = useMemo(() => new Set(filtered.map((entry) => entry.league)).size, [filtered])
+  const filteredEventCount = useMemo(() => new Set(filtered.map((entry) => entry.event)).size, [filtered])
   const pageCount = Math.max(1, Math.ceil(filtered.length / view.pageSize))
   const scopeKey = catalog ? `${scopeForFilter(catalog.filter)}:${archiveYear ?? 'All'}` : ''
   const requestedPage = view.scopeKey === undefined || view.scopeKey === scopeKey ? view.page : 1
@@ -180,8 +181,8 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
       ribbon={
         <StatRibbon label="Match ledger summary">
           <StatCell icon={<History aria-hidden="true" />} label="Series" value={formatNumber(filtered.length)} detail={`${formatNumber(filteredGameCount)} games`} />
-          <StatCell label="Leagues" value={formatNumber(leagues.length)} />
-          <StatCell label="Events" value={formatNumber(events.length)} />
+          <StatCell label="Leagues" value={formatNumber(filteredLeagueCount)} />
+          <StatCell label="Events" value={formatNumber(filteredEventCount)} />
         </StatRibbon>
       }
     >
@@ -191,7 +192,7 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
           titleId={headingId}
         />
         <PanelBody className="grid gap-2 items-end sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_180px_220px_auto]">
-          {archiveYears.length > 1 && onYearChange ? <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">Year</span><Select aria-label="Match history year" value={archiveYear ?? 'All'} onChange={(event) => onYearChange(event.target.value)}><option value="All">All years</option>{archiveYears.map((year) => <option key={year} value={year}>{year}</option>)}</Select></label> : null}
+          {archiveYears.length > 1 && onYearChange ? <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">Year</span><Select aria-label="Match history year" className="w-full max-w-none" value={archiveYear ?? 'All'} onChange={(event) => onYearChange(event.target.value)}><option value="All">All years</option>{archiveYears.map((year) => <option key={year} value={year}>{year}</option>)}</Select></label> : null}
           <label className="relative min-w-0">
             <span className="sr-only">Find a team</span><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
             <Input ref={searchRef} type="search" aria-keyshortcuts="/" className="w-full pl-9" value={view.search} onChange={(event) => update({ search: event.target.value })} placeholder="Find a team" />
