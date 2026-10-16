@@ -25,6 +25,8 @@ import {
   teamHistoryShardFileName,
   tournamentMovementShardFileName,
 } from './schema'
+import { canonicalPublicLogicalPath } from './logicalPath.mjs'
+import { artifactReferences, assertReferenceClosure } from './logicalReferences.mjs'
 import type { TournamentInstanceId } from '../internationalTournaments'
 
 type StaticRankingData = Parameters<typeof createStaticRankingSummaryData>[0]
@@ -100,14 +102,15 @@ export function createPublicArtifactWritePlan(
   data: StaticRankingData,
   {
     fullSnapshotUrl,
-    urlForPath = localPublicDataUrl,
     affectedLogicalPaths,
+    retainedLogicalPaths = new Set(),
     previousArtifacts,
   }: {
     fullSnapshotUrl?: string
-    urlForPath?: (relativePath: string) => string
     /** Optional dependency plan; omitted for the authoritative full writer. */
     affectedLogicalPaths?: ReadonlySet<string>
+    /** Logical paths of the verified active generation that partial writes may reference without rewriting. */
+    retainedLogicalPaths?: ReadonlySet<string>
     /** Verified semantic values from the active generation, used to merge partial indexes. */
     previousArtifacts?: Readonly<Record<string, unknown>>
   } = {},
@@ -117,7 +120,7 @@ export function createPublicArtifactWritePlan(
     modelVersion: data.model.version,
     modelConfigHash: data.model.configHash,
   })
-  const versionedUrlForPath = (relativePath: string) => withArtifactVersion(urlForPath(relativePath), artifactVersion)
+  const versionedUrlForPath = (relativePath: string) => versionedPublicDataUrl(relativePath, artifactVersion)
   const selected = (relativePath: string) => !affectedLogicalPaths || affectedLogicalPaths.has(relativePath)
   const selectedFamily = (indexPath: string, prefix: string) => !affectedLogicalPaths
     || selected(indexPath)
@@ -186,45 +189,35 @@ export function createPublicArtifactWritePlan(
   ]
 
   assertPublicArtifactBudgets(allWrites, data.defaultSnapshotKey)
-  // A changed catalog can introduce pages at a year boundary, during legacy
-  // migration, or for a new checkpoint. Select their actual generated IDs.
-  const requiredNewPages = new Set<string>()
-  if (affectedLogicalPaths && matchHistory) {
-    const previousPagesByScope = previousMatchPages(previous(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex))
-    for (const [key, catalog] of Object.entries(matchHistory.catalogs)) {
-      if (!selected(publicMatchHistoryShardPath(key))) continue
-      const previousPages = previousPagesByScope.get(key) ?? new Set<number>()
-      for (const page of catalog.pages) {
-        if (!previousPages.has(page.page)) requiredNewPages.add(publicMatchHistoryPagePath(key, page.page))
-      }
-    }
-  }
-  const writes = affectedLogicalPaths
-    ? allWrites.filter((entry) => affectedLogicalPaths.has(entry.relativePath) || requiredNewPages.has(entry.relativePath))
-    : allWrites
 
   return {
     manifest: mergedSummaryManifest,
     snapshots: summary.snapshots,
-    writes,
+    writes: transitiveWriteClosure(allWrites, affectedLogicalPaths, retainedLogicalPaths),
     budgets: PUBLIC_ARTIFACT_BUDGETS,
   }
 }
 
-// Storage restore supplies digest-verified semantic bodies without volatile
-// schema/model/run metadata. Read only the inventory needed for page reuse.
-function previousMatchPages(value: unknown) {
-  const inventory = new Map<string, Set<number>>()
-  if (!value || typeof value !== 'object' || !('scopeIndex' in value)) return inventory
-  const scopes = value.scopeIndex
-  if (!scopes || typeof scopes !== 'object' || Array.isArray(scopes)) return inventory
-  for (const [key, scope] of Object.entries(scopes)) {
-    if (!scope || typeof scope !== 'object' || !('pages' in scope) || !Array.isArray(scope.pages)) continue
-    const pageIds = scope.pages.flatMap((page: unknown) => page && typeof page === 'object' && 'page' in page
-      && typeof page.page === 'number' && Number.isSafeInteger(page.page) && page.page > 0 ? [page.page] : [])
-    inventory.set(key, new Set(pageIds))
+function transitiveWriteClosure(
+  writes: PublicArtifactWrite[],
+  affectedLogicalPaths: ReadonlySet<string> | undefined,
+  retainedLogicalPaths: ReadonlySet<string>,
+) {
+  const generated = new Map(writes.map((entry) => [canonicalPublicLogicalPath(entry.url), entry]))
+  const retained = new Set([...retainedLogicalPaths].map(canonicalPublicLogicalPath))
+  const selected = new Map([...generated].filter(([, entry]) => !affectedLogicalPaths || affectedLogicalPaths.has(entry.relativePath)))
+  const edges = new Map<string, string[]>()
+  for (const [logicalPath, entry] of selected) {
+    const targets = artifactReferences(entry.value as Record<string, unknown>)
+    edges.set(logicalPath, targets)
+    for (const target of targets) {
+      const write = generated.get(target)
+      if (write && !retained.has(target)) selected.set(target, write)
+    }
   }
-  return inventory
+  assertReferenceClosure(edges, new Set([...selected.keys(), ...retained]))
+  const selectedWrites = new Set(selected.values())
+  return writes.filter((entry) => selectedWrites.has(entry))
 }
 
 function mergeRecordIndex<T extends Record<string, unknown>>(current: T, previous: unknown, key: string): T {
@@ -249,12 +242,6 @@ function mergeArrayIndex<T extends Record<string, unknown>>(current: T, previous
     }
   }
   return { ...current, [key]: [...merged.values()] }
-}
-
-function withArtifactVersion(url: string, version: string) {
-  if (!url.startsWith('/data/')) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}v=${encodeURIComponent(version)}`
 }
 
 export function assertPublicArtifactBudgets(writes: PublicArtifactWrite[], defaultSnapshotKey: string) {

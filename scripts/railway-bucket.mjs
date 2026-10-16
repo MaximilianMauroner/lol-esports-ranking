@@ -1,6 +1,7 @@
 import { diagnosticBegin, diagnosticEnd } from './benchmark-diagnostics.mjs'
 import { createHash } from 'node:crypto'
 import { hydrateArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
+import { artifactReferences, assertReferenceClosure } from '../src/lib/publicArtifacts/logicalReferences.mjs'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -1678,7 +1679,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
   const root = resolve(dir)
   const files = (await listFiles(root)).sort((left, right) => compareCodeUnits(relative(root, left), relative(root, right)))
   const entries = [], uploaded = [], unchanged = []
-  const seen = new Set(), paths = new Set()
+  const seen = new Set(), paths = new Set(), references = new Map()
   let semanticLogicalBytes = 0, compressedLogicalBytes = 0
   // Validate path aliases and root provenance before the first storage write.
   for (const file of files) {
@@ -1699,6 +1700,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     const logicalPath = canonicalPublicLogicalPath(`/data/${relativePath}`)
     const artifact = prepareSemanticArtifact(value)
     entries.push({ logicalPath, digest: artifact.digest, bytes: artifact.bytes })
+    references.set(logicalPath, artifactReferences(value))
     for (const member of [...(artifact.children ?? []), artifact]) {
       if (seen.has(member.digest)) continue
       seen.add(member.digest)
@@ -1709,6 +1711,7 @@ export async function uploadContentAddressedPublicArtifacts(client, config, dir,
     }
   }
   if (!rootManifest) throw new Error('Content-addressed publication requires ranking-summary.json')
+  assertReferenceClosure(references, paths)
   const manifest = createGenerationManifest({ generationId, rootManifest, entries })
   const manifestSync = await syncGenerationManifest(client, config, generationId, manifest, onVerifiedStored)
   for (const result of manifestSync.directoryResults ?? []) {
@@ -1810,9 +1813,10 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
   }
   diagnosticEnd(inheritedSpan, { objects: uniqueReused.size })
   const hydrateSpan = diagnosticBegin('public.inherited-hydration')
+  const inheritedReferences = new Map()
   for (const entry of uniqueReused.values()) {
     const content = JSON.parse(gunzipSync(entry.verified.compressed).toString('utf8')).content
-    await hydrateArchive(content, async (reference) => {
+    inheritedReferences.set(entry.digest, artifactReferences(await hydrateArchive(content, async (reference) => {
       const child = await assertReferencedContentAddressedIntegrity(client, config, reference, entry.logicalPath, { onVerifiedStored })
       if (!hasImmutablePublicMetadata(child)) uploaded.push(await putContentAddressedObject(client, config,
         bucketKey(config, `objects/sha256/${reference.sha256}`), { digest: reference.sha256, bytes: reference.bytes,
@@ -1820,9 +1824,13 @@ export async function uploadContentAddressedPublicArtifactPatch(client, config, 
       else reused.push({ status: 'reused', reason: 'inherited-archive-node-verified', key: bucketKey(config, `objects/sha256/${reference.sha256}`),
         bytes: child.compressed.byteLength, semanticBytes: reference.bytes, contentType: PUBLIC_JSON_CONTENT_TYPE, contentEncoding: 'gzip', digest: reference.sha256 })
       return JSON.parse(gunzipSync(child.compressed).toString('utf8')).content
-    })
+    })))
   }
   diagnosticEnd(hydrateSpan)
+  assertReferenceClosure([
+    ...[...entriesByPath.values()].map((entry) => [entry.logicalPath, inheritedReferences.get(entry.digest)]),
+    ...[...changedByPath.values()].map((artifact) => [artifact.logicalPath, artifactReferences(artifact.value)]),
+  ], new Set(actualPaths))
   const changedSpan = diagnosticBegin('public.changed-prepare-sync')
   const uniqueChanged = new Map()
   let compressedLogicalBytes = 0
