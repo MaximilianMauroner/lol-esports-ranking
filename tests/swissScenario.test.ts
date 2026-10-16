@@ -5,7 +5,7 @@ import {
   liveSwissBaseline, opponentOptions, pairReason, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawnRound, type SwissBaseline,
 } from '../src/lib/swissScenario'
 import { teamBrandingFor } from '../src/data/teamBranding'
-import { canonicalTeamNameFor } from '../src/data/teamIdentity'
+import { canonicalTeamNameFor, teamIdentityFor } from '../src/data/teamIdentity'
 import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/lib/worlds2026Swiss'
 import type { TournamentEvent, TournamentSeries } from '../src/lib/tournamentFeed'
 
@@ -31,6 +31,12 @@ function playOut(baseline: SwissBaseline, pick: (pair: [string, string], round: 
 function poolOf(seed: string) {
   return WORLDS_2026_SWISS_RULES.pools.findIndex((pool) => (pool as readonly string[]).includes(seed))
 }
+
+test('each 2026 Play-In team names its own Play-In region, so the preview can show it by name', () => {
+  // The Worlds 2026 Play-In field from the Leaguepedia schedule.
+  const regions = ['Cloud9', 'Karmine Corp', 'FURIA', 'MVK Esports'].map((name) => teamIdentityFor(name)?.region)
+  assert.deepEqual(regions.sort(), [...PLAY_IN_REGIONS].sort())
+})
 
 test('round one pairs matched pools across regions, including the chosen Play-In region', () => {
   const baseline = seedBaseline('LCS')
