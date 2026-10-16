@@ -46,7 +46,7 @@ export function TournamentBracket({ series, timezone }: { series: TournamentSeri
       {pinned
         ? <><span>Tracing <strong className="text-[var(--text-strong)]">{displayName(names.get(pinned) ?? pinned)}</strong></span>
           <Button variant="outline" size="xs" onClick={() => setPinned(null)}>Clear</Button></>
-        : null}
+        : <span>Bracket inferred from schedule results.</span>}
     </div>
     {sections.map((section, index) => <section key={index} className="grid min-w-0 gap-2.5" aria-label={sectionTitle(section, sections)}>
       {sections.length > 1 ? <h3 className="text-base font-semibold text-[var(--text-strong)]">{sectionTitle(section, sections)}</h3> : null}

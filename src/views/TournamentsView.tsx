@@ -294,7 +294,7 @@ function formatClock(value: string, timezone: string) {
 }
 function SourceNote({ feed, event }: { feed: TournamentFeed; event: TournamentEvent | undefined }) {
   if (feed.source === 'lolesports-persisted-site-api') return <>Source: LoL Esports public schedule.</>
-  return <>Source: <a href={leaguepediaPageUrl(event?.sourceTournamentId ?? 'League of Legends Esports Wiki')} target="_blank" rel="noopener noreferrer" className="underline">Leaguepedia</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA 3.0</a>).</>
+  return <>Source: <a href={leaguepediaPageUrl(event?.sourceTournamentId ?? 'League of Legends Esports Wiki')} target="_blank" rel="noopener noreferrer" className="underline">Leaguepedia</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA 3.0</a>). Live means the start time has passed and no result is in yet.</>
 }
 function leaguepediaPageUrl(page: string) {
   return `https://lol.fandom.com/wiki/${page.replaceAll(' ', '_').split('/').map(encodeURIComponent).join('/')}`
