@@ -32,6 +32,8 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "node scripts/run-tests.mjs",
+    "test:public-artifact-references": "tsx --tsconfig tsconfig.app.json --test tests/publicArtifactIdentity.test.ts tests/publicArtifactSchema.test.ts tests/checkpointSemanticIdentity.test.ts",
+    "test:ranking-board": "tsx --tsconfig tsconfig.app.json --test tests/rankingFlair.test.ts tests/rankingsBoardPanels.test.ts tests/internationalTournaments.test.ts tests/publicArtifactLoading.test.ts",
     "test:release": "RANKING_TEST_PUBLIC_DIR=public node scripts/run-tests.mjs",
     "test:browser": "tsx --tsconfig tsconfig.app.json --test tests/tournamentBrowser.test.ts",
     "benchmark:riot-gpr": "tsx scripts/compare-riot-gpr.ts",
