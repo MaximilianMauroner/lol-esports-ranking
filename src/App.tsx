@@ -27,7 +27,7 @@ import { Button, buttonVariants } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
-import { LoadingState } from './components/ui/loading'
+import { LoadingState, type PageLayout } from './components/ui/loading'
 import { TooltipProvider } from './components/ui/tooltip'
 import { RegionCompareDrawer, TeamCompareDrawer } from './components/CompareDrawer'
 import { currentSeasonScope } from './lib/defaultScope'
@@ -86,6 +86,9 @@ const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
 ]
 
 /** One title per view and one short line that says what the numbers are. */
+/** The skeleton each view shows while its data loads. */
+const PAGE_LAYOUTS: Record<Mode, PageLayout> = { rankings: 'board', regions: 'regions', matches: 'ledger', tournaments: 'schedule' }
+
 const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   rankings: {
     title: 'Team Power Index',
@@ -482,9 +485,9 @@ function RankingApp() {
         ) : null}
 
         {snapshotState.status !== 'ready' ? (
-          <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} />
+          <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} layout={PAGE_LAYOUTS[mode]} />
         ) : (
-          <Suspense fallback={<LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} />}>
+          <Suspense fallback={<LoadingState presentation="page" layout={PAGE_LAYOUTS[mode]} label={`Loading ${MODE_TITLES[mode].title}`} />}>
             {mode === 'regions' ? (
               <RegionsView
                 regions={regions}
@@ -637,7 +640,7 @@ function ManifestRouteShell({
             </Card>
           </section>
         ) : (
-          <LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} />
+          <LoadingState presentation="page" layout={PAGE_LAYOUTS[mode]} label={`Loading ${MODE_TITLES[mode].title}`} />
         )}
       </main>
     </div>
@@ -826,9 +829,9 @@ function toggleLimitedPick<T>(current: T[], item: T, keyFor: (item: T) => string
   return current.length >= COMPARE_LIMIT ? [...current.slice(1), item] : [...current, item]
 }
 
-function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {
+function ScopedSnapshotState({ state, scope, layout }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string; layout: PageLayout }) {
   if (state.status === 'loading') {
-    return <LoadingState presentation="page" label={`Loading ${scope}`} />
+    return <LoadingState presentation="page" layout={layout} label={`Loading ${scope}`} />
   }
   return (
     <section className="flex min-w-0 flex-col px-[var(--page-x)] pt-6">

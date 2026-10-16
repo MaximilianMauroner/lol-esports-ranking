@@ -152,7 +152,7 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
       </PageShell>
     )
   }
-  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading match history" />
+  if (state.status === 'loading') return <LoadingState presentation="page" layout="ledger" label="Loading match history" />
   if (state.status === 'missing' || state.status === 'error') {
     return (
       <PageShell>

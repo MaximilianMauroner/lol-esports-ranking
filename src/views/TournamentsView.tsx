@@ -127,7 +127,7 @@ export function TournamentsView() {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time'
   const grouped = useMemo(() => groupTournamentSeries(selected?.series ?? []), [selected])
 
-  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading tournament schedule" />
+  if (state.status === 'loading') return <LoadingState presentation="page" layout="schedule" label="Loading tournament schedule" />
   if (state.status === 'error') return <div className="px-[var(--page-x)] py-6"><Alert variant="warning" role="alert">Tournament schedule unavailable: {state.message} <Button className="ml-2" onClick={() => void refresh()}>Retry</Button></Alert></div>
   const sourceAge = now - Date.parse(state.health?.checkedAt ?? state.feed.fetchedAt)
   const stale = Boolean(state.error) || (state.health
