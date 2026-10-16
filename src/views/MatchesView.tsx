@@ -151,7 +151,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
       </PageShell>
     )
   }
-  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading match history" description="Fetching the selected match ledger." />
+  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading match history" />
   if (state.status === 'missing' || state.status === 'error') {
     return (
       <PageShell>
@@ -228,7 +228,7 @@ export function MatchesView({ state, scopeLabel, onRequestPages, searchRef, arch
                 ? <SeriesTable series={visible} expanded={expanded} onToggle={toggleSeries} publication={publication} />
                 : <SeriesCards series={visible} expanded={expanded} onToggle={toggleSeries} publication={publication} />
             ) : null}
-            {pageLoading ? <LoadingState presentation="rows" className="m-4" label="Loading matches" description="Fetching the missing rows for this page." /> : null}
+            {pageLoading ? <LoadingState presentation="rows" className="m-4" label="Loading matches" /> : null}
             {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
               <Alert className="m-4 w-auto">{pageFailure.message}</Alert>
             ) : null}

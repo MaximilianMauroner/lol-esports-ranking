@@ -479,7 +479,7 @@ function RegionMatchHistory({
       {state.status === 'idle' ? (
         <p className="px-4 py-5 text-sm text-muted-foreground">Match history loads when this region is opened.</p>
       ) : state.status === 'loading' ? (
-        <LoadingState presentation="rows" className="m-3" label={`Loading ${region.region} match history`} description="Fetching the scoped match ledger." />
+        <LoadingState presentation="rows" className="m-3" label={`Loading ${region.region} match history`} />
       ) : state.status === 'missing' || state.status === 'error' ? (
         <p className="px-4 py-5 text-sm text-muted-foreground">{state.message}</p>
       ) : refs.length === 0 ? (
@@ -498,7 +498,7 @@ function RegionMatchHistory({
               ))}
             </div>
           ) : null}
-          {pageLoading ? <LoadingState presentation="rows" className="m-3" rowCount={6} label={`Loading ${region.region} matches`} description="Fetching the missing rows for this page." /> : null}
+          {pageLoading ? <LoadingState presentation="rows" className="m-3" rowCount={6} label={`Loading ${region.region} matches`} /> : null}
           {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
             <p className="px-4 py-5 text-sm text-destructive" role="alert">{pageFailure.message}</p>
           ) : null}

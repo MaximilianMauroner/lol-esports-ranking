@@ -213,7 +213,7 @@ test('Matches event choices and addressed pages survive catalog loading and real
       const requestedSnapshot = page.waitForRequest((request) => new URL(request.url()).pathname === snapshotPath)
       await page.getByLabel('Season', { exact: true }).selectOption('2026')
       await requestedSnapshot
-      await page.getByText('Fetching the exact public shard for this scope.', { exact: true }).waitFor()
+      await page.getByRole('heading', { name: 'Loading 2026 source season', exact: true }).waitFor()
       await page.waitForFunction(() => !document.querySelector('[aria-label="Match history results"]'))
       assert.ok(pendingSnapshot.length > 0, 'the selected scope must require an uncached snapshot')
       holdSnapshot = false

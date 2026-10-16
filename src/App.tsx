@@ -85,27 +85,23 @@ const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
   { id: 'tournaments', label: 'Tournaments', icon: CalendarDays },
 ]
 
-/**
- * One title per view, plus one visible sentence that tells a first-time
- * visitor what the numbers mean. The sentence used to sit in a collapsed
- * "About these ratings" disclosure, so nobody read it.
- */
+/** One title per view and one short line that says what the numbers are. */
 const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   rankings: {
     title: 'Team Power Index',
-    intro: 'Every team on one Power scale, built from match results and weighted by opponent strength and event importance. Higher is stronger.',
+    intro: 'Match results weighted by opponent and event. Higher is stronger.',
   },
   regions: {
     title: 'Region power',
-    intro: 'A region\u2019s power is the average Power of its three strongest ranked teams. The spread of the rest shows how deep it is.',
+    intro: 'Average Power of each region\u2019s top three teams.',
   },
   matches: {
     title: 'Match history',
-    intro: 'Every series behind the ratings, newest first, with how much each team\u2019s rating changed.',
+    intro: 'Every rated series, newest first.',
   },
   tournaments: {
     title: 'Tournaments',
-    intro: 'Upcoming, live and completed series from the Leaguepedia schedule, and a Worlds Swiss preview where you choose winners and draws. Neither changes the published Power Index or scores matches.',
+    intro: 'Leaguepedia schedule and the Worlds Swiss preview. Not part of the Power Index.',
   },
 }
 
@@ -382,12 +378,12 @@ function RankingApp() {
   const movementBaseline = movementBaselineFor(activeCheckpoint, checkpointTabs)
   const pendingCheckpoint = pendingCheckpointForSeason(activeSeason, seasonYears, checkpointTabs)
   const teamCompareAfter = drawerOpen && mode === 'rankings' ? (
-    <Suspense fallback={<LoadingState label="Loading team comparison" description="Preparing the selected team analysis." />}>
+    <Suspense fallback={<LoadingState label="Loading team comparison" />}>
       <TeamCompareAnalysis teams={activeTeamPicks} columns={teamColumns} historyState={teamHistoryState} />
     </Suspense>
   ) : null
   const regionCompareAfter = drawerOpen && mode === 'regions' ? (
-    <Suspense fallback={<LoadingState label="Loading region comparison" description="Preparing the selected region analysis." />}>
+    <Suspense fallback={<LoadingState label="Loading region comparison" />}>
       <RegionCompareAnalysis
         regions={activeRegionPicks}
         columns={regionColumns}
@@ -641,7 +637,7 @@ function ManifestRouteShell({
             </Card>
           </section>
         ) : (
-          <LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} description="Fetching the published ranking manifest." />
+          <LoadingState presentation="page" label={`Loading ${MODE_TITLES[mode].title}`} />
         )}
       </main>
     </div>
@@ -832,7 +828,7 @@ function toggleLimitedPick<T>(current: T[], item: T, keyFor: (item: T) => string
 
 function ScopedSnapshotState({ state, scope }: { state: Exclude<PublicSnapshotState, { status: 'ready' }>; scope: string }) {
   if (state.status === 'loading') {
-    return <LoadingState presentation="page" label={`Loading ${scope}`} description="Fetching the exact public shard for this scope." />
+    return <LoadingState presentation="page" label={`Loading ${scope}`} />
   }
   return (
     <section className="flex min-w-0 flex-col px-[var(--page-x)] pt-6">
