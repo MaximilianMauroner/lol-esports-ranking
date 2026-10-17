@@ -194,7 +194,7 @@ const leagueInferenceRules: { league: string; patterns: RegExp[] }[] = [
   { league: 'EWC', patterns: [/\besports\s+world\s+cup\b/i, /\bewc\s+\d{4}\b/i] },
   { league: 'Asia Master', patterns: [/\basia\s+masters?\b/i] },
   { league: 'KeSPA', patterns: [/\bkespa\b/i] },
-  { league: 'DCup', patterns: [/\bdcup\b/i, /\bdemacia cup\b/i] },
+  { league: 'DCup', patterns: [/\bdcup\b/i, /\bdcgi\b/i, /\bdemacia cup\b/i] },
   { league: 'EMEA Masters', patterns: [/\bemea masters\b/i, /\bem\s+\d{4}\b/i] },
   { league: 'LCK Academy', patterns: [/\blck\s+academy\b/i, /\blas\s+\d{4}\b/i] },
   { league: 'LCK CL', patterns: [/\blck\s*cl\b/i, /\blckc\b/i, /\blck\s+challengers?\b/i] },
@@ -255,7 +255,7 @@ export function inferLeagueFromEvent(event: string) {
 }
 
 export function isDemaciaCupEvent(event: string) {
-  return /\b(?:dcup|demacia cup)\b/i.test(event)
+  return /\b(?:dcup|dcgi|demacia cup)\b/i.test(event)
 }
 
 export function inferEventTier(input: CompetitionTierInput): EventTier {
@@ -348,7 +348,9 @@ export function isCompetitionOnlyLeague(league: string) {
     || normalized === 'ASI'
     || normalized === 'AC'
     || normalized === 'DCUP'
+    || normalized === 'DCGI'
     || normalized === 'KESPA'
+    || normalized === 'KESPA CUP'
     || normalized === 'EM'
     || normalized === 'LTA'
     || normalized === 'EMEA MASTERS'
