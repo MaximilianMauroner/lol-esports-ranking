@@ -163,6 +163,25 @@ test('games without source IDs retain fallback date grouping', () => {
   assert.deepEqual(series.map((item) => item.games.length), [1, 2])
 })
 
+test('explicit series identifiers ending in a hyphen and number remain distinct across dates', () => {
+  const games = midnightSweep('2026-10-15', '2026-10-16').map((match, index) => ({
+    ...match, sourceMatchId: `series-${index + 1}`, bestOf: 1, bestOfBasis: 'provider' as const,
+  }))
+  const series = resolveCanonicalSeries(games)
+  assert.equal(series.length, 3)
+  assert.ok(series.every((entry) => entry.games.length === 1))
+})
+
+test('Leaguepedia series-level identifiers keep the match number', () => {
+  const games = midnightSweep('2026-10-15', '2026-10-16').map((match, index) => ({
+    ...match, sourceMatchId: `LCK/2026 Season/Cup_Week 1_${index + 1}`,
+    bestOf: 1, bestOfBasis: 'provider' as const,
+  }))
+  const series = resolveCanonicalSeries(games)
+  assert.equal(series.length, 3)
+  assert.ok(series.every((entry) => entry.games.length === 1))
+})
+
 function mixedOfficialSourceSweep() {
   const gameIds = ['LOLTMNT02_478715', 'LOLTMNT02_478718', 'LOLTMNT02_478726']
   const times = ['2026-10-15T23:00:00Z', '2026-10-16T00:06:03.000Z', '2026-10-16T01:01:24.000Z']

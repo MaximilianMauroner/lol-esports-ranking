@@ -127,7 +127,9 @@ function sourceMatchSeriesKey(match: MatchRecord) {
   if (!match.sourceMatchId) return undefined
   const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
     .sort((left, right) => compareCodeUnits(left, right))
-  return joinKey('source-match', sourceSeriesId(match.sourceMatchId), ...teams)
+  const gameAlias = /^(?:.+[_-]game[_-]?[1-5]|.+_.+_\d+_[1-5])$/i.test(match.sourceMatchId)
+  const sourceId = gameAlias ? sourceSeriesId(match.sourceMatchId) : match.sourceMatchId
+  return joinKey('source-match', sourceId, ...teams)
 }
 
 function sourceSeriesId(value: string) {

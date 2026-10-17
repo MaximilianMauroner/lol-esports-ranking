@@ -284,7 +284,6 @@ function compatibleGameIdentities(left: MatchRecord, right: MatchRecord) {
 
 function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMatches: MatchRecord[]) {
   const links = new Map<MatchRecord, MatchRecord>()
-  // Reserve exact scoreboards before matching declared slots after a stat revision.
   for (const keyFor of [matchStatOutcomeKey, declaredGameSlotKey]) {
     const reservedIdentities = new Set([...links.values()].map((match) => match.sourceGameId ?? match.id))
     const oracleByKey = new Map<string, MatchRecord[]>()
