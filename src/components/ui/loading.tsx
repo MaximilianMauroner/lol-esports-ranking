@@ -12,6 +12,7 @@ type LoadingStateProps = {
   label: string
   className?: string
   announce?: boolean
+  delay?: boolean
 } & (
   | { presentation: 'page'; layout: PageLayout }
   | { presentation?: 'panel' | 'rows' | 'chart' | 'inline'; rowCount?: number }
@@ -23,12 +24,13 @@ type LoadingStateProps = {
  * never flashes a skeleton and a slow one never shifts the layout.
  */
 export function LoadingState(props: LoadingStateProps) {
-  const { label, className, announce = true } = props
+  const { label, className, announce = true, delay = true } = props
+  const reveal = delay && 'loading-reveal'
   const status = announce ? { role: 'status', 'aria-live': 'polite' as const } : {}
 
   if (props.presentation === 'page') {
     return (
-      <div className={cn('loading-reveal', className)} {...status} aria-busy="true">
+      <div className={cn(reveal, className)} {...status} aria-busy="true">
         <span className="sr-only">{label}</span>
         <PageSkeleton layout={props.layout} />
       </div>
@@ -39,7 +41,7 @@ export function LoadingState(props: LoadingStateProps) {
   const rowCount = props.rowCount ?? 3
   if (presentation === 'inline') {
     return (
-      <span className={cn('loading-reveal inline-flex items-center gap-2 text-muted-foreground', className)} {...status}>
+      <span className={cn(reveal, 'inline-flex items-center gap-2 text-muted-foreground', className)} {...status}>
         <span className="loading-dot" aria-hidden="true" />
         {label}
       </span>
@@ -48,7 +50,7 @@ export function LoadingState(props: LoadingStateProps) {
 
   return (
     <Card
-      className={cn('loading-reveal rounded-md border border-border bg-card p-4', presentation === 'chart' && 'min-h-[260px] p-5', className)}
+      className={cn(reveal, 'rounded-md border border-border bg-card p-4', presentation === 'chart' && 'min-h-[260px] p-5', className)}
       {...status}
       aria-busy="true"
     >
@@ -143,7 +145,7 @@ function PageSkeleton({ layout }: { layout: PageLayout }) {
             <div className="grid gap-1"><Line size="sm" className="w-24" /><Control className="w-[min(312px,80vw)]" /></div>
             <div className="flex gap-1.5"><Control className="w-20" /><Control className="w-24" /></div>
           </div>
-          <div className="flex items-center gap-3"><Line size="xs" className="w-56" /><Skeleton className="h-8 w-20 rounded-md" /></div>
+          <div className="flex flex-wrap items-center gap-3"><Line size="xs" className="w-56" /><Skeleton className="h-8 w-20 rounded-md" /></div>
         </div>
         <Line size="lg" className="w-56" />
         <div className="grid min-h-[340px] grid-cols-[repeat(auto-fill,minmax(212px,1fr))] content-start gap-x-11 gap-y-3 rounded-lg border border-border bg-card p-4">

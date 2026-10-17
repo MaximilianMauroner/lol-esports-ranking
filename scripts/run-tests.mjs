@@ -11,6 +11,7 @@ const browserJourneys = [
   'tests/matchesAddressBrowser.test.ts',
   'tests/rankingTournamentBoardBrowser.test.ts',
   'tests/tournamentBrowser.test.ts',
+  'tests/loadingStateBrowser.test.ts',
   'tests/tournamentForecastBrowser.test.ts',
   'tests/worldsSimulationBrowser.test.ts',
   'tests/swissPreviewBrowser.test.ts',
