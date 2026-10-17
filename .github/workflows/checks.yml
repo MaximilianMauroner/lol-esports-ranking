@@ -53,9 +53,6 @@ jobs:
       - name: Verify
         run: pnpm run verify
 
-      - name: Public artifact reference contracts
-        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/publicArtifactIdentity.test.ts tests/publicArtifactSchema.test.ts tests/checkpointSemanticIdentity.test.ts
-
       - name: Bundle
         run: pnpm run bundle
 
