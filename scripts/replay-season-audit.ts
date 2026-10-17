@@ -6,6 +6,7 @@ import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources.ts'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver.ts'
+import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 import type { MatchRecord } from '../src/types.ts'
 import type { PublicMatchHistoryEntry } from '../src/lib/publicArtifacts/schema.ts'
 
@@ -31,7 +32,7 @@ const after = mergeCommunityMatchSources({
 const outcomes = (matches: typeof after) => matches.map((match) => ({
   id: match.id, date: match.date, teamA: match.teamA, teamB: match.teamB, winner: match.winner,
   kills: [match.teamAKills, match.teamBKills], gold: [match.teamAGold, match.teamBGold],
-})).sort((a, b) => a.id.localeCompare(b.id))
+})).sort((a, b) => compareCodeUnits(a.id, b.id))
 assert.deepEqual(outcomes(after), outcomes(before))
 const published = JSON.parse(await readFile(`${evidence}/public/matches.json`, 'utf8')) as PublicMatchHistoryEntry[]
 const publishedMatches: MatchRecord[] = published.map((game) => ({
