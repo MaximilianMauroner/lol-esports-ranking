@@ -405,6 +405,7 @@ export async function buildRankingIncrementally({
       ? { ...restored.artifacts, ...await restored.loadArtifacts(previousArtifactMergePaths(preliminaryPlan.logicalPaths)) }
       : restored.artifacts
     if (!previousArtifacts) throw new Error('verified-active-artifacts-missing')
+    const previousSemantic = semanticMapFromGeneration(restored.publicManifest)
     candidateDir = `${publicDataDir}.incremental-${process.pid}-${Date.now()}`
     const candidateSpan = diagnosticBegin('build.scoped-snapshot')
     const candidate = await buildSnapshot({
@@ -415,6 +416,7 @@ export async function buildRankingIncrementally({
       generatedAt,
       precomputedGlobalRanking: replayModel,
       affectedLogicalPaths,
+      retainedLogicalPaths: new Set(Object.keys(previousSemantic)),
       affectedSnapshotKeys,
       affectedTournamentIds,
       previousArtifacts,
@@ -443,7 +445,6 @@ export async function buildRankingIncrementally({
       )
     }
     prunePartialPublicIndexes(candidate.publicPlan.writes, validScopeKeys, validTournamentIds)
-    const previousSemantic = semanticMapFromGeneration(restored.publicManifest)
     const candidateReceipts = candidate.publicPlan.writes.map((write) => prepareArtifactReceipt(write.value))
     const candidateSemantic = Object.fromEntries(candidate.publicPlan.writes.map((write, index) => [
       `/data/${write.relativePath}`, { digest: candidateReceipts[index]!.digest },

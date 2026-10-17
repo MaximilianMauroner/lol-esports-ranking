@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { canonicalPublicLogicalPath, prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { artifactReferences, assertReferenceClosure } from '../src/lib/publicArtifacts/logicalReferences.mjs'
 
 export async function materializePublicArtifactPatch(publicDataDir, patch, {
   move = rename,
@@ -39,6 +40,7 @@ export async function materializePublicArtifactPatch(publicDataDir, patch, {
   await mkdir(staging, { recursive: true })
   try {
     const mapping = {}
+    const references = new Map()
     for (const logicalPath of expected) {
       const relativePath = localRelativePath(logicalPath)
       const value = changed.has(logicalPath)
@@ -46,11 +48,13 @@ export async function materializePublicArtifactPatch(publicDataDir, patch, {
         : await readVerifiedLocalArtifact(root, logicalPath, previous[logicalPath])
       const prepared = prepareSemanticArtifact(value, { compress: false })
       mapping[logicalPath] = { sha256: prepared.digest, bytes: prepared.bytes }
+      references.set(logicalPath, artifactReferences(value))
       if (logicalPath === '/data/ranking-summary.json') continue
       const output = join(staging, relativePath)
       await mkdir(dirname(output), { recursive: true })
       await writeFile(output, `${JSON.stringify(value)}\n`)
     }
+    assertReferenceClosure(references, new Set(expected))
     const rootValue = changed.get('/data/ranking-summary.json')
     await writeFile(join(staging, 'ranking-summary.json'), `${JSON.stringify(rootValue)}\n`)
 
