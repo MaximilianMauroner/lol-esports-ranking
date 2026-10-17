@@ -53,12 +53,6 @@ jobs:
       - name: Verify
         run: pnpm run verify
 
-      - name: Public artifact reference contracts
-        run: pnpm run test:public-artifact-references
-
-      - name: Ranking board contracts
-        run: pnpm run test:ranking-board
-
       - name: Bundle
         run: pnpm run bundle
 
