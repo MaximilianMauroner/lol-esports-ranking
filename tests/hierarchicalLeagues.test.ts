@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { fitHierarchicalLeagues } from '../scripts/lib/hierarchical-leagues.ts'
+import { fitHierarchicalLeagues } from '../tools/calibration/lib/hierarchical-leagues.ts'
 import type { EvaluationRow } from '../src/lib/rankingEvaluation.ts'
 
 function domesticAndSelectedEntrantRows() {

@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-const classifier = fileURLToPath(new URL('../scripts/ci-affected-paths.mjs', import.meta.url))
+const classifier = fileURLToPath(new URL('../tools/dev/ci-affected-paths.mjs', import.meta.url))
 const gitAt = (cwd, ...args) => execFileSync('git', args, {
   cwd, encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024,
 }).trim()
@@ -57,7 +57,7 @@ test('presentation and Markdown edits avoid unrelated heavy validation', (t) => 
   f.write('src/views/MatchesView.tsx', 'presentation')
   f.write('src/components/ui/button.tsx', 'button')
   f.write('src/styles/base.css', 'styles')
-  f.write('docs/guide.md', 'prose')
+  f.write('README.md', 'prose')
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=false')
@@ -68,7 +68,7 @@ test('shared, model, import, worker, dependency, benchmark, and unknown paths fa
   for (const path of [
     'src/lib/ratingContext.ts', 'src/data/rankingConfig.ts', 'scripts/download-local-data.mjs',
     'worker/ranking-refresh/src/main.rs', 'pnpm-lock.yaml', 'scripts/benchmark-incremental-ranking.ts',
-    'public/data/ranking-summary.json', 'docs/plans/ranking-accuracy/protocol.json',
+    'public/data/ranking-summary.json', 'tools/calibration/ranking-accuracy-protocol.json',
     'src/future/runtime.ts', 'src/components/futureWorker.ts', 'Dockerfile.refresh', '.github/workflows/checks.yml',
   ]) {
     f.write(path, 'changed')

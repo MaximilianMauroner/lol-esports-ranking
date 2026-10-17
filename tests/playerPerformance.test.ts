@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { auditPlayerPerformance } from '../scripts/audit-player-performance.ts'
+import { auditPlayerPerformance } from '../tools/audit/audit-player-performance.ts'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { buildPlayerModel, buildRankingModel } from '../src/lib/model.ts'
 import { createPlayerPerformanceAccumulator, recordPlayerPerformance, summarizePlayerPerformance } from '../src/lib/playerPerformance.ts'

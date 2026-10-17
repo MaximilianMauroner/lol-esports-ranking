@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { POWER_INDEX_MARK, POWER_INDEX_HEADER_MARK, POWER_INDEX_FAVICON, POWER_INDEX_MASKABLE_MARK } from '../src/data/brandMark.ts'
+import { POWER_INDEX_MARK, POWER_INDEX_HEADER_MARK, POWER_INDEX_FAVICON, POWER_INDEX_MASKABLE_MARK } from '../../src/data/brandMark.ts'
 
 // Run manually when the master mark changes. Requires ffmpeg with librsvg.
 const temporary = mkdtempSync(join(tmpdir(), 'power-index-brand-'))

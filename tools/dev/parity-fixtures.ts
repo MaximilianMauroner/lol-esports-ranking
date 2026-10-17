@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
-import { parseProviderInstant, providerDate, providerDatetimeUtc } from '../src/lib/importers/providerTime'
-import { stableDigest, stableJson } from '../src/lib/incremental/types'
-import { configHashFor } from '../src/lib/modelConfig'
-import { canonicalJsonFor, prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { compareCodeUnits } from '../../src/lib/codeUnitOrder.mjs'
+import { parseProviderInstant, providerDate, providerDatetimeUtc } from '../../src/lib/importers/providerTime'
+import { stableDigest, stableJson } from '../../src/lib/incremental/types'
+import { configHashFor } from '../../src/lib/modelConfig'
+import { canonicalJsonFor, prepareSemanticArtifact } from '../../scripts/public-artifact-storage.mjs'
 
 /**
  * Byte contracts that the planned Rust refresh worker (#84) must reproduce

@@ -1,4 +1,4 @@
-import type { EvaluationRow } from '../../src/lib/rankingEvaluation'
+import type { EvaluationRow } from '../../../src/lib/rankingEvaluation'
 
 export type LeagueFit = ReturnType<typeof fitHierarchicalLeagues>
 

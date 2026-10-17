@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { competitionForLeague, normalizeTournamentFeed, type TournamentCompetition } from '../src/lib/tournamentFeed.ts'
+import { competitionForLeague, normalizeTournamentFeed, type TournamentCompetition } from '../../src/lib/tournamentFeed.ts'
 
 const competitions: TournamentCompetition[] = ['lcs', 'lec', 'lpl', 'lck', 'worlds', 'msi', 'first-stand']
 function record(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === 'object' && !Array.isArray(value)) }

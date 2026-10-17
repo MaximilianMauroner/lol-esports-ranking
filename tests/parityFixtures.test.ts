@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { promisify } from 'node:util'
 import { providerDate, providerDatetimeUtc } from '../src/lib/importers/providerTime'
-import { buildParityFixtures } from '../scripts/parity-fixtures'
+import { buildParityFixtures } from '../tools/dev/parity-fixtures'
 
 const exec = promisify(execFile)
 
@@ -38,7 +38,7 @@ test('malformed provider dates use ten UTF-16 units and replace only lone surrog
 
 test('provider timestamp fixtures agree in fresh UTC and non-UTC processes', async () => {
   const stored = JSON.parse(await readFile('tests/fixtures/parity/contracts.json', 'utf8'))
-  const fixtureUrl = new URL('../scripts/parity-fixtures.ts', import.meta.url).href
+  const fixtureUrl = new URL('../tools/dev/parity-fixtures.ts', import.meta.url).href
   for (const timezone of ['UTC', 'Asia/Seoul', 'America/New_York']) {
     const { stdout } = await exec(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
       import { buildParityFixtures } from ${JSON.stringify(fixtureUrl)}
