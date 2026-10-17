@@ -24,6 +24,7 @@ httpdate = "1"
 rustix = { version = "1", features = ["fs"] }
 regex = "1"
 serde_json.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

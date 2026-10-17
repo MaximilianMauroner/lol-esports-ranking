@@ -143,3 +143,25 @@ This project is not endorsed by Riot Games and does not reflect the views or
 opinions of Riot Games or anyone officially involved in producing or managing
 Riot Games properties. Riot Games and all associated properties are trademarks or
 registered trademarks of Riot Games, Inc.
+
+## Run the native local data service
+
+Build and start the Unix service with an existing local data directory.
+
+```sh
+cargo +1.98.0 build --manifest-path worker/Cargo.toml --package league-platform --bin platform-api --locked
+worker/target/debug/platform-api --data-root public/data --listen 127.0.0.1:4174
+```
+
+The listener accepts loopback addresses only. It serves `/data/`, `/api/live`, and `/api/ready`.
+Readiness checks only local summary access. The root stays pinned until restart. All symlinks are refused.
+Errors use safe fixed text. Conditional dates use standard HTTP forms. This bounded Unix service does not establish production equivalence.
+Node remains the production start command.
+
+Run the explicit native proof after building the binary. Both paths must exist. The proof does not build or download inputs.
+
+```sh
+RANKING_NATIVE_HTTP_BINARY=worker/target/debug/platform-api \
+RANKING_NATIVE_HTTP_RETAINED_DATA_DIR=data/reference/8adbc0a4239fd0dfba2094b3e70f60b513560de4/public/data \
+pnpm exec tsx --tsconfig tsconfig.app.json --test tests/nativeRankingHttp.integration.ts
+```

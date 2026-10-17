@@ -46,7 +46,7 @@ export async function writeSyntheticArtifacts(root: string, generation: boolean)
   if (generation) {
     for (const { artifact } of prepared) {
       await write(`/data/objects/sha256/${artifact.digest}`, artifact.canonicalBytes)
-      for (const child of artifact.children ?? []) await write(`/data/objects/sha256/${child.digest}`, child.canonicalBytes)
+      for (const child of artifact.children) await write(`/data/objects/sha256/${child.digest}`, child.canonicalBytes)
     }
     const index = createGenerationManifest({ generationId: manifest.artifactMeta.runId, rootManifest: manifest, entries: prepared.map(({ logicalPath, artifact }) => ({ logicalPath, digest: artifact.digest, bytes: artifact.bytes })) })
     await write('/data/ranking-summary.json', canonicalJsonFor(index))

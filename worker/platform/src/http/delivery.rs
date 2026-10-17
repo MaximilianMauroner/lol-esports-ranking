@@ -3,18 +3,22 @@ use std::fs::{File, Metadata};
 use std::io;
 use std::os::fd::OwnedFd;
 use std::path::{Component, Path};
-use std::sync::Arc;
+use std::pin::Pin;
+use std::sync::{Arc, LazyLock};
+use std::task::{Context, Poll};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use async_compression::tokio::bufread::GzipEncoder;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::Frame;
 use hyper::header::HeaderValue;
-use hyper::{Response, StatusCode, Uri};
+use hyper::{HeaderMap, Response, StatusCode, Uri};
+use regex::Regex;
 use rustix::fs::{Mode, OFlags, open, openat};
 use serde_json::json;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt, BufReader, ReadBuf};
 use tokio::sync::Semaphore;
 use tokio_util::io::ReaderStream;
 
@@ -25,6 +29,7 @@ pub(super) struct LocalData {
     metadata_slots: Arc<Semaphore>,
     data_cache: HeaderValue,
     manifest_cache: HeaderValue,
+    gzip_enabled: bool,
 }
 
 struct LocalRoot {
@@ -48,7 +53,7 @@ struct OpenedFile {
     metadata: Metadata,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(super) enum LocalReadiness {
     Ready,
     Missing,
@@ -96,6 +101,7 @@ impl LocalData {
             metadata_slots: Arc::new(Semaphore::new(64)),
             data_cache: header(&options.data_cache_control)?,
             manifest_cache: header(&options.manifest_cache_control)?,
+            gzip_enabled: options.gzip_enabled,
         })
     }
 
@@ -119,7 +125,12 @@ impl LocalData {
         }
     }
 
-    pub(super) async fn respond(&self, target: &RequestTarget, head: bool) -> Response<Body> {
+    pub(super) async fn respond(
+        &self,
+        target: &RequestTarget,
+        head: bool,
+        headers: &HeaderMap,
+    ) -> Response<Body> {
         let Some(path) = DataPath::parse(target) else {
             return json_response(
                 StatusCode::BAD_REQUEST,
@@ -150,25 +161,56 @@ impl LocalData {
             CacheClass::Data => self.data_cache.clone(),
         };
         let length = opened.metadata.len();
+        let etag = local_etag(&opened.metadata);
+        let modified = opened.metadata.modified().unwrap_or(UNIX_EPOCH);
+        let fresh = is_fresh(headers, &etag, modified);
+        let compressible = compressible(path.media_type);
+        let gzip = !fresh
+            && !head
+            && self.gzip_enabled
+            && compressible
+            && length >= 1024
+            && accepts_gzip(headers);
         let mut response = Response::builder()
-            .status(StatusCode::OK)
+            .status(if fresh {
+                StatusCode::NOT_MODIFIED
+            } else {
+                StatusCode::OK
+            })
             .header("Content-Type", path.media_type)
             .header("Cache-Control", cache)
-            .header("ETag", local_etag(&opened.metadata))
+            .header("ETag", etag)
             .header(
                 "Last-Modified",
-                httpdate::fmt_http_date(opened.metadata.modified().unwrap_or(UNIX_EPOCH)),
-            )
-            .header("Content-Length", length);
-        if compressible(path.media_type) {
+                chrono::DateTime::<chrono::Utc>::from(modified)
+                    .format("%a, %d %b %Y %H:%M:%S GMT")
+                    .to_string(),
+            );
+        if compressible {
             response = response.header("Vary", "Accept-Encoding");
         }
-        let body = if head {
+        if gzip {
+            response = response.header("Content-Encoding", "gzip");
+        } else if !fresh {
+            response = response.header("Content-Length", length);
+        }
+        let body = if head || fresh {
             empty_body()
         } else {
-            let file = tokio::fs::File::from_std(opened.file).take(length);
-            StreamBody::new(ReaderStream::with_capacity(file, 64 * 1024).map_ok(Frame::data))
-                .boxed_unsync()
+            let file = ExactFile {
+                file: tokio::fs::File::from_std(opened.file).take(length),
+            };
+            let reader: Box<dyn tokio::io::AsyncRead + Send + Unpin> = if gzip {
+                Box::new(GzipEncoder::new(BufReader::with_capacity(64 * 1024, file)))
+            } else {
+                Box::new(file)
+            };
+            StreamBody::new(
+                ReaderStream::with_capacity(reader, 64 * 1024)
+                    .inspect_err(|error| eprintln!("Data stream failed: {error}"))
+                    .map_ok(Frame::data),
+            )
+            .boxed_unsync()
         };
         response.body(body).unwrap()
     }
@@ -335,6 +377,102 @@ fn local_etag(metadata: &Metadata) -> String {
         format!("{milliseconds:x}")
     };
     format!("W/\"{:x}-{timestamp}\"", metadata.len())
+}
+
+fn is_fresh(headers: &HeaderMap, etag: &str, modified: SystemTime) -> bool {
+    let value = headers
+        .get_all("if-none-match")
+        .iter()
+        .map(|value| {
+            value
+                .as_bytes()
+                .iter()
+                .map(|byte| char::from(*byte))
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    if !value.is_empty() {
+        let strip_weak = |value: &str| {
+            value
+                .strip_prefix("W/")
+                .or_else(|| value.strip_prefix("w/"))
+                .unwrap_or(value)
+                .to_owned()
+        };
+        return value
+            .split(',')
+            .map(str::trim)
+            .any(|tag| tag == "*" || strip_weak(tag) == strip_weak(etag));
+    }
+    headers
+        .get("if-modified-since")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| {
+            httpdate::parse_http_date(value).ok().or_else(|| {
+                chrono::NaiveDateTime::parse_from_str(value, "%a, %d %b %Y %H:%M:%S GMT")
+                    .ok()
+                    .filter(|date| date.and_utc().timestamp() < 0)
+                    .map(|date| SystemTime::from(date.and_utc()))
+            })
+        })
+        .is_some_and(|since| {
+            let whole_seconds = match modified.duration_since(UNIX_EPOCH) {
+                Ok(duration) => UNIX_EPOCH + std::time::Duration::from_secs(duration.as_secs()),
+                Err(error) => {
+                    UNIX_EPOCH
+                        - std::time::Duration::from_secs(
+                            error.duration().as_secs()
+                                + u64::from(error.duration().subsec_nanos() != 0),
+                        )
+                }
+            };
+            whole_seconds <= since
+        })
+}
+
+fn accepts_gzip(headers: &HeaderMap) -> bool {
+    static GZIP: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)(?-u:\b)gzip(?-u:\b)").unwrap());
+    static ZERO: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)(?-u:\b)gzip\s*;\s*q=0(?:\.0+)?(?-u:\b)").unwrap());
+    let values = headers
+        .get_all("accept-encoding")
+        .iter()
+        .map(|value| {
+            value
+                .as_bytes()
+                .iter()
+                .map(|byte| char::from(*byte))
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    GZIP.is_match(&values) && !ZERO.is_match(&values)
+}
+
+struct ExactFile {
+    file: tokio::io::Take<tokio::fs::File>,
+}
+
+impl AsyncRead for ExactFile {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let before = buffer.filled().len();
+        let expects_bytes = self.file.limit() > 0 && buffer.remaining() > 0;
+        match Pin::new(&mut self.file).poll_read(context, buffer) {
+            Poll::Ready(Ok(())) if expects_bytes && buffer.filled().len() == before => {
+                Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "artifact shortened during read",
+                )))
+            }
+            result => result,
+        }
+    }
 }
 
 fn empty_body() -> Body {

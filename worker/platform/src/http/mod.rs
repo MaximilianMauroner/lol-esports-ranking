@@ -180,7 +180,10 @@ async fn dispatch(
             head,
         )
     } else if path.starts_with("/data/") {
-        state.delivery.respond(target.as_ref().unwrap(), head).await
+        state
+            .delivery
+            .respond(target.as_ref().unwrap(), head, request.headers())
+            .await
     } else {
         json_response(
             StatusCode::NOT_FOUND,

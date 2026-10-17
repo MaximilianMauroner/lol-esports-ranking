@@ -1,3 +1,5 @@
+import './nativeHttpSafetyProof.ts'
+import './nativeHttpDeliveryProof.ts'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
@@ -17,7 +19,7 @@ test('native CLI rejects unsafe roots, nonloopback addresses and invalid options
   assert.ok(binary, 'RANKING_NATIVE_HTTP_BINARY is required')
   const run = promisify(execFile)
   try {
-    await mkdir(join(root, 'real'))
+    await mkdir(join(root, 'real/child'), { recursive: true })
     await symlink(join(root, 'real'), join(root, 'link'))
     const help = await run(binary, ['--help'])
     assert.match(help.stdout, /127\.0\.0\.1:4174/)
