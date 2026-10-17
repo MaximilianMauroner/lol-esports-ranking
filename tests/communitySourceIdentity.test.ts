@@ -163,3 +163,63 @@ test('games without source IDs retain fallback date grouping', () => {
   assert.deepEqual(series.map((item) => item.date), ['2026-10-15', '2026-10-16'])
   assert.deepEqual(series.map((item) => item.games.length), [1, 2])
 })
+
+function mixedOfficialSourceSweep() {
+  const gameIds = ['LOLTMNT02_478715', 'LOLTMNT02_478718', 'LOLTMNT02_478726']
+  const times = ['2026-10-15T23:00:00Z', '2026-10-16T00:06:03.000Z', '2026-10-16T01:01:24.000Z']
+  return midnightSweep('2026-10-15', '2026-10-16', '2026 Season World Championship/Play-In_Round 1_2')
+    .map((match, index) => ({
+      ...match,
+      id: gameIds[index],
+      sourceProvider: 'oracles-elixir' as const,
+      sourceGameId: gameIds[index],
+      datetimeUtc: times[index],
+      teamA: 'FURIA',
+      teamB: 'MVK Esports',
+      winner: 'MVK Esports',
+      bestOf: index === 0 ? 5 : 3,
+      officialMatchId: index === 0 ? '115660588583040710' : undefined,
+    }))
+}
+
+test('mixed official and full source series identities resolve the pinned FURIA sweep as one 0-3', () => {
+  const games = mixedOfficialSourceSweep()
+  const original = structuredClone(games)
+  for (const ordered of [games, [...games].reverse()]) {
+    const series = resolveCanonicalSeries(ordered)
+    assert.equal(series.length, 1)
+    assert.equal(series[0].id, 'official-match\u0000115660588583040710')
+    assert.equal(series[0].date, '2026-10-15')
+    assert.equal(series[0].teamA, 'FURIA')
+    assert.equal(series[0].teamB, 'MVK Esports')
+    assert.equal(series[0].games.length, 3)
+    assert.deepEqual([series[0].winsA, series[0].winsB], [0, 3])
+    assert.equal(series[0].format, 5)
+    assert.equal(series[0].state, 'completed')
+    assert.deepEqual(games, original)
+  }
+})
+
+test('conflicting official identities do not absorb source-only games or join official matches', () => {
+  const games = mixedOfficialSourceSweep()
+  games[1].officialMatchId = 'different-official-match'
+  for (const ordered of [games, [...games].reverse(), [games[1], games[2], games[0]]]) {
+    const series = resolveCanonicalSeries(ordered)
+    assert.equal(series.length, 3)
+    assert.ok(series.every((item) => item.games.length === 1))
+    assert.equal(series.find((item) => item.games[0].id === games[2].id)?.id,
+      'source-match\u00002026 Season World Championship/Play-In_Round 1_2\u0000FURIA\u0000MVK Esports')
+    assert.equal(games[2].officialMatchId, undefined)
+  }
+})
+
+test('official identity inheritance stays within the source series and canonical team pair', () => {
+  const games = mixedOfficialSourceSweep()
+  const otherSeries = { ...games[1], id: 'other-series', sourceMatchId: '2026 Season World Championship/Play-In_Round 1_3_2' }
+  const otherTeams = { ...games[2], id: 'other-teams', teamA: 'Gen.G' }
+  const series = resolveCanonicalSeries([...games, otherSeries, otherTeams])
+  assert.equal(series.length, 3)
+  assert.equal(series.find((item) => item.id === 'official-match\u0000115660588583040710')?.games.length, 3)
+  assert.ok(series.filter((item) => item.id !== 'official-match\u0000115660588583040710')
+    .every((item) => item.games.length === 1 && item.id.startsWith('source-match\u0000')))
+})
