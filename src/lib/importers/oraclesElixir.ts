@@ -126,11 +126,13 @@ function normalizeGame(
   const rawDate = value(first, 'date')
   const date = providerDate(rawDate)
   const format = bestOfForGame(first, playoffs)
+  const gameNumber = numberValue(first, 'game')
 
   return {
     id: `oe-${gameId}`,
     sourceProvider: 'oracles-elixir',
     sourceGameId: gameId,
+    gameNumber: Number.isInteger(gameNumber) && gameNumber >= 1 && gameNumber <= 5 ? gameNumber : undefined,
     sourceUrl: options.sourceUrl || value(first, 'url'),
     sourceFileName: options.sourceFileName,
     dataCompleteness: value(first, 'datacompleteness') || undefined,
