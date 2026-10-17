@@ -28,7 +28,7 @@ import {
 } from './incremental-benchmark-assertions.ts'
 import { runCalibrationWorkload } from './benchmark-calibration.ts'
 import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
-import { verifyRustRawSource } from './verify-rust-raw-source.ts'
+import { verifyRustRawSource } from '../tools/audit/verify-rust-raw-source.ts'
 
 const requestedMatchCount = parseBenchmarkPositiveInteger('RANKING_BENCHMARK_MATCH_COUNT', process.env.RANKING_BENCHMARK_MATCH_COUNT)
 const requestedRepeats = parseBenchmarkPositiveInteger('RANKING_BENCHMARK_REPEATS', process.env.RANKING_BENCHMARK_REPEATS)
