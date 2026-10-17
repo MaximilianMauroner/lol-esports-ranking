@@ -200,6 +200,11 @@ test('tracked-file hygiene rejects narrative output inside source zones', (t) =>
     'tools/audit/report.md': '# Audit results',
     'src/views/rankings/migration-plan.md': '# Migration plan',
     'tools/reports/results.html': '<p>Audit results</p>',
+    'tools/reviews/q1.md': '# Review results',
+    'tools/audits/final.md': '# Audit results',
+    'src/views/reviews/2024.html': '<p>Review results</p>',
+    'tools/review/q1.md': '# Review results',
+    'tools/audit/final.md': '# Audit results',
   }
   const { root } = fixture(t, files)
   execFileSync('git', ['init', '-q', root])
