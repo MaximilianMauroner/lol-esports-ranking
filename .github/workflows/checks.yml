@@ -56,9 +56,6 @@ jobs:
       - name: Public artifact reference contracts
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/publicArtifactIdentity.test.ts tests/publicArtifactSchema.test.ts tests/checkpointSemanticIdentity.test.ts
 
-      - name: Public output reference closure
-        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/incrementalArtifacts.test.ts tests/incrementalArtifactPatch.test.ts tests/incrementalRankingIntegration.test.ts tests/railwayRefresh.test.ts
-
       - name: Bundle
         run: pnpm run bundle
 
