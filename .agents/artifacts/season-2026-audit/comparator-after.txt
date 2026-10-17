@@ -1,0 +1,18 @@
+[
+  {
+    "mode": "matching-cargo",
+    "passed": true
+  },
+  {
+    "mode": "unmapped-cargo-team",
+    "passed": true
+  },
+  {
+    "mode": "riot-only",
+    "passed": true
+  },
+  {
+    "mode": "liquipedia-without-cargo-score",
+    "passed": true
+  }
+]

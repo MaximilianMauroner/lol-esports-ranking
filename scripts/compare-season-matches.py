@@ -264,15 +264,17 @@ def compare(directory):
                 item = candidates[0]
                 first = team(a["name"]) == team(item["teams"][0]) or team(b["name"]) == team(item["teams"][1])
                 score = item["score"] if first else list(reversed(item["score"]))
-                supplemental = {**item, "scoreInPublicOrder": score, "cargoScoreAgrees": score == expected_score,
+                supplemental = {**item, "scoreInPublicOrder": score,
+                                "cargoScoreAgrees": score == expected_score if expected_score is not None else None,
                                 "cargoTeamsAgree": pair(*item["teams"]) == pair(schedule["Team1"], schedule["Team2"])}
                 independence = "second-provider-series" if supplemental["cargoTeamsAgree"] else "second-provider-series-team-conflict"
                 if not supplemental["cargoTeamsAgree"] and "teams-source-conflict" not in issues:
                     issues.append("teams-source-conflict")
-                if not supplemental["cargoScoreAgrees"] and "source-score-conflict" not in issues:
+                if supplemental["cargoScoreAgrees"] is False and "source-score-conflict" not in issues:
                     issues.append("source-score-conflict")
         results.append({"seriesId": sid, "date": entry["date"], "teamA": a["name"], "teamB": b["name"],
-                        "shownScore": shown_score, "correctScore": expected_score if expected_score is not None else riot_score,
+                        "shownScore": shown_score, "cargoScore": expected_score,
+                        "correctScore": expected_score if expected_score is not None else riot_score,
                         "event": entry["event"], "league": entry["league"], "phase": rows[0]["phase"],
                         "patches": sorted({row["patch"] for row in rows}), "correctLeague": expected_league,
                         "correctStage": expected_stage, "correctBestOf": schedule.get("BestOf") if schedule else None,
@@ -293,12 +295,13 @@ def compare(directory):
     target.mkdir(exist_ok=True)
     for name, value in [("games", checked_games), ("series", results)]:
         (target / (name + ".json")).write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    cargo_riot_agreements = [row for row in results if row["cargoScore"] is not None and row["riotScore"] == row["cargoScore"]]
     summary = {"games": len(matches), "series": len(results), "gameMatchBasis": dict(Counter(row["basis"] for row in checked_games)),
                "seriesStatus": dict(Counter(row["status"] for row in results)),
                "seriesIndependence": dict(Counter(row["independence"] for row in results)),
                "issueCounts": dict(Counter(issue for row in results for issue in row["issues"])),
-               "cargoRiotScoreAgreements": sum(bool(row["cargoMatchId"]) and row["riotScore"] is not None and row["riotScore"] == row["correctScore"] for row in results),
-               "uniqueCargoRiotScoreAgreements": len({row["cargoMatchId"] for row in results if row["cargoMatchId"] and row["riotScore"] is not None and row["riotScore"] == row["correctScore"]}),
+               "cargoRiotScoreAgreements": len(cargo_riot_agreements),
+               "uniqueCargoRiotScoreAgreements": len({row["cargoMatchId"] for row in cargo_riot_agreements}),
                "duplicateReferenceGames": sum(len(ids) > 1 for ids in public_by_cargo.values()),
                "duplicateExtraRows": sum(max(0, len(ids) - 1) for ids in public_by_cargo.values())}
     results_by_id = {row["seriesId"]: row for row in results}
@@ -372,7 +375,7 @@ def export_report(directory, destination, results, checked_games, summary):
         "",
         f"There are {summary['duplicateExtraRows']} extra published rows for {summary['duplicateReferenceGames']} paired reference games. There are {wrong_patches} wrong patch rows in {summary['issueCounts'].get('patch', 0)} series. Direct game-ID checks found {direct_fact_differences} team, UTC date, or winner differences after the listed brand aliases were applied.", "",
         "Oracle's `16.xx` patch notation and Leaguepedia's `26.xx` notation describe the same 2026 patch. These are not counted as errors. `26.1` versus `26.10` is a retained precision error.", "",
-        "Seven displayed EWC qualifier series have a team-source conflict across four source matches. Three Oracle-derived series name Team Secret Whales, while Cargo and the three duplicate Leaguepedia-derived series name Team Secret (Vietnamese Team). The May 20 Oracle-derived series also names Team Secret. Liquipedia names Secret Whales in all four source matches and agrees with Cargo's dates and scores. The wiki API gives Team Secret and Team Secret Whales distinct page IDs. The patch keeps this conflict open and does not merge their identities.", "",
+        "Seven displayed EWC qualifier series have a team-source conflict across four source matches. Three Oracle-derived series name Team Secret Whales. Cargo names Team Secret (Vietnamese Team), and the three repeated Leaguepedia-derived series show Team Secret. These three apparent repeated series contain seven candidate extra games outside the count of 80 directly paired extra rows. Their dates, common opponent, series scores, and Cargo match IDs agree, but the seven Oracle game ordinals remain unpaired. The May 20 Oracle-derived series also names Team Secret. Liquipedia names Secret Whales in all four source matches and agrees with Cargo's dates and scores. The wiki API gives Team Secret and Team Secret Whales distinct page IDs. The patch keeps this conflict open and does not merge their identities.", "",
         "## Root causes and fixes", "",
         "1. The deployed duplicates show a failed cross-provider link. Exact kills and gold are the current primary link key. A synthetic stat revision proves one way this path can retain two rows and create an orphan Oracle Bo1. This is a demonstrated failure mode, not the confirmed trigger for every deployed duplicate. The retained local baseline has identical Oracle and Leaguepedia stats for all 77 duplicate pairs it covers. The production source delta remains unknown. The code change handles valid stat revisions with unique declared game slots after exact-stat matching. It requires matching date, teams, winner, league, season, and compatible clocks. Ambiguous games remain separate. A full production repair is not certified.", "",
         "2. Source-series grouping included the UTC date. Schedule enrichment also matched by date, so only the first game of some overnight series received an official ID. FURIA versus MVK on October 15 and 16 appears as 0-1 and 0-2 instead of one 0-3 result. The fix groups explicit source series IDs across dates and shares a unique official anchor within a verified source series. Conflicting official IDs remain separate. Declared series-level IDs keep their numeric match suffixes. Date grouping remains for games without a source series ID.", "",
@@ -418,6 +421,8 @@ def export_report(directory, destination, results, checked_games, summary):
             correct = "Cargo: " + correct + "; Liquipedia: " + " vs ".join(row["liquipedia"]["teams"]) + " (identity unresolved)"
         provider = " + ".join("Oracle" if item == "oracles-elixir" else "Leaguepedia" for item in row["providers"])
         step = "merge or series grouping" if any(issue in row["issues"] for issue in ("score", "duplicate-game")) else "stage inference"
+        if "teams-source-conflict" in row["issues"]:
+            step = "source team identity or cross-provider merge"
         if "league" in row["issues"]:
             step = "league inference"
         elif "patch" in row["issues"] and len(row["issues"]) == 1:
