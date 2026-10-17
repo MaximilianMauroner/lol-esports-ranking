@@ -63,9 +63,9 @@ All 1,192 displayed series were compared. Per-game rows are paired for 2,894 of 
 
 The stage flags use explicit stage words in MatchSchedule tabs or playoff and play-in paths. Generic Round and Day labels remain unknown. The 120 stage flags are heuristic candidates for correction, not a complete stage certification.
 
-Raw downloads, request URLs, hashes, source excerpts, comparison JSON, and check output stay under `.agents/artifacts/season-2026-audit/`. The committed raw evidence archive preserves the inputs used by this report. Source data is an audit capture, not a refreshed production dataset.
+Raw downloads, request URLs, hashes, source excerpts, comparison JSON, and check output stay under `.agents/artifacts/season-2026-audit/`. Raw evidence stays local and is not tracked by Git. The local archive preserves the inputs used by this report. Source data is an audit capture, not a refreshed production dataset.
 
-Reproduce the retained audit from the repository root. The archive includes the optional original Oracle clock excerpts.
+With the retained local evidence, reproduce the audit from the repository root. The archive includes the optional original Oracle clock excerpts.
 
 ```sh
 tar -xzf .agents/artifacts/season-2026-audit/raw-evidence.tar.gz -C .
@@ -77,9 +77,9 @@ Collect a later public generation with `python3 scripts/audit-season-matches.py 
 
 ## Verification and handoff
 
-The initial full local verification failed. It passed typecheck and lint, then recorded 1,208 passed, seven failed, and 21 skipped tests out of 1,236. Source edits occurred during that run, so it has no single verified commit and gives no current-head verification credit. The raw output is retained. Later fixes address those failures. Final focused checks, player-output parity, full verification, and bundle validation await a host allocation. The PR body records the final results with raw output links. Hosted Actions is billing-blocked. All branch commits use `[skip ci]`; no workflow is dispatched.
+The initial full local verification failed. It passed typecheck and lint, then recorded 1,208 passed, seven failed, and 21 skipped tests out of 1,236. Source edits occurred during that run, so it has no single verified commit and gives no current-head verification credit. The raw output is retained. Later fixes address those failures. Final focused checks, player-output parity, full verification, and bundle validation await a host allocation. The PR body records the results. Raw check output stays in the local evidence directory. Hosted Actions is billing-blocked. All branch commits use `[skip ci]`; no workflow is dispatched.
 
-The focused replay uses an unchanged checkout at `904919f97b8059b2b152ae2c40d699c187e47178`. Create one with `git worktree add --detach /tmp/lol-2026-audit-baseline 904919f97b8059b2b152ae2c40d699c187e47178`, provide its dependencies, and extract the archive first. Then run `heavy-check -- bash .agents/artifacts/season-2026-audit/final-focused.sh`. The script accepts a different baseline path as its first argument. It performs no dependency install.
+The focused replay uses an unchanged checkout at `904919f97b8059b2b152ae2c40d699c187e47178`. Create one with `git worktree add --detach /tmp/lol-2026-audit-baseline 904919f97b8059b2b152ae2c40d699c187e47178`, provide its dependencies, and extract the archive first. Then run `heavy-check -- bash .agents/artifacts/season-2026-audit/final-focused.sh`. The harness stays local with the evidence. It accepts a different baseline path as its first argument and performs no dependency install.
 
 Merging this code does not repair the live public objects. A full raw-data replay and a later approved publication are required. Rankings and series IDs can change. The new taxonomy also changes the model config hash. No merge, deployment, force-push, or rebase of a pushed branch is authorized.
 

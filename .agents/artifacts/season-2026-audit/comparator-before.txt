@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/.agents/artifacts/season-2026-audit/comparator-regression.py", line 58, in <module>
-    assert summary["cargoRiotScoreAgreements"] == (1 if mode == "matching-cargo" else 0), (mode, summary)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError: ('unmapped-cargo-team', {'games': 1, 'series': 1, 'gameMatchBasis': {'source-game-id': 1}, 'seriesStatus': {'different': 1}, 'seriesIndependence': {'second-provider-series': 1}, 'issueCounts': {'game-winner-conflict': 1, 'game-teams-conflict': 1}, 'cargoRiotScoreAgreements': 1, 'uniqueCargoRiotScoreAgreements': 1, 'duplicateReferenceGames': 0, 'duplicateExtraRows': 0, 'leaguepediaGamesWithRiotSeriesReference': 0, 'leaguepediaGamesWithoutSecondProvider': 0, 'leaguepediaGamesWithLiquipediaSeriesReference': 0})
