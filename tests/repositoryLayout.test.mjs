@@ -177,6 +177,8 @@ test('tracked-file hygiene accepts source fixtures and assets and rejects forced
     'public/team-colors.csv': 'team,color\nA,blue\n',
     'ops/safety/receipt.json': '{"schemaVersion":1}',
     'tools/audit/report-contract.json': '{"schemaVersion":1}',
+    'docs/product.md': '# Product purpose',
+    'docs/product-specification.md': '# Product requirements',
     'src/shared/shared.ts': 'export {}',
   })
   execFileSync('git', ['init', '-q', root])
@@ -205,6 +207,8 @@ test('tracked-file hygiene rejects narrative output inside source zones', (t) =>
     'src/views/reviews/2024.html': '<p>Review results</p>',
     'tools/review/q1.md': '# Review results',
     'tools/audit/final.md': '# Audit results',
+    'docs/plans/migration.md': '# Migration plan',
+    'docs/reports/results.md': '# Audit results',
   }
   const { root } = fixture(t, files)
   execFileSync('git', ['init', '-q', root])

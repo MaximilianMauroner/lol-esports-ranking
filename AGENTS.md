@@ -18,6 +18,7 @@
 - `tools/` owns developer calibration, audits, assets, and verification tools. It can consume shared and production code. The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is also a developer entry with tools ownership.
 - `tests/` owns tests and fixtures. Discover serial browser journeys by `*Browser.test.ts`.
 - `worker/` owns the Cargo workspace. `ops/` owns safety receipts.
+- `docs/` owns the product purpose, product requirements, principles, and reasons for lasting design decisions. Keep current-code tours, migration plans, reports, audits, and handoffs in ignored `.agents/artifacts/`.
 - Lint enforces import directions after resolving paths. Keep the ownership policy in `tools/dev/ownership-policy.mjs`.
 - Keep the move map in `tools/dev/platform-migration-map.json` rerunnable with `node tools/dev/migrate-platform.mjs --check`.
 - Put reports, plans, audits, research captures, and handoffs in ignored `.agents/artifacts/`. Keep source fixtures and product assets in Git. `verify` checks tracked-file hygiene separately from Git-independent lint.

@@ -7,7 +7,6 @@ logs/
 /.rollout-evidence/
 /.agent/artifacts/
 /.agents/artifacts/
-/docs/
 /reports/
 /research/
 /coverage/

@@ -3,6 +3,12 @@
 An independent team-strength model for LoL esports. The app shows team and league
 rankings, match history, player timelines, and tournament forecasts.
 
+This repository is the starting point for a connected League of Legends platform.
+Read the [product purpose](docs/product.md) and the
+[product specification](docs/product-specification.md) for its shared goals across
+esports, build tools, personal analytics, and a desktop companion. Those documents
+describe the product direction. They do not imply that every capability is available.
+
 This is not an official Riot ranking. Keep each ranking claim tied to its source
 manifest, model config hash, schema version, and coverage window. A fixed reference
 snapshot, synthetic fixture, or no-data payload is not current official data.
@@ -66,6 +72,7 @@ workspace. It has one JavaScript dependency set and no package split.
 | `tests/` | Tests and focused fixtures. |
 | `worker/` | Native refresh seams and Rust contracts. |
 | `ops/` | Tracked safety receipts. |
+| `docs/` | Product purpose, requirements, principles, and lasting design decisions. |
 | `.agents/artifacts/` | Ignored reports, plans, audit output, and local evidence. |
 
 The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is a developer

@@ -8,7 +8,7 @@ const roots = new Set([
   'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
   'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json', 'tsconfig.test.json',
   'Dockerfile.refresh', 'Dockerfile.refresh.dockerignore', 'railway.toml', 'railway.refresh.toml',
-  'src', 'scripts', 'tools', 'tests', 'worker', 'ops', 'data', 'public',
+  'src', 'scripts', 'tools', 'tests', 'worker', 'ops', 'data', 'public', 'docs',
 ])
 export function trackedPathError(path) {
   if (!roots.has(path.split('/')[0])) return 'Unapproved tracked root'
