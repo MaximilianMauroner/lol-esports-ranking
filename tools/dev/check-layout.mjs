@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const roots = new Set([
@@ -16,6 +16,10 @@ export function trackedPathError(path) {
   if (/(?:^|\/)(?:node_modules|dist|coverage|\.cache|\.vite|test-results|playwright-report)(?:\/|$)/.test(path)) return 'Generated output must stay ignored'
   if (/^(?:public\/(?:data|tournament-data)|data\/(?:derived|reference)|worker\/target)(?:\/|$)/.test(path)) return 'Generated output must stay ignored'
   if (path.startsWith('data/') && path !== 'data/raw/manifest.json') return 'Local data must stay ignored'
+  if (/\.(?:md|html?)$/i.test(path) && (
+    /(?:^|\/)(?:reports|plans|handoffs|captures|research)\//i.test(path)
+    || /(?:^|[-_.])(?:reports?|plans?|audits?|handoffs?|captures?|reviews?|research)(?:[-_.]|$)/i.test(basename(path))
+  )) return 'Narrative output must stay in ignored agent artifacts'
 }
 
 export function checkLayout(root = process.cwd()) {

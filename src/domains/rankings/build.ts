@@ -61,8 +61,14 @@ export {
   reconcileRatingCheckpointEvents,
 } from './internal/replay/ratingCheckpointInventory.ts'
 export {
+  type ConditionalPowerReplay,
   type ConditionalPowerReplayBasis,
+  evaluateConditionalPowerReplay,
 } from './internal/scenarios/conditionalPowerReplay.ts'
+export {
+  type PreparedConditionalPowerReplayBasis,
+  prepareConditionalPowerReplayBasis,
+} from './internal/scenarios/conditionalPowerReplayBasis.ts'
 export {
   evaluateConditionalPowerResultComponent,
 } from './internal/scenarios/conditionalPowerResultComponent.ts'

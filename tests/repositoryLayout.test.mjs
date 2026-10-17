@@ -87,6 +87,25 @@ test('type-only imports do not permit cross-owner dependencies', (t) => {
   assert.match(checkDependencies(root).join('\n'), /shared cannot import browser/)
 })
 
+for (const [syntax, runtime] of [
+  ["import { type Snapshot } from './internal/projections/snapshot'", true],
+  ["export { type Snapshot } from './internal/projections/snapshot'", true],
+  ["import type { Snapshot } from './internal/projections/snapshot'", false],
+  ["export type { Snapshot } from './internal/projections/snapshot'", false],
+  ["type Snapshot = import('./internal/projections/snapshot').Snapshot", false],
+]) {
+  test(`browser traversal preserves emitted module evaluation for ${syntax}`, (t) => {
+    const { root } = fixture(t, {
+      'src/browser/page.ts': "import { read } from '../domains/rankings/read'; console.log(read)",
+      'src/domains/rankings/read.ts': `${syntax}; export const read = 1`,
+      'src/domains/rankings/internal/projections/snapshot.ts': 'export type Snapshot = { value: number }; export const replay = 1',
+    })
+    const errors = checkDependencies(root)
+    if (runtime) assert.match(errors.join('\n'), /Browser runtime reaches producer .*read\.ts -> .*snapshot\.ts/)
+    else assert.deepEqual(errors, [])
+  })
+}
+
 test('domain internals and codec adapters cannot be entered through aliases or parent paths', (t) => {
   const { root } = fixture(t, {
     'src/views/page.ts': "export * from '@/domains/rankings/internal/queries/detail'; import '../domains/rankings/published-read'",
@@ -151,11 +170,13 @@ test('tracked-file hygiene accepts source fixtures and assets and rejects forced
     'tests/fixtures/page.html': '<p>Fixture</p>',
     'tests/fixtures/schema.json': '{"type":"object"}',
     'tests/fixtures/README.md': 'Fixture provenance',
+    'tests/fixtures/provenance.md': 'Recorded input provenance',
     'public/logo.svg': '<svg/>',
     'public/legal/NOTICE.md': 'Asset license',
     'public/help.html': '<p>Help</p>',
     'public/team-colors.csv': 'team,color\nA,blue\n',
     'ops/safety/receipt.json': '{"schemaVersion":1}',
+    'tools/audit/report-contract.json': '{"schemaVersion":1}',
     'src/shared/shared.ts': 'export {}',
   })
   execFileSync('git', ['init', '-q', root])
@@ -172,6 +193,20 @@ test('tracked-file hygiene accepts source fixtures and assets and rejects forced
   assert.match(errors, /reports\/result\.csv/)
   assert.match(errors, /tools\/audit\/dist\/result\.json/)
   assert.match(errors, /src\/browser\/\.cache\/result\.html/)
+})
+
+test('tracked-file hygiene rejects narrative output inside source zones', (t) => {
+  const files = {
+    'tools/audit/report.md': '# Audit results',
+    'src/views/rankings/migration-plan.md': '# Migration plan',
+    'tools/reports/results.html': '<p>Audit results</p>',
+  }
+  const { root } = fixture(t, files)
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '.'])
+  const errors = checkLayout(root).errors
+  assert.equal(errors.length, Object.keys(files).length)
+  for (const file of Object.keys(files)) assert.ok(errors.some(error => error.startsWith(`${file}:`)), file)
 })
 
 test('the pinned developer benchmark can use audit tools but production cannot import it', (t) => {

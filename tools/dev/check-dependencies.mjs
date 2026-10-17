@@ -19,15 +19,8 @@ function sourceFiles(root, directory) {
 
 function typeOnly(node) {
   if (ts.isImportTypeNode(node)) return true
-  if (ts.isImportDeclaration(node)) {
-    const clause = node.importClause
-    return Boolean(clause && (clause.isTypeOnly || (!clause.name && clause.namedBindings
-      && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.length
-      && clause.namedBindings.elements.every(element => element.isTypeOnly))))
-  }
-  return Boolean(ts.isExportDeclaration(node) && (node.isTypeOnly || (node.exportClause
-    && ts.isNamedExports(node.exportClause) && node.exportClause.elements.length
-    && node.exportClause.elements.every(element => element.isTypeOnly))))
+  if (ts.isImportDeclaration(node)) return Boolean(node.importClause?.isTypeOnly)
+  return ts.isExportDeclaration(node) && node.isTypeOnly
 }
 
 function importReference(node) {
