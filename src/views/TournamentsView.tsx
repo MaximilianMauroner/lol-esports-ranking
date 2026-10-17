@@ -27,7 +27,10 @@ type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; 
 export function TournamentsView() {
   const [state, setState] = useState<FeedState>(() => {
     const cached = readCachedTournamentFeed()
-    return cached ? { status: 'ready', feed: cached, health: null, healthPending: true } : { status: 'loading' }
+    const requestedEvent = hashParam('event')
+    return cached && (!requestedEvent || cached.events.some((event) => event.id === requestedEvent))
+      ? { status: 'ready', feed: cached, health: null, healthPending: true }
+      : { status: 'loading' }
   })
   const [selectedId, setSelectedId] = useState(() => hashParam('event') ?? '')
   const [view, setView] = useState(() => hashParam('view'))
