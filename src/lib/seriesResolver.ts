@@ -27,9 +27,20 @@ export type CanonicalSeries = {
 }
 
 export function resolveCanonicalSeries(matches: readonly MatchRecord[]): CanonicalSeries[] {
+  const officialIdsBySourceSeries = new Map<string, string | null>()
+  for (const match of matches) {
+    const sourceId = sourceMatchSeriesKey(match)
+    if (!sourceId || !match.officialMatchId) continue
+    const previous = officialIdsBySourceSeries.get(sourceId)
+    officialIdsBySourceSeries.set(sourceId,
+      previous === undefined || previous === match.officialMatchId ? match.officialMatchId : null)
+  }
+
   const grouped = new Map<string, MatchRecord[]>()
   for (const match of matches) {
-    const id = canonicalSeriesId(match)
+    const sourceId = sourceMatchSeriesKey(match)
+    const officialMatchId = match.officialMatchId || (sourceId && officialIdsBySourceSeries.get(sourceId))
+    const id = officialMatchId ? joinKey('official-match', officialMatchId) : canonicalSeriesId(match)
     grouped.set(id, [...(grouped.get(id) ?? []), match])
   }
 
@@ -98,12 +109,8 @@ function buildCanonicalSeries(id: string, inputGames: MatchRecord[]): CanonicalS
 
 function canonicalSeriesId(match: MatchRecord) {
   const provider = match.sourceProvider ?? 'unknown'
-  if (match.officialMatchId) return joinKey('official-match', match.officialMatchId)
-  if (match.sourceMatchId) {
-    const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
-      .sort((left, right) => compareCodeUnits(left, right))
-    return joinKey('source-match', sourceSeriesId(match.sourceMatchId), ...teams)
-  }
+  const sourceMatchId = sourceMatchSeriesKey(match)
+  if (sourceMatchId) return sourceMatchId
   const sourceGameSeriesId = sourceGameSeriesIdFor(match)
   if (sourceGameSeriesId) return joinKey('source-game-series', provider, sourceGameSeriesId)
 
@@ -114,6 +121,13 @@ function canonicalSeriesId(match: MatchRecord) {
     return joinKey(fallbackBase, match.id)
   }
   return fallbackBase
+}
+
+function sourceMatchSeriesKey(match: MatchRecord) {
+  if (!match.sourceMatchId) return undefined
+  const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
+    .sort((left, right) => compareCodeUnits(left, right))
+  return joinKey('source-match', sourceSeriesId(match.sourceMatchId), ...teams)
 }
 
 function sourceSeriesId(value: string) {
