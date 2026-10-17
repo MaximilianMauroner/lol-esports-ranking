@@ -1,0 +1,1840 @@
+heavy-check: waiting for the machine lock
+heavy-check: running with timeout 40m
+$ pnpm run typecheck && pnpm run lint && pnpm test
+$ tsc -b
+$ eslint .
+$ node scripts/run-tests.mjs
+✔ presentation and Markdown edits avoid unrelated heavy validation (124.927352ms)
+✔ shared, model, import, worker, dependency, benchmark, and unknown paths fail open (1112.840912ms)
+✔ a later UI push cannot hide an earlier runtime edit in the PR (128.683836ms)
+✔ a stale UI branch excludes advanced-base runtime edits at checkout depth two (286.295794ms)
+✔ a runtime rename into a presentation path retains the runtime side of the diff (111.658088ms)
+✔ a runtime deletion requires full validation (115.36028ms)
+✔ manual and other non-PR events require full validation (289.946203ms)
+✔ missing or mismatched synthetic PR context requires full validation (358.960312ms)
+✔ root, ordinary, octopus, and depth-one checkouts require full validation (298.332973ms)
+✔ an unavailable synthetic merge parent 1 requires full validation (116.443278ms)
+✔ an unavailable synthetic merge parent 2 requires full validation (107.903095ms)
+✔ an unavailable merge diff and an empty PR diff require full validation (187.816941ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3379.141987
+✔ browser data artifact stays compact and does not ship the full snapshot (94.3707ms)
+✔ generated region scores follow eligible flagship teams in each scope (26.185941ms)
+✔ generated 2026 records agree with completed archived series across LCS, LCK and LEC (76.393383ms)
+✔ generated archive preserves historical T1 MSI results and the domestic Gen.G series label (50.784452ms)
+✔ generated 2026 Demacia Cup games are indexed with reconciled source coverage (15.422217ms)
+✔ generated public fixture data does not serialize HTML entities (220.293518ms)
+✔ public summary snapshot index is consistent with generated shards (54.719037ms)
+✔ generated public artifacts include season checkpoint scopes (24.675952ms)
+✔ public manifest data URLs resolve to downloaded reference files (2.481491ms)
+✔ public team history series store is consistent with scope indexes (128.309374ms)
+✔ generated histories separate observed matches, current state, and region metric families (50.318955ms)
+✔ generated confidence and lineups expose evidence limits instead of false precision (40.234485ms)
+✔ public tournament movement index resolves versioned, boundary-correct shards (10.69664ms)
+✔ generated public artifacts share one model and generated-at provenance spine (124.993392ms)
+✔ generated public source coverage reconciles with default and shard snapshots (45.629582ms)
+✔ generated 2026 scope exposes match-level display records and scoped history (43.034136ms)
+✔ generated public artifacts only include the published rated team universe (161.472438ms)
+✔ generated ranked player directory excludes teams outside the rated universe (27.895938ms)
+✔ generated ranked player directory requires displayed-team and role samples (18.742542ms)
+✔ retained captures expose coverage and identity ambiguity without approving a source or mapping (13.098693ms)
+✔ dedicated provider children run with an empty PATH and retain failure diagnostics (871.212848ms)
+Wrote 18 matches to /tmp/automatic-tournament-kSMXni/staging/leaguepedia/scoreboard-games-2025-01-01_to_2026-10-03.json
+Wrote local data manifest to /tmp/automatic-tournament-kSMXni/staging/manifest.json
+Warning: Oracle download skipped by --oracle false or --skip-oracle.
+Warning: LoL Esports schedule reference download skipped by --lolesports false or --skip-lolesports.
+Warning: No Oracle CSVs were downloaded. Leaguepedia remains available as the backup/gap-fill source if its download succeeded.
+Source data changed; refreshed ranking artifacts for 2025-01-01 through 2026-10-03.
+Wrote 27 matches to /tmp/automatic-tournament-kSMXni/staging/leaguepedia/scoreboard-games-2026-10-03_to_2026-10-06.json
+Wrote local data manifest to /tmp/automatic-tournament-kSMXni/staging/manifest.json
+Warning: Oracle download skipped by --oracle false or --skip-oracle.
+Warning: LoL Esports schedule reference download skipped by --lolesports false or --skip-lolesports.
+Warning: No Oracle CSVs were downloaded. Leaguepedia remains available as the backup/gap-fill source if its download succeeded.
+Source data changed; refreshed ranking artifacts for 2026-10-03 through 2026-10-06.
+✔ scheduled date-window downloads retain a new tournament across refreshes without manual inputs (468.080473ms)
+✔ source coverage excludes discarded duplicate metadata and team identity (12.453636ms)
+✔ canonical text parsing agrees with the serializer across JSON token forms (2.818069ms)
+✔ canonical text parsing keeps syntax errors separate from noncanonical errors (0.261137ms)
+✔ canonical text parsing rejects non-text input before JSON coercion (0.171318ms)
+✔ canonical text parsing ignores inherited array toJSON hooks like the serializer (0.230238ms)
+✔ public recent matches retain completed Bo2 ties and canonical provenance (2.475493ms)
+✔ player recent matches retain canonical Bo2 ties and separate same-day series ids (0.728297ms)
+✔ public match delta follows visible rating movement between series (0.443983ms)
+✔ chart influence formatter describes the match behind a rating point (1.096616ms)
+✔ chart point validation rejects malformed chart coordinates (0.193214ms)
+✔ chart influence formatter describes aggregated day-close points (0.150313ms)
+✔ chart helpers reconcile visible movement against model attribution (0.207687ms)
+✔ rank movement is never reconciled against Power-point attribution (0.190798ms)
+✔ streamed identity matches the existing stored canonical bytes across flush and UTF-16 boundaries (39.377394ms)
+✔ inline and retained legacy references identify the same actual persisted checkpoint (2.824953ms)
+✔ semantic comparison retains body, boundary, raw-prefix, compatibility and reference-size distinctions (1.67251ms)
+✔ published names order by UTF-16 code units, not by locale collation (2.753829ms)
+✔ teams that stay keep their colour when others leave or join (1.352842ms)
+✔ slots never exceed the palette (0.192676ms)
+✔ source excerpts resolve to one 2-0 series with synthetic gold revision false (10.225894ms)
+✔ source excerpts resolve to one 2-0 series with synthetic gold revision true (1.918396ms)
+✔ Oracle imports only integer game slots from one through five (3.49517ms)
+✔ declared slots require unique candidates in both source directions (4.933359ms)
+✔ slot links preserve exact-stat reservations in either input order (2.749018ms)
+✔ different winners, competitions, missing slots, and distant clocks do not establish slot links (3.8796ms)
+✔ a result-only row cannot supply a slot-based series identity (2.141619ms)
+✔ explicit source series remains one 0-3 sweep across 2026-10-15 and 2026-10-16 (4.958511ms)
+✔ explicit source series remains one 0-3 sweep across 2026-12-31 and 2027-01-01 (1.035476ms)
+✔ distinct explicit series IDs keep rematches and seasons separate (1.618297ms)
+✔ games without source IDs retain fallback date grouping (0.94306ms)
+✔ region comparison is ready for every supported selection count above one (30.677169ms)
+✔ profile bars disclose narrow selected ranges and lower-is-better direction (2.61691ms)
+✔ conditional public points equal isolated production replay for every legal winner/score, event weight and compressed scale (736.043739ms)
+✔ preview clamps both public endpoints before subtracting, and invalidates changed inputs without a stale cache (33.313225ms)
+✔ finite state edits require a new payload pin before a conditional replay can run (84.603593ms)
+✖ fresh production pins reject historical series aliases shared by distinct canonical owners (100.215449ms)
+✔ repeated raw and normalized source aliases within one canonical series preserve its preview (80.048751ms)
+✔ fresh production pins cannot admit cross-row historical game aliases in any identity namespace (79.498445ms)
+✔ hypothetical games cannot share a hidden or cross-namespace game alias (74.275613ms)
+✔ missing optional IDs, repeated aliases within one row and distinct multi-alias rows preserve previews (67.645826ms)
+✔ the full historical roster-basis map matches the producer for third teams and ignores insertion order (68.724452ms)
+✔ fresh pins cannot hide missing scoring state for any historical team or home league (185.512923ms)
+✔ all historical home leagues retain scoring coverage after a team changes league (52.85205ms)
+✔ producer-absent optional context and an unobserved third team remain supported (37.654115ms)
+✔ direct bases validate historical UTC timestamps without rewriting or re-pinning state (53.600028ms)
+✔ pre-state pins require structured source identities and exact state and context digests (85.655228ms)
+✔ context digests are required and mismatches cannot use a valid state payload pin (48.110206ms)
+✔ every replay-context field is pinned and changed inputs fail closed without modifying rating state (61.633912ms)
+✔ map and object insertion order does not change the pinned context or the preview (54.271729ms)
+✔ direct historical bases reject unsupported series after genuine replay and valid state and context pins (177.748337ms)
+✔ direct historical bases support completed official and provider series with compatible optional event IDs (245.053329ms)
+✔ offset timestamps use their UTC calendar date and preserve isolated production parity (41.33305ms)
+✔ mixed timestamp offsets preserve decisive-game player priors and pin the original inputs (21.121537ms)
+✔ missing or unsupported inputs fail closed without changing canonical state or caller stores (185.956753ms)
+✔ conditional replay requires identified series, games and pinned event metadata without fallback provenance (124.50927ms)
+✖ hypothetical game and series identities cannot alias the historical prefix (129.924179ms)
+✔ latest historical home-league evidence must be explicit and agree across a UTC date and the directory (28.930393ms)
+✔ event region and supplied team region overrides must match the pinned event and directory (54.736898ms)
+✔ incomplete or inconsistent pre-state evidence is unavailable instead of producing a numeric delta (90.208095ms)
+✔ pre-state event trackers must prove the same corpus and lifecycle as the replay context (32.781228ms)
+✔ completed future placement boundaries are unsupported while historical pending placement retains production parity (22.955354ms)
+✔ malformed required state maps and clone errors return unavailable without throwing (37.086259ms)
+✔ a player cannot appear in both opposing lineups in one hypothetical game (18.24884ms)
+✔ future player priors require explicit valid evidence, coverage and freshness rather than production defaults (242.541699ms)
+✔ player prior adjustments obey production caps and zero-evidence invariants on both sides (131.872075ms)
+✔ production replay errors and cancelled selections have no writes to input maps or provider calls (25.791537ms)
+✔ public inputs expose unavailability instead of probability-derived points (5.630633ms)
+✔ corpus adapter reconstructs a detached production pre-state and preserves isolated replay parity (90.088131ms)
+✔ corpus adapter rejects absent, incomplete or future historical evidence without writes (81.804481ms)
+✔ adapter-produced checkpoint pins reject a changed rating without caller mutation (38.484768ms)
+✔ a production international pre-state rejects synchronized league rewrites and supports an explicitly rebuilt corpus (68.196686ms)
+✔ corpus adapter requires complete legal historical series before production replay (79.978677ms)
+✔ corpus adapter rejects conflicting historical series scoring metadata and preserves optional event IDs (190.133428ms)
+✔ optional historical timestamps must be valid and match their UTC date without changing the source (109.351936ms)
+✔ detached historical clocks preserve actual game order and match the UTC production replay (59.529977ms)
+✔ the corpus adapter rejects cross-record game aliases before replay and preserves aliases within a row (100.317913ms)
+✖ the corpus adapter rejects duplicate historical series aliases even when every game identity is unique (34.602544ms)
+✔ the corpus adapter accepts repeated raw and normalized aliases owned by one completed series (70.490861ms)
+Homepage prerender fallback used: ENOENT: no such file or directory, open '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/public/data/ranking-summary.json'
+Homepage prerender fallback used: ENOENT: no such file or directory, open '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/public/data/ranking-summary.json'
+Homepage prerender fallback used: ENOENT: no such file or directory, open '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/public/data/ranking-summary.json'
+Homepage prerender fallback used: ENOENT: no such file or directory, open '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/public/data/ranking-summary.json'
+Homepage prerender fallback used: ENOENT: no such file or directory, open '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/public/data/ranking-summary.json'
+✔ offline numeric result component follows legal outcomes, keeps frozen odds and closes at live play (7254.956525ms)
+✔ result component matches production stable updates and frozen-state public projection for every legal outcome (812.907156ms)
+✔ historical pending placements finalize the frozen baseline before result expectations (39.424626ms)
+✔ result component needs no hypothetical games or future statistics and preserves all input stores (19.259393ms)
+✔ missing pinned raw result state stays unavailable even under a fresh state pin (21.87631ms)
+✔ result component rejects stale pins, event mismatches, illegal scores and started series without mutation (38.701074ms)
+✔ producer receipt round-trips through the public schema and contains every legal outcome (189.181214ms)
+✔ public receipt validation rejects incomplete, duplicate, impossible or inconsistent outcomes (57.452541ms)
+✔ generation, event, identity, model and scale changes cannot reuse a numeric receipt (62.22933ms)
+✔ offline immutable producer persists only valid receipts and leaves supplied inputs untouched (164.667224ms)
+✔ a corrected preplay schedule selects its current immutable receipt (80.919545ms)
+✔ equal public Power cannot authorize a different canonical participant mapping (54.131624ms)
+✔ the Oracle quota failure reaches visitors as plain freshness, without operator details (11.189012ms)
+✔ a complete refresh shows source dates without a failure notice (1.643054ms)
+✔ a failed newest provider does not claim that another provider covers later matches (1.696012ms)
+✔ a past-season view labels its counts as the view and keeps the refresh notice about published data (1.29688ms)
+✔ a failed oracle refresh with no cached files reaches the rendered panel (56.627124ms)
+✔ a failed leaguepedia refresh with no cached files reaches the rendered panel (6.628628ms)
+✔ DSS defaults mirror the PDF constants (2.079142ms)
+✔ DSS event weights and format multipliers produce PDF series weights (0.300301ms)
+✔ DSS discounts post-Worlds preseason series but keeps Demacia Cup at EWC weight (2.95936ms)
+✔ DSS probability helpers implement the PDF logistic and series formulas (0.280327ms)
+✔ DSS raw and weighted series value reward upset and margin signals (0.197535ms)
+✔ DSS roster validity and instability follow the PDF clamps (0.206279ms)
+✔ DSS current-roster resume and schedule strength use roster validity weighted denominators (0.506894ms)
+✔ DSS team score, conservative score, bridge credit, and uncertainty are composable (0.259252ms)
+✔ DSS incoming player bridge helpers use PDF asset weights and integration factors (0.351769ms)
+✔ DSS stage achievement points apply roster validity and event resume cap (0.389074ms)
+✔ DSS player contribution shares use base role shares and performance z clamps (0.421956ms)
+✔ DSS region helpers implement the PDF region resume frame (0.350792ms)
+✔ DSS series ledger groups source match rows and emits one entry per team (0.756503ms)
+✔ DSS series ledger infers same-day series when source match ids are absent (0.484094ms)
+✔ DSS series ledger treats Bo2 ties as split expected series points (0.490748ms)
+✔ DSS series ledger freezes expectation inputs through callbacks (0.355534ms)
+✔ DSS weighted series conversion preserves ledger values and explicit roster validity (0.391214ms)
+✔ DSS team component aggregation produces the public component contract (2.067213ms)
+✔ buildDeservedStandingModel ranks teams by Team DSS from series ledgers (3.974548ms)
+✔ buildDeservedStandingModel applies team-specific base scores (0.503938ms)
+✔ buildDeservedStandingModel prices wins above expectation through reference strengths (0.84479ms)
+✔ buildDeservedStandingModel applies roster validity to current-roster resume and schedule components (0.867836ms)
+✔ buildDeservedStandingModel carries optional stage, bridge, and conservative components (0.524141ms)
+✔ public compact standings expose DSS comparison and mark missing roster evidence provisional (31.940389ms)
+✔ public DSS comparison discounts prior results after sourced roster changes (19.457249ms)
+✔ checkpoint DSS comparison uses previous rating as its base score (68.250156ms)
+✔ region-scoped DSS prices cross-region opponents from the full scope context (9.128594ms)
+✔ buildDeservedStandingRegionModel ranks regions from cross-region resume ledgers (5.225653ms)
+✔ buildDeservedStandingRegionModel applies roster validity, seed hooks, and stage caps (1.336496ms)
+✔ buildDeservedStandingRegionModel keeps same-number seed baselines region-specific (0.837596ms)
+✔ buildDeservedStandingRegionModel applies default region-specific seed expectations (0.995001ms)
+✔ buildDeservedStandingRegionModel keeps same-region games out of international resume and shrinks to prior (2.228107ms)
+✔ buildDeservedStandingRegionModel uses team profiles for competition-only rows without side metadata (0.608595ms)
+✔ buildDeservedStandingRegionModel uses top two and top four eligible team residuals for region depth (0.887109ms)
+✔ constructor failure saves only bounded code and message identity, preserving first failure (3.382771ms)
+✔ real clean worker exit before readiness rejects instead of hanging (53.221689ms)
+✔ real startup error saves a sanitized native code (43.336049ms)
+✔ ready worker exiting before completion rejects its completion promise (1.451251ms)
+✔ readiness deadline terminates its worker and records an incomplete capture (11.478962ms)
+✔ ready/done/clean exit succeeds without a failure record (1.545599ms)
+Warning: Detected unsettled top-level await at file:///tmp/diagnostic-lifecycle-uzqG1D/startup.mjs:2
+await new Promise(() => {})
+^
+
+
+
+✔ delayed asynchronous startup stays alive when the control port is referenced first (199.820961ms)
+✔ local data download manifest records Oracle primary and Leaguepedia backup roles (127.597947ms)
+✔ LoL Esports reference download failure is warning-only unless required (14776.934975ms)
+✔ Oracle HTML quota failure still allows Leaguepedia fallback download (217.349753ms)
+✔ eligibility reports explicit current-window and staleness reasons (2.857491ms)
+✔ anchored major teams with enough current matches become eligible (0.655171ms)
+✔ anchored major teams with only a short qualifier run stay in audit rows (0.486279ms)
+✔ current rated leagues with international signal can clear scoped total-volume noise (0.500794ms)
+✔ rated-league total-volume waiver still requires current local activity (1.634738ms)
+✔ rated-league total-volume waiver requires international connectivity (0.440081ms)
+✔ match-level eligibility history groups game rows from resolved series (1.189649ms)
+✔ tier-three regional teams can become eligible with international signal (0.376114ms)
+✔ developmental teams remain unanchored even when their parent league is certified (0.749543ms)
+✔ emerging leagues remain unanchored even with cross-ecosystem matches (0.701715ms)
+✔ offline controls predict before a UTC-date update and ignore later results and metadata (4.988034ms)
+✔ Glicko control matches the published Glicko-1 reference update and inactivity increases deviation (0.339199ms)
+✔ regional finals and play-ins override Worlds aliases and generic playoff flags (1.755714ms)
+✔ First Stand and domestic cup weights follow the sourced phase (1.183928ms)
+✔ observed Worlds games, regional finals, upper finals and partial finals cannot start preseason (2.054635ms)
+✔ only a resolved Worlds best-of-five final enables the offseason discount (0.37122ms)
+✔ Demacia retains EWC evidence weight and domestic identity after completed Worlds (0.944032ms)
+✔ official playoff phase enrichment also updates the applied domestic cup tier (2.888865ms)
+✔ completed placement uses highest attainment, conserves the pool and applies only once (24.291946ms)
+✔ a tied terminal series cannot grant champion placement evidence (2.029654ms)
+✔ placement conserves the event pool after grouping several entrants into each league (5.370325ms)
+✔ execution index is bounded and rewards stronger stat lines (1.631654ms)
+✔ execution soft outcome dampens binary results without flipping them by itself (0.277123ms)
+✔ team execution index is symmetric by match side (0.417583ms)
+✔ sourced-player causality accepts append and replays same-day inserts or source corrections (26.380823ms)
+✔ DSS team causality covers append, synergy/config changes, and tournament completion boundaries (4.752455ms)
+✔ DSS region causality replays historical team-region corrections and preserves clean output parity (8.985145ms)
+✔ roster-era causality recomputes an appended open era from its start and replays same-day substitutions (3.599269ms)
+✔ player resume causality accepts append, catches historical series corrections, and preserves parity (1.478006ms)
+✔ inventory exposes every external contract without activating production resume (0.192741ms)
+✔ full audit eligibility is restricted to fenced daily/manual full promotions (1.193663ms)
+✔ full audit snapshot gzip is deterministic, reusable, and verified before reuse (29.46564ms)
+✔ full audit receipt parser enforces the canonical authority shape (0.950122ms)
+✔ day receipt is canonical, promotion-bound, lease-checked, and idempotent (37.557166ms)
+✔ full audit staging rejects non-JSON, stale, and mismatched provenance (6.4111ms)
+✔ an international-only entrant does not change the mean used to center domestic team effects (61.59656ms)
+✔ international links alone leave a league without observed domestic members provisional (79.184575ms)
+✔ Leaguepedia international rows use known team home leagues when explicit fields are absent (21.17468ms)
+✔ Oracle imports preserve known retrieval dates and leave unknown dates absent across repeated imports (2.819966ms)
+✔ Leaguepedia import retains the public export URL from a downloaded snapshot (4.175985ms)
+✔ Leaguepedia import restores trailing zeros in numeric calendar patches (1.736518ms)
+✔ Leaguepedia import restores trailing zeros in retained calendar patch strings (1.417005ms)
+✔ Leaguepedia import preserves legacy patches and leaves missing or non-finite patches empty (1.510759ms)
+✔ Leaguepedia competition rows resolve exact team aliases before known identity fallback (1.632294ms)
+✔ Leaguepedia domestic rows keep sourced league over static known identity (2.318886ms)
+✔ Oracle domestic rows keep sourced league over static known identity (0.844255ms)
+✔ Leaguepedia import decodes HTML entities before storing text fields (2.136548ms)
+✔ Leaguepedia import infers known regional league aliases from event names (6.202002ms)
+✔ community merge keeps same-day scored series games but drops incomplete Leaguepedia duplicates after Oracle (6.8745ms)
+✔ LoL Esports schedule import normalizes result references and game ids (1.501092ms)
+✔ community merge enriches Oracle rows with unique LoL Esports official ids (1.116754ms)
+✔ community merge reconciles official schedule aliases and format (0.697702ms)
+✔ duplicate schedule pages preserve an in-progress official Bo5 (1.589055ms)
+✔ community merge drops exact scored Leaguepedia duplicates with different source ids after Oracle (0.924839ms)
+✔ community merge keeps Oracle stats but adopts Leaguepedia qualifier metadata for duplicates (0.692397ms)
+✔ community merge corrects Oracle Worlds labels on regional finals (0.4248ms)
+✔ community merge upgrades Oracle duplicate tier and best-of from stronger Leaguepedia metadata (0.530758ms)
+✔ community merge does not promote domestic Oracle playoff rows to international tiers (0.524674ms)
+✔ unique domestic scoreboard duplicates link retained Oracle games to a Leaguepedia series gap fill (3.012203ms)
+✔ exact timestamped anchors keep same-day rematches and ordinal-bearing series identifiers separate (8.849465ms)
+✔ small provider clock differences preserve the corroborated GiantX EWC qualifier sweep as one series (3.046003ms)
+✔ bounded provider clock differences still require unique scoreboard identities in both directions (2.390123ms)
+✔ same-provider stable game IDs retain equal-score games and remove repeated IDs despite clock corrections (3.343616ms)
+✔ a Leaguepedia alias of Oracle cannot hide a different identified Leaguepedia game in either input order (3.540954ms)
+✔ ambiguous scoreboard anchors cannot assign provider series identities (1.010819ms)
+✔ corrected clocks for one Leaguepedia game ID cannot certify two Oracle game identities (1.529349ms)
+✔ result-only and conflicting-time duplicates cannot provide scored series anchors (1.345256ms)
+✔ eight exact scoreboard duplicates with source patch aliases add no game rows and link only bounded clocks (13.830155ms)
+✔ community merge keeps distinct scored same-winner series games (0.904438ms)
+✔ team identity cleanup maps exact source display aliases only (0.272236ms)
+✔ community merge removes unidentified duplicate Oracle games across canonical tournament event labels (0.419021ms)
+✔ community merge reconciles overlapping Oracle and Leaguepedia MSI series once (9.801786ms)
+✔ community merge completes a partial Oracle series with the missing Leaguepedia game (1.676239ms)
+✔ team code cleanup uses known source abbreviations for major teams (0.249577ms)
+✔ Leaguepedia MSI rows resolve LYON alias to its published home league (0.507414ms)
+✔ community merge drops Leaguepedia alias duplicates after Oracle while keeping real second games (0.526726ms)
+✔ community merge adopts qualifier metadata across Team Secret rebrand aliases (0.458236ms)
+✔ community merge drops Leaguepedia sponsor-name duplicates after Oracle (0.741097ms)
+✔ community merge keeps affiliate teams distinct from parent team aliases (0.437253ms)
+✔ Oracle import preserves blue and red side metadata (1.909105ms)
+✔ Oracle import treats First Stand preliminary games as early international signal (0.484733ms)
+✔ Leaguepedia import treats First Stand as an MSI-level international bracket signal (0.388411ms)
+✔ Leaguepedia import treats Mid-Season Invitational bracket and final ids as MSI bracket signal (0.695294ms)
+✔ Leaguepedia import treats LCK Road to MSI as a domestic playoff path (0.287192ms)
+✔ Oracle import treats EMEA Masters as competition-only instead of a team home league (0.409635ms)
+✔ Oracle import treats generic LTA as a competition layer instead of team home league (1.531781ms)
+✔ Leaguepedia import treats generic LTA as a competition layer instead of current identity (0.878287ms)
+✔ Leaguepedia import treats global invitationals as competition-only events (0.398443ms)
+✔ Oracle import classifies WLDs abbreviation as Worlds tier (0.276194ms)
+✔ importers do not classify academic world tournaments as Worlds tier (0.995881ms)
+✔ Demacia Cup stays in LPL and receives EWC event weight (0.681902ms)
+✔ Leaguepedia import treats EMEA Masters as competition-only without explicit home leagues (0.424732ms)
+✔ Oracle import maps player rows into sourced game rosters (1.68156ms)
+✔ Oracle import applies exact player id aliases without fuzzy same-name merging (1.025772ms)
+✔ Oracle import marks incomplete player rows as a partial roster (0.324583ms)
+✔ Oracle import scopes missing player ids to the unresolved source team (0.62657ms)
+✔ partial artifact patch uploads only changed hashes and composes exact complete mapping with removals (26.374769ms)
+✔ local-only patch verifies reused inputs and atomically materializes the same mapping (12.534219ms)
+✔ local patch reports committed backup cleanup failures without masking the new root (7.174998ms)
+✔ local patch restores the old root when the staging-to-root rename fails (6.842344ms)
+✔ partial artifact patch fails before manifest creation when a reused object is missing or corrupt (5.165711ms)
+✔ partial artifact patch repairs missing object metadata once without changing its reference (8.227226ms)
+✔ full uploads stream-verify same-length pre-existing content-addressed objects before reuse (6.600969ms)
+✔ semantic parity reports missing, unexpected, digest, and generation/provenance mismatches (1.358364ms)
+✔ dependency graph covers global, season/checkpoint, team/player/tournament, match-page, rolling, and provenance changes (1.121075ms)
+✔ early corrections rewrite every subsequent inventoried page while post-checkpoint appends skip closed checkpoint scopes (0.702372ms)
+✔ explicit benchmark limits reject invalid values instead of selecting the full workload (1.671447ms)
+✔ invalid benchmark limits fail before reference data preflight or fixture setup (1990.653693ms)
+✔ incremental safety peak is strict at 700 MiB (0.180147ms)
+✔ incremental compute uses the middle calibration run for odd counts (0.958698ms)
+✔ incremental compute averages the two middle calibration runs for even counts (0.206794ms)
+✔ one slow repetition fails incremental compute on its own (0.177389ms)
+✔ incremental compute limit is strict (0.220792ms)
+✔ incremental compute fails closed on missing or invalid durations (0.203502ms)
+✔ raw rewrite evidence follows receipt baseline identities, not byte-size heuristics (0.48774ms)
+✔ benchmark aggregation reports explicit median and max for every numeric gate metric (0.489918ms)
+✔ canonical ledger uses provider priority, deterministic ordering, and rejects collisions (5.698145ms)
+✔ provider availability receives the complete scored input digest once per match (1.249978ms)
+✔ canonical schedule keys must be unique across dates before persistence and after restore (0.756459ms)
+✔ canonical ledger digests roster inputs without retaining or aliasing raw roster payloads (0.86124ms)
+✔ classifier exhaustively distinguishes receipts, append, insertion, correction, deletion, date move, and invalidation (5.75499ms)
+✔ external causal bundle accepts append, replays corrections, and fails closed without callback proof (12.373565ms)
+✔ safe checkpoint selection walks back and fails closed with serialized input (34.40054ms)
+✔ safe checkpoint selection walks back and fails closed with parsed input (11.367775ms)
+✔ partial player directory preserves valid unaffected season players and diagnostics (2.393765ms)
+✖ releasing import audit rows before snapshot preserves roster/player public semantics (324.431176ms)
+Wrote 7 ranking snapshots to /tmp/incremental-matrix-1Kigs8/disabled-full.json
+Wrote browser summary to /tmp/incremental-matrix-1Kigs8/disabled-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-matrix-1Kigs8/disabled-public/scopes
+Public data budget: 89361 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-matrix-1Kigs8/missing-state-full.json
+Wrote browser summary to /tmp/incremental-matrix-1Kigs8/missing-state-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-matrix-1Kigs8/missing-state-public/scopes
+Public data budget: 89361 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-matrix-1Kigs8/daily-full.json
+Wrote browser summary to /tmp/incremental-matrix-1Kigs8/daily-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-matrix-1Kigs8/daily-public/scopes
+Public data budget: 89361 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-matrix-1Kigs8/manual-full.json
+Wrote browser summary to /tmp/incremental-matrix-1Kigs8/manual-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-matrix-1Kigs8/manual-public/scopes
+Public data budget: 89361 bytes
+✔ feature/mode matrix preserves disabled and daily/manual force full while canonical no-change exits before build (522.48318ms)
+Wrote 7 ranking snapshots to /tmp/incremental-reconciliation-3MpBkO/reconciliation-base-full.json
+Wrote browser summary to /tmp/incremental-reconciliation-3MpBkO/reconciliation-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-reconciliation-3MpBkO/reconciliation-base-public/scopes
+Public data budget: 89929 bytes
+✔ retry no-change reconciliation acknowledges a match after publish-to-parent crash (170.836577ms)
+Wrote 7 ranking snapshots to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-baseline-full.json
+Wrote browser summary to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-baseline-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-baseline-public/scopes
+Public data budget: 89361 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-refresh-full.json
+Wrote browser summary to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-refresh-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-refresh-public/scopes
+Public data budget: 89361 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-state-mismatch-full.json
+Wrote browser summary to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-state-mismatch-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-audit-receipt-identity-uQlJ1j/receipt-state-mismatch-public/scopes
+Public data budget: 89361 bytes
+✔ daily audit compares corpus authority across refreshed receipt identities without hiding state drift (302.690913ms)
+Wrote 7 ranking snapshots to /tmp/incremental-parity-w4XuGn/base-full.json
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-parity-w4XuGn/base-public/scopes
+Public data budget: 89361 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/append-incremental-public.incremental-204215-1792232980677/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-parity-w4XuGn/append-incremental-public.incremental-204215-1792232980677/scopes
+Public data budget: 83217 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-parity-w4XuGn/append-full-full.json
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/append-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-parity-w4XuGn/append-full-public/scopes
+Public data budget: 94402 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/appendExistingEvent-incremental-public.incremental-204215-1792232980815/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-parity-w4XuGn/appendExistingEvent-incremental-public.incremental-204215-1792232980815/scopes
+Public data budget: 83412 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-parity-w4XuGn/appendExistingEvent-full-full.json
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/appendExistingEvent-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-parity-w4XuGn/appendExistingEvent-full-public/scopes
+Public data budget: 94597 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/sameDay-incremental-public.incremental-204215-1792232980927/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-parity-w4XuGn/sameDay-incremental-public.incremental-204215-1792232980927/scopes
+Public data budget: 83129 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-parity-w4XuGn/sameDay-full-full.json
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/sameDay-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-parity-w4XuGn/sameDay-full-public/scopes
+Public data budget: 94314 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/correction-incremental-public.incremental-204215-1792232981048/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-parity-w4XuGn/correction-incremental-public.incremental-204215-1792232981048/scopes
+Public data budget: 78315 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-parity-w4XuGn/correction-full-full.json
+Wrote browser summary to /tmp/incremental-parity-w4XuGn/correction-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-parity-w4XuGn/correction-full-public/scopes
+Public data budget: 89500 bytes
+✔ append, same-day insertion, and historical correction use whole-date replay and equal clean full semantics (590.369114ms)
+Wrote 7 ranking snapshots to /tmp/incremental-artifact-bytes-a0kEgS/byte-baseline-full.json
+Wrote browser summary to /tmp/incremental-artifact-bytes-a0kEgS/byte-baseline-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-artifact-bytes-a0kEgS/byte-baseline-public/scopes
+Public data budget: 89361 bytes
+✔ incremental byte metrics include repeated archive children and an unchanged forced root (240.884581ms)
+Wrote 5 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/year-base-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/year-base-public/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/year-base-public/scopes
+Public data budget: 200454 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/checkpoint-base-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/checkpoint-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/checkpoint-base-public/scopes
+Public data budget: 288742 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/rollover-patch-public.incremental-204215-1792232982071/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/rollover-patch-public.incremental-204215-1792232982071/scopes
+Public data budget: 119588 bytes
+Wrote 6 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/rollover-full-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/rollover-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/rollover-full-public/scopes
+Public data budget: 214520 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/semantic-restore-patch-public.incremental-204215-1792232982380/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/semantic-restore-patch-public.incremental-204215-1792232982380/scopes
+Public data budget: 166933 bytes
+Wrote 5 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/semantic-restore-full-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/semantic-restore-full-public/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/semantic-restore-full-public/scopes
+Public data budget: 205118 bytes
+Materialized 3 ranking snapshots
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/new-checkpoint-patch-public.incremental-204215-1792232982802/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/new-checkpoint-patch-public.incremental-204215-1792232982802/scopes
+Public data budget: 187778 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/new-checkpoint-full-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/new-checkpoint-full-public/ranking-summary.json
+Wrote 4 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/new-checkpoint-full-public/scopes
+Public data budget: 304916 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/migration-patch-public.incremental-204215-1792232983274/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/migration-patch-public.incremental-204215-1792232983274/scopes
+Public data budget: 204102 bytes
+Wrote 5 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/migration-full-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/migration-full-public/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/migration-full-public/scopes
+Public data budget: 204866 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/moved-year-patch-public.incremental-204215-1792232983562/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/moved-year-patch-public.incremental-204215-1792232983562/scopes
+Public data budget: 159158 bytes
+Wrote 5 ranking snapshots to /tmp/incremental-year-pages-mGNiw9/moved-year-full-full.json
+Wrote browser summary to /tmp/incremental-year-pages-mGNiw9/moved-year-full-public/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-year-pages-mGNiw9/moved-year-full-public/scopes
+Public data budget: 197343 bytes
+✔ year rollover, legacy page migration, and storage-year corrections publish a closed catalog with full parity (2451.284034ms)
+Wrote 7 ranking snapshots to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-base-full.json
+Wrote browser summary to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-base-public/scopes
+Public data budget: 89361 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-candidate-public.incremental-204215-1792232983921/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-candidate-public.incremental-204215-1792232983921/scopes
+Public data budget: 83129 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-shadow-public.incremental-204215-1792232983946/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-shadow-public.incremental-204215-1792232983946/scopes
+Public data budget: 83129 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-shadow-full.json
+Wrote browser summary to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-shadow-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-checkpoint-representation-tR5Yo9/representation-shadow-public/scopes
+Public data budget: 94314 bytes
+✔ same-horizon replay compares retained checkpoint references with identical full inline content (245.71ms)
+Wrote 7 ranking snapshots to /tmp/incremental-fallbacks-G1fKgY/fallback-base-full.json
+Wrote browser summary to /tmp/incremental-fallbacks-G1fKgY/fallback-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-fallbacks-G1fKgY/fallback-base-public/scopes
+Public data budget: 89361 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-fallbacks-G1fKgY/shadow-authority-full.json
+Wrote browser summary to /tmp/incremental-fallbacks-G1fKgY/shadow-authority-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-fallbacks-G1fKgY/shadow-authority-public/scopes
+Public data budget: 94402 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-fallbacks-G1fKgY/appended-daily-audit-public.incremental-204215-1792232984371/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-fallbacks-G1fKgY/appended-daily-audit-public.incremental-204215-1792232984371/scopes
+Public data budget: 83217 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-fallbacks-G1fKgY/appended-daily-audit-full.json
+Wrote browser summary to /tmp/incremental-fallbacks-G1fKgY/appended-daily-audit-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-fallbacks-G1fKgY/appended-daily-audit-public/scopes
+Public data budget: 94402 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-fallbacks-G1fKgY/missing-full.json
+Wrote browser summary to /tmp/incremental-fallbacks-G1fKgY/missing-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-fallbacks-G1fKgY/missing-public/scopes
+Public data budget: 94402 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-fallbacks-G1fKgY/context-invalid-full.json
+Wrote browser summary to /tmp/incremental-fallbacks-G1fKgY/context-invalid-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-fallbacks-G1fKgY/context-invalid-public/scopes
+Public data budget: 94402 bytes
+✔ shadow publishes full authority and real checkpoint drift or invalid candidates diagnose and fall back fully (683.982764ms)
+Wrote 7 ranking snapshots to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-base-full.json
+Wrote browser summary to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-base-public/scopes
+Public data budget: 89361 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-recovered-full.json
+Wrote browser summary to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-recovered-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-recovered-public/scopes
+Public data budget: 89361 bytes
+Materialized 3 ranking snapshots
+Wrote browser summary to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-corrected-public.incremental-204215-1792232985000/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-corrected-public.incremental-204215-1792232985000/scopes
+Public data budget: 62791 bytes
+Wrote 7 ranking snapshots to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-corrected-full-full.json
+Wrote browser summary to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-corrected-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-overlapping-schedule-9Mw8Dp/overlap-corrected-full-public/scopes
+Public data budget: 89361 bytes
+✔ overlapping schedule snapshots persist restorable state and recover from an old duplicate ledger (316.136374ms)
+Wrote 5 ranking snapshots to /tmp/incremental-tournament-transition-4j95om/tournament-base-full.json
+Wrote browser summary to /tmp/incremental-tournament-transition-4j95om/tournament-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-tournament-transition-4j95om/tournament-base-public/scopes
+Public data budget: 96266 bytes
+Wrote 5 ranking snapshots to /tmp/incremental-tournament-transition-4j95om/tournament-transition-full.json
+Wrote browser summary to /tmp/incremental-tournament-transition-4j95om/tournament-transition-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-tournament-transition-4j95om/tournament-transition-public/scopes
+Public data budget: 96242 bytes
+Wrote 5 ranking snapshots to /tmp/incremental-tournament-transition-4j95om/tournament-transition-full-full.json
+Wrote browser summary to /tmp/incremental-tournament-transition-4j95om/tournament-transition-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-tournament-transition-4j95om/tournament-transition-full-public/scopes
+Public data budget: 96242 bytes
+Materialized 3 ranking snapshots
+Wrote browser summary to /tmp/incremental-tournament-transition-4j95om/tournament-schedule-append-public.incremental-204215-1792232985339/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-tournament-transition-4j95om/tournament-schedule-append-public.incremental-204215-1792232985339/scopes
+Public data budget: 64383 bytes
+✔ causal tournament schedule transitions replay while future schedule appends keep predecessor checkpoints valid (261.535675ms)
+Wrote 7 ranking snapshots to /tmp/incremental-provider-availability-F0k0Eq/provider-base-full.json
+Wrote browser summary to /tmp/incremental-provider-availability-F0k0Eq/provider-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-provider-availability-F0k0Eq/provider-base-public/scopes
+Public data budget: 89650 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-provider-availability-F0k0Eq/provider-append-public.incremental-204215-1792232985483/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-provider-availability-F0k0Eq/provider-append-public.incremental-204215-1792232985483/scopes
+Public data budget: 83801 bytes
+✔ provider availability is attributed to the receipt covering the newly observed match (149.119559ms)
+Wrote 7 ranking snapshots to /tmp/incremental-correction-append-9VTiDH/sequence-base-full.json
+Wrote browser summary to /tmp/incremental-correction-append-9VTiDH/sequence-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-correction-append-9VTiDH/sequence-base-public/scopes
+Public data budget: 89361 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-correction-append-9VTiDH/sequence-correction-public.incremental-204215-1792232985605/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-correction-append-9VTiDH/sequence-correction-public.incremental-204215-1792232985605/scopes
+Public data budget: 78315 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-correction-append-9VTiDH/sequence-append-public.incremental-204215-1792232985633/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-correction-append-9VTiDH/sequence-append-public.incremental-204215-1792232985633/scopes
+Public data budget: 83367 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-correction-append-9VTiDH/sequence-full-full.json
+Wrote browser summary to /tmp/incremental-correction-append-9VTiDH/sequence-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-correction-append-9VTiDH/sequence-full-public/scopes
+Public data budget: 94552 bytes
+✔ a correction can be promoted and followed by an append without losing predecessor checkpoint authority (257.751107ms)
+Wrote 7 ranking snapshots to /tmp/incremental-lazy-checkpoint-NeBOi8/lazy-base-full.json
+Wrote browser summary to /tmp/incremental-lazy-checkpoint-NeBOi8/lazy-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-lazy-checkpoint-NeBOi8/lazy-base-public/scopes
+Public data budget: 89361 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-lazy-checkpoint-NeBOi8/lazy-append-public.incremental-204215-1792232985842/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-lazy-checkpoint-NeBOi8/lazy-append-public.incremental-204215-1792232985842/scopes
+Public data budget: 83217 bytes
+✔ replay lazily loads the newest eligible checkpoint and rejects same-date prefix mismatches (149.929506ms)
+Wrote 8 ranking snapshots to /tmp/incremental-season-removal-GlgDpA/season-base-full.json
+Wrote browser summary to /tmp/incremental-season-removal-GlgDpA/season-base-public/ranking-summary.json
+Wrote 4 public ranking scopes to /tmp/incremental-season-removal-GlgDpA/season-base-public/scopes
+Public data budget: 100149 bytes
+Materialized 3 ranking snapshots
+Wrote browser summary to /tmp/incremental-season-removal-GlgDpA/season-correction-public.incremental-204215-1792232986010/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-season-removal-GlgDpA/season-correction-public.incremental-204215-1792232986010/scopes
+Public data budget: 89129 bytes
+Wrote 8 ranking snapshots to /tmp/incremental-season-removal-GlgDpA/season-correction-full-full.json
+Wrote browser summary to /tmp/incremental-season-removal-GlgDpA/season-correction-full-public/ranking-summary.json
+Wrote 4 public ranking scopes to /tmp/incremental-season-removal-GlgDpA/season-correction-full-public/scopes
+Public data budget: 100315 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-season-removal-GlgDpA/season-removed-public.incremental-204215-1792232986146/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-season-removal-GlgDpA/season-removed-public.incremental-204215-1792232986146/scopes
+Public data budget: 69886 bytes
+Wrote 6 ranking snapshots to /tmp/incremental-season-removal-GlgDpA/season-removed-full-full.json
+Wrote browser summary to /tmp/incremental-season-removal-GlgDpA/season-removed-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-season-removal-GlgDpA/season-removed-full-public/scopes
+Public data budget: 79350 bytes
+✔ cross-season corrections and whole-season deletion subtract extinct scope artifacts exactly (351.764591ms)
+Wrote 6 ranking snapshots to /tmp/incremental-page-contraction-qfNEYg/pages-base-full.json
+Wrote browser summary to /tmp/incremental-page-contraction-qfNEYg/pages-base-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-page-contraction-qfNEYg/pages-base-public/scopes
+Public data budget: 218463 bytes
+Materialized 2 ranking snapshots
+Wrote browser summary to /tmp/incremental-page-contraction-qfNEYg/pages-contracted-public.incremental-204215-1792232986521/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/incremental-page-contraction-qfNEYg/pages-contracted-public.incremental-204215-1792232986521/scopes
+Public data budget: 173727 bytes
+Wrote 6 ranking snapshots to /tmp/incremental-page-contraction-qfNEYg/pages-full-full.json
+Wrote browser summary to /tmp/incremental-page-contraction-qfNEYg/pages-full-public/ranking-summary.json
+Wrote 3 public ranking scopes to /tmp/incremental-page-contraction-qfNEYg/pages-full-public/scopes
+Public data budget: 185067 bytes
+✔ match-page contraction removes obsolete trailing page objects (476.757476ms)
+✔ legacy wrapper and reusable full replay remain exactly compatible (24.017441ms)
+✔ resumed replay equals a full replay for append, same-day insertion, correction, roster substitution, and tournament placement (21.657823ms)
+✔ replay rejects a partial UTC date and a checkpoint on the affected date (2.035779ms)
+✔ state preparation hashes canonical JSON and creates deterministic gzip bytes (2.980519ms)
+✔ state object admission accepts nested objects and arrays (5.28762ms)
+✔ state object admission accepts numeric keys in lexical order (1.081217ms)
+✔ state object admission accepts Unicode and escaped strings (1.00842ms)
+✔ state object admission accepts escaped and Unicode keys (0.999572ms)
+✔ state object admission accepts number formats and exponent strings (0.932608ms)
+✔ state object admission accepts null root (0.699721ms)
+✔ state object admission accepts array root (0.740935ms)
+✔ state object admission rejects reordered object keys (1.511634ms)
+✔ state object admission rejects numeric keys in numeric order (1.416804ms)
+✔ state object admission rejects nested reordered keys (0.721557ms)
+✔ state object admission rejects interior whitespace (0.611531ms)
+✔ state object admission rejects trailing whitespace (0.600961ms)
+✔ state object admission rejects escaped Unicode value (0.531884ms)
+✔ state object admission rejects escaped Unicode key (0.636681ms)
+✔ state object admission rejects decimal integer (0.612189ms)
+✔ state object admission rejects negative zero (0.689203ms)
+✔ state object admission rejects uppercase exponent (0.504738ms)
+✔ state object admission rejects duplicate object keys (0.594878ms)
+✔ state object admission rejects overflow in a primitive array (0.607168ms)
+✔ state object admission accepts numeric keys in nested arrays (0.472285ms)
+✔ mixed checkpoint persistence preserves immutable bytes, reused members and caller state (38.28413ms)
+✔ one active CAS binds public, state, and raw receipt authorities (47.316159ms)
+✔ raw/state receipt mismatch and corrupt raw references never promote (23.737104ms)
+✔ prepared state contains complete compatibility and ordered checkpoint candidates (2.313144ms)
+✔ state preparation preserves ref-only checkpoints without re-materializing their bundles (1.08809ms)
+✔ state objects conditionally create, reuse identical bytes, and reject collisions (1.509142ms)
+✔ a conditional-create race reuses verified state objects (1.495273ms)
+✔ state reuse accepts alternate gzip sizes and rejects forged semantic payloads (4.115731ms)
+▶ state reuse and race reuse reject GET authority failures after a valid HEAD
+  ✔ reuse: type (0.550782ms)
+  ✔ reuse: encoding (0.257035ms)
+  ✔ reuse: digest (0.32739ms)
+  ✔ reuse: semantic size (0.497331ms)
+  ✔ reuse: encoding metadata (0.243424ms)
+  ✔ reuse: absent length (0.246292ms)
+  ✔ reuse: zero length (0.22746ms)
+  ✔ reuse: unsafe length (0.228936ms)
+  ✔ reuse: mismatched length (0.627843ms)
+  ✔ reuse: CRC (0.837963ms)
+  ✔ reuse: truncation (0.708655ms)
+  ✔ race reuse: type (0.293263ms)
+  ✔ race reuse: encoding (0.248873ms)
+  ✔ race reuse: digest (0.320451ms)
+  ✔ race reuse: semantic size (0.395769ms)
+  ✔ race reuse: encoding metadata (0.314227ms)
+  ✔ race reuse: absent length (0.245002ms)
+  ✔ race reuse: zero length (0.243568ms)
+  ✔ race reuse: unsafe length (0.270261ms)
+  ✔ race reuse: mismatched length (0.591497ms)
+  ✔ race reuse: CRC (0.790516ms)
+  ✔ race reuse: truncation (0.949425ms)
+✔ state reuse and race reuse reject GET authority failures after a valid HEAD (11.968333ms)
+✔ new state identities normalize reused legacy references and stored manifests remain byte-stable (16.66165ms)
+✔ state manifests are immutable and identical retries reuse the original object (5.033546ms)
+✔ manifest authority fails closed for mutation, missing objects, and corrupt object bytes (14.455439ms)
+✔ manifest authority exposes compressed-byte proof only after full object verification (4.505878ms)
+✔ promotion reuses verified state bytes but rechecks alternate gzip bytes with proof scoped to each publication (28.340867ms)
+✔ state-object body mutation after verification blocks promotion and preserves the old generation (11.851248ms)
+✔ state-object metadata mutation after verification blocks promotion and preserves the old generation (27.457592ms)
+✔ state-object missing mutation after verification blocks promotion and preserves the old generation (11.386465ms)
+✔ active pointers without state authority trigger a full rebuild and promotion resolves both manifests (13.970975ms)
+✔ crashes and stale workers cannot activate prepared state (18.130068ms)
+✔ state-manifest mutation after preparation blocks public pointer promotion (10.015709ms)
+✔ groups international tournament event labels by family (1.732932ms)
+✔ normalizes aliases into one season-specific instance without merging years (0.327728ms)
+✔ does not treat regional qualifier labels as international tournament fields (0.134171ms)
+✔ builds exact tournament options from movement index entries (0.966745ms)
+✔ labels a past event without schedule evidence as completed, not as latest data (0.344604ms)
+✔ an event without schedule evidence ends after 14 days without a rated match (0.213503ms)
+✔ preserves explicit lifecycle statuses when rated results lag (0.1928ms)
+✔ keeps lagged tournament results labeled as latest data after matches elsewhere continue (1.177479ms)
+✔ keeps incomplete same-day tournament results labeled as latest data (0.408266ms)
+✔ derives a live Worlds entry from its first rated Play-In match, not from schedule rows alone (0.551079ms)
+✔ keeps tournament instances compatible with the active season and checkpoint window (0.336701ms)
+✔ matches broad international filters from appearances and exact filters from shard team ids (0.197498ms)
+✔ prefers durable tournament appearance metadata for the broad international filter (0.145279ms)
+✔ derives ongoing lifecycle from future unstarted schedule rows without rating them (0.35279ms)
+✔ only claims completed when schedule coverage extends beyond the completed final (0.378452ms)
+✔ completed lifecycle requires retained official results for every completed schedule row (0.250639ms)
+✔ drops ambiguous qualifier rows that predate the main tournament schedule (0.225026ms)
+✔ does not clip rated opening matches when schedule coverage starts mid-event (0.2931ms)
+✔ rejects qualifier and regional-final evidence even when event aliases look international (0.198249ms)
+✔ uses the newest observation for overlapping official schedule matches (0.268213ms)
+✔ official completion requires a terminal scored series (0.193511ms)
+✔ maps Leaguepedia schedule rows to a valid hub feed (2.885361ms)
+✔ infers live and missing results from the scheduled start and best-of (0.542752ms)
+✔ tags international competitions only for international events (0.369189ms)
+✔ marks conflicting or unidentified rows as incomplete coverage (0.323879ms)
+✔ marks malformed rows and unreadable start times as incomplete coverage (4.447305ms)
+✔ pages through the Cargo export until a short page (12.178061ms)
+✔ feed service caches, refreshes when due and keeps the last complete feed (10.807313ms)
+✔ feed service ends a check whose response body stalls (229.435218ms)
+✔ feed service reports an unavailable feed when the first check fails (1.659518ms)
+✔ legalPageFromPath recognizes only public legal routes (0.933328ms)
+✔ chart timestamp formatting tolerates non-date labels (0.971865ms)
+✔ chart tooltip timestamp formatting reads the x-axis value from payload (0.204436ms)
+✔ local data manifests resolve legacy and relative raw file paths under rawDir (1.634825ms)
+✔ probe paginates to its watermark and targets details only for uncertain completions (4.595649ms)
+✔ probe reports incomplete coverage without silently accepting a page limit (0.755359ms)
+✔ probe request timeout exposes terminal retry telemetry for failure persistence (10.250925ms)
+✔ premier events lead domestic families while qualifiers and development stay lower (10.697691ms)
+✔ grouping is complete and stable across duplicate rows, source order, ambiguous events and league filters (3.22885ms)
+✔ parent league names do not promote academy events or override international event identity (0.563731ms)
+✔ qualifying series and qualification names stay below main events without moving play-ins or domestic series (0.384898ms)
+✔ generic development names use emerging source families and keep major or ambiguous sources under Other events (0.971545ms)
+✔ Demacia Cup leads into next season histories without changing season records or replaying its impact (65.973508ms)
+✔ match history publishes scoped game rows and series-atomic impact (9.84917ms)
+✔ match history parser rejects a winner outside the two teams (3.044872ms)
+✔ match history preserves an unknown patch as an empty string (2.175736ms)
+✔ match history impact stays tied to the series when published ratings also move for other reasons (5.290519ms)
+✔ a strong team win does not acquire a negative impact from the public soft cap (0.671458ms)
+✔ league options exclude incompatible events without changing event identifiers (2.248322ms)
+✔ colliding event choices show catalog coverage and raw identity without changing other labels (0.725484ms)
+✔ raw event identities keep colliding labels distinct even when coverage is equal (0.235064ms)
+✔ old MSI impact remains rejected and reports the exact affected record and publication (0.596544ms)
+✔ reports the pre-match chance of the series winner and flags upsets (0.954982ms)
+✔ hides the rating change when the deltas contradict the winner (0.684682ms)
+✔ caps the delta bar and keeps small changes visible (0.186455ms)
+✔ crawler and social metadata use the custom canonical host (9.900051ms)
+✔ crawler entry files advertise the custom canonical host (3.153998ms)
+✔ web app manifest includes installable icon sizes (2.876684ms)
+✔ app shell includes the Riot project disclaimer footer (1.770164ms)
+✔ visible SVG logo is optimized separately from the install icon (0.92018ms)
+✔ favicon is a vector from the header mark with an ICO fallback at tab sizes (2.255863ms)
+✔ team latent strength is result-only and allocates evidence across stable and form (26.108124ms)
+✔ series rows publish one atomic team and league strength update (6.372167ms)
+✔ international ledger separates configured evidence shares from realized movement (2.848489ms)
+✔ a completed Bo2 tie is neutral in ratings, provenance, and head-to-head context (2.928299ms)
+✔ sourced player histories retain a completed Bo2 tie through public compaction (13.146345ms)
+✔ sourced player histories share one immutable source trace per match and team side (2.176296ms)
+✔ compact player history keeps published ratings, career games, and recent series exact (11.681987ms)
+✔ compact player history does not let recent unrateable series evict older rateable series (11.722514ms)
+✔ compact player history follows canonical start time when same-day ids sort differently (5.133316ms)
+✔ an ambiguous fallback 1-1 prefix stays incomplete and does not count for eligibility (2.860967ms)
+✔ an unequal Bo3 prefix stays ongoing and does not count for eligibility (1.249166ms)
+✔ a 2-2 fallback prefix cannot award a series update or eligibility evidence (1.593274ms)
+✔ an international Bo2 tie assigns half a league result without inventing league history wins (5.583503ms)
+✔ interleaved same-date series rows still publish one atomic team update (3.424088ms)
+✔ official match ids keep independent same-day team-pair matches separate (1.242629ms)
+✔ same-day series permutations produce identical rating artifacts (3.673235ms)
+✔ team history points use global ranks instead of match-local ranks (8.647446ms)
+✔ series expectation can value an elite win above an expected sweep (43.283499ms)
+✔ domestic stable gains in weaker leagues are shrunk before global publication (9.081952ms)
+✔ published roster prior caps positive player signal for sustained losing records (0.196247ms)
+✔ published team stable offset compresses only the elite positive tail (0.10838ms)
+✔ post-Worlds preseason games are discounted except Demacia Cup, which keeps EWC weight (2.159322ms)
+✔ Esports World Cup does not start the post-Worlds preseason window (0.211086ms)
+✔ league Elo only updates from international cross-league games with smaller K (1.471796ms)
+✔ league Elo preserves fractional international residual evidence (0.298417ms)
+✔ emerging league effective ratings cannot publish above tier-three baseline (0.119537ms)
+✔ league adjustment preserves same-league base-rating gaps before momentum (1.352984ms)
+✔ published league anchor relief is gated by sourced team evidence (0.146924ms)
+✔ international league resume accounts for participating opponent strength (9.200926ms)
+✔ a scored new-season lineup does not alter its own pregame prediction (10.316551ms)
+✔ same-region Worlds final skips league game delta while placement residual rewards two finalists (4.451602ms)
+✔ tournament placement depends on phase data, not the event title alias (3.468863ms)
+✔ ongoing tournaments keep match movement but do not apply placement residuals (0.825723ms)
+✔ completed tournaments wait for official result coverage before placement residuals (0.738256ms)
+✔ disconnected unknown-league teams stay provisional instead of topping the eligible board (21.785813ms)
+✔ league priors separate unknown leagues from major leagues without international signal (1.056114ms)
+✔ standings expose uncertainty bands (1.031136ms)
+✔ standings expose sourced roster basis from observed Oracle rosters (1.131363ms)
+✔ dynamic player shares can make a high-impact support more important than an average mid (2.325653ms)
+✔ sourced Oracle player stats produce player ratings without checked-in rosters (1.511701ms)
+✔ sourced Oracle player diagnostics summarize same-role stat context (1.362355ms)
+✔ sourced Oracle player diagnostics preserve missing optional stat fields (1.320521ms)
+✔ same-day predictions use the latest previously observed roster prior (2.707685ms)
+✔ matches missing roster snapshots carry the last known roster prior (1.862429ms)
+✔ individual residual separates same-team players with identical team win rate (20.733712ms)
+✔ sourced player ratings do not inject role-specific mass on balanced schedules (25.000824ms)
+✔ sourced player ratings use league baselines for global comparability (1.819084ms)
+✔ sourced player ratings shrink emerging-league domestic edges on the global board (16.681958ms)
+✔ sourced player ratings ignore incomplete role matchups (0.697336ms)
+✔ sourced player appearance audit separates career games from latest rated team (2.298898ms)
+✔ a gap inside the uncertainty is a near tie and a large gap is not (1.83572ms)
+✔ near-tie groups hold teams within reach of the group leader, not a chain of small gaps (1.812378ms)
+✔ headline calls a coin-flip lead close to level (0.402444ms)
+✔ headline states a clear lead as a points gap and game edge (0.183163ms)
+✔ headline handles scopes with one or no ranked team (0.20998ms)
+✔ latest compatible pre-start receipt supplies one series row with explicit offline ineligibility (3.563218ms)
+✔ conflicting outcomes cannot be selected by input order (0.518288ms)
+✔ Bo1 and Bo3 remain series targets and same-time revisions have deterministic ordering (0.86009ms)
+✔ actual early start excludes a receipt even when its scheduled-start contract is valid (1.947079ms)
+✔ a future correction cannot rewrite or conflict with an in-window cohort (0.426921ms)
+✔ missing, incompatible and changed participant receipts are excluded separately (0.389761ms)
+✔ cancellations, unresolved results, invalid terminal scores and future observations are excluded (0.360323ms)
+✔ invalid ledger or policy never becomes an evaluation cohort (0.275055ms)
+✔ hand-computable home-oriented bins and losses retain offline provenance (3.959333ms)
+✔ empty, tiny, all-correct/all-wrong and exact zero/one cases are explicit (1.258977ms)
+✔ baseline comparison scores both forecasts on the identical paired subset (0.921421ms)
+✔ conflicting, invalid and late baseline rows cannot alter a paired denominator (0.503248ms)
+✔ a worse forecast has negative paired improvement and baseline endpoint errors remain visible (0.436336ms)
+✔ unsupported cohorts, duplicated series, invalid probabilities and ambiguous baseline provenance fail closed (0.337557ms)
+✔ checked-in parity fixtures match the current byte contracts (14.986192ms)
+✔ lowercase zone-less provider timestamps preserve UTC clocks and low years (0.424501ms)
+✔ malformed provider dates use ten UTF-16 units and replace only lone surrogates (0.16266ms)
+✔ provider timestamp fixtures agree in fresh UTC and non-UTC processes (710.315522ms)
+✔ Oracle imports signed differences and real zeros while excluding missing and invalid rates (4.570577ms)
+✔ KP requires valid source kills, assists, and positive team kills without impossible participation (2.915286ms)
+✔ performance averages paired observations rather than mismatched means or pooled KP (1.254924ms)
+✔ invalid share/rate observations stay unavailable and valid zero shares are preserved (0.273108ms)
+✔ new stats affect diagnostics but never player/team ranks, residuals, or predictions (88.873773ms)
+✔ public player artifacts retain coverage in default and season scopes and reject corrupt metrics (57.771818ms)
+✔ coverage audit counts normalized observations, retains LPL-style gaps, and rejects duplicates (0.729451ms)
+✔ playerResumeCreditEntries attributes weighted series value by contribution share (1.49659ms)
+✔ buildDssPlayerResumeLedgers aggregates career, season, split, international, and role ledgers (1.085774ms)
+✔ buildDssPlayerResumeLedgers honors explicit current scope and uncertainty callbacks (0.377195ms)
+✔ buildDssPlayerResumeLedgers treats current season as current split when split ids are absent (0.368323ms)
+✔ walk-forward predictions are recorded before each match update (20.096574ms)
+✔ future match result and stats do not change earlier pre-game predictions (8.442295ms)
+✔ appending a later match does not change earlier pre-game predictions (4.788307ms)
+✔ future roster observations do not change earlier pre-game predictions (5.022338ms)
+✔ a scored-game roster change affects later predictions but not its own pregame state (5.231342ms)
+✔ result of a roster-change match does not alter its pre-game continuity prediction (4.014757ms)
+✔ same-day matches are predicted as one batch before any same-day update (2.139538ms)
+✔ side priors are prior-only and published predictions are side-aware (3.839829ms)
+✔ current game player stats do not affect their own pre-game player edge (2.061268ms)
+✔ prior sourced player ratings feed gated player-adjusted probabilities (3.403536ms)
+✔ future player stats do not change earlier player-shadow predictions (3.490647ms)
+✔ a completed same-day series can inform a later distinct series (1.541156ms)
+✔ elite player-rating priors can exceed the old roster-strength hard cap (12.713329ms)
+✔ current game execution stats do not affect their own pre-game execution shadow (1.73327ms)
+✔ future execution stats do not change earlier execution-shadow predictions (3.228508ms)
+✔ same-day execution ratings are frozen before all same-day predictions (1.72237ms)
+✔ walk-forward predictions label validation segments from prior state only (2.358039ms)
+✔ walk-forward metrics score game probabilities because rows are games (0.532029ms)
+✔ walk-forward metrics compare published predictions to pre-game baselines (0.633946ms)
+✔ walk-forward metrics summarize segment performance (0.490352ms)
+✔ walk-forward metrics score the player-rating shadow variant separately (0.426189ms)
+✔ walk-forward metrics score the execution-residual shadow variant separately (0.419751ms)
+✔ current neutral predictor favors the stronger trained team without side conditions (1.994737ms)
+✔ probe coordination uses only its isolated key and supports exclusion, renewal, release, and monotonic takeover (1.734109ms)
+✔ probe CAS yields exactly one concurrent winner and validates safe ids (0.522843ms)
+✔ every provider integration uses the shared retry helper and forbids direct network bypass (8.359975ms)
+✔ provider retry honors Retry-After seconds and date with injected telemetry (28.098142ms)
+✔ provider retry treats every 5xx as retryable and surfaces terminal telemetry (2.189755ms)
+✔ provider retry handles network and body rate limits but not hard 4xx or aborts (3.311178ms)
+✔ provider retry caps attempts, backoff, and elapsed time (0.446162ms)
+✔ maxElapsed aborts an in-flight provider attempt and emits failure telemetry before rejection (11.101467ms)
+✔ attempt deadline remains a referenced liveness handle until fetch settles and is then cleared (0.570859ms)
+✔ caller timeout preserves abort semantics and attaches one persisted terminal attempt (11.098997ms)
+✔ failure persistence rejection never retries or masks the original HTTP/provider outcome (1.295788ms)
+✔ synthetic 2-year archive has bounded nodes and lossless chronological reconstruction (55.928992ms)
+✔ synthetic 5-year archive has bounded nodes and lossless chronological reconstruction (129.4718ms)
+✔ synthetic 10-year archive has bounded nodes and lossless chronological reconstruction (255.158919ms)
+✔ year selection skips prior-year objects and an append reuses their content identities (110.687309ms)
+✔ map lookup retrieves only a bounded part of a large artifact directory (97.425344ms)
+✔ counts, unknown versions, duplicate map keys, missing nodes and cycles fail closed (28.986063ms)
+✔ an oversized atomic series fails rather than discarding games (7.974933ms)
+✔ catalog projection retains all games in a series assigned to its opening year (0.386817ms)
+✔ a series spanning New Year is discoverable from both year views (36.060928ms)
+✔ year projection preserves the year directory and ranking season metadata (27.235418ms)
+✔ hash-only preparation preserves storage identity without retaining compressed buffers (58.906089ms)
+✔ archive growth beyond 40 MB does not block a bounded ranking bootstrap (1.104523ms)
+✔ ranking bootstrap retains exact UTF-8 byte boundaries (5.905997ms)
+✔ one URL resolver preserves delivery forms and proxy query semantics (1.778324ms)
+✔ known logical URL fields have run identity normalized for every index family (34.901774ms)
+✔ normalization, hydration and dependencies share the finite artifact references (19.542752ms)
+✔ gzip transport is decoded by fetch and verified against canonical uncompressed semantic JSON (28.391802ms)
+✔ transport encoding mismatches and non-decoded gzip fail closed (4.296948ms)
+✔ generation context loads every lazy public artifact family through production reader boundaries (1049.720096ms)
+▶ generation manifest load rejects external required references before lazy reads
+  ✔ playerDirectoryUrl (12.754202ms)
+  ✔ teamDirectoryUrl (8.627491ms)
+  ✔ teamHistoryIndexUrl (7.381206ms)
+  ✔ regionHistoryUrl (9.812898ms)
+  ✔ tournamentMovementIndexUrl (10.629368ms)
+  ✔ matchHistoryIndexUrl (9.006465ms)
+  ✔ snapshotIndex All__All__All (7.286194ms)
+  ✔ snapshotIndex 2025__All__All (9.798347ms)
+  ✔ snapshotIndex 2025__All__All__split-1 (8.897181ms)
+  ✔ snapshotIndex 2025__All__All__split-2 (7.844123ms)
+  ✔ snapshotIndex 2025__All__All__split-3 (7.705426ms)
+  ✔ snapshotIndex 2026__All__All (8.837583ms)
+  ✔ snapshotIndex 2026__All__All__split-1 (9.483135ms)
+  ✔ snapshotIndex 2026__All__All__split-2 (10.100528ms)
+  ✔ snapshotIndex 2026__All__All__split-3 (11.402639ms)
+  ✔ external audit and source citations (8.814372ms)
+✔ generation manifest load rejects external required references before lazy reads (580.007802ms)
+✔ manifest loader deduplicates requests and synchronously retains only a resolved manifest (40.935654ms)
+✔ manifest loader leaves failures uncached and retries HTTP and validation errors (18.119172ms)
+✔ concurrent and returning views download and verify an immutable shard once (207.277996ms)
+✔ reused immutable content is hydrated with each active generation identity (33.520884ms)
+✔ snapshot loading repairs a cached shard from an older publish (29.023102ms)
+▶ generation-backed snapshot loading does not outer-retry abort, HTTP, or integrity failures
+  ✔ abort (33.828938ms)
+  ✔ http (30.906199ms)
+  ✔ integrity (50.383951ms)
+✔ generation-backed snapshot loading does not outer-retry abort, HTTP, or integrity failures (116.058105ms)
+✔ generation-backed network plus proxy failure makes exactly two requests (35.192117ms)
+✔ generation manifest loads semantic artifacts through the manifest loader and snapshot resolver (64.23214ms)
+✔ semantic identity excludes volatile run metadata and uses deterministic key ordering (32.15927ms)
+✔ reader mapping canonicalizes double-encoded logical paths exactly once (2.113987ms)
+✔ generation manifest and semantic loading fail closed on integrity and generation errors (64.634294ms)
+✔ redirected immutable-object failures retry the original same-origin URL once through the proxy (27.018004ms)
+✔ immutable-object network rejection retries once, while proxy failure does not loop (25.598582ms)
+✔ ordinary same-origin HTTP failures do not trigger proxy fallback (23.780546ms)
+✔ aborted immutable-object requests never retry through the proxy (27.402483ms)
+✔ direct and proxy immutable delivery share hydration and digest validation (78.280802ms)
+✔ public ranking manifest parser validates nested filters and data URL paths (5.245496ms)
+✔ public ranking shard parser validates source, standing, and league rows (3.350445ms)
+✔ checkpoint filters round-trip through public keys and manifest options (2.195077ms)
+✔ team history index parser requires schemaVersion, matching scopes, and canonical URLs (1.071259ms)
+✔ team history shard parser validates point tuples and compact model context (4.310027ms)
+✔ tournament movement parsers require matching identities and explicit boundaries (2.697578ms)
+✔ region history parser validates scoped series and tuple context (0.741751ms)
+✔ public matchup defaults preserve game probability compatibility (1.967832ms)
+✔ public matchup best-of options amplify a favorite edge (0.613735ms)
+✔ public matchup applies explicit side assumptions as rating edge adjustments (0.518914ms)
+✔ public matchup uncertainty bands bracket game and series estimates (0.587055ms)
+✔ non-default missing snapshot never falls back to embedded default snapshot (1.438065ms)
+✔ non-default indexed snapshot reports loading until exact shard arrives (0.231881ms)
+✔ checkpoint indexed snapshot reports loading until exact shard arrives (0.184501ms)
+✔ cached exact shard resolves without using default snapshot (0.277894ms)
+✔ shard validation rejects scope drift (0.427037ms)
+✔ team history shard validation rejects scope drift (0.455245ms)
+✔ tournament movement validation rejects mixed runs and shard metadata drift (0.716059ms)
+✔ published rating scale is monotonic, invertible, and scales deltas (1.069824ms)
+✔ minimum model uncertainty publishes as a compact rating band (0.15149ms)
+✔ published rating components reconcile with transformed rating (0.215936ms)
+✔ public summary publishes ladder-scale ratings while internal snapshots remain calibrated (66.310162ms)
+✔ published region strength averages published top-three representative scores (0.725821ms)
+✔ published team history exposes current standing separately from the final match point (16.778005ms)
+✔ public snapshot publishes a true 30-day baseline, activity, and pre-series expectations (13.961693ms)
+✔ public matchup estimates invert ladder ratings before probability math (20.255298ms)
+✔ content-addressed bucket paths are strict before any SDK or signer call (3.736454ms)
+✔ bucket HEAD maps immutable metadata without reading a body (0.89236ms)
+✔ bucket presigning uses method-specific commands and a fixed 3600-second expiry (32.445216ms)
+✔ signer failures are surfaced for the server soft fallback (0.352902ms)
+✔ server delivery decision retains HEAD metadata when signing fails (0.435311ms)
+✔ content-addressed public uploads carry immutable JSON/gzip metadata (8.55605ms)
+✔ verified content-addressed objects with missing metadata are repaired once, then reused (9.015397ms)
+✔ generation readiness closure rejects duplicate and mutable membership (3.251079ms)
+✔ conditional JSON state writes and lease fencing reject stale owners (9.108405ms)
+✔ acquiring the next lease preserves the current receipt-bound publication authority (139.66483ms)
+✔ released leases allow the next scheduled worker to run immediately (1.872382ms)
+✔ lease renewal is conditional and release uses the renewed ETag (1.430464ms)
+✔ live lease assertion rejects expiry takeover and an old worker resuming (1.383994ms)
+✔ every generation promotion requires the live shared lease and raw authority (5.329664ms)
+✔ lost lease leaves uploaded generation objects orphaned and active pointer unchanged (93.001599ms)
+✔ takeover between final assertion and active-pointer write invalidates the exact promotion CAS (89.33651ms)
+✔ readiness receipt failure leaves the prior active generation authoritative (101.634636ms)
+✔ readiness receipt stays pre-activation while mutable refresh telemetry records promotion (98.533183ms)
+✔ semantic public artifacts produce deterministic gzip bytes over canonical uncompressed JSON (0.729964ms)
+✔ generation readiness receipt is canonical, digest-bound, and immutable (165.365828ms)
+✔ pre-promotion state model and publication outcomes are exact and exhaustive (236.615136ms)
+✔ public and raw reuse measure alternate gzip sizes in the publication closure (202.040896ms)
+✔ publication reuses only raw and public proofs from this upload and rechecks changed gzip bytes (235.555283ms)
+▶ active publication proof reuse keeps fresh transport checks and isolated receipt scopes
+  ✔ repeated reads fetch every member but only changed gzip bytes inflate again (5.698912ms)
+  ✔ warmed reads reject crc corruption (17.974911ms)
+  ✔ warmed reads reject semantic corruption (3.21096ms)
+  ✔ warmed reads reject metadata corruption (2.280031ms)
+  ✔ warmed reads reject length corruption (2.109231ms)
+  ✔ warmed reads reject missing corruption (2.921567ms)
+  ✔ a changed response length is rejected even when the body and hash match (3.096137ms)
+  ✔ unverified or invalid receipts and failed closures do not warm proofs (3.56907ms)
+  ✔ new clients, buckets, prefixes and receipt bindings start cold and replace the sole retained scope (7.993426ms)
+  ✔ concurrent distinct receipts cannot replace another read's operation-local proofs (4.711117ms)
+✔ active publication proof reuse keeps fresh transport checks and isolated receipt scopes (56.07073ms)
+✔ publication rejects objects corruption after stored validation despite caller-supplied proofs (172.373358ms)
+✔ publication rejects raw/objects corruption after stored validation despite caller-supplied proofs (180.076857ms)
+✔ content-addressed generation reuses unchanged objects, uploads only changed content, and remains reader-compatible (367.54682ms)
+✔ active content-addressed restore verifies pointer, manifest, and every referenced object authority (201.540438ms)
+✔ active serving rejects unsupported and contradictory publication pointer schemas (101.598466ms)
+✔ stripping publication bindings from a native pointer fails public, state, and raw readers (85.520486ms)
+✔ the pre-readiness schema-v2 pointer restores through its legacy publish receipt (95.286843ms)
+✔ verified active root serving is bounded, cached by pointer authority, and invalidated by a new ETag (85.695385ms)
+✔ active reader rejects a receipt whose model provenance differs from the public manifest (85.984524ms)
+✔ post-commit operational failures return committed warnings without invalidating readers (93.39099ms)
+✔ active schema-v1 content-addressed cutover is read-only and the first v2 promotion drops its rollback target (220.54542ms)
+✔ content-addressed collisions and partial uploads fail before promotion (197.092368ms)
+✔ stale content-addressed publication never promotes its generation manifest (82.936418ms)
+✔ generation manifest mutation between upload and pointer CAS blocks activation (76.450353ms)
+✔ concurrent identical generation publishers conditionally create or reuse one immutable manifest (141.945964ms)
+✔ logical path aliases and encoded traversal fail before any bucket upload (84.702472ms)
+✔ double-encoded filenames are canonicalized exactly once before manifest assembly (89.759657ms)
+✔ generation manifest validation finishes before any content object upload (19.046381ms)
+✔ synthetic archive over 40 MB publishes, restores fresh, and reuses its complete closure on the next generation (54906.278191ms)
+✔ large generation directories remain bounded and browser lookup reads only needed directory pages (3472.214974ms)
+✔ full-audit injected functions run only for eligible daily and manual full refreshes (1.641062ms)
+✔ source fingerprint ignores volatile fetch timestamps (26.232168ms)
+✔ rolling refresh requires a Leaguepedia file covering the bootstrap start (0.440992ms)
+Wrote /tmp/refresh-provider-env-3Au4Tt/staging/oracles-elixir/scoped.csv
+Wrote local data manifest to /tmp/refresh-provider-env-3Au4Tt/staging/manifest.json
+Warning: Leaguepedia backup download skipped by --leaguepedia false or --skip-leaguepedia.
+Warning: LoL Esports schedule reference download skipped by --lolesports false or --skip-lolesports.
+Source data changed; refreshed ranking artifacts for 2026-01-01 through 2026-01-03.
+✔ provider subprocess uses scoped environment instead of ambient Oracle URL (162.845261ms)
+✔ source fingerprint separates provider health noise from ranking content (24.605851ms)
+✔ provider status uses explicit provider outcomes rather than warnings (0.322427ms)
+✔ non-zero provider output must satisfy the complete outage manifest contract (49.370846ms)
+Source data changed; refreshed ranking artifacts for 2011-01-01 through 2026-06-29.
+No source-data changes detected for 2011-01-01 through 2026-06-29; skipping crunch.
+Source data changed; refreshed ranking artifacts for 2011-01-01 through 2026-06-29.
+No current Oracle or Leaguepedia source files were downloaded for 2011-01-01 through 2026-06-29; preserving existing ranking artifacts.
+No source-data changes detected for 2011-01-01 through 2026-06-29; skipping crunch.
+✔ refresh wrapper skips crunch when staged source digest is unchanged (227.361595ms)
+✔ refresh date window bootstraps without raw baseline and then uses rolling lookback (0.576758ms)
+Source data changed; refreshed ranking artifacts for 2025-01-01 through 2026-06-29.
+✔ refresh wrapper ignores legacy unverified bucket raw files when bootstrapping (10.004679ms)
+Source data changed; refreshed ranking artifacts for 2026-06-22 through 2026-06-29.
+✔ verified startup restore honors a custom manifest path and scoped Node worker (199.885649ms)
+Source data changed; refreshed ranking artifacts for 2026-06-22 through 2026-06-29.
+✔ refresh wrapper merges rolling downloads into existing raw baseline (31.815913ms)
+No current Oracle or Leaguepedia source files were downloaded for 2026-07-02 through 2026-07-09; preserving existing ranking artifacts.
+No current Oracle or Leaguepedia source files were downloaded for 2026-07-02 through 2026-07-09; preserving existing ranking artifacts.
+No current Oracle or Leaguepedia source files were downloaded for 2026-07-02 through 2026-07-09; preserving existing ranking artifacts.
+No current Oracle or Leaguepedia source files were downloaded for 2026-07-02 through 2026-07-09; rebuilding from verified raw authority.
+Wrote 4 ranking snapshots to /tmp/lol-ranking-stale-refresh-9Bh7oL/derived.json
+Wrote browser summary to /tmp/lol-ranking-stale-refresh-9Bh7oL/public-data/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/lol-ranking-stale-refresh-9Bh7oL/public-data/scopes
+Public data budget: 59753 bytes
+Source data changed; refreshed ranking artifacts for 2026-07-02 through 2026-07-09.
+No current Oracle or Leaguepedia source files were downloaded for 2011-01-01 through 2026-07-09; preserving existing ranking artifacts.
+✔ refresh wrapper preserves artifacts and uses scoped Rust worker for verified recovery and preparation (441.72838ms)
+Source data changed; refreshed ranking artifacts for 2026-07-02 through 2026-07-09.
+✔ refresh wrapper warns when previous Oracle raw data is preserved for a fallback-only refresh (12.656844ms)
+Source data changed; refreshed ranking artifacts for 2025-01-01 through 2026-06-29.
+✔ refresh wrapper bootstraps when manifest exists but raw files are missing (8.365843ms)
+Uploaded 5 ranking artifact(s) (11507 bytes); reused 0 unchanged artifact(s) (0 bytes) in Railway bucket prefix rankings; skipped 1 optional artifact(s).
+Source data changed; refreshed ranking artifacts for 2011-01-01 through 2026-06-29.
+✔ refresh wrapper uploads refresh state after bucket publish metadata is attached (20.52243ms)
+Wrote 4 ranking snapshots to /tmp/lol-ranking-restored-lineage-72Nir3/full.json
+Wrote browser summary to /tmp/lol-ranking-restored-lineage-72Nir3/public/ranking-summary.json
+Wrote 2 public ranking scopes to /tmp/lol-ranking-restored-lineage-72Nir3/public/scopes
+Public data budget: 59035 bytes
+Uploaded 0 ranking artifact(s) (0 bytes); reused 0 unchanged artifact(s) (0 bytes) in Railway bucket prefix rankings.
+Source data changed; refreshed ranking artifacts for 2011-01-01 through 2026-06-29.
+✔ refresh fallback persists distinct restored generation and run lineage (265.714765ms)
+Uploaded 0 ranking artifact(s) (0 bytes); reused 0 unchanged artifact(s) (0 bytes) in Railway bucket prefix rankings.
+Source data changed; refreshed ranking artifacts for 2011-01-01 through 2026-06-29.
+✔ refresh workflow preserves a committed promotion and surfaces post-CAS audit, telemetry, and state warnings (10.557509ms)
+✔ bucket publisher skips full audit artifact upload by default (10.624425ms)
+✔ bucket publish receipt carries refresh telemetry without changing public artifacts (3.144586ms)
+✔ bucket publisher can opt in to full audit artifact upload (6.314767ms)
+✔ bucket publisher reuses a raw object when SHA-256 metadata and size match (33.666687ms)
+✔ bucket publisher uploads same-size raw content when SHA-256 metadata differs (20.696048ms)
+✔ bucket publisher uploads raw content when metadata cannot be verified (21.446607ms)
+✔ bucket publisher uploads an immutable snapshot when the source changes during PUT (32.951328ms)
+✔ bucket object lookup maps /data paths to the configured prefix (1.950356ms)
+✔ Railway server serves the live Leaguepedia tournament feed without configuration (381.467737ms)
+✔ Railway server returns app shell only for known app routes (323.722813ms)
+✔ Railway server prefers refreshed bucket data over its bundled snapshot (452.191199ms)
+✔ Railway server reuses its verified root cache and invalidates it when the active ETag changes (386.363401ms)
+✔ Railway server serves versioned data from the requested bucket generation (326.744491ms)
+▶ Railway server and production reader support identity and gzip delivery of gzip-stored artifacts
+  ✔ delivers decoded identity (488.406148ms)
+  ✔ passes stored gzip through (405.82429ms)
+✔ Railway server and production reader support identity and gzip delivery of gzip-stored artifacts (981.935678ms)
+✔ Railway server hybrid delivery redirects only eligible immutable objects and preserves proxy recovery (1114.263247ms)
+✔ Railway server injects the latest current-season crawler snapshot on each request (298.071415ms)
+✔ crawler HTML and sitemap follow one verified bucket generation and fall back as a pair (461.408089ms)
+✔ GC is inventory-only and rejects every mutation or approval argument (2.251351ms)
+✔ inventory protects retained and operational objects while exposing only old immutable orphans (52.354144ms)
+✔ generation retention is the union of the 14-day window and newest 50 roots (134.484788ms)
+✔ malformed or truncated generation activity invalidates inventory instead of extending retention (17.204683ms)
+✔ missing retained references fail closed with no deletion candidates (4.628269ms)
+✔ minimum deletion age includes exactly 48 hours and protects just under (14.586454ms)
+✔ retained public, recursive state, current raw, and recent audit roots protect shared closure (13.482275ms)
+✔ GC accepts alternate gzip sizes for semantic raw and state references but rejects changed payloads (31.41905ms)
+✔ GC enforces legacy reference sizes and measured audit snapshot sizes (23.498979ms)
+✔ GC rejects missing or invalid ContentLength and inconsistent inventory sizes for semantic references (42.231965ms)
+✔ corrupt retained content and pointer ETag/reference mutations change or invalidate approval (64.510848ms)
+✔ strict publish closure rejects authority omission, body mutation, and metadata mismatch (20.119554ms)
+✔ GC accepts only the exact historical schema-1 legacy cutover authority (7.158341ms)
+✔ native schema-2 authority stripped of every receipt and public marker fails closed (57.294068ms)
+✔ receipt-bound active and previous pointers require exact schema-1 publication bindings (132.420756ms)
+✔ current receipt-bound pointer requires the native schema-2 content-addressed envelope (46.952163ms)
+✔ receipt-bound active and previous authorities reject canonical schema-1 public manifests (21.819967ms)
+✔ retained year archive closure protects child objects and a missing child suppresses all GC candidates (87.118009ms)
+✔ prediction pairing rejects duplicate IDs, swapped sides, changed outcomes, targets, source and segments (3.099404ms)
+✔ empty and event-poor comparisons remain unavailable and cannot pass the gate (6.19202ms)
+✔ event-aware bootstrap preserves common event effects and reproduces paired losses (3.677963ms)
+✔ metric endpoints, bins and missing denominators match the shared versioned contract (0.221861ms)
+✔ chronological folds withhold whole events that cross a boundary (0.239778ms)
+✔ export builder rejects stale source joins, duplicate identities and mixed model identities (12.766705ms)
+✔ exported aliases and swapped raw sides keep game and series probabilities aligned with canonical outcomes (7.263145ms)
+✔ seeded bounded search reproduces each trial and fails closed on edited definitions (36.662349ms)
+✔ legal stopping paths form a distribution, ties are symmetric and prefixes remain incomplete (1.957124ms)
+✔ placement pool expectations cannot exceed champion attainment and preserve feasible mass (0.760109ms)
+✔ binary-grid placement expectations conserve a fractional allocation when league grouping changes sum order (0.461975ms)
+✔ hierarchy recovers league order from selected entrants and keeps disconnected leagues provisional (604.240993ms)
+✔ warm-up rows train prior state but cannot enter game, control, series or audit denominators (12.720708ms)
+✔ public composition matches its prior board and rejects a mismatched score (11.861056ms)
+✔ evidence reduces heuristic uncertainty; time alone does not create a calibrated inactivity variance (12.353636ms)
+✔ score likelihood sums legal paths without treating missing game order as a stop violation (0.560847ms)
+✔ ranking explanations cover all public model components (1.278807ms)
+✔ roster and uncertainty helpers describe compact standing fields (0.27816ms)
+✔ walk-forward helper formats compact manifest metrics (15.090964ms)
+✔ walk-forward helper tolerates metrics without baseline comparisons (0.492049ms)
+✔ derives deterministic S/A/B/C tiers from power-score bands (3.279447ms)
+✔ keeps close contenders in A tier after a tight S-tier leader pack (0.476653ms)
+✔ does not split tier badges across small adjacent rating gaps (0.389877ms)
+✔ filtered ranking flair preserves tiers from the full ranked universe (0.524777ms)
+✔ keeps championship-score clusters together when no visible boundary gap exists (0.216774ms)
+✔ derives podium and 30-day Power movement picks with deterministic tie-breakers (0.353999ms)
+✔ movement picks use Power delta first and exclude inactive teams (0.215057ms)
+✔ tournament movement picks list each team once and only in its own direction (0.37116ms)
+✔ derives upset headline from lowest pre-series expectation in the rolling window (0.584329ms)
+✔ derives spicy-take confidence bands from confidence, uncertainty, and recent evidence (0.4053ms)
+✔ omitting rolling window keeps evidence independent from 30-day series counts for tournament flair (0.210109ms)
+✔ canonical matrix is closed, frozen, and specifies all seven dimensions for every outcome (1.729801ms)
+✔ normalization binds all ten canonical outcomes to current runtime vocabularies (0.853235ms)
+✔ matrix and observations reject missing, extra, unknown, and contradictory states (2.604135ms)
+✔ forced raw recovery requires force, separate authorization, and a validated existing baseline (1.941062ms)
+✔ incident ledger is exactly the approved ten ordered lessons with real mappings (25.874928ms)
+✔ committed receipt is strict, canonical, complete, and authority-bound (4.405757ms)
+✔ strict parser rejects corruption, extra fields, and crossed authorities fail (1.960937ms)
+✔ active pointer ETag or content race fails closed (0.576773ms)
+✔ full capture hashes the bounded production graph and permits only read commands (35.271094ms)
+✔ full capture rejects corrupt bodies, crossed publish authority, and pointer races (24.967065ms)
+✔ publish bindings reject crossed key, digest, and byte authorities (0.554824ms)
+✔ canonical self-digest cannot legitimize crossed paths, integrity, or seeded state (5.120773ms)
+✔ capture requires schema authority from state compatibility with no fallback (13.6551ms)
+✔ audit inspection is paginated, selects newest canonical day, and is read-only (4.20429ms)
+✔ audit absence records the canonical searched prefix across all pages (0.400041ms)
+✔ commit identity has explicit/env/Git priority and archive failure is strict (0.695262ms)
+✔ runtime defaults, cron, proxy delivery, and inventory-only GC remain explicit (2.241088ms)
+✔ baseline inspector imports and issues no publication or deletion capability (1.057409ms)
+✔ full-season selection does not end at the last split checkpoint (1.148527ms)
+✔ probability copy reconciles with comparisons for the same scale and assumptions (1.204279ms)
+✔ calendar scope boundaries do not roll into the previous date west of UTC (428.186537ms)
+✔ published model calibration controls examples and game/series estimates (0.981258ms)
+✔ fresh, stale, and forced recovery evidence are distinct canonical immutable proofs (10.976349ms)
+✔ evidence modes reject ambiguous or weakened recovery provenance (0.651582ms)
+✔ raw authority validation reconstructs every object and fails closed on reference, bytes, object, importer, or coverage mismatch (4.308786ms)
+✔ evidence type remains a strict discriminated union at runtime (0.20014ms)
+✔ raw authority proof is independent of Git metadata in an archive-shaped root (12.55499ms)
+✔ source coverage counts retained tournament games after home-league resolution and deduplication (28.727936ms)
+✔ leaguepedia source coverage separates equal basenames and assigns duplicates to the first input (8.549848ms)
+✔ oracle source coverage separates equal basenames and assigns duplicates to the first input (10.401975ms)
+✔ source ownership stays with the retained Oracle game after Leaguepedia metadata enrichment (16.055643ms)
+✔ curated inventory preserves input provenance without an inherited provider refresh receipt (3.461668ms)
+✔ historical refresh prefixes do not change the provider warning kind (3.867086ms)
+✔ cached Oracle source coverage serializes without an invented retrieval date (2.331299ms)
+✔ the Data and sources panel finds each provider in importer source names (4.215118ms)
+✔ What changed names the upset event like the match ledger, not by its source path (15.910025ms)
+✔ record order breaks equal wins by losses (0.800316ms)
+✔ checkpoint exhaustively and losslessly round-trips every RatingRunState field (571.427794ms)
+✔ semantically identical maps and sets serialize byte-identically regardless of insertion order (13.020942ms)
+✔ checkpoint validation fails closed for corruption and every invalidation identity (18.382069ms)
+✔ checkpoint transport accepts reordered JSON keys and still rejects payload corruption (21.66965ms)
+✔ envelope encoding retains stored UTF-16 payload digests and fresh live values (21.857774ms)
+✔ both checkpoint transports reject correctly digested unsafe decoded keys (22.645051ms)
+✔ terminal match identity and exact UTC boundary are mandatory (24.231221ms)
+✔ checkpoint encoding rejects an event inventory derived from future corpus rows (1.685814ms)
+✔ canonical Map and Set ordering uses locale-independent code units for case and accents (8.236779ms)
+✔ append resume from a decoded predecessor checkpoint equals a clean full replay (8.211939ms)
+✔ same-day insertion resumes only from the predecessor and replays the whole UTC date (18.354625ms)
+✔ historical correction replays from its predecessor through the current boundary (12.682298ms)
+✔ a newly discovered future event merges safely and preserves pre-event powers and placement behavior (14.474937ms)
+✔ changes to an already-started event return a predecessor replay boundary (9.107681ms)
+✔ event context or event-weight changes cannot silently resume the immediate predecessor (5.216405ms)
+✔ manual invalidation always signals a full replay fallback (0.186267ms)
+✔ target decay is unchanged by unrelated matches inserted inside the gap (4.347825ms)
+✔ patch and split boundaries apply only to the participating team and league (0.329417ms)
+✔ published rating universe keeps only matches between rated domestic leagues (2.342063ms)
+✔ semantic manifest freshness rejects unreferenced newer scored coverage (12.300057ms)
+✔ semantic manifest freshness ignores exact-content duplicate snapshots (4.538931ms)
+✔ semantic manifest freshness audits tournament-named scored snapshots (5.17522ms)
+✔ parallel provider reads preserve manifest order despite reversed completion (81.008763ms)
+✔ aged Oracle delta chains deterministically re-baseline at the documented bound (204.16541ms)
+✔ promoted raw authority restarts across append, same-day substitution, and historical correction/tombstone (32.608896ms)
+✔ raw generation preserves provider game order through receipt materialization (8.02424ms)
+✔ verified prepared materialization imports equivalently from a clean receipt-bound directory (16.908341ms)
+✔ verified prepared materialization fails closed when staged bytes change after prepare (8.792334ms)
+✔ raw worker emits a file-backed generation and cleans partial output on failure (772.275587ms)
+✔ raw objects are canonical, deterministic gzip objects and fail closed when corrupt (8.654614ms)
+✔ raw receipt identity ignores compressor sizes while legacy receipts retain their authority (21.669341ms)
+✔ raw object parsing rejects noncanonical or invalid JSON even with matching integrity fields (1.06085ms)
+✔ append deltas reconstruct and materialize importer-equivalent legacy source files (50.436022ms)
+✔ raw receipt restore swaps atomically, prunes orphans, and preserves prior authority on corruption (9.054401ms)
+✔ ordered deltas support correction, delete, and date/league moves with prior digests (6.495015ms)
+✔ a compacted baseline reconstructs the same effective source without old deltas (4.083376ms)
+✔ schema, compatibility, duplicate, missing, corrupt, and chain errors fail closed (6.505539ms)
+✔ builds a typed team receipt with rating, movement, players, source, model, and config (2.716456ms)
+✔ receipt share payload is stable and exposes staleness fields (0.615254ms)
+✔ test readers select the generated candidate for both direct paths and data URLs (1218.074582ms)
+✔ candidate validation rejects a missing expected artifact without reference fallback (66.002176ms)
+✔ candidate validation rejects invalid JSON in generated shards (61.824959ms)
+✔ test runner rejects a missing release candidate before launching test workers (59.37423ms)
+✔ refresh telemetry uses injected wall, monotonic, and RSS clocks deterministically (2.864192ms)
+✔ real child stages replace not-applicable placeholders when records merge (0.601984ms)
+✔ record aggregation preserves whole-run envelope, freshness, promotion, and peak RSS (0.413791ms)
+✔ resource telemetry measures CPU seconds and RSS-integrated GB-seconds separately from peak (0.30884ms)
+✔ work telemetry preserves unknown as null and process merging deduplicates one process (1.556406ms)
+✔ one unknown subprocess keeps aggregate CPU and integrated memory unknown (0.365807ms)
+✔ metric aggregation preserves failed stages and all failure messages (0.27761ms)
+✔ production publication hook emits strict immutable evidence when explicitly enabled (3.875088ms)
+✔ unchanged gated probe performs no broad provider fetch, crunch, or artifact upload (4.864749ms)
+✔ lease loss during child work prevents trigger-state mutation after the child (18.323778ms)
+✔ heartbeat updates authority so release can use the renewed ETag (0.652561ms)
+✔ remote and local state read failures still stop heartbeat, release lease, and emit terminal metrics (2.257896ms)
+✔ renewal and assertion serialize across the PUT-to-local-authority update window (0.556885ms)
+✔ recovery-window work uses match completion date and reports no publication without promotion (9.627279ms)
+✔ startup enforces five-minute gate receipts and lease timing (2.80342ms)
+✔ daily audit defaults on in gated mode, is due from last success, and bypasses unchanged probe work without advancing on failure (3.481192ms)
+✔ daily audit success timestamp requires clean parity, promotion, and full-audit receipt (26.255042ms)
+✔ default gated child env enables canonical fenced ingestion for every scored cause without a legacy flag (0.641124ms)
+✔ release failure cannot replace the primary failure and terminal metric is unconditional (1.633085ms)
+✔ release failure leaves successful canonical metric immutable and emits separate evidence (0.949213ms)
+✔ timeout waits for child-tree exit before rejecting and permitting lease release (0.446765ms)
+✔ published child telemetry remains canonical in result, trigger state, and stable log (4.812566ms)
+✔ gated probe failure persists one canonical record without a publish receipt (10.738504ms)
+Source data changed; refreshed ranking artifacts for 2011-01-01 through 2026-07-22.
+No source-data changes detected for 2011-01-01 through 2026-07-22; skipping crunch.
+✔ unchanged child record is identical across applicable non-publishing surfaces (29.212742ms)
+No current Oracle or Leaguepedia source files were downloaded for 2011-01-01 through 2026-07-22; preserving existing ranking artifacts.
+✔ stale-source child record is identical across applicable non-publishing surfaces (14.614636ms)
+✔ child error preserves one canonical failed record across refresh, metrics, trigger, error, and log surfaces (14.550968ms)
+✔ child telemetry error remains primary when the subprocess wrapper is generic (20.814927ms)
+✔ cadence rejection emits one immutable failed rollout receipt before lease acquisition (8.5378ms)
+✔ lease acquisition failure and skip each emit exactly one immutable terminal receipt (1.720419ms)
+✔ missing storage fails closed without claiming an immutable receipt (1.361884ms)
+✔ invalid lease TTL emits failed evidence through the native immutable publisher (1.943649ms)
+✔ native rollout publisher creates, reuses, and rejects conflicting complete receipts (3.721634ms)
+✔ publication failure is observable and never changes the terminal outcome into receipt success (0.771222ms)
+✔ completion requires stable identity, two teams, terminal state, and final result (1.720373ms)
+✔ completion accepts a completed best-of-two tie with a final score (0.156165ms)
+✔ schedule probes queue completions once and preserve watermark on incomplete coverage (0.62656ms)
+✔ gated fetches occur only for due pending work, audits, or manual recovery (0.431762ms)
+✔ provider lag backs off and exact reconciliation alone acknowledges work (0.580707ms)
+✔ five-minute cadence requires immutable stored rollout gate authority (0.802101ms)
+✔ refresh cause precedence is manual, overdue audit, retry, pending, unchanged (0.327174ms)
+✔ refresh worker memory flags are canonical and deduplicate inherited variants (1.69455ms)
+✔ raw source selector defaults to Node, uses Rust CLI arguments, and rejects unknown workers (0.741164ms)
+✔ Linux executable peak excludes the setup parent memory inherited across fork and exec (157.3159ms)
+✔ Linux executable peak retains a real allocation after its backing memory is released (136.487176ms)
+✔ Linux executable peak fails closed when procfs high-water data is missing or invalid (53.021118ms)
+✔ worker, direct, and benchmark entry points share the exact refresh memory policy (14.948707ms)
+✔ the lead dot keeps the line under the lead label when a weaker scoring dot collides (34.204662ms)
+✔ all clustered teams remain reachable with adjacent rows at width 320: 4 teams (1.780418ms)
+✔ all clustered teams remain reachable with adjacent rows at width 320: 6 teams (0.586244ms)
+✔ all clustered teams remain reachable with adjacent rows at width 760: 4 teams (13.01582ms)
+✔ all clustered teams remain reachable with adjacent rows at width 760: 6 teams (0.523328ms)
+✔ rows keep their minimum height when teams need no extra lanes (0.538972ms)
+✔ deriveRegionStrength ranks regions by top-three team strength and excludes International (2.519022ms)
+✔ deriveRegionStrength uses flagship leagues instead of diluting majors with lower tiers (0.379833ms)
+✔ deriveRegionStrength lists eligible flagship teams as current representatives (0.342054ms)
+✔ deriveRegionStrength exposes top-three and total-region team averages without team-count sum bias (0.372591ms)
+✔ displayRegionPowerScore rounds the visible top-three team average (0.198874ms)
+✔ deriveRegionStrength includes international participant regions and ignores feeder ecosystems (0.630042ms)
+✔ region power team predicate only accepts teams from score leagues (0.392057ms)
+✔ deriveRegionStrength exposes opponent-adjusted international resume (0.372467ms)
+✔ deriveRegionStrength can include International when requested (0.298125ms)
+✔ directory promotion falls back to atomic file replacement across filesystems (16.90464ms)
+✔ extracts official ranking entries from fetched Apollo payload snapshots (1.963198ms)
+✔ extracts official ranking entries from nested team records (0.329881ms)
+✔ compares current standings against official ranking data and flags large top-rank deltas (1.08495ms)
+✔ passes when matched deltas are within thresholds (0.247022ms)
+✔ allows limited top-band disagreement without treating Riot as a formula clone (0.339331ms)
+✔ fails when a model elite team is far outside the Riot benchmark (0.316628ms)
+✔ matches common Riot naming aliases before reporting coverage gaps (0.251846ms)
+✔ elite missing-team checks are not truncated by a narrower reporting band (0.170184ms)
+✔ filtered rolling endpoint is truncated at its latest rated match (41.561178ms)
+✔ rolling ranks end at the published board for every scope, including filtered history (43.955149ms)
+✔ teams without a rolling baseline still end at their published rank (7.939272ms)
+✖ rolling summaries cover upset and evidence beyond the 25 recent-match display cap (39.06055ms)
+✔ rollout evidence requires every receipt section and publishes immutably (9.788966ms)
+✔ fractional production timings are valid and cheap unchanged is successful without invented parity (1.358827ms)
+✔ zero-mutation daily audit is authoritative and excluded from cheap unchanged and changed populations (0.777369ms)
+✔ evidence aggregation deduplicates identical runs, rejects conflicts, preserves failures, and computes p50/p95 (0.852051ms)
+✔ cadence above five minutes is unaffected and inline outer proof is forbidden (2.428738ms)
+✔ nested proof references are re-read and a never-written key fails closed (5.019778ms)
+✔ native coordination, rollback, audit, and gate constructors align on strict schemas (1.986313ms)
+✔ all canonical nested proof kinds resolve from storage without trusting inline bodies (10.866406ms)
+✔ gate receipt loader accepts only a digest-bound bucket reference (0.657632ms)
+✔ fixture construction supports source archives and preserves tracked-file filtering when Git exists (813.186653ms)
+✔ native implementation evidence generation is deterministic, exact, and commit-bound (1752.970038ms)
+✔ generation rejects modified or uncommitted contract sources and arbitrary command claims (7932.631642ms)
+✔ local authority is canonical, create-only, reusable, and rejects conflicting manifests (14432.659903ms)
+✔ resolution rejects fake-runner proof, dirty worktrees, and evidence from an older HEAD (9574.980724ms)
+✔ local authority rejects relative roots, symlinks, noncanonical JSON, and digest mismatches (1415.142744ms)
+✔ descriptor-relative create cannot be redirected by an ancestor swap (877.005763ms)
+✔ each production action has one strict native successful receipt (2.72501ms)
+✔ production action receipts reject generic, cross-action, failed, and forged approval claims (0.753365ms)
+✔ native live production measurements strictly prove all three plan thresholds (1.762771ms)
+✔ production measurement thresholds and forged schemas fail closed (0.701972ms)
+✔ production-like scenario fixtures establish coverage but never increase live counts (5.858789ms)
+✔ authoritative daily audits do not inflate changed or cheap unchanged shadow counts (3.735687ms)
+✔ shadow gate rejects malformed parity and exact-commit/expiry mismatches (0.586045ms)
+✔ DSS retained player contribution uses prior result shares, not raw player count (1.145639ms)
+✔ DSS retained synergy follows PDF pair weights when shotcaller is known (0.437957ms)
+✔ DSS retained synergy falls back to retained player count when shotcaller is unknown (0.217398ms)
+✔ DSS org coach continuity uses organization-only fallback when coach data is missing (0.182111ms)
+✔ DSS role-critical continuity uses direct support and jungle proxies when shotcaller is unknown (0.240701ms)
+✔ DSS roster carryover combines org, contribution, synergy, and role-critical continuity (0.187505ms)
+✔ DSS substitute thresholds only create eras for meaningful or permanent substitutes (0.199314ms)
+✔ DSS patch similarity is optional and multiplicative (0.201921ms)
+✔ DSS roster era carryover constants mirror the PDF season and split policies (0.976737ms)
+✔ DSS roster era observations skip partial rosters unless explicitly included (1.23294ms)
+✔ DSS roster era builder splits on roster and coach changes while carrying ledger ids (1.060676ms)
+✔ rosterBasisByTeam returns sourced for latest complete five-role roster (1.30286ms)
+✔ latestRosterByTeam chooses the newest roster by date and stable id order (0.206689ms)
+✔ partial-only sourced appearances become assumed-continuous (0.138449ms)
+✔ a later partial observation does not erase the latest complete lineup (0.248799ms)
+✔ partial observations update known roles without dropping the last complete roles (0.270292ms)
+✔ matches without sourced roster rows leave teams unknown (0.161713ms)
+✔ rosterContinuity uses role value instead of raw returning-player count (0.382059ms)
+✔ rosterContinuity skips missing or partial lineups (0.112693ms)
+▶ malformed event-detail JSON has stable warnings without retries and later details continue
+  ▶ HTML
+    ✔ node (161.89283ms)
+    ﹣ rust (0.647702ms) # SKIP
+  ✔ HTML (170.384094ms)
+  ▶ truncated
+    ✔ node (140.851034ms)
+    ﹣ rust (0.183941ms) # SKIP
+  ✔ truncated (143.550339ms)
+  ▶ invalid token
+    ✔ node (147.80225ms)
+    ﹣ rust (0.199972ms) # SKIP
+  ✔ invalid token (148.855457ms)
+  ▶ later valid detail
+    ✔ node (433.776959ms)
+    ﹣ rust (0.24421ms) # SKIP
+  ✔ later valid detail (435.171923ms)
+✔ malformed event-detail JSON has stable warnings without retries and later details continue (909.498288ms)
+﹣ native fetch matches Node files and manifests on recorded paginated provider responses (0.179598ms) # SKIP
+﹣ native fetch preserves optional and required failure receipts and network telemetry (0.083833ms) # SKIP
+﹣ native fetch preserves malformed compressed body failures without retries or child artifacts (0.065057ms) # SKIP
+▶ failure headers are classified without waiting for Oracle or LoL bodies
+  ▶ oracle HTTP 404
+    ﹣ native CLI matches the header reference (0.248255ms) # SKIP
+  ✔ oracle HTTP 404 (25.044639ms)
+  ▶ oracle HTTP 429
+    ﹣ native CLI matches the header reference (0.588876ms) # SKIP
+  ✔ oracle HTTP 429 (536.229206ms)
+  ▶ oracle HTTP 503
+    ﹣ native CLI matches the header reference (0.158056ms) # SKIP
+  ✔ oracle HTTP 503 (473.568424ms)
+  ▶ lolesports HTTP 404
+    ﹣ native CLI matches the header reference (0.17398ms) # SKIP
+  ✔ lolesports HTTP 404 (4.360093ms)
+  ▶ lolesports HTTP 429
+    ﹣ native CLI matches the header reference (0.739314ms) # SKIP
+  ✔ lolesports HTTP 429 (724.448178ms)
+  ▶ lolesports HTTP 503
+    ﹣ native CLI matches the header reference (0.433269ms) # SKIP
+  ✔ lolesports HTTP 503 (456.051878ms)
+✔ failure headers are classified without waiting for Oracle or LoL bodies (2226.674323ms)
+✔ isolated raw verifier refuses input filename collisions before starting either worker (22.337184ms)
+✔ raw object parity compares unique semantic objects by digest rather than index (178.915167ms)
+﹣ Rust raw seam matches Node baseline, mutation partitions, restore and rebaseline (0.248407ms) # SKIP
+﹣ native storage matches Node immutable bytes and shares MinIO lease fencing (0.817129ms) # SKIP
+﹣ native publication reader matches Node against MinIO for authority and declared closure failures (0.12596ms) # SKIP
+﹣ native raw graph verifier matches Node before publication against MinIO (0.165464ms) # SKIP
+﹣ native state authority verifier matches Node integrity against MinIO (0.104671ms) # SKIP
+﹣ native public archive reader matches Node content and fresh transport proofs (0.093301ms) # SKIP
+﹣ native supplied public directory expansion matches Node without publication authority (0.128488ms) # SKIP
+﹣ native supplied public generation structure preserves Node contracts with an explicit date gate (0.101327ms) # SKIP
+✔ streaming S3 puts create a fresh body after SlowDown (2.253598ms)
+✔ S3 put retry rejects hard client errors without sleeping (0.653856ms)
+✔ S3 retry classification covers throttling and server errors (0.179891ms)
+✔ LCP Wildcard playoffs do not enter the flagship LCP rating universe (8.960524ms)
+✔ flagship LCP games still enter the published rating universe (1.662847ms)
+✔ a cancelled view does not cancel a shared preload or its next consumer (1.862039ms)
+✔ failed validation leaves the next request free to retry (0.373886ms)
+✔ the byte limit evicts old data and retains recently visited objects (0.835846ms)
+✔ the entry limit bounds caches of small archive directory objects (2.230868ms)
+✔ homepage prerender includes ranking snapshot content from public artifacts (22.826962ms)
+✔ Tailwind scans utilities owned only by the prerender source file (1.941891ms)
+✔ visible startup stays the same across ranking refreshes and missing data (0.980357ms)
+✔ non-ranking manifest errors stay in the app shell (0.155751ms)
+✔ canonical resolver represents a trusted Bo2 tie as a completed neutral series (2.620872ms)
+✔ score inference overrides an untrusted playoff Bo5 fallback (0.521183ms)
+✔ fallback Bo1 rows stay grouped so source scores can prove a series format (0.375793ms)
+✔ an ambiguous fallback 1-1 group is not treated as a completed Bo2 (0.264116ms)
+✔ a fallback 2-2 prefix cannot become a completed Bo3 (0.359576ms)
+✔ a trusted format with an impossible winning score stays unknown (0.728179ms)
+✔ canonical resolver distinguishes completed Bo3 and Bo5 scores from incomplete series (0.454824ms)
+✔ official ids separate same-team same-day series and orientation swaps stay canonical (0.333186ms)
+✔ one canonical series tolerates swapped raw sides and known team aliases (0.364613ms)
+✔ interleaved provider rows and every row permutation resolve identically (12.842949ms)
+✔ createPlayerDirectory flattens sourced players and joins region/league from standings (4.08705ms)
+✔ createPlayerDirectory groups recent player game rows into match series (0.540489ms)
+✔ public team standing records count matches instead of source game rows (1.673155ms)
+✔ public team recent match bestOf follows the observed decisive score (0.50681ms)
+✔ public team standing records infer match series when source rows say bo1 (0.604799ms)
+✔ public compact standings retain a paginatable recent match window (1.032616ms)
+✔ event-scoped public standings keep same-day Bo-series siblings across source event labels (42.277283ms)
+✔ createPlayerDirectory credits season rows to the primary scoped team (0.514141ms)
+✔ createPlayerDirectory reuses full-season player rows for checkpoint views (0.853617ms)
+✔ scoped player directories retain every rated team player without a global top-N cutoff (1.301238ms)
+✔ createPlayerDirectory gates low-sample sourced players from ranked public rows (0.488545ms)
+✔ createPlayerDirectory gates unanchored-league teams from ranked public player rows (0.349601ms)
+✔ createTeamHistory reports omitted standings with fewer than two points (1.601893ms)
+✔ createTeamHistory publishes match-level history points for multi-game series (0.55399ms)
+✔ createTeamHistory keeps independent official same-day matches separate (0.750884ms)
+✔ createTeamHistory preserves the final atomic delta for model-correct series rows (0.632116ms)
+✔ createTeamHistory final point matches published standing rating (0.467906ms)
+✔ createTeamHistory skips unresolved tied match groups (0.499971ms)
+✔ createTeamHistoryArtifacts slices default and season scopes into indexed shards (30.821401ms)
+✔ tournament movement artifacts merge aliases and preserve common global boundaries (17.195213ms)
+✔ season checkpoint scopes publish movement and companion history artifacts (31.007248ms)
+✔ season checkpoint boundaries ignore domestic Road to MSI and Esports World Cup labels (10.652567ms)
+✔ season checkpoint scopes publish an ongoing split after the previous boundary (13.541052ms)
+✔ season checkpoint remains ongoing while its boundary tournament is active (9.552619ms)
+✔ createRegionHistory publishes first-class region timelines from league-strength history (14.074428ms)
+✔ createRegionHistory context only describes leagues used for region power scores (0.410201ms)
+✔ generated snapshots carry model and source provenance (13.423817ms)
+✔ event filters preserve the global rating scale instead of rebuilding mini-models (13.433453ms)
+✔ scoped snapshots carry only filter-relevant league strength history (10.826844ms)
+✔ region filters list teams from that region instead of their opponents (12.265153ms)
+✔ region filtered standings recompute movement against scoped ranks (5.612694ms)
+✔ published rating universe excludes APAC feeder league teams from rating scopes (2.772109ms)
+✔ region filters use dated side regions instead of current global team identity (4.087732ms)
+✔ region filters do not assign unknown competition-only teams from event region alone (1.639326ms)
+✔ season filters publish calendar-aligned season-end standings instead of current global standings (16.258956ms)
+✔ source seasons without calendar-aligned matches do not publish empty year scopes (7.337133ms)
+✔ season scoped standings use league observed inside that season (4.87211ms)
+✔ empty usable inputs create a no-data snapshot instead of seeded rankings (0.4368ms)
+✔ scheduled public summaries omit standing histories and seed-source rows (12.906552ms)
+✔ standing eligibility uses match-level history instead of raw game rows (22.774075ms)
+✔ scheduled public snapshots publish sourced player rating proof without shipping summary players (10.533908ms)
+✔ streamed state identity preserves the existing canonical byte contract (24.293746ms)
+✔ state identity detects mutations at both sides of a flush boundary (19.490516ms)
+✖ chronological 25-series partitions keep latest appends on the tail while catalog lookup stays newest-first (78.444451ms)
+✖ New Year preserves prior pages, keeps a cross-year series atomic, and a corrected opening date moves its partition (14.456823ms)
+10,000 trials in 1211 ms
+✔ a drawn team that would break a restriction, now or later in the draw, moves to the next open slot (2.906853ms)
+✔ the rulebook draw always gives a legal Round 1 for any pot order (67.440966ms)
+✔ every trial sends exactly eight teams through, and a group gets a team out at least as often as its best member (406.93769ms)
+✔ a team that wins every match always advances, and one that loses every match never does (130.426916ms)
+✔ picked results count as played, whatever the ratings say (6.283414ms)
+✔ the same seed gives the same odds, and ten thousand trials stay fast (2337.410233ms)
+✔ each 2026 Play-In team names its own Play-In region, so the preview can show it by name (1.726183ms)
+✔ round one pairs matched pools across regions, including the chosen Play-In region (1.617664ms)
+✔ without a Play-In region, a round one draw stays valid for every possible region (3.338251ms)
+✔ seed slots name the confirmed teams, while saved scenarios keep naming the slots (0.423296ms)
+✔ the bracket groups match every round of a played-out scenario (10.069244ms)
+✔ a played-out scenario follows the Swiss format and passes the sourced rules validator (7.58587ms)
+✔ changing an earlier pick drops later draws that no longer fit and keeps earlier picks (1.838558ms)
+✔ opponent swaps stay inside the record bucket and never create an unwaived rematch (1.44713ms)
+✔ a record bucket with no draw free of rematches allows the officials waiver and fills it last (0.411031ms)
+✔ the live baseline uses published draws and results, and preview picks never replace them (2.109751ms)
+✔ a round with fewer published matches than its size keeps the earlier live rounds (0.531378ms)
+✔ saved live picks name the same teams after the schedule moves a Round 1 match (1.173921ms)
+✔ choices survive the page address and ignore malformed input (6.355478ms)
+✔ every published team has audited branding metadata (16.132326ms)
+✔ source-provided shorthand replaces generated acronyms (0.615504ms)
+✔ published team marks stay within the icon image budget (9.214445ms)
+✔ public artifacts receive audited shorthand at the read boundary (1.311513ms)
+✔ chart point conversion expands compact model context for tooltip display (1.877644ms)
+✔ daily chart aggregation preserves same-day matches and reconciles visible movement (1.050963ms)
+✔ daily chart aggregation contains match results only (0.235983ms)
+✔ tournament boundaries remain annotations instead of counted match results (0.374631ms)
+✔ rank chart keeps Power match annotations separate from unchanged rank (0.47699ms)
+✔ tournament rank movement never reconciles Power attribution as rank positions (0.386622ms)
+✔ loading another team does not renumber published historical ranks (0.379175ms)
+✔ rank history uses the last recorded rank of each day and skips invalid ranks (0.268785ms)
+✔ a wordmark wider than two to one falls back to the team code (0.905868ms)
+✔ an image with no visible pixels falls back to the team code (0.199224ms)
+✔ a near-black monochrome logo is inverted for the dark tile (0.168977ms)
+✔ coloured, light and mixed logos are shown as published (0.154644ms)
+✔ mergeTeamProfiles does not let later unknown profiles replace useful league identity (1.50969ms)
+✔ competition taxonomy keeps home-league fallback and event tier policy centralized (0.997964ms)
+✔ tournament placeholders use prior domestic evidence without future leakage or replacing explicit leagues (0.711774ms)
+✔ deriveTeamProfilesFromMatches prefers dominant non-competition home league over file order (0.521405ms)
+✔ deriveTeamProfilesFromMatches follows latest explicit home league for moved teams (0.36857ms)
+✔ deriveTeamProfilesFromMatches ignores later unknown placeholders from competition rows (0.209133ms)
+✔ deriveTeamProfilesFromMatches ignores generic LTA rows after subleague observations (0.263164ms)
+✔ deriveTeamProfilesFromMatches uses sourced domestic home league before static known identities (0.240017ms)
+✔ deriveTeamProfilesFromMatches uses known identities when source has only competition rows (0.318938ms)
+✔ timeline compaction groups adjacent series and shapes source provenance (1.926213ms)
+✔ a double-elimination playoff gets upper and lower brackets, byes and a grand final from team records (4.485736ms)
+✔ a beaten team meeting a fresh lower-bracket seed plays in the lower bracket (0.650297ms)
+✔ a named round robin opening a knockout stays in the upper bracket (0.548146ms)
+✔ Play-In losses do not move playoff series into the lower bracket (0.423702ms)
+✔ Swiss rounds before a double-elimination playoff with an unbeaten-versus-unbeaten final (1.504662ms)
+✔ an undrawn double-elimination bracket places TBD series by tab order and team counts (0.471189ms)
+✔ a knockout without losers rounds is single elimination with paired feeders (0.407226ms)
+✔ a third-place match sits under the final instead of forming a lower bracket (0.57061ms)
+✔ later knockout tabs without start times keep play order (0.586691ms)
+✔ decided series fill TBD slots unless already linked to this round (0.527282ms)
+✔ an undrawn 16-team Swiss stage gets its record pools from the round sizes (0.912474ms)
+✔ a Swiss stage with results groups series by record and marks who advanced (0.738893ms)
+✔ round-robin days become groups of teams that only play each other (0.797809ms)
+✔ named group tabs stay separate groups even when teams meet across them (0.353457ms)
+✔ "Group Stage" tabs are not group names, so their pods come from who plays whom (1.528916ms)
+✔ a third-place match renders under the final of a single-elimination bracket (153.360867ms)
+✔ a series the source ended without a confirmed result says so instead of showing a start time (3.158147ms)
+✔ an unknown series without a terminal source state keeps its scheduled time (2.472228ms)
+✔ discovers an allowed upcoming event without rated games or a manually supplied event ID (2.530789ms)
+✔ competition allowlist covers four domestic and three international families (0.354468ms)
+✔ accepts only HTTPS VOD destinations and formats Vienna daylight changes (15.587476ms)
+✔ preserves source state, corrections, TBD slots and confirmed terminal status (0.870892ms)
+✔ withholds identifier-less rows and recovers result evidence from event details (0.33885ms)
+✔ collector lock rejects a live owner and reclaims a dead local owner (24.504709ms)
+✔ concurrent stale-lock recovery preserves the winning collector lock (9.2143ms)
+✔ reclaims an orphan recovery claim with stale primary lock (8.564969ms)
+✔ reclaims an orphan recovery claim with absent primary lock (6.418696ms)
+✔ concurrent orphan-claim recovery grants only one collector ownership (10.662391ms)
+✔ unreadable primary owner metadata cannot be reclaimed as an orphan (3.467068ms)
+✔ unreadable recovery owner metadata cannot be reclaimed as an orphan (2.209833ms)
+✔ invalid prior feed records failed health without replacing its bytes (468.909506ms)
+✔ partial and contradictory observations cannot replace complete last-good state (0.636247ms)
+✔ collector follows both cursors and withholds a capped incomplete read (3.766071ms)
+✔ malformed present page cursors cannot publish a truncated feed over last-good (48.002839ms)
+✔ collector retries 429 with the shared provider helper and rejects malformed coverage (268.384686ms)
+✔ invalid times in allowed cancelled or postponed source rows prevent a complete replacement (20.569501ms)
+✔ malformed schedule rows cannot replace a prior feed after collection (10.181622ms)
+✔ missing league identity and accepted-row fields retain the prior feed (30.130353ms)
+✔ mismatched or absent detail event IDs retain the prior feed (5.221793ms)
+✔ a rolling coverage window is published even when event rows are unchanged (2.831867ms)
+✔ coverage bounds roll by UTC day rather than every unchanged poll (1.227782ms)
+✔ durable feed preserves last good content and publishes corrections under a separate lease (18.421224ms)
+✔ a second host fences a suspended publisher before and during final CAS (6.726746ms)
+✔ corrupt immutable content cannot become or remain an accepted feed (3.366271ms)
+✔ forecast matches public model for decisive formats, swapped teams and an explicit published scale (9.678301ms)
+✔ unknown and tie-capable formats, absent source IDs and unmapped aliases fail closed (0.879399ms)
+✔ receipt is pinned before play, remains frozen across model revisions and rejects post-start publication (1.24248ms)
+✔ pinning waits for source-reported play and chooses the latest actual publication instant (0.631499ms)
+✔ a stalled optional forecast ledger read times out (11.167695ms)
+✔ score-conditioned odds use frozen game probability and reject impossible or changed series (0.896066ms)
+✔ participant and event corrections cannot relabel a pinned forecast (0.480699ms)
+✔ played-game evidence and corrected earlier start prevent pre-match labeling (0.398806ms)
+✔ receipt parser rejects backdated, mismatched and non-upcoming persisted artifacts (1.176134ms)
+✔ Bo1 score conditioning requires one integer completed-game win (0.383504ms)
+✔ offline store writes each receipt and pin once without overwriting a revision (236.463468ms)
+✔ public delivery observer proves exact pre-schedule bytes without certifying actual play (249.953147ms)
+✔ returns null when there is not enough history to chart (0.980761ms)
+✔ reports net change, peak, trough, and rank climb (0.36741ms)
+✔ summary describes the climb, rank gain, and form; driver is exposed separately (0.345456ms)
+✔ leads with the slide when a team has fallen off its peak (0.166497ms)
+✔ Vite dev server prefers a local tournament feed and otherwise serves both paths live (518.022802ms)
+✔ neutral win probability is symmetric for equal ratings (1.2113ms)
+✔ uncertainty shrinks a rating edge toward fifty percent (0.241539ms)
+✔ normal public-board uncertainty keeps favorites meaningfully separated (0.139625ms)
+✔ Bo2 prediction separates decisive win probability from expected series points (0.195714ms)
+✔ series swing states price current Bo3 and Bo5 scores (0.350528ms)
+✔ complete observed group advances two without claiming a historical forecast (1.966148ms)
+✔ missing evidence, wrong season and incomplete group return unsupported (0.334567ms)
+✔ entrant pools, regions and game identity must match the observed format (0.424409ms)
+✔ unresolved qualification tie is unsupported, including with all scheduled games (0.228284ms)
+✔ symmetric eight-team bracket enumerates 128 fixed paths and conserves cumulative/finish slots (12.830256ms)
+✔ independent partial rounds stay fixed and equivalent reordered/swapped observations replay identically (4.413969ms)
+✔ semifinalists follow observed bracket links with no reseeding (0.700936ms)
+✔ completed bracket is deterministic without model inputs; eliminated ratings are not needed (0.411684ms)
+✔ asymmetric exact title odds increase with strength and final odds equal the #46 provider (2.936621ms)
+✔ uncertified rules, malformed qualifier records and illegal or missing draws fail closed (0.426495ms)
+✔ premature or reseeded results, impossible scores, duplicate IDs and future results fail closed (0.543974ms)
+✔ missing or incompatible ratings and future snapshot provenance yield no partial forecast (0.911484ms)
+✔ overflowing provider calculations yield no partial knockout forecast (0.408108ms)
+✔ complete symmetric Play-In enumerates 64 paths and conserves one Swiss/each finish slot (10.102447ms)
+✔ completed opening winners have 3/8 Swiss odds and losers 1/8 without a final reset (1.190586ms)
+✔ partial independent rounds replay, reordered observations and swapped score orientation are equivalent (0.973276ms)
+✔ final loser is eliminated even with one match loss and terminal state requires no model (0.461923ms)
+✔ a stronger team improves exact odds, and a fixed final uses the #46 Bo5 probability unchanged (3.860186ms)
+✔ rules, entrant seeds, opening draw and distinct tagged observations fail closed (0.390442ms)
+✔ premature downstream results, reseeding, duplicates, invalid scores and future observations are rejected (0.272181ms)
+✔ missing/future/incompatible frozen inputs never yield partial or substitute odds (0.707221ms)
+✔ an accepted finite rating scale that overflows provider calculations cannot yield supported NaN odds (0.529858ms)
+✔ an empty bracket may omit result evidence but cannot echo explicitly invalid result provenance (0.377926ms)
+✔ snapshot data cannot postdate publication, including when both dates precede the state cutoff (2.118003ms)
+✔ observed bracket keeps quarterfinal slots and reports forecasts unsupported (1.972705ms)
+✔ fixed links carry observed winners through semis and final without re-seeding (0.947021ms)
+✔ draw evidence, Swiss completion, exact qualifiers and opposite halves are required (0.57622ms)
+✔ partial rounds and invalid results fail instead of advancing a bracket (0.483038ms)
+✔ 2025 observed Swiss round 1 replays without forecasting an unobserved draw (4.023129ms)
+✔ missing entrant evidence and uncertified seasons return explicit unsupported states (0.347801ms)
+✔ Swiss rejects incomplete, duplicate, incorrect-tier, same-region and contradictory results (0.647479ms)
+✔ later Swiss rounds require equal records and never replay an opponent (0.483971ms)
+✔ five observed rounds finish with exactly eight advancers and no active team (0.576027ms)
+✔ 2026 Swiss reference replay pins draws, Bo changes and 2/3/3 qualifier records (5.423078ms)
+✔ Swiss rejects corrupt draws, missing prior rounds, future and nonterminal observations promptly (4.326855ms)
+✔ pre-event retains all 19 international entrants, exact Play-In odds and precise later-stage unavailability (11.516819ms)
+✔ direct qualification requires its own evidence before marking reached Swiss, even before a Swiss draw (1.623744ms)
+✔ final observed Swiss draw composes with random knockout and fixed bracket; seed pins counts and frozen inputs (989.545065ms)
+✔ known knockout agrees with exact enumeration; completed event uses no present-day model (15.696373ms)
+✔ mid-event observations remain fixed and conflicting stage handoffs fail closed (83.45581ms)
+✔ unsupported model never yields partial totals; future basis, missing active team and invalid options fail safely (5.745261ms)
+✔ bounded computation yields and aborts before publishing; sampled zero has a positive upper error bound (21.206351ms)
+✔ knockout draw has the 36 equally weighted bracket outcomes implied by unrestricted §4.3.4 selection (127.930483ms)
+✔ 2022 observed groups keep historical labels and model unavailability; boundary ties stay explicit (0.851577ms)
+✔ cancel invalidates saved old handlers before terminating the owned worker (2.739355ms)
+✔ companion schema rejects malformed JSON shapes before engine code; feed corrections change coherence key (29.022547ms)
+✔ a matching content key cannot hide omitted or conflicting source results, or a live series (2.842432ms)
+✔ pre-Swiss companions require direct qualifier provenance and cannot label synthetic direct evidence as sourced (2.214278ms)
+✔ terminal source states without results stay in the schedule but cannot become unplayed Worlds simulations (4.845196ms)
+✔ cancelled series block unsupported advancement while postponed, delayed and upcoming schedules remain supported (2.24089ms)
+✔ a coherent companion cannot complete a scheduled match that the feed still marks unresolved (1.733055ms)
+✔ historical canonical game IDs reconcile schedule participants, orientation, completion, format and winner evidence (4.891958ms)
+✔ historical reconciliation preserves bounded windows and unrelated stages but never maps the two group legs by pair (1.855422ms)
+ℹ tests 1236
+ℹ suites 0
+ℹ pass 1208
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 21
+ℹ todo 0
+ℹ duration_ms 218590.300739
+
+✖ failing tests:
+
+test at tests/conditionalPowerReplay.test.ts:1:7256
+✖ fresh production pins reject historical series aliases shared by distinct canonical owners (100.215449ms)
+  AssertionError [ERR_ASSERTION]: normalized roots across source match and source game namespaces
+  
+  true !== false
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/conditionalPowerReplay.test.ts:167:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/conditionalPowerReplay.test.ts:1:45175
+✖ hypothetical game and series identities cannot alias the historical prefix (129.924179ms)
+  AssertionError [ERR_ASSERTION]: resolved source series alias
+  + actual - expected
+  
+  + 'ready'
+  - 'unavailable'
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/conditionalPowerReplay.test.ts:904:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'ready',
+    expected: 'unavailable',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/conditionalPowerReplayBasis.test.ts:1:19319
+✖ the corpus adapter rejects duplicate historical series aliases even when every game identity is unique (34.602544ms)
+  AssertionError [ERR_ASSERTION]: official ID reused as a normalized source match root
+  + actual - expected
+  
+  + 'ready'
+  - 'unavailable'
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/conditionalPowerReplayBasis.test.ts:388:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'ready',
+    expected: 'unavailable',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/incrementalRankingIntegration.test.ts:1:2080
+✖ releasing import audit rows before snapshot preserves roster/player public semantics (324.431176ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'bd576291c3b6ae3ad1109ea784529949df21f162237bff7d8510de0d7a3226d3'
+  - 'e1fdb414891df185ba36528bb01aaedd389fdd98afdf1c2edb0b6348ec6190aa'
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/incrementalRankingIntegration.test.ts:83:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'bd576291c3b6ae3ad1109ea784529949df21f162237bff7d8510de0d7a3226d3',
+    expected: 'e1fdb414891df185ba36528bb01aaedd389fdd98afdf1c2edb0b6348ec6190aa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/rollingMovement.test.ts:1:3363
+✖ rolling summaries cover upset and evidence beyond the 25 recent-match display cap (39.06055ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  22 !== 27
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/rollingMovement.test.ts:90:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 22,
+    expected: 27,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/stableMatchPagination.test.ts:1:398
+✖ chronological 25-series partitions keep latest appends on the tail while catalog lookup stays newest-first (78.444451ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 2026000001
+  - 2026000002
+             ^
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/stableMatchPagination.test.ts:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2026000001,
+    expected: 2026000002,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/stableMatchPagination.test.ts:1:2612
+✖ New Year preserves prior pages, keeps a cross-year series atomic, and a corrected opening date moves its partition (14.456823ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  ... Skipped lines
+  
+    {
+      artifactKind: 'match-history-page',
+      artifactMeta: {
+        generatedAt: '2026-02-01T00:00:00.000Z',
+        modelConfigHash: 'fnv1a-5eebb6ce',
+  ...
+      },
+  +   gameCount: 3,
+  -   gameCount: 2,
+      generatedAt: '2026-02-01T00:00:00.000Z',
+      matches: [
+        {
+          bestOf: 1,
+          date: '2025-12-31',
+  ...
+          impact: {
+  +         unit: 'held'
+  +       },
+  +       league: 'LCK',
+  +       patch: '26.1',
+  +       phase: 'Regular season',
+  +       region: 'LCK',
+  +       seriesId: 'official-match\x00cross-year',
+  +       seriesState: 'unknown',
+  +       seriesWinsA: 1,
+  +       seriesWinsB: 1,
+  +       source: {
+  +         gameId: 'game-2',
+  +         matchId: 'series-2',
+  +         provider: 'oracles-elixir'
+  +       },
+  +       teamA: {
+  +         code: 'ALP',
+  +         id: 'team:alp:alpha',
+  +         name: 'Alpha'
+  +       },
+  +       teamB: {
+  +         code: 'BET',
+  +         id: 'team:bet:beta',
+  +         name: 'Beta'
+  +       },
+  +       winnerId: 'team:bet:beta'
+  +     },
+  +     {
+  +       bestOf: 1,
+  +       date: '2026-01-02',
+  +       datetimeUtc: '2026-01-03T12:00:00.000Z',
+  +       event: 'LCK 2026',
+  +       gameNumber: 3,
+  +       id: 'game-3',
+  +       impact: {
+            eventWeight: 1,
+            expectedTeamA: 0.537,
+            teamA: -3,
+            teamB: 3,
+            unit: 'series-applied'
+  ...
+          seriesState: 'unknown',
+  +       seriesWinsA: 2,
+  -       seriesWinsA: 1,
+          seriesWinsB: 1,
+          source: {
+  +         gameId: 'game-3',
+  +         matchId: 'series-3',
+  -         gameId: 'game-2',
+  -         matchId: 'series-2',
+            provider: 'oracles-elixir'
+          },
+          teamA: {
+            code: 'ALP',
+            id: 'team:alp:alpha',
+  ...
+          },
+  +       winnerId: 'team:alp:alpha'
+  -       winnerId: 'team:bet:beta'
+        }
+      ],
+      modelConfigHash: 'fnv1a-5eebb6ce',
+      modelVersion: 'transparent-power-index-v0.2.0',
+      page: 2025000001,
+  
+      at TestContext.<anonymous> (/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/tests/stableMatchPagination.test.ts:92:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { artifactKind: 'match-history-page', schemaVersion: 24, artifactMeta: { schemaVersion: 24, runId: 'run_20260201000000_transparent-power-index-v0-2-0_fnv1a-5eebb6ce', generatedAt: '2026-02-01T00:00:00.000Z', modelVersion: 'transparent-power-index-v0.2.0', modelConfigHash: 'fnv1a-5eebb6ce' }, generatedAt: '2026-02-01T00:00:00.000Z', modelVersion: 'transparent-power-index-v0.2.0', modelConfigHash: 'fnv1a-5eebb6ce', filter: { season: 'All', event: 'All', region: 'All' }, page: 2025000001, storageYear: '2025', seriesCount: 1, gameCount: 3, matches: [ [Object], [Object], [Object] ] },
+    expected: { artifactKind: 'match-history-page', schemaVersion: 24, artifactMeta: { schemaVersion: 24, runId: 'run_20260201000000_transparent-power-index-v0-2-0_fnv1a-5eebb6ce', generatedAt: '2026-02-01T00:00:00.000Z', modelVersion: 'transparent-power-index-v0.2.0', modelConfigHash: 'fnv1a-5eebb6ce' }, generatedAt: '2026-02-01T00:00:00.000Z', modelVersion: 'transparent-power-index-v0.2.0', modelConfigHash: 'fnv1a-5eebb6ce', filter: { season: 'All', event: 'All', region: 'All' }, page: 2025000001, storageYear: '2025', seriesCount: 1, gameCount: 2, matches: [ [Object], [Object] ] },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+[ELIFECYCLE] Test failed. See above for more details.
+[ELIFECYCLE] Command failed with exit code 1.

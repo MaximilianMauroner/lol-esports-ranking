@@ -1,0 +1,35 @@
+{
+  "games": 2945,
+  "series": 1192,
+  "gameMatchBasis": {
+    "source-game-id": 2748,
+    "unique-original-clock-and-teams": 103,
+    "unresolved-game": 51,
+    "unique-date-teams-source-game-number": 24,
+    "unique-clock-and-teams": 19
+  },
+  "seriesStatus": {
+    "checked": 905,
+    "different": 287
+  },
+  "seriesIndependence": {
+    "second-provider-series": 1182,
+    "same-provider-only": 10
+  },
+  "issueCounts": {
+    "score": 124,
+    "stage": 120,
+    "best-of": 86,
+    "league": 6,
+    "duplicate-game": 139,
+    "patch": 11,
+    "teams-source-conflict": 3,
+    "qualifier-as-main-event": 3
+  },
+  "cargoRiotScoreAgreements": 933,
+  "uniqueCargoRiotScoreAgreements": 867,
+  "duplicateReferenceGames": 80,
+  "duplicateExtraRows": 80,
+  "leaguepediaGamesWithRiotSeriesReference": 95,
+  "leaguepediaGamesWithoutSecondProvider": 37
+}
