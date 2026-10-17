@@ -150,7 +150,11 @@ async fn dispatch(
 ) -> Result<Response<Body>, Infallible> {
     let head = request.method() == hyper::Method::HEAD;
     let close = !request.body().is_end_stream();
-    let path = request.uri().path();
+    let target = delivery::RequestTarget::parse(request.uri());
+    let path = target
+        .as_ref()
+        .map(|target| target.path.as_str())
+        .unwrap_or("");
     let mut response = if path == "/api/live" {
         json_response(
             StatusCode::OK,
@@ -175,6 +179,8 @@ async fn dispatch(
             json!({"ok": false, "error": "Method not allowed"}),
             head,
         )
+    } else if path.starts_with("/data/") {
+        state.delivery.respond(target.as_ref().unwrap(), head).await
     } else {
         json_response(
             StatusCode::NOT_FOUND,
