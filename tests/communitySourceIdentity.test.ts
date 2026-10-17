@@ -4,6 +4,7 @@ import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
 import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources.ts'
 import { resolveCanonicalSeries } from '../src/lib/seriesResolver.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
 
 const oracleCsv = [
   'gameid,date,year,league,split,playoffs,game,patch,position,side,teamname,result,kills,totalgold,gamelength',
@@ -53,6 +54,16 @@ test('Oracle imports only integer game slots from one through five', () => {
     const [match] = importOraclesElixirCsv(csv).matches
     assert.equal(match.gameNumber, /^[1-5]$/.test(raw) ? Number(raw) : undefined, raw)
   }
+})
+
+test('public history preserves the declared Oracle game number for an unlinked game', () => {
+  const imported = importOraclesElixirCsv(oracleCsv)
+  const data = createStaticRankingData({
+    matches: imported.matches.slice(1), teams: imported.teams, rosters: {},
+    dataMode: 'scheduled-public-data', generatedAt: '2026-01-16T00:00:00.000Z',
+  })
+  const pages = Object.values(createMatchHistoryArtifacts(data).pages[data.defaultSnapshotKey])
+  assert.equal(pages.flatMap((page) => page.matches)[0]?.gameNumber, 2)
 })
 
 test('declared slots require unique candidates in both source directions', () => {
