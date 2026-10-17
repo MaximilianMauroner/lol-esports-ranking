@@ -48,7 +48,7 @@ jobs:
 
       - name: Classify affected paths
         id: changes
-        run: node scripts/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
+        run: node tools/dev/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
 
       - name: Verify
         run: pnpm run verify
@@ -101,7 +101,7 @@ jobs:
       - name: Build CLI
         run: cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --locked
       - name: Live model config parity
-        run: pnpm exec tsx --tsconfig tsconfig.app.json scripts/check-rust-parity.ts
+        run: pnpm exec tsx --tsconfig tsconfig.app.json tools/audit/check-rust-parity.ts
       - name: Rust raw seam integration
         env:
           RANKING_RAW_SOURCE_WORKER: rust
@@ -190,4 +190,4 @@ jobs:
         run: |
           printf '#!/bin/sh\nexec docker run --rm ranking-refresh "$@"\n' > /tmp/ranking-refresh-image
           chmod +x /tmp/ranking-refresh-image
-          pnpm exec tsx --tsconfig tsconfig.app.json scripts/check-rust-parity.ts /tmp/ranking-refresh-image
+          pnpm exec tsx --tsconfig tsconfig.app.json tools/audit/check-rust-parity.ts /tmp/ranking-refresh-image

@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 
 const exec = promisify(execFile)
 const helperUrl = new URL('../scripts/reference-public-data.mjs', import.meta.url).href
-const runnerPath = fileURLToPath(new URL('../scripts/run-tests.mjs', import.meta.url))
+const runnerPath = fileURLToPath(new URL('../tools/dev/run-tests.mjs', import.meta.url))
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 
 async function probe(publicDir?: string, ensure = true) {

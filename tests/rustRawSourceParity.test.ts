@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
-import { assertRawSourceObjectsMatch, verifyRustRawSource } from '../scripts/verify-rust-raw-source.ts'
+import { assertRawSourceObjectsMatch, verifyRustRawSource } from '../tools/audit/verify-rust-raw-source.ts'
 import { hydrateFileBackedRawSourceGeneration, type PreparedRawSourceGeneration } from '../scripts/raw-source-generation.mjs'
 import { type RawSourceReceipt } from '../scripts/raw-source-storage.mjs'
 

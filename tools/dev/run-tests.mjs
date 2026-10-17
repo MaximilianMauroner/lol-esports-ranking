@@ -1,21 +1,10 @@
 import { globSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { ensureReferencePublicData } from './reference-public-data.mjs'
+import { ensureReferencePublicData } from '../../scripts/reference-public-data.mjs'
 
 await ensureReferencePublicData()
 
-const browserJourneys = [
-  'tests/rankingArchiveBrowser.test.ts',
-  'tests/rankingBoardAddressBrowser.test.ts',
-  'tests/matchPagePrefetchBrowser.test.ts',
-  'tests/matchesAddressBrowser.test.ts',
-  'tests/rankingTournamentBoardBrowser.test.ts',
-  'tests/tournamentBrowser.test.ts',
-  'tests/loadingStateBrowser.test.ts',
-  'tests/tournamentForecastBrowser.test.ts',
-  'tests/worldsSimulationBrowser.test.ts',
-  'tests/swissPreviewBrowser.test.ts',
-]
+const browserJourneys = [...globSync('tests/**/*Browser.test.ts')].sort()
 const browserSet = new Set(browserJourneys)
 const isolatedTests = ['tests/ciAffectedPaths.test.mjs']
 const otherTests = [...globSync('tests/**/*.test.ts'), ...globSync('tests/**/*.test.mjs')].filter((path) => !browserSet.has(path) && !isolatedTests.includes(path)).sort()

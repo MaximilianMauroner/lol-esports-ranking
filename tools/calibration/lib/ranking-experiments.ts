@@ -1,4 +1,4 @@
-import { chronologicalCohorts, seededRandom, summarizeEvaluation, type EvaluationExport } from '../../src/lib/rankingEvaluation'
+import { chronologicalCohorts, seededRandom, summarizeEvaluation, type EvaluationExport } from '../../../src/lib/rankingEvaluation'
 
 export const searchParameters = [
   { file: 'src/lib/modelConfig.ts', key: 'recencyHalfLifeDays', group: 'temporal', low: 240, high: 720 },

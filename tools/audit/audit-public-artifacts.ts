@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { prepareSemanticArtifact } from '../../scripts/public-artifact-storage.mjs'
 
 export async function auditPublicArtifacts(root: string) {
   const artifacts: Array<{ path: string; family: string; year: string; logicalBytes: number; storedBytes: number; nodeCount: number; largestNodeBytes: number }> = []

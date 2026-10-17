@@ -6,9 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.agents/artifacts/**']),
   {
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'tools/**/*.mjs'],
     extends: [
       js.configs.recommended,
     ],
@@ -40,7 +40,7 @@ export default defineConfig([
     // Data order guard: published artifacts, state, and hashes must not depend
     // on ICU collation (localeCompare, Intl.Collator) or the process locale.
     // Views may sort for display.
-    files: ['src/lib/**/*.{ts,mts,mjs,js}', 'scripts/**/*.{ts,mts,mjs,js}'],
+    files: ['src/lib/**/*.{ts,mts,mjs,js}', 'scripts/**/*.{ts,mts,mjs,js}', 'tools/**/*.{ts,mts,mjs,js}'],
     // Declaration files need the TypeScript parser, which this block does not set.
     ignores: ['**/*.d.mts'],
     rules: {

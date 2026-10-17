@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { compareEvaluationExports } from '../src/lib/rankingEvaluation'
+import { compareEvaluationExports } from '../../src/lib/rankingEvaluation'
 
 const [oldPath, nextPath] = process.argv.slice(2)
 if (!oldPath || !nextPath) throw new Error('Usage: paired-prediction-calibration <old-export> <next-export>')

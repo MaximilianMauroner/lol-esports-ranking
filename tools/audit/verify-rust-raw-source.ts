@@ -7,9 +7,9 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { gunzipSync } from 'node:zlib'
-import { manifestWithResolvedFiles } from './local-data-manifest.js'
-import { hydrateFileBackedRawSourceGeneration, type PreparedRawSourceGeneration } from './raw-source-generation.mjs'
-import { rawSourceWorkerExecArgv } from './refresh-worker-memory.mjs'
+import { manifestWithResolvedFiles } from '../../scripts/local-data-manifest.js'
+import { hydrateFileBackedRawSourceGeneration, type PreparedRawSourceGeneration } from '../../scripts/raw-source-generation.mjs'
+import { rawSourceWorkerExecArgv } from '../../scripts/refresh-worker-memory.mjs'
 
 type RawManifest = {
   start: string

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 // Shared code, data, configuration, tests, and new paths must fail open.
 const lightweightPaths = [
   /^(README|AGENTS)\.md$/,
-  /^(docs\/.*|data\/README)\.md$/,
+  /^data\/README\.md$/,
   /^src\/(components|views)\/.*\.(tsx|css)$/,
   /^src\/styles\/.*\.css$/,
   /^src\/(App\.tsx|main\.tsx|index\.css)$/,
