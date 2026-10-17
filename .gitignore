@@ -1,57 +1,38 @@
-# Logs
-logs
+# Local commands and generated output
+node_modules/
+dist/
+dist-ssr/
+logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
 *.local
-.rollout-evidence/
+/.rollout-evidence/
 /.agent/artifacts/
 /.agents/artifacts/
+/docs/
+/reports/
+/research/
+/coverage/
+/test-results/
+/playwright-report/
+/.cache/
 
-# Local data inputs/caches. Fetch/update into data/raw locally, but do not
-# commit provider downloads; commit only the manifest that documents inputs.
-data/*.json
-data/*.csv
-data/raw/**
-!data/raw/
-!data/raw/manifest.json
-data/derived/**
-data/**/*.csv
-data/**/*.jsonl
-data/**/*.ndjson
-data/**/*.parquet
-data/**/*.sqlite
-data/**/*.db
-!data/README.md
+# Provider inputs, reference cache and calculations stay local.
+/data/**
+!/data/raw/
+!/data/raw/manifest.json
+/public/data/
+/public/tournament-data/
+/public/.data-download-*/
+/worker/target/
 
-# Generated browser payload and downloaded reference corpus are local artifacts.
-public/data/
-public/.data-download-*/
-data/reference/
-
-# Editor directories and files
+# Editor and local project settings
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-
-/.agents/artifacts
-
-# Rust build products
-/worker/target/
-
-# Local T3 Code project configuration
-t3.json
+/t3.json
