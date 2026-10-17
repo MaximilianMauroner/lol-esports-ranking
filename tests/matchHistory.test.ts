@@ -186,7 +186,7 @@ function game(gameNumber: number, winner: 'Gen.G' | 'T1'): MatchRecord {
     id: `lck-series-game-${gameNumber}`,
     sourceProvider: 'oracles-elixir',
     sourceGameId: `lck-series_${gameNumber}`,
-    sourceMatchId: `lck-series_${gameNumber}`,
+    sourceMatchId: 'lck-series',
     dataCompleteness: 'complete',
     date: '2026-07-16',
     datetimeUtc: `2026-07-16T1${gameNumber}:00:00.000Z`,

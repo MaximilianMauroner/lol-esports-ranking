@@ -156,7 +156,7 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
   }
   // Until one full ledger has been measured there is no height to keep, so the ledger waits behind the page loader.
   // A failed page shows at once with the controls and its alert.
-  if (state.status === 'loading' || (pageLoading && !resultsHeight && !pageFailure)) return <LoadingState presentation="page" label="Loading match history" />
+  if (state.status === 'loading' || (pageLoading && !resultsHeight && !pageFailure)) return <LoadingState presentation="page" layout="ledger" label="Loading match history" />
   if (state.status === 'missing' || state.status === 'error') {
     return (
       <PageShell>

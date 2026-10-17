@@ -36,7 +36,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
   let feedStatus = 200
   let holdHealth = true
   const pendingHealth: Array<() => void> = []
-  let holdNextFeed = false
+  let holdNextFeed = true
   const pendingFeed: Array<() => void> = []
   const dataRequests: string[] = []
   const fixturePlugin: Plugin = {
@@ -75,8 +75,16 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     const externalRequests: string[] = []
     page.on('request', (request) => { if (!request.url().startsWith(base)) externalRequests.push(request.url()) })
     await page.clock.install({ time: new Date(at) })
+    await page.addInitScript((cached) => {
+      if (!localStorage.getItem('tournament-feed')) localStorage.setItem('tournament-feed', JSON.stringify(cached))
+    }, { ...feed, events: feed.events.slice(0, 1) })
 
     await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
+    await waitForPendingFeed(pendingFeed)
+    assert.equal(await page.getByRole('heading', { name: 'LCS 2026', exact: true }).count(), 0, 'A cache without the addressed event must not substitute another competition')
+    assert.match(page.url(), /event=worlds%3A2026/)
+    await page.getByText('Loading tournament schedule', { exact: true }).waitFor()
+    pendingFeed.splice(0).forEach((respond) => respond())
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.doesNotMatch(await page.locator('body').innerText(), /Schedule may be stale/, 'Pending health is not a stale result')
     holdHealth = false
@@ -244,6 +252,13 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     })
     await resumed
     assert.ok(dataRequests.length > requestsWhileHidden, 'Returning to the tournament page refreshes immediately')
+
+    holdNextFeed = true
+    await page.reload()
+    await page.locator('#tournament-event').waitFor()
+    await waitForPendingFeed(pendingFeed)
+    assert.equal(await page.getByText('Loading tournament schedule', { exact: true }).count(), 0, 'A return visit shows the last schedule while the feed request is held')
+    pendingFeed.splice(0).forEach((respond) => respond())
     assert.deepEqual(externalRequests, [])
   } finally {
     pendingHealth.splice(0).forEach((respond) => respond())

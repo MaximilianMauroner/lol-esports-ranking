@@ -333,6 +333,19 @@ body::before {
   background-image: linear-gradient(100deg, transparent 30%, var(--surface-3) 50%, transparent 70%);
 }
 
+/* Placeholders hold their space at once and show after 180ms, so a fast
+   load never flashes one. The step is not motion, so reduced-motion users
+   get the same delay. */
+.loading-reveal {
+  animation: loading-reveal 0s linear 180ms backwards;
+}
+
+@keyframes loading-reveal {
+  from {
+    visibility: hidden;
+  }
+}
+
 .loading-dot {
   width: 0.55rem;
   height: 0.55rem;

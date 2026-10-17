@@ -14,7 +14,7 @@ import { TournamentBracket } from '../components/TournamentBracket'
 import { findSwissEvent } from '../lib/swissScenario'
 import { worldsFeedEventKey } from '../lib/worldsArtifacts'
 import type { ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
-import { formatTournamentTime, groupTournamentSeries, isTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
+import { cacheTournamentFeed, formatTournamentTime, groupTournamentSeries, isTournamentFeed, readCachedTournamentFeed, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../lib/tournamentFeed'
 
 type FeedHealth = { checkedAt: string; complete: boolean; warnings: string[] }
 type FeedState = { status: 'loading' } | { status: 'ready'; feed: TournamentFeed; health: FeedHealth | null; healthPending: boolean; error?: string } | { status: 'error'; message: string }
@@ -25,7 +25,13 @@ const FORECASTS_ENABLED = import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED === 
 type ForecastArtifacts = { basis: ForecastBasis | null; ledger: ForecastLedger; powerPreviews?: ConditionalPowerResultLedger | null; reason?: string; ledgerWarning?: string }
 
 export function TournamentsView() {
-  const [state, setState] = useState<FeedState>({ status: 'loading' })
+  const [state, setState] = useState<FeedState>(() => {
+    const cached = readCachedTournamentFeed()
+    const requestedEvent = hashParam('event')
+    return cached && (!requestedEvent || cached.events.some((event) => event.id === requestedEvent))
+      ? { status: 'ready', feed: cached, health: null, healthPending: true }
+      : { status: 'loading' }
+  })
   const [selectedId, setSelectedId] = useState(() => hashParam('event') ?? '')
   const [view, setView] = useState(() => hashParam('view'))
   const [now, setNow] = useState(() => Date.now())
@@ -70,6 +76,7 @@ export function TournamentsView() {
       const body: unknown = await response.json()
       if (!isTournamentFeed(body)) throw new Error('Tournament feed schema is unsupported or incomplete')
       if (sequence !== refreshSequence.current) return
+      cacheTournamentFeed(body)
       setState((previous) => ({ status: 'ready', feed: body, health: previous.status === 'ready' ? previous.health : null, healthPending: true }))
       const healthResponse = await fetch('/tournament-data/feed.json.health.json', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]) }).catch(() => null)
       const healthBody: unknown = healthResponse?.ok ? await healthResponse.json().catch(() => null) : null
@@ -127,7 +134,7 @@ export function TournamentsView() {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time'
   const grouped = useMemo(() => groupTournamentSeries(selected?.series ?? []), [selected])
 
-  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading tournament schedule" />
+  if (state.status === 'loading') return <LoadingState presentation="page" layout="schedule" delay={false} label="Loading tournament schedule" />
   if (state.status === 'error') return <div className="px-[var(--page-x)] py-6"><Alert variant="warning" role="alert">Tournament schedule unavailable: {state.message} <Button className="ml-2" onClick={() => void refresh()}>Retry</Button></Alert></div>
   const sourceAge = now - Date.parse(state.health?.checkedAt ?? state.feed.fetchedAt)
   const stale = Boolean(state.error) || (state.health
