@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { checkDependencies } from '../tools/dev/check-dependencies.mjs'
 import { checkLayout } from '../tools/dev/check-layout.mjs'
+import { createOwnershipPolicy } from '../tools/dev/ownership-policy.mjs'
 
 function fixture(t, files) {
   const root = mkdtempSync(join(tmpdir(), 'repository-layout-'))
@@ -53,7 +54,11 @@ test('runtime traversal follows mjs implementations even when declarations exist
     'src/domains/rankings/read.d.mts': 'export declare const replay: number',
     'src/domains/rankings/internal/projections/snapshot.ts': 'export const replay = 1',
   })
-  assert.match(checkDependencies(root).join('\n'), /Browser runtime reaches producer .*snapshot\.ts/)
+  const policy = createOwnershipPolicy({ rankings: {
+    entries: { 'read.mjs': { browserRuntime: true } },
+    producers: ['internal/projections/snapshot.ts'],
+  } })
+  assert.match(checkDependencies(root, policy).join('\n'), /Browser runtime reaches producer .*snapshot\.ts/)
 })
 
 test('browser configuration values do not authorize indirect player replay', (t) => {
@@ -226,4 +231,108 @@ test('the pinned developer benchmark can use audit tools but production cannot i
   assert.deepEqual(checkDependencies(root), [])
   write('scripts/server.ts', "import './benchmark-incremental-ranking'")
   assert.match(checkDependencies(root).join('\n'), /production cannot import tools/)
+})
+
+test('a synthetic domain gets ownership, purity and consumer access from one registration', (t) => {
+  const { root, write } = fixture(t, {
+    'src/domains/builds/read.ts': "export { value } from './helper'",
+    'src/domains/builds/helper.ts': "export { value } from '../../shared/value'",
+    'src/shared/value.ts': 'export const value = 1',
+    'src/browser/page.ts': "import { value } from '@/domains/builds/read'; console.log(value)",
+    'scripts/server.ts': "export * from '../src/domains/builds/read'",
+    'tools/audit/check.ts': "import '../../src/domains/builds/read'",
+    'tests/builds.test.ts': "import '../src/domains/builds/helper'",
+  })
+  assert.match(checkDependencies(root).join('\n'), /builds\/read\.ts: Source has no owner/)
+  const policy = createOwnershipPolicy({ builds: { entries: { 'read.ts': { browserRuntime: true } } } })
+  assert.deepEqual(checkDependencies(root, policy), [])
+  write('src/shared/value.ts', "import '../domains/builds/read'; export const value = 1")
+  assert.match(checkDependencies(root, policy).join('\n'), /shared cannot import builds/)
+})
+
+test('cross-domain permission requires a declared dependency even for erased imports', (t) => {
+  const { root } = fixture(t, {
+    'src/domains/builds/read.ts': "import type { Profile } from '../profiles/read'; export type { Profile } from '../profiles/read'; type Rating = import('../rankings/types').Rating; export type { Rating }",
+    'src/domains/profiles/read.ts': 'export type Profile = number',
+    'src/domains/rankings/types.ts': 'export type Rating = number',
+  })
+  const definitions = {
+    builds: {},
+    profiles: { entries: { 'read.ts': {} } },
+    rankings: { entries: { 'types.ts': {} } },
+  }
+  const errors = checkDependencies(root, createOwnershipPolicy(definitions)).join('\n')
+  assert.equal(errors.match(/builds cannot import profiles/g)?.length, 2)
+  assert.match(errors, /builds cannot import rankings/)
+  definitions.builds.dependencies = ['profiles', 'rankings']
+  assert.deepEqual(checkDependencies(root, createOwnershipPolicy(definitions)), [])
+})
+
+test('new domains remain private through aliases, re-exports, dynamic imports and erased types', (t) => {
+  const { root } = fixture(t, {
+    'src/domains/builds/helper.ts': 'export type Hidden = number; export const hidden = 1',
+    'src/browser/page.ts': "import type { Hidden } from '@/domains/builds/helper'; export { hidden } from '../domains/builds/helper'",
+    'scripts/server.ts': "import('../src/domains/builds/helper')",
+    'tools/audit/check.ts': "type Hidden = import('@/domains/builds/helper').Hidden",
+  })
+  const errors = checkDependencies(root, createOwnershipPolicy({ builds: {} }))
+  assert.equal(errors.filter(error => error.includes('Domain implementation is private')).length, 4, errors.join('\n'))
+})
+
+test('registered domains reject Node, React, browser imports and global effect aliases', (t) => {
+  const { root } = fixture(t, {
+    'src/domains/builds/read.ts': "import 'node:fs'; import 'react/jsx-runtime'; import '../../browser/state'; const runtime = globalThis as typeof globalThis; const alias = runtime; alias.location; runtime['localStorage']; const { document: doc } = alias; window.location; fetch('/data')",
+    'src/domains/profiles/read.ts': "import 'path'; import 'react'; process.env; Buffer.from('')",
+    'src/browser/state.ts': 'export {}',
+  })
+  const errors = checkDependencies(root, createOwnershipPolicy({ builds: {}, profiles: {} })).join('\n')
+  assert.match(errors, /builds cannot import Node builtin node:fs/)
+  assert.match(errors, /profiles cannot import Node builtin path/)
+  assert.match(errors, /builds cannot import React/)
+  assert.match(errors, /profiles cannot import React/)
+  assert.match(errors, /builds cannot import browser/)
+  for (const name of ['location', 'localStorage', 'document', 'window', 'fetch', 'process', 'Buffer']) assert.match(errors, new RegExp(`browser global ${name}`))
+})
+
+test('browser runtime permission defaults to denied and erased types still obey entry privacy', (t) => {
+  const { root, write } = fixture(t, {
+    'src/browser/page.ts': "import type { Value } from '../domains/builds/read'; export type { Value } from '../domains/builds/read'; type Deferred = import('../domains/builds/read').Value; export type { Deferred }",
+    'src/domains/builds/read.ts': 'export type Value = number; export const read = 1',
+  })
+  const policy = createOwnershipPolicy({ builds: { entries: { 'read.ts': {} } } })
+  assert.deepEqual(checkDependencies(root, policy), [])
+  for (const syntax of ["import '../domains/builds/read'", "import { type Value } from '../domains/builds/read'", "export { type Value } from '../domains/builds/read'"]) {
+    write('src/browser/page.ts', syntax)
+    assert.match(checkDependencies(root, policy).join('\n'), /Browser runtime cannot enter domain entry/)
+  }
+  write('src/browser/page.ts', "import type { Value } from '../domains/builds/read'")
+  assert.match(checkDependencies(root, createOwnershipPolicy({ builds: {} })).join('\n'), /Domain implementation is private/)
+})
+
+test('browser-safe domain entries cannot conceal denied entries or declared producers', (t) => {
+  const { root, write } = fixture(t, {
+    'src/browser/page.ts': "import '../domains/builds/read'",
+    'src/domains/builds/read.ts': "export { value } from './future'",
+    'src/domains/builds/future.ts': 'export const value = 1',
+  })
+  const definitions = { builds: { entries: { 'read.ts': { browserRuntime: true }, 'future.ts': {} } } }
+  assert.match(checkDependencies(root, createOwnershipPolicy(definitions)).join('\n'), /Browser runtime cannot enter domain entry .*future\.ts via .*read\.ts -> .*future\.ts/)
+  delete definitions.builds.entries['future.ts']
+  definitions.builds.producers = ['future.ts']
+  assert.match(checkDependencies(root, createOwnershipPolicy(definitions)).join('\n'), /Browser runtime reaches producer .*read\.ts -> .*future\.ts/)
+  write('src/domains/builds/read.ts', "export type { Value } from './future'")
+  write('src/domains/builds/future.ts', 'export type Value = number')
+  assert.deepEqual(checkDependencies(root, createOwnershipPolicy(definitions)), [])
+})
+
+test('new domain producer traversal follows paired declarations and implementations', (t) => {
+  const { root } = fixture(t, {
+    'src/browser/page.ts': "import '../domains/builds/read'",
+    'src/domains/builds/read.ts': "export { value } from './helper.mjs'",
+    'src/domains/builds/helper.d.mts': 'export declare const value: number',
+    'src/domains/builds/helper.mjs': "export { value } from './internal/replay/future.mjs'",
+    'src/domains/builds/internal/replay/future.mjs': 'export const value = 1',
+  })
+  const policy = createOwnershipPolicy({ builds: { entries: { 'read.ts': { browserRuntime: true } }, producers: ['internal/replay/'] } })
+  assert.match(checkDependencies(root, policy).join('\n'), /Browser runtime reaches producer .*read\.ts -> .*helper\.mjs -> .*future\.mjs/)
 })

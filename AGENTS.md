@@ -11,13 +11,14 @@
 
 ## Source ownership
 
-- `src/domains/rankings/` and `src/domains/tournaments/` own business rules. Use their public entries. Keep domain code free of browser state, React, and Node effects.
+- `src/domains/<name>/` owns business rules. Register each real domain, its public entries, and permitted domain dependencies once in `tools/dev/ownership-policy.mjs`. Unregistered domains and undeclared public entries fail the boundary check. Keep domain code free of browser state, React, and Node effects.
 - `src/lib/` holds five retained ranking safety implementations. Keep their exact paths. `src/shared/` holds deterministic ordering and shared presentation helpers. `src/data/` holds presentation facts and legal text.
 - `src/browser/`, `src/hooks/`, `src/components/`, `src/views/`, and app entries own the browser. Keep replay producers, checkpoints, importers, and write plans out of its runtime graph.
 - `scripts/` owns production Node code, storage, publication, and operator commands. It cannot import browser or developer code.
 - `tools/` owns developer calibration, audits, assets, and verification tools. It can consume shared and production code. The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is also a developer entry with tools ownership.
 - `tests/` owns tests and fixtures. Discover serial browser journeys by `*Browser.test.ts`.
 - `worker/` owns the Cargo workspace. `ops/` owns safety receipts.
+- Keep the current repository roots. New native service binaries and engines enter the `worker/` workspace with a working consumer. New browser entries stay under the existing browser roots. Do not add empty feature packages or require a top-level move to deploy a service separately.
 - `docs/` owns the product purpose, product requirements, principles, and reasons for lasting design decisions. Keep current-code tours, migration plans, reports, audits, and handoffs in ignored `.agents/artifacts/`.
 - Lint enforces import directions after resolving paths. Keep the ownership policy in `tools/dev/ownership-policy.mjs`.
 - Keep the move map in `tools/dev/platform-migration-map.json` rerunnable with `node tools/dev/migrate-platform.mjs --check`.

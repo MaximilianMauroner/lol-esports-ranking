@@ -3,7 +3,7 @@ import { dirname, resolve, relative } from 'node:path'
 import { builtinModules } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
-import { ownerOf, browserGlobals, isProducer, pureOwners, domainImportError } from './ownership-policy.mjs'
+import { defaultPolicy, browserGlobals } from './ownership-policy.mjs'
 
 const sourceExtension = /\.(?:[cm]?[jt]sx?)$/
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]))
@@ -100,7 +100,8 @@ function checkGlobals(source, checker, report) {
   visit(source)
 }
 
-export function checkDependencies(root = process.cwd()) {
+export function checkDependencies(root = process.cwd(), policy = defaultPolicy) {
+  const { ownerOf, pureOwners, domainImportError, isProducer, browserRuntimeError } = policy
   root = realpathSync(resolve(root))
   const files = ['src', 'scripts', 'tools', 'tests'].flatMap(directory => sourceFiles(root, directory))
   if (existsSync(resolve(root, 'vite.config.ts'))) files.push(resolve(root, 'vite.config.ts'))
@@ -140,7 +141,7 @@ export function checkDependencies(root = process.cwd()) {
         const target = local && ownerOf(local)
         if (target) {
           if (!owner.imports.includes(target.name)) report(node, `${owner.name} cannot import ${target.name} source ${local}`)
-          const boundary = domainImportError(file, local)
+          const boundary = domainImportError(file, local, entry.type)
           if (boundary) report(node, boundary)
           if (!entry.type) runtimeEdges.push(local)
         } else if (specifier.startsWith('.') || specifier.startsWith('@/') || specifier.startsWith('/src/')) {
@@ -164,6 +165,8 @@ export function checkDependencies(root = process.cwd()) {
       if (seen.has(path)) return
       seen.add(path)
       if (isProducer(path)) { errors.push(`${file}: Browser runtime reaches producer ${chain.join(' -> ')}`); return }
+      const boundary = browserRuntimeError(path)
+      if (boundary) errors.push(`${file}: ${boundary} via ${chain.join(' -> ')}`)
       for (const next of edges.get(path) ?? []) visit(next, [...chain, next])
     }
     visit(file, [file])

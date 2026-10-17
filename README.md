@@ -57,7 +57,7 @@ real rankings. `VITE_RANKING_DATA_URL` selects an external browser manifest.
 
 ## Source ownership
 
-The repository contains one private JavaScript application and a five-crate Cargo
+The repository contains one private JavaScript application and a Rust Cargo
 workspace. It has one JavaScript dependency set and no package split.
 
 | Path | Owner |
@@ -82,6 +82,37 @@ Lint checks resolved import directions and public domain entries. Browser runtim
 code cannot reach replay producers or publication plans. Ranking adapters own
 private publication codecs. Views consume domain queries and types.
 The test runner discovers `*Browser.test.ts` journeys and runs them one at a time.
+
+### Extend the platform within these roots
+
+Add a real business capability under `src/domains/<name>/`. Register its public
+entries and domain dependencies in `tools/dev/ownership-policy.mjs`. The policy
+derives purity and consumer permissions from that record. Unregistered domains
+and undeclared public entries fail the boundary check. Do not add empty feature
+directories before their first working consumer.
+
+Keep web transport, request lifetime, caching, and navigation under `src/browser/`.
+Put workflow screens under `src/views/` and shared controls under `src/components/`.
+Keep domain calculations independent of React, browser state, provider calls,
+storage, and native application effects. Shared definitions do not grant access
+to private account or workspace data.
+
+Add native engines and service binaries as real members of the existing `worker/`
+Cargo workspace. A Rust API and analysis process can build and release separately
+without moving that workspace. Retain the current Node authority until native
+parity, cutover, and rollback requirements pass.
+
+A second web deployment needs its own working entry, build output, route contract,
+and release checks. Keep its browser entry under the existing browser roots.
+Multiple Vercel projects do not require new top-level application folders or
+placeholder package manifests. Create a shared package only when a real consumer
+needs a separate build contract.
+
+Keep contract generation, migration, and verification under `tools/`. Put retained
+inputs and compatibility cases under `tests/`. Public assets stay under `public/`,
+and generated payloads stay ignored. Keep reports and implementation plans under
+ignored `.agents/artifacts/`. These boundaries support builds, personal analytics,
+scouting, Riot integration, and a companion without changing the repository roots.
 
 ## Railway services
 
