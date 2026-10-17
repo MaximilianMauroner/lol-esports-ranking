@@ -84,14 +84,16 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
   })
   const nextPagesKey = [...new Set(filtered.slice(pageStart + view.pageSize, pageStart + view.pageSize * 2).map((entry) => entry.page))].join(',')
   const currentPageReady = state.status === 'ready' && !pageLoading && !pageFailure
+  // Measured whenever the ledger is shown, a failed page included, so the next load stays in place below the controls.
+  const resultsSettled = state.status === 'ready' && (!pageLoading || Boolean(pageFailure))
 
   useEffect(() => {
     const results = resultsRef.current
-    if (!currentPageReady || !results) return
+    if (!resultsSettled || !results) return
     const observer = new ResizeObserver(() => setResultsHeight(Math.ceil(results.getBoundingClientRect().height)))
     observer.observe(results)
     return () => observer.disconnect()
-  }, [currentPageReady])
+  }, [resultsSettled])
 
   useEffect(() => {
     if (neededPagesKey) onRequestPages(neededPagesKey.split(',').map(Number))
@@ -152,7 +154,9 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
       </PageShell>
     )
   }
-  if (state.status === 'loading') return <LoadingState presentation="page" label="Loading match history" />
+  // Until one full ledger has been measured there is no height to keep, so the ledger waits behind the page loader.
+  // A failed page shows at once with the controls and its alert.
+  if (state.status === 'loading' || (pageLoading && !resultsHeight && !pageFailure)) return <LoadingState presentation="page" label="Loading match history" />
   if (state.status === 'missing' || state.status === 'error') {
     return (
       <PageShell>
