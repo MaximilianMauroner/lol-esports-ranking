@@ -1,4 +1,4 @@
-import { formatEventName } from './display'
+import { formatEventName } from './display.ts'
 
 export type ChartAttributionEntry = {
   key: 'stable' | 'league' | 'placement' | 'form' | 'roster' | 'uncertainty' | 'context'

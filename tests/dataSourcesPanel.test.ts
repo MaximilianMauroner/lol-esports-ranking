@@ -8,7 +8,7 @@ import { providerFreshness } from '../src/domains/rankings/internal/evidence/sou
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { DataSourceInfo } from '../src/domains/rankings/internal/projections/snapshot.ts'
-import { DataSourcesDisclosure } from '../src/views/rankings/TeamsView.tsx'
+import { DataSourcesDisclosure } from '../src/views/rankings/DataSourcesDisclosure.tsx'
 
 type RefreshStatus = NonNullable<DataSourceInfo['refreshReceipt']>['status']
 

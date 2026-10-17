@@ -1,9 +1,9 @@
-import type { ChampionPicks, DeservedStandingEligibilityLabel, DeservedStandingLeaderboard, FactorBreakdown, LeagueStrength, MatchRecord, PlayerAppearanceSummary, PlayerDiagnostics, PlayerIndividualResidual, PlayerStanding, PublishedRatingScale, RatingComponents, RatingUpdateLedger, Region, Role, RosterBasis, SeriesState, SourceTrace, TeamEligibility } from '../../types'
-import type { InternationalTournamentFamilyId, TournamentInstanceId, TournamentLifecycleStatus } from '../evidence/internationalTournaments'
-import type { WalkForwardMetrics } from '../projections/predictionModel'
-import type { RegionStrength } from '../projections/regionStrength'
-import type { AwardSignalData, DataCoverage, DataQualityAudit, DataSourceInfo, ModelInfo, SnapshotCheckpointOption, SnapshotFilter, SnapshotSourceBreakdown } from '../projections/snapshot'
-import type { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../published/schema'
+import type { ChampionPicks, DeservedStandingEligibilityLabel, DeservedStandingLeaderboard, FactorBreakdown, LeagueStrength, MatchRecord, PlayerAppearanceSummary, PlayerDiagnostics, PlayerIndividualResidual, PlayerStanding, PublishedRatingScale, RatingComponents, RatingUpdateLedger, Region, Role, RosterBasis, SeriesState, SourceTrace, TeamEligibility } from '../../types.ts'
+import type { InternationalTournamentFamilyId, TournamentInstanceId, TournamentLifecycleStatus } from '../evidence/internationalTournaments.ts'
+import type { WalkForwardMetrics } from '../projections/predictionModel.ts'
+import type { RegionStrength } from '../projections/regionStrength.ts'
+import type { AwardSignalData, DataCoverage, DataQualityAudit, DataSourceInfo, ModelInfo, SnapshotCheckpointOption, SnapshotFilter, SnapshotSourceBreakdown } from '../projections/snapshot.ts'
+import type { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../published/schema.ts'
 export type ArtifactMeta = {
   schemaVersion: typeof PUBLIC_ARTIFACT_SCHEMA_VERSION
   runId: string

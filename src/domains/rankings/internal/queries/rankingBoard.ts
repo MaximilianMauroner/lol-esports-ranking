@@ -1,8 +1,8 @@
-import type { PublicRollingWindow, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam } from '../../types'
-import type { RankingSummaryStanding } from '../../types'
+import type { PublicRollingWindow, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam } from '../../types.ts'
+import type { RankingSummaryStanding } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
-import { compareRecord, teamKey } from '../../../../shared/display'
-import { displayRegionPowerScore, type RegionStrength } from '../projections/regionStrength'
+import { compareRecord, teamKey } from '../../../../shared/display.ts'
+import { displayRegionPowerScore, type RegionStrength } from '../projections/regionStrength.ts'
 import {
   deriveRankingFlair,
   deriveTierLabels,
@@ -10,7 +10,7 @@ import {
   type RankingMovementPick,
   type RankingTierLabel,
   type RankingUpsetHeadline,
-} from './rankingFlair'
+} from './rankingFlair.ts'
 import {
   effectiveTournamentStatus,
   projectTournamentStandings,
@@ -21,7 +21,7 @@ import {
   type TournamentFilterValue,
   type TournamentInstanceId,
   type TournamentLifecycleStatus,
-} from '../evidence/internationalTournaments'
+} from '../evidence/internationalTournaments.ts'
 
 export const SORT_KEYS = ['rank', 'rating', 'wins'] as const
 export const SORT_DIRECTIONS = ['ascending', 'descending'] as const
@@ -44,6 +44,7 @@ export type RankingEvidence = {
 }
 
 export type RankingUniverse = {
+  select: (selection: RankingBoardSelection) => RankingBoard
   standings: readonly RankingSummaryStanding[]
   rankedStandings: readonly RankingSummaryStanding[]
   tierFor: (team: RankingSummaryStanding) => RankingTierLabel | undefined
@@ -101,7 +102,7 @@ export type RankingBoard = {
   }
 }
 
-export function deriveRankingUniverse(evidence: RankingEvidence): RankingUniverse {
+export function createRankingBoard(evidence: RankingEvidence): RankingUniverse {
   const { standings: scopeStandings, latestMatchDate } = evidence
   const tournamentOptions = tournamentFilterOptionsForStandings(scopeStandings, evidence.tournamentEntries, latestMatchDate)
   const tournamentFilter = tournamentOptions.some((option) => option.value === evidence.requestedTournamentFilter) ? evidence.requestedTournamentFilter : 'All'
@@ -115,7 +116,8 @@ export function deriveRankingUniverse(evidence: RankingEvidence): RankingUnivers
   const tierByTeam = new Map(deriveTierLabels(ranked).map((assignment) => [assignment.team.toLocaleLowerCase('en'), assignment.tier]))
   const powerByRegion = new Map(evidence.regions.map((entry) => [entry.region, displayRegionPowerScore(entry)]))
   const presentRegions = Array.from(new Set(scopeStandings.map((team) => team.region).filter(Boolean)))
-  return {
+  const universe: RankingUniverse = {
+    select,
     standings,
     rankedStandings: ranked.toSorted(compareTeamRank),
     tierFor: (team) => tierByTeam.get(team.team.toLocaleLowerCase('en')),
@@ -127,55 +129,59 @@ export function deriveRankingUniverse(evidence: RankingEvidence): RankingUnivers
     movementByTeamId: new Map((tournament?.teams ?? []).map((team) => [team.teamId, team])),
     rollingWindow: evidence.rollingWindow,
   }
-}
 
-export function deriveRankingBoard(universe: RankingUniverse, selection: RankingBoardSelection): RankingBoard {
-  const { tournament, tournamentFilter, exactTournamentId, tierFor } = universe
-  const query = selection.search.trim().toLowerCase()
-  const participantIds = tournament ? new Set(tournament.teams.map((team) => team.teamId)) : undefined
-  const scopeRows = universe.standings.filter((team) => {
-    if (selection.region !== 'All' && team.region !== selection.region) return false
-    if (!teamMatchesTournamentFilter(team, tournamentFilter, participantIds)) return false
-    if (!query) return true
-    return [team.team, team.code, team.region, team.league].some((value) => value?.toLowerCase().includes(query))
-  })
-  const eligibleRows = scopeRows.filter((team) => team.eligibility?.eligible)
-  const eligibilityFilterApplies = !exactTournamentId
-  const byEligibility = selection.eligibility === 'ranked' && eligibilityFilterApplies ? eligibleRows : scopeRows
-  const filtered = selection.tier === 'All' ? byEligibility : byEligibility.filter((team) => tierFor(team) === selection.tier)
+  return universe
 
-  const rows = sortRows(filtered, selection.sortKey, selection.sortDirection)
-  const pageCount = Math.max(1, Math.ceil(rows.length / selection.pageSize))
-  const current = Math.min(selection.requestedPage, pageCount)
-  const start = (current - 1) * selection.pageSize
-  const visibleRows = rows.slice(start, start + selection.pageSize)
+  function select(selection: RankingBoardSelection): RankingBoard {
+    const { tournament, tournamentFilter, exactTournamentId, tierFor } = universe
+    const query = selection.search.trim().toLowerCase()
+    const participantIds = tournament ? new Set(tournament.teams.map((team) => team.teamId)) : undefined
+    const scopeRows = universe.standings.filter((team) => {
+      if (selection.region !== 'All' && team.region !== selection.region) return false
+      if (!teamMatchesTournamentFilter(team, tournamentFilter, participantIds)) return false
+      if (!query) return true
+      return [team.team, team.code, team.region, team.league].some((value) => value?.toLowerCase().includes(query))
+    })
+    const eligibleRows = scopeRows.filter((team) => team.eligibility?.eligible)
+    const eligibilityFilterApplies = !exactTournamentId
+    const byEligibility = selection.eligibility === 'ranked' && eligibilityFilterApplies ? eligibleRows : scopeRows
+    const filtered = selection.tier === 'All' ? byEligibility : byEligibility.filter((team) => tierFor(team) === selection.tier)
 
-  return {
-    rows,
-    visibleRows,
-    rankedRows: filtered.filter((team) => team.eligibility?.eligible).toSorted(compareTeamRank),
-    page: { current, count: pageCount, start, end: rows.length === 0 ? 0 : start + visibleRows.length },
-    tierCounts: (['S', 'A', 'B', 'C'] as const).map((tier) => ({ tier, count: eligibleRows.filter((team) => tierFor(team) === tier).length })),
-    scopeScoreRanks: scoreRanks(scopeRows),
-    activeFilterCount: [
-      selection.search.trim() !== '',
-      selection.region !== 'All',
-      selection.tier !== 'All',
-      tournamentFilter !== 'All',
-      selection.eligibility !== 'ranked' && eligibilityFilterApplies,
-    ].filter(Boolean).length,
-    unrankedOnTournamentBoard: exactTournamentId ? filtered.filter((team) => !team.eligibility?.eligible).length : 0,
-    showsWholeTournamentField: selection.search.trim() === '' && selection.region === 'All' && selection.tier === 'All',
-    movement: boardMovement(universe, filtered),
-    disclosure: {
-      regionFilter: selection.region,
-      tournamentFilter,
-      tableTeamCount: filtered.length,
-      scopeTeamCount: universe.standings.length,
-      hiddenFromRankedCount: scopeRows.length - eligibleRows.length,
-    },
+    const rows = sortRows(filtered, selection.sortKey, selection.sortDirection)
+    const pageCount = Math.max(1, Math.ceil(rows.length / selection.pageSize))
+    const current = Math.min(selection.requestedPage, pageCount)
+    const start = (current - 1) * selection.pageSize
+    const visibleRows = rows.slice(start, start + selection.pageSize)
+
+    return {
+      rows,
+      visibleRows,
+      rankedRows: filtered.filter((team) => team.eligibility?.eligible).toSorted(compareTeamRank),
+      page: { current, count: pageCount, start, end: rows.length === 0 ? 0 : start + visibleRows.length },
+      tierCounts: (['S', 'A', 'B', 'C'] as const).map((tier) => ({ tier, count: eligibleRows.filter((team) => tierFor(team) === tier).length })),
+      scopeScoreRanks: scoreRanks(scopeRows),
+      activeFilterCount: [
+        selection.search.trim() !== '',
+        selection.region !== 'All',
+        selection.tier !== 'All',
+        tournamentFilter !== 'All',
+        selection.eligibility !== 'ranked' && eligibilityFilterApplies,
+      ].filter(Boolean).length,
+      unrankedOnTournamentBoard: exactTournamentId ? filtered.filter((team) => !team.eligibility?.eligible).length : 0,
+      showsWholeTournamentField: selection.search.trim() === '' && selection.region === 'All' && selection.tier === 'All',
+      movement: boardMovement(universe, filtered),
+      disclosure: {
+        regionFilter: selection.region,
+        tournamentFilter,
+        tableTeamCount: filtered.length,
+        scopeTeamCount: universe.standings.length,
+        hiddenFromRankedCount: scopeRows.length - eligibleRows.length,
+      },
+    }
   }
 }
+
+
 
 function boardMovement(universe: RankingUniverse, filtered: readonly RankingSummaryStanding[]): BoardMovement {
   const { tournament } = universe

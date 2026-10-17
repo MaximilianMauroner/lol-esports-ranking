@@ -5,23 +5,23 @@ import type {
   MatchRecord,
   PlayerAppearanceSummary, PlayerComparisonMetricInfo, PlayerDirectory, PlayerIndividualResidual, PlayerLifecycleEvent, PlayerLifecycleReleaseEvent, PlayerMetricInfo, PlayerProfile, PlayerRatingProof, PlayerStanding, PublicCurrentLineup, PublicMatchHistoryCatalog, PublicMatchHistoryEntry, PublicMatchHistoryIndex, PublicMatchHistoryPage, PublicMatchHistoryPageRef, PublicMatchHistorySeriesRef, PublicRegionHistoryPoint, PublicRegionHistoryPointContext, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicRollingWindow, PublicTeamDirectory, PublicTeamHistoryModelContext, PublicTeamHistoryPoint, PublicTeamHistoryPointContext, PublicTeamHistoryShard, PublicTeamRollingMovement, PublicTournamentMovementShard, PublicTournamentMovementTeam, PublishedRatingScale, RankingSummarySnapshot, Region, RegionHistoryDirectory, Role, SameTeamTopFiveClusteringDiagnostic, SeasonSummary, SnapshotCheckpointOption, SnapshotFilter, SnapshotSourceBreakdown, StaticRankingData, StaticRankingSummaryData, TeamDirectory, TeamEligibility, TeamHistoryArtifacts, TeamHistoryDirectory, TeamHistoryPoint, TeamHistoryPointCompact, TeamHistorySeries, TeamProfile,
   TeamStanding, TournamentMovementArtifacts
-} from '../../types'
+} from '../../types.ts'
 import {
   deriveTournamentInstances,
   tournamentInstanceForEvent,
   type TournamentInstanceId,
   type TournamentScheduleReference,
-} from '../evidence/internationalTournaments'
-import { homeLeagueForMatch } from '../evidence/matchContext'
-import { filterPublishedRatingUniverseInput } from '../evidence/ratingUniverse'
-import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../evidence/regionTaxonomy'
-import { isSeasonHistoryLeadIn } from '../evidence/seasonHistory'
-import { resolveCanonicalSeries } from '../evidence/seriesResolver'
-import { canonicalTeamNameFor, regionForLeague } from '../evidence/teamIdentity'
-import { isCompetitionOnlyLeague, isUnknownLeague } from '../evidence/teamProfiles'
-import { leagueTierFor } from '../policy/leagueTiers'
-import { publishedRatingScale } from '../policy/modelConfig'
-import { playerModelParameters } from '../policy/playerPolicy'
+} from '../evidence/internationalTournaments.ts'
+import { homeLeagueForMatch } from '../evidence/matchContext.ts'
+import { filterPublishedRatingUniverseInput } from '../evidence/ratingUniverse.ts'
+import { currentTopTierRegionForLeague, currentTopTierRegions, isCurrentTopTierRegion } from '../evidence/regionTaxonomy.ts'
+import { isSeasonHistoryLeadIn } from '../evidence/seasonHistory.ts'
+import { resolveCanonicalSeries } from '../evidence/seriesResolver.ts'
+import { canonicalTeamNameFor, regionForLeague } from '../evidence/teamIdentity.ts'
+import { isCompetitionOnlyLeague, isUnknownLeague } from '../evidence/teamProfiles.ts'
+import { leagueTierFor } from '../policy/leagueTiers.ts'
+import { publishedRatingScale } from '../policy/modelConfig.ts'
+import { playerModelParameters } from '../policy/playerPolicy.ts'
 import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   artifactMetaFor,
@@ -34,7 +34,7 @@ import {
   teamHistoryShardUrlPathForKey,
   teamIdFor,
   tournamentMovementShardUrlPathForId,
-} from '../published/schema'
+} from '../published/schema.ts'
 import {
   groupAdjacentTimelineEntries,
   groupEntriesByDate,
@@ -45,27 +45,27 @@ import {
   timelineGroupKey,
   timelineSourceSummary,
   uniqueValues,
-} from '../queries/timelineCompaction'
-import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata, type RankingModelOutput } from '../replay/model'
+} from '../queries/timelineCompaction.ts'
+import { buildPlayerModel, buildRankingModel, isDevelopmentalTeamName, transparentGprModelMetadata, type RankingModelOutput } from '../replay/model.ts'
 import {
   teamNamesForDssContext,
   withDeservedStandingComparison,
   withDeservedStandingRegionComparison,
   type ComputedTeamStanding,
-} from './deservedStandingPublicComparison'
-import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibility'
-import { summarizePredictions } from './predictionModel'
+} from './deservedStandingPublicComparison.ts'
+import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibility.ts'
+import { summarizePredictions } from './predictionModel.ts'
 import {
   publishedRating,
   toPublishedLeagueStrength,
   toPublishedRegionStrength,
   toPublishedTeamStanding,
-} from './publishedRatingArtifacts'
-import { deriveRegionStrength } from './regionStrength'
-export type { AwardSignalData, ComputedRankingSnapshot, DataCoverage, DataQualityAudit, DataQualityLeagueSummary, DataSourceInfo, DataSourceWarning, ModelInfo, PlayerDirectory, PlayerLifecycleEvent, PlayerLifecycleReleaseEvent, RankingSummarySnapshot, RankingSummaryStanding, RegionHistoryDirectory, SnapshotCheckpointOption, SnapshotFilter, SnapshotIndexEntry, SnapshotSourceBreakdown, StaticRankingData, StaticRankingSummaryData, TeamDirectory, TeamHistoryArtifacts, TeamHistoryDirectory, TeamHistoryPointCompact, TeamHistorySeries, TournamentMovementArtifacts } from './snapshotTypes'
+} from './publishedRatingArtifacts.ts'
+import { deriveRegionStrength } from './regionStrength.ts'
+export type { AwardSignalData, ComputedRankingSnapshot, DataCoverage, DataQualityAudit, DataQualityLeagueSummary, DataSourceInfo, DataSourceWarning, ModelInfo, PlayerDirectory, PlayerLifecycleEvent, PlayerLifecycleReleaseEvent, RankingSummarySnapshot, RankingSummaryStanding, RegionHistoryDirectory, SnapshotCheckpointOption, SnapshotFilter, SnapshotIndexEntry, SnapshotSourceBreakdown, StaticRankingData, StaticRankingSummaryData, TeamDirectory, TeamHistoryArtifacts, TeamHistoryDirectory, TeamHistoryPointCompact, TeamHistorySeries, TournamentMovementArtifacts } from './snapshotTypes.ts'
 
-export { snapshotKey } from '../published/schema'
-export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from '../published/schema'
+export { snapshotKey } from '../published/schema.ts'
+export type { CompactPlayer, CompactPlayerRating, PlayerRatingProof } from '../published/schema.ts'
 
 // Snapshot generation owns these derived outputs, but intentionally does not
 // activate checkpoint resume until orchestration persists and validates the

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -104,6 +104,22 @@ test('domain internals and codec adapters cannot be entered through aliases or p
 test('runtime dynamic imports require a finite literal graph', (t) => {
   const { root } = fixture(t, { 'src/browser/worker.ts': 'const target = location.hash; import(target)' })
   assert.match(checkDependencies(root).join('\n'), /Dynamic source imports require a literal target/)
+})
+
+test('browser resource internals remain hidden and symlink imports cannot escape the source root', (t) => {
+  const { root, write } = fixture(t, {
+    'src/views/page.ts': "import '@/browser/rankings/published/resource'",
+    'src/browser/rankings/published/resource.ts': 'export const value = 1',
+    'src/browser/page.ts': "import './escape'",
+  })
+  const outside = mkdtempSync(join(tmpdir(), 'repository-outside-'))
+  t.after(() => rmSync(outside, { recursive: true, force: true }))
+  writeFileSync(join(outside, 'outside.ts'), 'export const value = 1')
+  write('src/browser/placeholder.ts', 'export {}')
+  symlinkSync(join(outside, 'outside.ts'), join(root, 'src/browser/escape.ts'))
+  const errors = checkDependencies(root).join('\n')
+  assert.match(errors, /Browser resource implementation is private/)
+  assert.match(errors, /Source import escapes the source root/)
 })
 
 test('shared browser globals include cast aliases and destructuring but exclude local names and gc', (t) => {

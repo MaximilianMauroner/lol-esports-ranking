@@ -1,10 +1,10 @@
-import { transparentGprModelMetadata } from '../policy/modelConfig'
+import { transparentGprModelMetadata } from '../policy/modelConfig.ts'
 import {
   isRatingCheckpointEventContract,
   validateRatingCheckpointEventContract,
   type RatingCheckpointEventContract,
-} from './ratingCheckpointInventory'
-import type { RatingRunState } from './ratingRunState'
+} from './ratingCheckpointInventory.ts'
+import type { RatingRunState } from './ratingRunState.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export const RATING_CHECKPOINT_SCHEMA_VERSION = 4 as const

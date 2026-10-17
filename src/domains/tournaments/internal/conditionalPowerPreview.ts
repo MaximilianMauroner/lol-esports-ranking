@@ -1,7 +1,7 @@
-import { conditionalOutcomeProblem, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from '../../rankings/evidence'
-import type { TournamentSeries } from './tournamentFeed'
-import type { TournamentForecast } from './tournamentForecast'
-export { conditionalOutcomeProblem, legalConditionalScores, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from '../../rankings/evidence'
+import { conditionalOutcomeProblem, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from '../../rankings/evidence.ts'
+import type { TournamentSeries } from './tournamentFeed.ts'
+import type { TournamentForecast } from './tournamentForecast.ts'
+export { conditionalOutcomeProblem, legalConditionalScores, unavailablePowerPreview, type ConditionalSeriesOutcome, type PowerPreviewUnavailable } from '../../rankings/evidence.ts'
 
 /** Public forecasts do not contain a replayable rating state. Never infer it from odds. */
 export function publicConditionalPowerPreview(series: TournamentSeries, outcome: ConditionalSeriesOutcome, forecast: TournamentForecast | null, now: number): PowerPreviewUnavailable {

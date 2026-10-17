@@ -1,5 +1,5 @@
-import type { LeagueTierName, Role } from '../../types'
-import { playerPerformancePolicy } from './playerPerformancePolicy'
+import type { LeagueTierName, Role } from '../../types.ts'
+import { playerPerformancePolicy } from './playerPerformancePolicy.ts'
 
 export const initialPlayerRating = 100
 export const sourcedPlayerKFactor = 8

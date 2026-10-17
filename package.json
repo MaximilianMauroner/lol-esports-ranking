@@ -30,7 +30,7 @@
     "data:build:oracle": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --oracle-csv",
     "data:build:leaguepedia": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --leaguepedia-json",
     "typecheck": "tsc -b",
-    "lint": "node tools/dev/check-dependencies.mjs && eslint .",
+    "lint": "node tools/dev/check-dependencies.mjs && node tools/dev/migrate-platform.mjs --check && eslint .",
     "test": "node tools/dev/run-tests.mjs",
     "test:release": "RANKING_TEST_PUBLIC_DIR=public node tools/dev/run-tests.mjs",
     "test:browser": "tsx --tsconfig tsconfig.app.json --test tests/tournamentBrowser.test.ts",

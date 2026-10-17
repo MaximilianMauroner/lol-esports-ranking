@@ -1,6 +1,6 @@
-import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast'
-import type { TournamentSeries } from './tournamentFeed'
-import type { ObservationEvidence } from './worldsObservedRules'
+import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import type { TournamentSeries } from './tournamentFeed.ts'
+import type { ObservationEvidence } from './worldsObservedRules.ts'
 
 /** Riot v1.0, §§4.1.1, 4.1.4.2, 4.2.1 and 4.3.1. Used by the read-only Worlds composition. */
 export const WORLDS_2026_PLAY_IN_RULES = {

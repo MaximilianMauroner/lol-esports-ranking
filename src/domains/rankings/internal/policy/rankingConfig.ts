@@ -1,4 +1,4 @@
-import type { EventTier } from '../../types'
+import type { EventTier } from '../../types.ts'
 
 export const preseasonEventWeightPolicy = 'completed-worlds-offseason-except-domestic-season-and-demacia-v3'
 export const preseasonEventWeightMultiplier = 0.35

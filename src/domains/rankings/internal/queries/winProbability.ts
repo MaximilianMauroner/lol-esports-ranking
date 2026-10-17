@@ -1,10 +1,10 @@
-import type { TeamStanding } from '../../types'
-import { normalizedBestOf } from '../evidence/matchFormat'
+import type { TeamStanding } from '../../types.ts'
+import { normalizedBestOf } from '../evidence/matchFormat.ts'
 import {
   winProbabilityEloScale,
   winProbabilityUncertaintyFloor,
   winProbabilityUncertaintyScale,
-} from '../policy/modelConfig'
+} from '../policy/modelConfig.ts'
 
 export type ProbabilityTeam = Pick<TeamStanding, 'team' | 'rating' | 'uncertainty'>
 

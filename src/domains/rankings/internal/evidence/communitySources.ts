@@ -1,7 +1,7 @@
-import type { MatchRecord } from '../../types'
-import { eventTierRank, inferEventTier } from './competitionTaxonomy'
-import { canonicalTeamNameFor } from './teamIdentity'
-import { tournamentFamilyForEvent } from './internationalTournaments'
+import type { MatchRecord } from '../../types.ts'
+import { eventTierRank, inferEventTier } from './competitionTaxonomy.ts'
+import { canonicalTeamNameFor } from './teamIdentity.ts'
+import { tournamentFamilyForEvent } from './internationalTournaments.ts'
 export type LolEsportsReferenceTeam = {
   id?: string
   name: string

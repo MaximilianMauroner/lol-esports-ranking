@@ -7,15 +7,15 @@ import type {
   RatingUpdateLedger,
   TeamHistoryPoint,
   TeamProfile,
-} from '../../types'
+} from '../../types.ts'
 import {
   initialTeamRating,
   maximumUncertainty,
-} from '../policy/modelConfig'
-import { eventWeightContextForMatches, type EventWeightContext } from './eventWeighting'
-import { buildEventTrackers, type PlacementTournamentLifecycle } from './placementResiduals'
-import { emptyRatingUpdateLedger } from './ratingCalculations'
-import type { SideAdjustmentSamples } from './sideAdjustments'
+} from '../policy/modelConfig.ts'
+import { eventWeightContextForMatches, type EventWeightContext } from './eventWeighting.ts'
+import { buildEventTrackers, type PlacementTournamentLifecycle } from './placementResiduals.ts'
+import { emptyRatingUpdateLedger } from './ratingCalculations.ts'
+import type { SideAdjustmentSamples } from './sideAdjustments.ts'
 
 export type RatingRunState = {
   ratings: Map<string, number>

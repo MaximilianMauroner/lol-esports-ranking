@@ -4,11 +4,11 @@ import { dirname, join } from 'node:path'
 import {
   appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, isForecastLedger, pinPreMatchReceipt,
   type ForecastBasis, type ForecastLedger, type ForecastReceipt, type ForecastUnavailable,
-} from '../src/domains/tournaments/forecast'
-import type { TournamentSeries } from '../src/domains/tournaments/read'
-import { createConditionalPowerResultReceipt } from './tournaments/conditionalPowerResultReceiptBuilder'
-import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/domains/tournaments/forecast'
-import { observeForecastDelivery } from './tournament-forecast-delivery'
+} from '../src/domains/tournaments/forecast.ts'
+import type { TournamentSeries } from '../src/domains/tournaments/read.ts'
+import { createConditionalPowerResultReceipt } from './tournaments/conditionalPowerResultReceiptBuilder.ts'
+import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/domains/tournaments/forecast.ts'
+import { observeForecastDelivery } from './tournament-forecast-delivery.ts'
 
 /** Offline-only receipt store. Nothing calls this from the collector or production worker. */
 export async function publishPreMatchReceiptOffline(root: string, input: {

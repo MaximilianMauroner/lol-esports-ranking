@@ -1,8 +1,8 @@
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
-import { WORLDS_2026_SWISS_RULES, applySwissWinner, swissBestOf, type SwissSeed } from './worlds2026Swiss'
-import type { SwissTeamStanding } from './worldsObservedRules'
-import { shuffled } from './worldsSimulation'
-import type { TournamentEvent, TournamentSeries } from './tournamentFeed'
+import { WORLDS_2026_SWISS_RULES, applySwissWinner, swissBestOf, type SwissSeed } from './worlds2026Swiss.ts'
+import type { SwissTeamStanding } from './worldsObservedRules.ts'
+import { shuffled } from './worldsSimulation.ts'
+import type { TournamentEvent, TournamentSeries } from './tournamentFeed.ts'
 
 /**
  * Deterministic "what if" preview of the Worlds 2026 Swiss stage.

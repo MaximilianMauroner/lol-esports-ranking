@@ -1,4 +1,4 @@
-import type { MatchRecord, TeamProfile } from '../../../types'
+import type { MatchRecord, TeamProfile } from '../../../types.ts'
 import { compareCodeUnits } from '../../../../../shared/codeUnitOrder.mjs'
 
 export const CANONICAL_MATCH_LEDGER_SCHEMA_VERSION = 2 as const

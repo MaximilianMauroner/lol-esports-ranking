@@ -1,7 +1,7 @@
-import type { MatchRecord, PublishedRatingScale, RatingComponents, RatingUpdateLedger, RosterBasis } from '../../types'
-import { eventKFactorForMatch, type EventWeightContext } from './eventWeighting'
-import { normalizedBestOf } from '../evidence/matchFormat'
-import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy'
+import type { MatchRecord, PublishedRatingScale, RatingComponents, RatingUpdateLedger, RosterBasis } from '../../types.ts'
+import { eventKFactorForMatch, type EventWeightContext } from './eventWeighting.ts'
+import { normalizedBestOf } from '../evidence/matchFormat.ts'
+import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy.ts'
 import {
   initialLeagueRating,
   initialTeamRating,
@@ -20,7 +20,7 @@ import {
   uncertaintyKMultiplierCeiling,
   uncertaintyKMultiplierFloor,
   uncertaintyKScale,
-} from '../policy/modelConfig'
+} from '../policy/modelConfig.ts'
 
 export function expectedScore(ratingA: number, ratingB: number) {
   return 1 / (1 + 10 ** ((ratingB - ratingA) / 400))

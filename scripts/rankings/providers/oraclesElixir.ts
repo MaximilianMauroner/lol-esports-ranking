@@ -1,14 +1,14 @@
-import type { MatchRecord, MatchRosterSnapshot, Region, Role, RosterCompleteness, RosterPlayerAppearance, TeamProfile } from '../../../src/domains/rankings/types'
+import type { MatchRecord, MatchRosterSnapshot, Region, Role, RosterCompleteness, RosterPlayerAppearance, TeamProfile } from '../../../src/domains/rankings/types.ts'
 import {
   inferEventTier,
   regionForCompetitionSide,
   regionForLeague,
   resolveHomeLeagueForCompetition,
-} from '../../../src/domains/rankings/evidence'
-import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../../src/domains/rankings/evidence'
+} from '../../../src/domains/rankings/evidence.ts'
+import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../../src/domains/rankings/evidence.ts'
 import { compareCodeUnits } from '../../../src/shared/codeUnitOrder.mjs'
-import { championPicks, PICK_ROLES } from './championPicks'
-import { providerDate, providerDatetimeUtc } from './providerTime'
+import { championPicks, PICK_ROLES } from './championPicks.ts'
+import { providerDate, providerDatetimeUtc } from './providerTime.ts'
 
 type CsvRecord = Record<string, string>
 

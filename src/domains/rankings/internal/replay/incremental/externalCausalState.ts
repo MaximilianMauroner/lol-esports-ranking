@@ -1,4 +1,4 @@
-import type { MatchRecord } from '../../../types'
+import type { MatchRecord } from '../../../types.ts'
 import {
   buildCausalPrefixSummary,
   reconcileCausalPrefix,
@@ -7,12 +7,12 @@ import {
   type CausalPrefixSummary,
   type CausalRecomputeDecision,
   type CausalSurfaceId,
-} from '../causalRecompute'
-import type { EventWeightContext } from '../eventWeighting'
-import type { PlacementTournamentLifecycle } from '../placementResiduals'
-import { buildRatingCheckpointEventContract, type RatingCheckpointEventContract } from '../ratingCheckpointInventory'
+} from '../causalRecompute.ts'
+import type { EventWeightContext } from '../eventWeighting.ts'
+import type { PlacementTournamentLifecycle } from '../placementResiduals.ts'
+import { buildRatingCheckpointEventContract, type RatingCheckpointEventContract } from '../ratingCheckpointInventory.ts'
 import { compareCodeUnits } from '../../../../../shared/codeUnitOrder.mjs'
-import { stableDigest } from './types'
+import { stableDigest } from './types.ts'
 
 export const REQUIRED_EXTERNAL_CAUSAL_SURFACES = [
   'sourced-player',

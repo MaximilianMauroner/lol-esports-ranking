@@ -5,15 +5,15 @@ import type {
   RatingUpdateLedger,
   TeamHistoryPoint,
   TeamStanding,
-} from '../../types'
-import type { PublicDeservedStandingComparison, PublicTeamRollingMovement } from '../../types'
-import type { RegionDeservedStandingComparison, RegionStrength } from './regionStrength'
+} from '../../types.ts'
+import type { PublicDeservedStandingComparison, PublicTeamRollingMovement } from '../../types.ts'
+import type { RegionDeservedStandingComparison, RegionStrength } from './regionStrength.ts'
 import {
   toPublishedRating,
   toPublishedRatingComponents,
   toPublishedRatingDelta,
-} from '../replay/ratingCalculations'
-import { publishedRatingScale } from '../policy/modelConfig'
+} from '../replay/ratingCalculations.ts'
+import { publishedRatingScale } from '../policy/modelConfig.ts'
 
 export type PublishedRatingTeamStandingInput = TeamStanding & {
   deservedStanding?: PublicDeservedStandingComparison

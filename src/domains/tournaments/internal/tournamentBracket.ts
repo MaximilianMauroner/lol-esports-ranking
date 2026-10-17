@@ -1,5 +1,5 @@
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
-import type { TournamentSeries } from './tournamentFeed'
+import type { TournamentSeries } from './tournamentFeed.ts'
 
 /**
  * Infers how an event is played from its schedule alone. Leaguepedia names

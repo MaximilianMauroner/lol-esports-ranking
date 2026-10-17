@@ -1,5 +1,5 @@
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
-import type { ObservationEvidence, SwissTeamStanding } from './worldsObservedRules'
+import type { ObservationEvidence, SwissTeamStanding } from './worldsObservedRules.ts'
 
 export const WORLDS_2026_SWISS_RULES = {
   id: 'worlds-2026-swiss-observed-v1',

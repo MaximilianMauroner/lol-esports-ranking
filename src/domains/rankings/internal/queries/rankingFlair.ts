@@ -1,4 +1,4 @@
-import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding, PublicTournamentMovementTeam } from '../../types'
+import type { PublicRollingUpsetWin, PublicRollingWindow, PublicTeamStanding, PublicTournamentMovementTeam } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type RankingTierLabel = 'S' | 'A' | 'B' | 'C'

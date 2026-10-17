@@ -1,7 +1,7 @@
-import type { CompactPlayer, PublicRankingManifest, PublicRankingShard, PublicRecentMatch, PublicTeamStanding, SnapshotFilter, SnapshotSourceBreakdown } from '../../types'
-import { deriveSpicyTakeConfidence, deriveTierLabels, type RankingTierLabel, type SpicyTakeConfidence } from './rankingFlair'
-import type { DataCoverage, DataSourceInfo, ModelInfo } from '../../types'
-import type { RatingComponents, Region, Role } from '../../types'
+import type { CompactPlayer, PublicRankingManifest, PublicRankingShard, PublicRecentMatch, PublicTeamStanding, SnapshotFilter, SnapshotSourceBreakdown } from '../../types.ts'
+import { deriveSpicyTakeConfidence, deriveTierLabels, type RankingTierLabel, type SpicyTakeConfidence } from './rankingFlair.ts'
+import type { DataCoverage, DataSourceInfo, ModelInfo } from '../../types.ts'
+import type { RatingComponents, Region, Role } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type TeamReceiptPlayer = {

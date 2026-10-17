@@ -1,4 +1,4 @@
-import { effectiveLeagueRating, leaguePriorFor, leagueTierFor } from '../policy/leagueTiers'
+import { effectiveLeagueRating, leaguePriorFor, leagueTierFor } from '../policy/leagueTiers.ts'
 import type {
   EventSummary,
   FactorBreakdown,
@@ -12,18 +12,18 @@ import type {
   TeamHistoryPoint,
   TeamProfile,
   TeamStanding,
-} from '../../types'
-import { evaluateTeamEligibility, matchLevelEligibilityHistory } from '../projections/eligibility'
-import { eventWeightContextForMatches } from './eventWeighting'
-import { ensureLeague } from './leagueRatings'
-import { homeLeagueForMatch, matchesByDate } from '../evidence/matchContext'
-import { buildEventSummaries, buildLeagueStrengths, buildSeasonSummaries } from '../projections/modelSummaries'
-import { buildPregamePlayerRatingEdges, type PregamePlayerRatingEdge } from '../players/playerModel'
+} from '../../types.ts'
+import { evaluateTeamEligibility, matchLevelEligibilityHistory } from '../projections/eligibility.ts'
+import { eventWeightContextForMatches } from './eventWeighting.ts'
+import { ensureLeague } from './leagueRatings.ts'
+import { homeLeagueForMatch, matchesByDate } from '../evidence/matchContext.ts'
+import { buildEventSummaries, buildLeagueStrengths, buildSeasonSummaries } from '../projections/modelSummaries.ts'
+import { buildPregamePlayerRatingEdges, type PregamePlayerRatingEdge } from '../players/playerModel.ts'
 import {
   applyCompletedPlacementResiduals,
   startEventTrackersForDate,
-} from './placementResiduals'
-import { applyEntityLocalContextDecayForDate } from './ratingContext'
+} from './placementResiduals.ts'
+import { applyEntityLocalContextDecayForDate } from './ratingContext.ts'
 import {
   clamp,
   evidenceWeightedPublishedLeagueAnchor,
@@ -35,13 +35,13 @@ import {
   recencyWeight,
   ratingComponents,
   ratingFromComponents,
-} from './ratingCalculations'
-import { createRatingRunState, ensureMatchRunEntities, type RatingRunState } from './ratingRunState'
-import type { PlacementTournamentLifecycle } from './placementResiduals'
-import { emitPregamePredictionsForDate, processRatingSeriesForDate } from '../../../../lib/ratingSeriesEngine'
-import { roundedContinuity } from './rosterContinuityRating'
-import { rosterBasisByTeam } from '../players/rosters'
-import { sideAdjustmentsFromSamples } from './sideAdjustments'
+} from './ratingCalculations.ts'
+import { createRatingRunState, ensureMatchRunEntities, type RatingRunState } from './ratingRunState.ts'
+import type { PlacementTournamentLifecycle } from './placementResiduals.ts'
+import { emitPregamePredictionsForDate, processRatingSeriesForDate } from '../../../../lib/ratingSeriesEngine.ts'
+import { roundedContinuity } from './rosterContinuityRating.ts'
+import { rosterBasisByTeam } from '../players/rosters.ts'
+import { sideAdjustmentsFromSamples } from './sideAdjustments.ts'
 import {
   directHeadToHeadContextConfig,
   initialLeagueRating,
@@ -57,11 +57,11 @@ import {
   splitBreakLeagueRetention,
   splitBreakMinimumGapDays,
   splitBreakTeamRetention,
-} from '../policy/modelConfig'
+} from '../policy/modelConfig.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
-export { buildPlayerModel } from '../players/playerModel'
-export { factorLabel, transparentGprModelMetadata } from '../policy/modelConfig'
+export { buildPlayerModel } from '../players/playerModel.ts'
+export { factorLabel, transparentGprModelMetadata } from '../policy/modelConfig.ts'
 
 export type RankingModelOutput = {
   standings: TeamStanding[]

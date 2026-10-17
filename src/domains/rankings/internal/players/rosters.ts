@@ -1,4 +1,4 @@
-import type { MatchRecord, MatchRosterSnapshot, Role, RosterBasis } from '../../types'
+import type { MatchRecord, MatchRosterSnapshot, Role, RosterBasis } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 const rosterRoleShares: Record<Role, number> = {

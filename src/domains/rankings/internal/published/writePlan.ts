@@ -6,7 +6,7 @@ import {
   createTeamDirectory,
   createTeamHistoryArtifacts,
   createTournamentMovementArtifacts,
-} from '../projections/snapshot'
+} from '../projections/snapshot.ts'
 import {
   parsePublicPlayerDirectory,
   parsePublicRankingManifest,
@@ -24,10 +24,10 @@ import {
   scopeArtifactFileNameForKey,
   teamHistoryShardFileName,
   tournamentMovementShardFileName,
-} from './schema'
+} from './schema.ts'
 import { canonicalPublicLogicalPath } from './logicalPath.mjs'
 import { artifactReferences, assertReferenceClosure } from './logicalReferences.mjs'
-import type { TournamentInstanceId } from '../evidence/internationalTournaments'
+import type { TournamentInstanceId } from '../evidence/internationalTournaments.ts'
 
 type StaticRankingData = Parameters<typeof createStaticRankingSummaryData>[0]
 

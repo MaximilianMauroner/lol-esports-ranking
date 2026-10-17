@@ -1,6 +1,6 @@
-import type { TeamProfile } from '../../types'
-import { teamBrandingFor } from '../../../../data/teamBranding'
-export { regionForLeague } from './competitionTaxonomy'
+import type { TeamProfile } from '../../types.ts'
+import { teamBrandingFor } from '../../../../data/teamBranding.ts'
+export { regionForLeague } from './competitionTaxonomy.ts'
 
 const baseKnownTeamIdentities: Record<string, TeamProfile> = {
   "Anyone's Legend": { name: "Anyone's Legend", code: 'AL', region: 'LPL', league: 'LPL' },

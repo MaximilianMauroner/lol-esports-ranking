@@ -1,4 +1,4 @@
-import type { DataSourceInfo, SnapshotSourceBreakdown } from '../../types'
+import type { DataSourceInfo, SnapshotSourceBreakdown } from '../../types.ts'
 
 // The importer names each source "<prefix>: <file>", for example
 // "Oracle's Elixir CSV: 2026_LoL_esports_match_data_from_OraclesElixir.csv".

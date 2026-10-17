@@ -1,5 +1,5 @@
-import type { PregamePrediction, PregamePredictionVariant, PregamePredictionVariantKey } from '../../types'
-import type { NeutralWinProbability } from '../queries/winProbability'
+import type { PregamePrediction, PregamePredictionVariant, PregamePredictionVariantKey } from '../../types.ts'
+import type { NeutralWinProbability } from '../queries/winProbability.ts'
 
 export function predictionVariantFromWinProbability(
   prediction: NeutralWinProbability,

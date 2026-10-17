@@ -12,8 +12,8 @@ export type LolEsportsScheduleSnapshot = {
   warnings?: string[]
 }
 
-import type { LolEsportsReferenceEvent, LolEsportsReferenceGame, LolEsportsReferenceTeam } from '../../../src/domains/rankings/evidence'
-export type { LolEsportsReferenceEvent, LolEsportsReferenceGame, LolEsportsReferenceTeam } from '../../../src/domains/rankings/evidence'
+import type { LolEsportsReferenceEvent, LolEsportsReferenceGame, LolEsportsReferenceTeam } from '../../../src/domains/rankings/evidence.ts'
+export type { LolEsportsReferenceEvent, LolEsportsReferenceGame, LolEsportsReferenceTeam } from '../../../src/domains/rankings/evidence.ts'
 
 export type LolEsportsReferenceImportResult = {
   events: LolEsportsReferenceEvent[]

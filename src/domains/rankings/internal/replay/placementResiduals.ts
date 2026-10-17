@@ -1,10 +1,10 @@
-import { effectiveLeagueRating, leaguePriorFor } from '../policy/leagueTiers'
-import type { MatchRecord, RatingUpdateLedger, TeamProfile } from '../../types'
-import { eventWeightMultiplierForMatch, type EventWeightContext } from './eventWeighting'
-import { homeLeagueForMatch } from '../evidence/matchContext'
-import { tournamentInstanceForEvent, type TournamentLifecycleStatus } from '../evidence/internationalTournaments'
-import { resolveCanonicalSeries, type CanonicalSeries } from '../evidence/seriesResolver'
-import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy'
+import { effectiveLeagueRating, leaguePriorFor } from '../policy/leagueTiers.ts'
+import type { MatchRecord, RatingUpdateLedger, TeamProfile } from '../../types.ts'
+import { eventWeightMultiplierForMatch, type EventWeightContext } from './eventWeighting.ts'
+import { homeLeagueForMatch } from '../evidence/matchContext.ts'
+import { tournamentInstanceForEvent, type TournamentLifecycleStatus } from '../evidence/internationalTournaments.ts'
+import { resolveCanonicalSeries, type CanonicalSeries } from '../evidence/seriesResolver.ts'
+import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy.ts'
 import {
   initialTeamRating,
   maximumUncertainty,
@@ -15,14 +15,14 @@ import {
   worldsPlacementResidualCap,
   worldsPlacementResidualK,
   tournamentPlacementStagePoints,
-} from '../policy/modelConfig'
+} from '../policy/modelConfig.ts'
 import {
   clamp,
   emptyRatingUpdateLedger,
   ratingComponents,
   ratingFromComponents,
   roundedRatingUpdateLedger,
-} from './ratingCalculations'
+} from './ratingCalculations.ts'
 
 type PlacementEventTracker = {
   event: string

@@ -1,1 +1,1 @@
-export * from './internal/published/schema'
+export * from './internal/published/schema.ts'

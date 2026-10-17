@@ -1,4 +1,4 @@
-import { readdirSync, existsSync } from 'node:fs'
+import { readdirSync, existsSync, realpathSync } from 'node:fs'
 import { dirname, resolve, relative } from 'node:path'
 import { builtinModules } from 'node:module'
 import { pathToFileURL } from 'node:url'
@@ -108,7 +108,7 @@ function checkGlobals(source, checker, report) {
 }
 
 export function checkDependencies(root = process.cwd()) {
-  root = resolve(root)
+  root = realpathSync(resolve(root))
   const files = ['src', 'scripts', 'tools', 'tests'].flatMap(directory => sourceFiles(root, directory))
   if (existsSync(resolve(root, 'vite.config.ts'))) files.push(resolve(root, 'vite.config.ts'))
   const configPath = resolve(root, 'tsconfig.app.json')
@@ -141,7 +141,9 @@ export function checkDependencies(root = process.cwd()) {
           const implementation = resolvedPath.replace(/\.d\.mts$/, '.mjs').replace(/\.d\.cts$/, '.cjs').replace(/\.d\.ts$/, '.js')
           if (existsSync(implementation)) resolvedPath = implementation
         }
+        if (resolvedPath && existsSync(resolvedPath)) resolvedPath = realpathSync(resolvedPath)
         const local = resolvedPath && !resolved.isExternalLibraryImport ? relative(root, resolvedPath).replaceAll('\\', '/') : undefined
+        if (local?.startsWith('../')) report(node, `Source import escapes the source root: ${specifier}`)
         const target = local && ownerOf(local)
         if (target) {
           if (!owner.imports.includes(target.name)) report(node, `${owner.name} cannot import ${target.name} source ${local}`)

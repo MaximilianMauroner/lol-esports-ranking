@@ -1,12 +1,12 @@
 import {
   eventTierConfig,
   preseasonEventWeightMultiplier,
-} from '../policy/rankingConfig'
-import type { MatchRecord } from '../../types'
+} from '../policy/rankingConfig.ts'
+import type { MatchRecord } from '../../types.ts'
 
 type EventScoringMatch = Pick<MatchRecord, 'date' | 'tier' | 'event' | 'phase' | 'league'>
-import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy'
-import { resolveCanonicalSeries } from '../evidence/seriesResolver'
+import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy.ts'
+import { resolveCanonicalSeries } from '../evidence/seriesResolver.ts'
 
 export type EventWeightContext = {
   worldsEndDateByCalendarYear: ReadonlyMap<number, string>

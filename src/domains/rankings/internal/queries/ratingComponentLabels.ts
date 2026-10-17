@@ -1,4 +1,4 @@
-import type { ChartAttributionEntry } from '../../../../shared/chartPoints'
+import type { ChartAttributionEntry } from '../../../../shared/chartPoints.ts'
 
 export type PowerComponentKey = Extract<ChartAttributionEntry['key'], 'league' | 'stable' | 'roster' | 'form' | 'context'>
 

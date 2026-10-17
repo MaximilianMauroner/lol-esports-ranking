@@ -1,12 +1,12 @@
-import { canonicalTeamNameFor } from './teamIdentity'
+import { canonicalTeamNameFor } from './teamIdentity.ts'
 import type {
   MatchRecord,
   SeriesFormat,
   SeriesFormatBasis,
   SeriesFormatConfidence,
   SeriesState,
-} from '../../types'
-import { normalizedBestOf } from './matchFormat'
+} from '../../types.ts'
+import { normalizedBestOf } from './matchFormat.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type CanonicalSeries = {

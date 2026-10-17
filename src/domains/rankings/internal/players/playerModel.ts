@@ -23,8 +23,8 @@ import {
   individualResidualMinimumRankedGames,
   roleStatBaselines,
   playerModelParameters,
-} from '../policy/playerPolicy'
-import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from '../policy/leagueTiers'
+} from '../policy/playerPolicy.ts'
+import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from '../policy/leagueTiers.ts'
 import type {
   LeagueStrength,
   MatchRecord,
@@ -41,17 +41,17 @@ import type {
   Side,
   SourceTrace,
   TeamProfile,
-} from '../../types'
-import { executionIndexFromStats } from '../policy/executionResidual'
-import { createPlayerPerformanceAccumulator, recordPlayerPerformance, summarizePlayerPerformance, type PlayerPerformanceAccumulator } from './playerPerformance'
+} from '../../types.ts'
+import { executionIndexFromStats } from '../policy/executionResidual.ts'
+import { createPlayerPerformanceAccumulator, recordPlayerPerformance, summarizePlayerPerformance, type PlayerPerformanceAccumulator } from './playerPerformance.ts'
 import {
   eventWeightContextForMatches,
   eventWeightForMatch,
   type EventWeightContext,
-} from '../replay/eventWeighting'
-import { homeLeagueForMatch, sourceTraceFor } from '../evidence/matchContext'
-import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from '../evidence/seriesResolver'
-import { mergeRosterObservation } from './rosters'
+} from '../replay/eventWeighting.ts'
+import { homeLeagueForMatch, sourceTraceFor } from '../evidence/matchContext.ts'
+import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from '../evidence/seriesResolver.ts'
+import { mergeRosterObservation } from './rosters.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -59,7 +59,7 @@ import {
   reconcileCausalPrefix,
   type CausalInputRow,
   type CausalPrefixSummary,
-} from '../replay/causalRecompute'
+} from '../replay/causalRecompute.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type PregamePlayerRatingEdge = {

@@ -1,26 +1,86 @@
-export * from './internal/players/playerPerformance'
-export * from './internal/players/rosters'
-export * from './internal/players/rosterEras'
-export * from './internal/projections/publishedRatingArtifacts'
-export * from './internal/projections/modelSummaries'
-export * from './internal/projections/regionStrength'
-export * from './internal/projections/deservedStanding'
-export * from './internal/projections/eligibility'
-export * from './internal/projections/predictionContext'
-export * from './internal/projections/matchupMath'
-export * from './internal/projections/binaryPredictionMetrics'
-export * from './internal/queries/rankingBoard'
-export * from './internal/queries/rankingFlair'
-export * from './internal/queries/matchLedger'
-export * from './internal/queries/matchEventGroups'
-export * from './internal/queries/playerScopes'
-export * from './internal/queries/nearTies'
-export * from './internal/queries/rankingScopeLabel'
-export * from './internal/queries/defaultScope'
-export * from './internal/queries/publicMatchup'
-export * from './internal/queries/winProbability'
-export * from './internal/queries/ratingComponentLabels'
-export * from './internal/queries/receipts'
-export * from './internal/queries/timelineCompaction'
-export { ratingScaleFromUnknown, toInternalRating, toInternalRatingDelta, toPublishedRating, toPublishedRatingDelta, toPublishedRatingComponents } from './internal/replay/ratingCalculations'
-export * from '../../lib/rankingExplanations'
+export {
+  type PlayerPerformanceAccumulator,
+  createPlayerPerformanceAccumulator,
+  playerPerformanceMetricKeys,
+  playerPerformanceMetrics,
+  recordPlayerPerformance,
+} from './internal/players/playerPerformance.ts'
+export {
+  binaryMetricContract,
+  binaryPredictionLoss,
+} from './internal/projections/binaryPredictionMetrics.ts'
+export {
+  matchLevelEligibilityHistory,
+} from './internal/projections/eligibility.ts'
+export {
+  DEFAULT_BLUE_SIDE_RATING_EDGE,
+  seriesSwingStateProbability,
+} from './internal/projections/matchupMath.ts'
+export {
+  type RegionStrength,
+  displayRegionPowerScore,
+  displayRegionTotalTeamRating,
+  isRegionPowerTeam,
+} from './internal/projections/regionStrength.ts'
+export {
+  currentSeasonScope,
+  preferredPublicSnapshotKey,
+} from './internal/queries/defaultScope.ts'
+export {
+  groupedMatchEvents,
+} from './internal/queries/matchEventGroups.ts'
+export {
+  compatibleMatchEvents,
+  hasConsistentImpactDirection,
+  matchEventFilterLabels,
+  matchEventLabel,
+} from './internal/queries/matchLedger.ts'
+export {
+  NEAR_TIE_WIN_PROBABILITY,
+  type NearTiePosition,
+  nearTieGroups,
+  nearTiePositions,
+} from './internal/queries/nearTies.ts'
+export {
+  emptyPlayerScope,
+  resolvePlayerScope,
+} from './internal/queries/playerScopes.ts'
+export {
+  type PublicMatchupModel,
+  type PublicMatchupSideAssumption,
+  estimatePublicMatchup,
+  gameWinChanceForGap,
+} from './internal/queries/publicMatchup.ts'
+export {
+  type BoardMovement,
+  ELIGIBILITY_FILTERS,
+  type EligibilityFilter,
+  type RankingUniverse,
+  SORT_DIRECTIONS,
+  SORT_KEYS,
+  type SortDirection,
+  type SortKey,
+  TIER_FILTERS,
+  type TierFilter,
+  createRankingBoard,
+} from './internal/queries/rankingBoard.ts'
+export {
+  type RankingMovementPick,
+  type RankingTierLabel,
+} from './internal/queries/rankingFlair.ts'
+export {
+  rankingScopePeriod,
+} from './internal/queries/rankingScopeLabel.ts'
+export {
+  POWER_COMPONENT_LABELS,
+} from './internal/queries/ratingComponentLabels.ts'
+export {
+  groupEntriesByDate,
+} from './internal/queries/timelineCompaction.ts'
+export {
+  neutralWinProbability,
+  seriesWinProbability,
+} from './internal/queries/winProbability.ts'
+export {
+  ratingScaleFromUnknown,
+} from './internal/replay/ratingCalculations.ts'

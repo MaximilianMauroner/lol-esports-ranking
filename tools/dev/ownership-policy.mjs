@@ -55,6 +55,9 @@ const matches = (path, prefixes) => prefixes.some(prefix => prefix.endsWith('/')
 export function domainImportError(file, target) {
   const caller = ownerOf(file)?.name
   const owner = ownerOf(target)?.name
+  if (target.startsWith('src/browser/rankings/published/') && caller !== 'tests' && !file.startsWith('src/browser/')) {
+    return `Browser resource implementation is private: ${target}`
+  }
   if (caller === owner || caller === 'tests') return
   if (retainedRankings.has(target) && (caller === 'production' || caller === 'tools')) return
   if (target === 'src/domains/rankings/published-read.ts' || target.startsWith('src/domains/rankings/internal/published/')) {

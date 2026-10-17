@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
-import { isTournamentFeed, type TournamentFeed } from '../src/domains/tournaments/read'
+import { isTournamentFeed, type TournamentFeed } from '../src/domains/tournaments/read.ts'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import { assertBucketLease, readBucketJson, writeBucketJson, type BucketClient, type BucketConfig, type BucketLeaseAuthority } from './railway-bucket.mjs'
 

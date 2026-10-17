@@ -1,18 +1,18 @@
-import { defaultProbabilityCalibration, type ProbabilityCalibration } from './winProbability'
-import type { ModelInfo, RankingSummaryStanding } from '../../types'
-import { publishedRatingScale } from '../policy/modelConfig'
+import { defaultProbabilityCalibration, type ProbabilityCalibration } from './winProbability.ts'
+import type { ModelInfo, RankingSummaryStanding } from '../../types.ts'
+import { publishedRatingScale } from '../policy/modelConfig.ts'
 import {
   estimateMatchupProbability,
   type MatchupSideAssumption,
   type MatchupUncertaintyBand,
   type ProbabilityBand,
-} from '../projections/matchupMath'
+} from '../projections/matchupMath.ts'
 import {
   ratingScaleFromUnknown,
   toInternalRating,
   toInternalRatingDelta,
   toPublishedRatingDelta,
-} from '../replay/ratingCalculations'
+} from '../replay/ratingCalculations.ts'
 
 export type PublicMatchupSideAssumption = 'neutral' | 'home-blue' | 'home-red'
 

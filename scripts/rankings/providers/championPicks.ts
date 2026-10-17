@@ -1,4 +1,4 @@
-import type { ChampionPicks, Role } from '../../../src/domains/rankings/types'
+import type { ChampionPicks, Role } from '../../../src/domains/rankings/types.ts'
 
 export const PICK_ROLES: readonly Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 

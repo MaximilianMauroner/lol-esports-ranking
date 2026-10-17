@@ -4,12 +4,12 @@ import {
   isUnknownLeague,
   leagueProfileScore,
   regionForLeague,
-} from './competitionTaxonomy'
-import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from './teamIdentity'
-import type { MatchRecord, Region, TeamProfile } from '../../types'
+} from './competitionTaxonomy.ts'
+import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from './teamIdentity.ts'
+import type { MatchRecord, Region, TeamProfile } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
-export { isCompetitionOnlyLeague, isUnknownLeague } from './competitionTaxonomy'
+export { isCompetitionOnlyLeague, isUnknownLeague } from './competitionTaxonomy.ts'
 
 /** Fill tournament placeholders from domestic evidence available before the game. */
 export function resolveCompetitionHomeLeagues(matches: MatchRecord[]) {

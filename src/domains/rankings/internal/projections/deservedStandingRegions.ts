@@ -1,5 +1,5 @@
-import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../evidence/regionTaxonomy'
-import type { MatchRecord, Region, TeamProfile } from '../../types'
+import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../evidence/regionTaxonomy.ts'
+import type { MatchRecord, Region, TeamProfile } from '../../types.ts'
 import {
   deservedStandingModelParameters,
   dssCausalInputsForMatches,
@@ -13,7 +13,7 @@ import {
   dssRegionStagePoints,
   dssSeriesWinProbability,
   type DssSeriesLedgerEntry,
-} from './deservedStanding'
+} from './deservedStanding.ts'
 import {
   dssTeamContextIdentity,
   buildDeservedStandingModel,
@@ -21,8 +21,8 @@ import {
   type DeservedStandingModelOptions,
   type DeservedStandingTeamSummary,
   type DssTeamCausalCallbackSemanticIds,
-} from './deservedStandingModel'
-import { isCompetitionOnlyLeague, isUnknownLeague } from '../evidence/teamProfiles'
+} from './deservedStandingModel.ts'
+import { isCompetitionOnlyLeague, isUnknownLeague } from '../evidence/teamProfiles.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -30,7 +30,7 @@ import {
   reconcileCausalPrefix,
   type CausalInputRow,
   type CausalPrefixSummary,
-} from '../replay/causalRecompute'
+} from '../replay/causalRecompute.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type DeservedStandingRegionSeedExpectationContext = {

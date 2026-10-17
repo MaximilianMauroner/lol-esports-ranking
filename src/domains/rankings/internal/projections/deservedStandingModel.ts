@@ -1,4 +1,4 @@
-import type { DeservedStandingTeamComponents, MatchRecord } from '../../types'
+import type { DeservedStandingTeamComponents, MatchRecord } from '../../types.ts'
 import {
   deservedStandingModelParameters,
   dssCausalInputsForMatches,
@@ -8,15 +8,15 @@ import {
   dssWeightedSeriesFromLedgerEntry,
   type DssSeriesLedgerEntry,
   type DssSeriesLedgerOptions,
-} from './deservedStanding'
+} from './deservedStanding.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
   reconcileCausalPrefix,
   type CausalInputRow,
   type CausalPrefixSummary,
-} from '../replay/causalRecompute'
-import { eventWeightContextForMatches } from '../replay/eventWeighting'
+} from '../replay/causalRecompute.ts'
+import { eventWeightContextForMatches } from '../replay/eventWeighting.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type DeservedStandingModelOptions = DssSeriesLedgerOptions & {

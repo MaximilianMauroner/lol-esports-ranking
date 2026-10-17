@@ -1,4 +1,4 @@
-import { WORLDS_2025_SWISS_RULES, type ObservationEvidence, type ObservedSwissMatch, type SwissReplayResult } from './worldsObservedRules'
+import { WORLDS_2025_SWISS_RULES, type ObservationEvidence, type ObservedSwissMatch, type SwissReplayResult } from './worldsObservedRules.ts'
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
 
 export const WORLDS_2025_KNOCKOUT_RULES = {

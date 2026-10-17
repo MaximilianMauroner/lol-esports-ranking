@@ -1,6 +1,6 @@
-import type { MatchRecord, TeamProfile } from '../../types'
-import { leaguePriorFor } from '../policy/leagueTiers'
-import { homeLeagueForMatch } from '../evidence/matchContext'
+import type { MatchRecord, TeamProfile } from '../../types.ts'
+import { leaguePriorFor } from '../policy/leagueTiers.ts'
+import { homeLeagueForMatch } from '../evidence/matchContext.ts'
 
 export type ContextDecayConfig = {
   initialTeamRating: number

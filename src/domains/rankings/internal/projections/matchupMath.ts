@@ -1,6 +1,6 @@
-import type { Side } from '../../types'
-import { normalizedDecisiveBestOf, type DecisiveBestOf } from '../evidence/matchFormat'
-import { neutralWinProbability, type ProbabilityTeam, type ProbabilityCalibration } from '../queries/winProbability'
+import type { Side } from '../../types.ts'
+import { normalizedDecisiveBestOf, type DecisiveBestOf } from '../evidence/matchFormat.ts'
+import { neutralWinProbability, type ProbabilityTeam, type ProbabilityCalibration } from '../queries/winProbability.ts'
 
 export const DEFAULT_BLUE_SIDE_RATING_EDGE = 24
 

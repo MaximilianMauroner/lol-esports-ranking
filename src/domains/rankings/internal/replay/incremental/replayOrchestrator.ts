@@ -1,12 +1,12 @@
-import type { MatchRecord } from '../../../types'
+import type { MatchRecord } from '../../../types.ts'
 import {
   createRatingReplayContext,
   materializeRankingModel,
   replayRatingDates,
   type RankingModelOutput,
   type RatingReplayContext,
-} from '../model'
-import type { RatingRunState } from '../ratingRunState'
+} from '../model.ts'
+import type { RatingRunState } from '../ratingRunState.ts'
 
 export type RankingReplayResult = {
   context: RatingReplayContext

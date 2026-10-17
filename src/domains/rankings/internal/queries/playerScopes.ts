@@ -1,5 +1,5 @@
-import type { PublicPlayerDirectory, SnapshotFilter } from '../../types'
-import { snapshotKey } from '../published/schema'
+import type { PublicPlayerDirectory, SnapshotFilter } from '../../types.ts'
+import { snapshotKey } from '../published/schema.ts'
 
 export type PlayerScopeBasis = 'current' | 'season-fallback' | 'all-seasons-fallback'
 

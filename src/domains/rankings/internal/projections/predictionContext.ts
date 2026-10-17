@@ -1,7 +1,7 @@
-import type { MatchRecord, MatchRosterSnapshot, TeamProfile, WalkForwardSegmentKey } from '../../types'
-import { normalizedBestOf } from '../evidence/matchFormat'
-import { rosterFingerprint } from '../players/rosters'
-import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy'
+import type { MatchRecord, MatchRosterSnapshot, TeamProfile, WalkForwardSegmentKey } from '../../types.ts'
+import { normalizedBestOf } from '../evidence/matchFormat.ts'
+import { rosterFingerprint } from '../players/rosters.ts'
+import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy.ts'
 
 export const walkForwardSegmentKeys = [
   'bo1',

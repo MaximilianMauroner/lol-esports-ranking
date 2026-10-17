@@ -1,5 +1,5 @@
-import { estimatePublicMatchup, type PublicMatchupModel } from './publicMatchup'
-import type { RankingSummaryStanding } from '../../types'
+import { estimatePublicMatchup, type PublicMatchupModel } from './publicMatchup.ts'
+import type { RankingSummaryStanding } from '../../types.ts'
 
 /**
  * Two teams are a near tie when the higher one wins fewer than this share of

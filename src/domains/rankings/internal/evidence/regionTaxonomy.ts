@@ -12,4 +12,4 @@ export {
   ratedTeamLeagues,
   ratedTeamUniverseModelParameters,
   ratedTeamUniversePolicy,
-} from './competitionTaxonomy'
+} from './competitionTaxonomy.ts'

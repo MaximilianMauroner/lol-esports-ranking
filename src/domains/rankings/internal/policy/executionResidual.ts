@@ -1,5 +1,5 @@
-import type { MatchRecord } from '../../types'
-import { publishedFeatureWeight, shadowFeatureWeight, type PredictionFeaturePolicy } from './predictionFeaturePolicy'
+import type { MatchRecord } from '../../types.ts'
+import { publishedFeatureWeight, shadowFeatureWeight, type PredictionFeaturePolicy } from './predictionFeaturePolicy.ts'
 
 export const executionResidualWeights = {
   kills: 0.14,

@@ -6,16 +6,16 @@ import type {
   MatchRecord,
   Region,
   Role,
-} from '../../types'
+} from '../../types.ts'
 import {
   eventWeightContextForMatches,
   eventWeightMultiplierForMatch,
   type EventWeightContext,
-} from '../replay/eventWeighting'
-import { causalInputRow, type CausalInputRow } from '../replay/causalRecompute'
-import type { NormalizedBestOf } from '../evidence/matchFormat'
-import { clamp } from '../replay/ratingCalculations'
-import { resolveCanonicalSeries } from '../evidence/seriesResolver'
+} from '../replay/eventWeighting.ts'
+import { causalInputRow, type CausalInputRow } from '../replay/causalRecompute.ts'
+import type { NormalizedBestOf } from '../evidence/matchFormat.ts'
+import { clamp } from '../replay/ratingCalculations.ts'
+import { resolveCanonicalSeries } from '../evidence/seriesResolver.ts'
 
 export const deservedStandingModelParameters = {
   baseScore: 1500,

@@ -1,12 +1,12 @@
-import { eventTierConfig } from '../policy/rankingConfig'
-import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../../types'
-import { digestCausalValue } from '../replay/causalRecompute'
-import { unavailablePowerPreview, type PowerPreviewUnavailable } from './contest'
-import { conditionalPowerBasisProblem, hasCompleteConditionalPowerHistoricalSeries, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay'
-import { createRatingReplayContext, replayRatingDates } from '../replay/model'
-import type { PlacementTournamentLifecycle } from '../replay/placementResiduals'
-import { decodeRatingCheckpoint, encodeRatingCheckpoint, type RatingCheckpointIdentity } from '../replay/ratingCheckpoint'
-import { buildRatingCheckpointEventContract } from '../replay/ratingCheckpointInventory'
+import { eventTierConfig } from '../policy/rankingConfig.ts'
+import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../../types.ts'
+import { digestCausalValue } from '../replay/causalRecompute.ts'
+import { unavailablePowerPreview, type PowerPreviewUnavailable } from './contest.ts'
+import { conditionalPowerBasisProblem, hasCompleteConditionalPowerHistoricalSeries, hasUniqueConditionalPowerGameAliases, hasUniqueConditionalPowerSeriesAliases, type ConditionalPowerReplayBasis } from './conditionalPowerReplay.ts'
+import { createRatingReplayContext, replayRatingDates } from '../replay/model.ts'
+import type { PlacementTournamentLifecycle } from '../replay/placementResiduals.ts'
+import { decodeRatingCheckpoint, encodeRatingCheckpoint, type RatingCheckpointIdentity } from '../replay/ratingCheckpoint.ts'
+import { buildRatingCheckpointEventContract } from '../replay/ratingCheckpointInventory.ts'
 
 type BasisSource = Omit<ConditionalPowerReplayBasis, 'context' | 'state' | 'preStateId'> & {
   /** The producer must identify the complete immutable prefix, including its terminal UTC date. */

@@ -1,6 +1,6 @@
-import type { LeagueStrength, LeagueTierName, Region } from '../../types'
-import type { PublicTeamStanding } from '../../types'
-import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../evidence/regionTaxonomy'
+import type { LeagueStrength, LeagueTierName, Region } from '../../types.ts'
+import type { PublicTeamStanding } from '../../types.ts'
+import { currentTopTierRegionForLeague, isMajorRegionPowerRegion } from '../evidence/regionTaxonomy.ts'
 
 export type RegionStrength = {
   region: Region | string

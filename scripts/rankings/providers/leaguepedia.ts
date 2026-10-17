@@ -1,15 +1,15 @@
-import type { MatchRecord, Region, TeamProfile } from '../../../src/domains/rankings/types'
+import type { MatchRecord, Region, TeamProfile } from '../../../src/domains/rankings/types.ts'
 import {
   inferEventTier,
   inferLeagueFromEvent,
   regionForCompetitionSide,
   regionForLeague,
   resolveHomeLeagueForCompetition,
-} from '../../../src/domains/rankings/evidence'
-import { canonicalTeamNameFor, cleanDisplayName, teamCodeFor, teamIdentityFor } from '../../../src/domains/rankings/evidence'
+} from '../../../src/domains/rankings/evidence.ts'
+import { canonicalTeamNameFor, cleanDisplayName, teamCodeFor, teamIdentityFor } from '../../../src/domains/rankings/evidence.ts'
 import { compareCodeUnits } from '../../../src/shared/codeUnitOrder.mjs'
-import { championPicks } from './championPicks'
-import { providerDate, providerDatetimeUtc } from './providerTime'
+import { championPicks } from './championPicks.ts'
+import { providerDate, providerDatetimeUtc } from './providerTime.ts'
 
 export type LeaguepediaSnapshot = {
   source?: string

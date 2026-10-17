@@ -1,10 +1,10 @@
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
-import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast'
-import { forecastWorlds2026PlayIn, replayWorlds2026PlayIn, WORLDS_2026_PLAY_IN_RULES, type Worlds2026PlayInInput } from './worlds2026PlayIn'
-import { forecastWorlds2026Knockout, replayWorlds2026Knockout, WORLDS_2026_KNOCKOUT_RULES, type Worlds2026KnockoutInput } from './worlds2026Knockout'
+import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import { forecastWorlds2026PlayIn, replayWorlds2026PlayIn, WORLDS_2026_PLAY_IN_RULES, type Worlds2026PlayInInput } from './worlds2026PlayIn.ts'
+import { forecastWorlds2026Knockout, replayWorlds2026Knockout, WORLDS_2026_KNOCKOUT_RULES, type Worlds2026KnockoutInput } from './worlds2026Knockout.ts'
 import { applySwissWinner, replayWorlds2026Swiss, validWorldsEvidence, validWorldsTime, WORLDS_2026_SWISS_RULES, worldsUnavailable,
-  type SwissReplay, type Worlds2026SwissEntrant, type Worlds2026SwissInput, type WorldsUnavailable } from './worlds2026Swiss'
-import type { ObservationEvidence, SwissTeamStanding } from './worldsObservedRules'
+  type SwissReplay, type Worlds2026SwissEntrant, type Worlds2026SwissInput, type WorldsUnavailable } from './worlds2026Swiss.ts'
+import type { ObservationEvidence, SwissTeamStanding } from './worldsObservedRules.ts'
 
 export type Worlds2026EventInput = {
   format: 'worlds-2026'

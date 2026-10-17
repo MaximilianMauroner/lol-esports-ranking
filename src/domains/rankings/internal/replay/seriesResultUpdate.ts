@@ -1,8 +1,8 @@
-import { leagueTierFor } from '../policy/leagueTiers'
-import type { SeriesFormat } from '../../types'
-import { rosterVolatilityMultiplier, uncertaintyKMultiplier } from './ratingCalculations'
-import { domesticStableTransferWeightsByTier, latentStrengthResultBudgetShares, ratingUpdateRecencyWeight } from '../policy/modelConfig'
-import { neutralWinProbability } from '../queries/winProbability'
+import { leagueTierFor } from '../policy/leagueTiers.ts'
+import type { SeriesFormat } from '../../types.ts'
+import { rosterVolatilityMultiplier, uncertaintyKMultiplier } from './ratingCalculations.ts'
+import { domesticStableTransferWeightsByTier, latentStrengthResultBudgetShares, ratingUpdateRecencyWeight } from '../policy/modelConfig.ts'
+import { neutralWinProbability } from '../queries/winProbability.ts'
 
 type ResultTeam = {
   team: string

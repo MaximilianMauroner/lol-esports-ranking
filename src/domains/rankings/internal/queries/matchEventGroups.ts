@@ -1,7 +1,7 @@
-import { inferLeagueFromEvent, leagueTierFor } from '../evidence/competitionTaxonomy'
+import { inferLeagueFromEvent, leagueTierFor } from '../evidence/competitionTaxonomy.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
-import { compatibleMatchEvents } from './matchLedger'
-import type { PublicMatchHistorySeriesRef } from '../../types'
+import { compatibleMatchEvents } from './matchLedger.ts'
+import type { PublicMatchHistorySeriesRef } from '../../types.ts'
 
 type EventRef = Pick<PublicMatchHistorySeriesRef, 'league' | 'event'>
 

@@ -1,5 +1,5 @@
-import type { MatchRecord } from '../../types'
-import { sideAdjustmentShrinkageGames } from '../policy/modelConfig'
+import type { MatchRecord } from '../../types.ts'
+import { sideAdjustmentShrinkageGames } from '../policy/modelConfig.ts'
 
 export type SideAdjustmentSamples = Map<string, { blueWins: number; total: number }>
 

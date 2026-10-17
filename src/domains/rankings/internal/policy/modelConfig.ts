@@ -4,16 +4,16 @@ import {
   preseasonEventWeightMultiplier,
   preseasonEventWeightPolicy,
   preseasonEventWeightWindow,
-} from './rankingConfig'
-import { leagueTierModelParameters } from './leagueTiers'
-import { currentRegionTaxonomyModelParameters, ratedTeamUniverseModelParameters } from '../evidence/regionTaxonomy'
-import type { FactorBreakdown, PublishedRatingScale } from '../../types'
-import { defaultEligibilityConfig } from '../projections/eligibility'
-import { executionResidualModelParameters } from './executionResidual'
-import { playerModelParameters } from './playerPolicy'
-import { publishedFeatureWeight, shadowFeatureWeight, type PredictionFeaturePolicy } from './predictionFeaturePolicy'
-import { walkForwardSegmentKeys } from '../projections/predictionContext'
-import { defaultRosterContinuityConfig } from '../players/rosters'
+} from './rankingConfig.ts'
+import { leagueTierModelParameters } from './leagueTiers.ts'
+import { currentRegionTaxonomyModelParameters, ratedTeamUniverseModelParameters } from '../evidence/regionTaxonomy.ts'
+import type { FactorBreakdown, PublishedRatingScale } from '../../types.ts'
+import { defaultEligibilityConfig } from '../projections/eligibility.ts'
+import { executionResidualModelParameters } from './executionResidual.ts'
+import { playerModelParameters } from './playerPolicy.ts'
+import { publishedFeatureWeight, shadowFeatureWeight, type PredictionFeaturePolicy } from './predictionFeaturePolicy.ts'
+import { walkForwardSegmentKeys } from '../projections/predictionContext.ts'
+import { defaultRosterContinuityConfig } from '../players/rosters.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export const initialTeamRating = 1500

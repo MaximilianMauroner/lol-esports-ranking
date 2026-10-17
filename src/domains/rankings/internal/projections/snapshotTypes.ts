@@ -1,9 +1,9 @@
-import type { EventSummary, LeagueStrength, LeagueStrengthHistoryPoint, LeagueTierName, MatchRecord, PlayerStanding, PublishedRatingScale, Region, SeasonSummary, TeamProfile } from '../../types'
-import type { TournamentInstanceId } from '../evidence/internationalTournaments'
-import type { PlayerMetricInfo, PlayerRatingProof, PUBLIC_ARTIFACT_SCHEMA_VERSION, PublicPlayerDirectory, PublicRankingManifest, PublicRankingShard, PublicRegionHistoryDirectory, PublicRollingWindow, PublicSnapshotIndexEntry, PublicTeamDirectory, PublicTeamHistoryDirectory, PublicTeamHistoryIndex, PublicTeamHistoryPoint, PublicTeamHistorySeries, PublicTeamHistoryShard, PublicTeamStanding, PublicTournamentMovementIndex, PublicTournamentMovementShard } from '../published/schema'
-import type { ComputedTeamStanding } from './deservedStandingPublicComparison'
-import type { WalkForwardMetrics } from './predictionModel'
-import type { RegionStrength } from './regionStrength'
+import type { EventSummary, LeagueStrength, LeagueStrengthHistoryPoint, LeagueTierName, MatchRecord, PlayerStanding, PublishedRatingScale, Region, SeasonSummary, TeamProfile } from '../../types.ts'
+import type { TournamentInstanceId } from '../evidence/internationalTournaments.ts'
+import type { PlayerMetricInfo, PlayerRatingProof, PUBLIC_ARTIFACT_SCHEMA_VERSION, PublicPlayerDirectory, PublicRankingManifest, PublicRankingShard, PublicRegionHistoryDirectory, PublicRollingWindow, PublicSnapshotIndexEntry, PublicTeamDirectory, PublicTeamHistoryDirectory, PublicTeamHistoryIndex, PublicTeamHistoryPoint, PublicTeamHistorySeries, PublicTeamHistoryShard, PublicTeamStanding, PublicTournamentMovementIndex, PublicTournamentMovementShard } from '../published/schema.ts'
+import type { ComputedTeamStanding } from './deservedStandingPublicComparison.ts'
+import type { WalkForwardMetrics } from './predictionModel.ts'
+import type { RegionStrength } from './regionStrength.ts'
 
 export type SnapshotFilter = {
   season: string

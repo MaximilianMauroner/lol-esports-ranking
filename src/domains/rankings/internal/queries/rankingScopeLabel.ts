@@ -1,5 +1,5 @@
-import { formatDate } from '../../../../shared/display'
-import type { SnapshotCheckpointOption } from '../../types'
+import { formatDate } from '../../../../shared/display.ts'
+import type { SnapshotCheckpointOption } from '../../types.ts'
 
 export function rankingScopePeriod(season: string | undefined, checkpoint?: SnapshotCheckpointOption) {
   if (checkpoint) return `Checkpoint window: ${formatDate(checkpoint.startDate)} to ${formatDate(checkpoint.endDate)}`

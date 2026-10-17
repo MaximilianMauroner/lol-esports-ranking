@@ -1,5 +1,5 @@
-import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../../types'
-import { formatEventName } from '../../../../shared/display'
+import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../../types.ts'
+import { formatEventName } from '../../../../shared/display.ts'
 
 export function matchEventLabel(event: string) {
   return formatEventName(event).replace(/\//g, ' · ').replace(/\b(\d{4}) Season\b/g, '$1')

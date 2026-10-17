@@ -1,8 +1,8 @@
-import type { MatchRecord } from '../../types'
-import type { EventWeightContext } from './eventWeighting'
-import { buildEventTrackers, eventTrackerKey, type PlacementTournamentLifecycle } from './placementResiduals'
-import { recencyWeight } from './ratingCalculations'
-import type { RatingRunState } from './ratingRunState'
+import type { MatchRecord } from '../../types.ts'
+import type { EventWeightContext } from './eventWeighting.ts'
+import { buildEventTrackers, eventTrackerKey, type PlacementTournamentLifecycle } from './placementResiduals.ts'
+import { recencyWeight } from './ratingCalculations.ts'
+import type { RatingRunState } from './ratingRunState.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 const includedRatingRunStateFields = [

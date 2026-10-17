@@ -1,5 +1,5 @@
-import type { EventTier } from '../../types'
-import type { PublicTeamStanding, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard } from '../../types'
+import type { EventTier } from '../../types.ts'
+import type { PublicTeamStanding, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type InternationalTournamentFamilyId = 'first-stand' | 'msi' | 'worlds' | 'ewc'

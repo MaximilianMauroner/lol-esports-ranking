@@ -1,5 +1,5 @@
-import { effectiveLeagueRating, leagueConnectivity, leagueTierFor } from '../policy/leagueTiers'
-import type { EventSummary, LeagueStrength, MatchRecord, Region, SeasonSummary, TeamHistoryPoint, TeamProfile, TeamStanding } from '../../types'
+import { effectiveLeagueRating, leagueConnectivity, leagueTierFor } from '../policy/leagueTiers.ts'
+import type { EventSummary, LeagueStrength, MatchRecord, Region, SeasonSummary, TeamHistoryPoint, TeamProfile, TeamStanding } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export function buildLeagueStrengths(

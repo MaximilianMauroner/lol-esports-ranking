@@ -1,13 +1,13 @@
-import type { MatchRecord, MatchRosterSnapshot } from '../../types'
+import type { MatchRecord, MatchRosterSnapshot } from '../../types.ts'
 import {
   initialTeamRating,
   maximumUncertainty,
   minimumUncertainty,
   rosterChangeUncertaintyPenalty,
   rosterContinuityFloor,
-} from '../policy/modelConfig'
-import { clamp } from './ratingCalculations'
-import { rosterContinuity } from '../players/rosters'
+} from '../policy/modelConfig.ts'
+import { clamp } from './ratingCalculations.ts'
+import { rosterContinuity } from '../players/rosters.ts'
 
 export function applyRosterContinuityForDate(
   matches: MatchRecord[],

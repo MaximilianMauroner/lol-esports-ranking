@@ -1,12 +1,12 @@
-import { isRatedTeamLeague } from '../evidence/regionTaxonomy'
-import { leagueTierDefinitions } from '../policy/leagueTiers'
-import type { EligibilityReason, LeagueTierName, TeamEligibility, TeamHistoryPoint } from '../../types'
+import { isRatedTeamLeague } from '../evidence/regionTaxonomy.ts'
+import { leagueTierDefinitions } from '../policy/leagueTiers.ts'
+import type { EligibilityReason, LeagueTierName, TeamEligibility, TeamHistoryPoint } from '../../types.ts'
 import {
   groupAdjacentTimelineEntries,
   isResolvedTimelineResult,
   summarizeTimelineResults,
   timelineGroupKey,
-} from '../queries/timelineCompaction'
+} from '../queries/timelineCompaction.ts'
 
 export const defaultEligibilityConfig = {
   // Eligibility consumes match-level history; 20 matches is roughly the old 30-game gate for Bo3-heavy leagues.

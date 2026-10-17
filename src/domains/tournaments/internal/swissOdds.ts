@@ -1,6 +1,6 @@
-import { SWISS_ROUND_SIZES, drawByRulebook, drawContext, drawPots, fillDraw, pairReason, type DrawContext, type PreviewTeam, type ResolvedScenario } from './swissScenario'
-import { applySwissWinner, swissBestOf } from './worlds2026Swiss'
-import { worldsRandom } from './worldsSimulation'
+import { SWISS_ROUND_SIZES, drawByRulebook, drawContext, drawPots, fillDraw, pairReason, type DrawContext, type PreviewTeam, type ResolvedScenario } from './swissScenario.ts'
+import { applySwissWinner, swissBestOf } from './worlds2026Swiss.ts'
+import { worldsRandom } from './worldsSimulation.ts'
 
 /** Chance that team `a` beats team `b` in one series. */
 export type SeriesWinChance = (a: string, b: string, bestOf: 1 | 3) => number

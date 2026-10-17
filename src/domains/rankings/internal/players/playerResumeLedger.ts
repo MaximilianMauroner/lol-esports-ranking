@@ -1,5 +1,5 @@
-import type { DeservedStandingPlayerResumeLedger, EventTier, Role } from '../../types'
-import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy'
+import type { DeservedStandingPlayerResumeLedger, EventTier, Role } from '../../types.ts'
+import { isDemaciaCupEvent } from '../evidence/competitionTaxonomy.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -7,7 +7,7 @@ import {
   reconcileCausalPrefix,
   type CausalInputRow,
   type CausalPrefixSummary,
-} from '../replay/causalRecompute'
+} from '../replay/causalRecompute.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type DssPlayerResumeSeriesPlayer = {

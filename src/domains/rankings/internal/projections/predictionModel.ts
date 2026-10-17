@@ -1,9 +1,9 @@
-import { buildRankingModel, transparentGprModelMetadata } from '../replay/model'
-import { binaryPredictionLoss } from './binaryPredictionMetrics'
-import { walkForwardSegmentKeys } from './predictionContext'
-import { hasPredictionVariant, predictionVariantProbability } from './predictionVariants'
-import { neutralWinProbability, type NeutralWinProbability } from '../queries/winProbability'
-import type { MatchRecord, PregamePrediction, TeamProfile, TeamStanding, WalkForwardSegmentKey } from '../../types'
+import { buildRankingModel, transparentGprModelMetadata } from '../replay/model.ts'
+import { binaryPredictionLoss } from './binaryPredictionMetrics.ts'
+import { walkForwardSegmentKeys } from './predictionContext.ts'
+import { hasPredictionVariant, predictionVariantProbability } from './predictionVariants.ts'
+import { neutralWinProbability, type NeutralWinProbability } from '../queries/winProbability.ts'
+import type { MatchRecord, PregamePrediction, TeamProfile, TeamStanding, WalkForwardSegmentKey } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type CurrentNeutralPrediction = NeutralWinProbability & {

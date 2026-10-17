@@ -1,4 +1,4 @@
-import { effectiveLeagueRating, leaguePriorFor } from '../domains/rankings/internal/policy/leagueTiers'
+import { effectiveLeagueRating, leaguePriorFor } from '../domains/rankings/internal/policy/leagueTiers.ts'
 import type {
   FactorBreakdown,
   LeagueStrengthHistoryPoint,
@@ -9,20 +9,20 @@ import type {
   Region,
   TeamHistoryPoint,
   TeamProfile,
-} from '../domains/rankings/types'
+} from '../domains/rankings/types.ts'
 import {
   executionResidualPredictionWeight,
   executionResidualShadowWeight,
   executionSoftOutcome,
   teamExecutionIndex,
-} from '../domains/rankings/internal/policy/executionResidual'
-import { eventKFactorForMatch, eventWeightForMatch } from '../domains/rankings/internal/replay/eventWeighting'
-import { updateLeagueStrengthForSeries } from '../domains/rankings/internal/replay/leagueRatings'
-import { homeLeagueForMatch, sourceTraceFor } from '../domains/rankings/internal/evidence/matchContext'
-import type { PregamePlayerRatingEdge } from '../domains/rankings/internal/players/playerModel'
-import { trackMatchForPlacement } from '../domains/rankings/internal/replay/placementResiduals'
-import { predictionSegmentsFor, recordTeamContext } from '../domains/rankings/internal/projections/predictionContext'
-import { predictionVariantFromWinProbability } from '../domains/rankings/internal/projections/predictionVariants'
+} from '../domains/rankings/internal/policy/executionResidual.ts'
+import { eventKFactorForMatch, eventWeightForMatch } from '../domains/rankings/internal/replay/eventWeighting.ts'
+import { updateLeagueStrengthForSeries } from '../domains/rankings/internal/replay/leagueRatings.ts'
+import { homeLeagueForMatch, sourceTraceFor } from '../domains/rankings/internal/evidence/matchContext.ts'
+import type { PregamePlayerRatingEdge } from '../domains/rankings/internal/players/playerModel.ts'
+import { trackMatchForPlacement } from '../domains/rankings/internal/replay/placementResiduals.ts'
+import { predictionSegmentsFor, recordTeamContext } from '../domains/rankings/internal/projections/predictionContext.ts'
+import { predictionVariantFromWinProbability } from '../domains/rankings/internal/projections/predictionVariants.ts'
 import {
   clamp,
   expectedScore,
@@ -37,14 +37,14 @@ import {
   ratingFromComponents,
   recencyWeight,
   roundedRatingUpdateLedger,
-} from '../domains/rankings/internal/replay/ratingCalculations'
-import type { RatingRunState } from '../domains/rankings/internal/replay/ratingRunState'
-import { makeRankMap } from '../domains/rankings/internal/replay/ratingRunState'
-import { applyRosterContinuityForSeries, roundedContinuity } from '../domains/rankings/internal/replay/rosterContinuityRating'
-import { recordSideAdjustmentSample, sideAdjustmentFor } from '../domains/rankings/internal/replay/sideAdjustments'
-import { resolveCanonicalSeries, type CanonicalSeries } from '../domains/rankings/internal/evidence/seriesResolver'
-import { neutralWinProbability } from '../domains/rankings/internal/queries/winProbability'
-import { calculateSeriesResultUpdate, seriesStrengthSignal } from '../domains/rankings/internal/replay/seriesResultUpdate'
+} from '../domains/rankings/internal/replay/ratingCalculations.ts'
+import type { RatingRunState } from '../domains/rankings/internal/replay/ratingRunState.ts'
+import { makeRankMap } from '../domains/rankings/internal/replay/ratingRunState.ts'
+import { applyRosterContinuityForSeries, roundedContinuity } from '../domains/rankings/internal/replay/rosterContinuityRating.ts'
+import { recordSideAdjustmentSample, sideAdjustmentFor } from '../domains/rankings/internal/replay/sideAdjustments.ts'
+import { resolveCanonicalSeries, type CanonicalSeries } from '../domains/rankings/internal/evidence/seriesResolver.ts'
+import { neutralWinProbability } from '../domains/rankings/internal/queries/winProbability.ts'
+import { calculateSeriesResultUpdate, seriesStrengthSignal } from '../domains/rankings/internal/replay/seriesResultUpdate.ts'
 import {
   initialTeamRating,
   latentStrengthResultBudgetShares,
@@ -55,7 +55,7 @@ import {
   playerRatingShadowWeight,
   ratingUpdateRecencyWeight,
   transparentGprModelMetadata,
-} from '../domains/rankings/internal/policy/modelConfig'
+} from '../domains/rankings/internal/policy/modelConfig.ts'
 
 type PregamePlayerRatingEdges = Map<string, PregamePlayerRatingEdge>
 

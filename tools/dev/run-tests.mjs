@@ -10,7 +10,7 @@ const isolatedTests = ['tests/ciAffectedPaths.test.mjs']
 const otherTests = [...globSync('tests/**/*.test.ts'), ...globSync('tests/**/*.test.mjs')].filter((path) => !browserSet.has(path) && !isolatedTests.includes(path)).sort()
 
 async function run(files) {
-  const child = spawn('pnpm', ['exec', 'tsx', '--tsconfig', 'tsconfig.app.json', '--test', ...files], { stdio: 'inherit' })
+  const child = spawn('pnpm', ['exec', 'tsx', '--tsconfig', 'tsconfig.app.json', '--test', '--test-concurrency=1', ...files], { stdio: 'inherit' })
   const code = await new Promise((resolve, reject) => {
     child.once('error', reject)
     child.once('exit', (code, signal) => resolve(signal ? 1 : code ?? 1))

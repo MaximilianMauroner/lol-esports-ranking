@@ -1,4 +1,4 @@
-export type { LeagueTierDefinition } from '../evidence/competitionTaxonomy'
+export type { LeagueTierDefinition } from '../evidence/competitionTaxonomy.ts'
 export {
   cappedLeagueRatingForTier,
   effectiveLeagueRating,
@@ -9,4 +9,4 @@ export {
   leagueTierDefinitions,
   leagueTierFor,
   leagueTierModelParameters,
-} from '../evidence/competitionTaxonomy'
+} from '../evidence/competitionTaxonomy.ts'

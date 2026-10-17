@@ -1,4 +1,5 @@
 import { teamKey } from '../../shared/display'
+export type { PublicSnapshotState } from './published/resolver'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PublicPlayerDirectory, PublicRankingManifest, PublicRegionHistoryDirectory, PublicRegionHistoryScope, PublicTeamHistoryIndex, PublicTeamHistoryShard, PublicTournamentMovementIndex, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicMatchHistoryCatalog, PublicMatchHistoryIndex, PublicMatchHistoryPage, SnapshotCheckpointOption, SnapshotFilter } from '../../domains/rankings/types'
 import {

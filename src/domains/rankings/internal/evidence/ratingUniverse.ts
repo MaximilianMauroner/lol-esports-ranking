@@ -1,7 +1,7 @@
-import { isRatedTeamLeague } from './regionTaxonomy'
-import type { MatchRecord, TeamProfile } from '../../types'
-import { homeLeagueForMatch } from './matchContext'
-import { deriveTeamProfilesFromMatches } from './teamProfiles'
+import { isRatedTeamLeague } from './regionTaxonomy.ts'
+import type { MatchRecord, TeamProfile } from '../../types.ts'
+import { homeLeagueForMatch } from './matchContext.ts'
+import { deriveTeamProfilesFromMatches } from './teamProfiles.ts'
 
 export type PublishedRatingUniverseInput = {
   matches: MatchRecord[]

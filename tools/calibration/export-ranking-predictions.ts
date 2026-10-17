@@ -12,9 +12,9 @@ void (async () => {
 
   const root = resolve(rootArg)
   const sourceModule: typeof import('../../scripts/rankings/source-input') = await import(pathToFileURL(`${root}/scripts/rankings/source-input.ts`).href)
-  const modelModule: typeof import('../../src/domains/rankings/build') = await import(pathToFileURL(`${root}/src/domains/rankings/internal/replay/model.ts`).href)
+  const modelModule: typeof import('../../src/domains/rankings/build') = await import(pathToFileURL(`${root}/src/domains/rankings/build.ts`).href)
   const evaluationModule: typeof import('./lib/rankingEvaluationData') = await import(pathToFileURL(`${root}/tools/calibration/lib/rankingEvaluationData.ts`).href)
-  const tournamentModule: typeof import('../../src/domains/rankings/evidence') = await import(pathToFileURL(`${root}/src/domains/rankings/internal/evidence/internationalTournaments.ts`).href)
+  const tournamentModule: typeof import('../../src/domains/rankings/evidence') = await import(pathToFileURL(`${root}/src/domains/rankings/evidence.ts`).href)
   const source = await sourceModule.importRankingSourceData({ manifestPath: resolve(manifestArg) })
   const matches = source.matches
   if (!matches.length || source.dataMode === 'no-data' || matches.some((match) => match.sourceProvider === 'seed')) {

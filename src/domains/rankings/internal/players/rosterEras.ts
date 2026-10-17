@@ -1,6 +1,6 @@
-import type { DeservedStandingRosterEra, MatchRecord, MatchRosterSnapshot, Role, Side } from '../../types'
-import { clamp } from '../replay/ratingCalculations'
-import { resolveCanonicalSeries } from '../evidence/seriesResolver'
+import type { DeservedStandingRosterEra, MatchRecord, MatchRosterSnapshot, Role, Side } from '../../types.ts'
+import { clamp } from '../replay/ratingCalculations.ts'
+import { resolveCanonicalSeries } from '../evidence/seriesResolver.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -8,7 +8,7 @@ import {
   reconcileCausalPrefix,
   type CausalInputRow,
   type CausalPrefixSummary,
-} from '../replay/causalRecompute'
+} from '../replay/causalRecompute.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export const dssRosterEraModelParameters = {

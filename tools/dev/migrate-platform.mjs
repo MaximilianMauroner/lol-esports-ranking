@@ -14,6 +14,16 @@ const localPath = (file, target, extension = true) => {
   if (!extension) result = result.replace(/\.tsx?$/, '')
   return result.startsWith('.') ? result : `./${result}`
 }
+function embeddedPath(value) {
+  return value.replace(/src\/[A-Za-z0-9_./-]+\.(?:tsx?|mjs|d\.mts)/g, path => map.get(path)?.new ?? path)
+}
+function nativeSpecifier(file, specifier) {
+  const caller = map.get(file)?.new ?? file
+  if (!/^(?:src\/(?:domains|data|shared|lib)\/|scripts\/)/.test(caller) || !specifier.startsWith('.') || /\.(?:tsx?|[cm]js|json|css|svg)$/i.test(specifier)) return specifier
+  const base = resolve(root, dirname(caller), specifier)
+  const extension = ['.ts', '.tsx', '.mjs'].find(extension => existsSync(base + extension))
+  return extension ? specifier + extension : specifier
+}
 function sources(directory) {
   return readdirSync(resolve(root, directory), { withFileTypes: true }).flatMap(entry => {
     const path = `${directory}/${entry.name}`
@@ -59,10 +69,15 @@ for (const file of files) {
         || (ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword)
         || ts.isLiteralTypeNode(parent)
       let next = targetFor(file, node.text, isImport)
+      if (!next && !isImport) {
+        const embedded = embeddedPath(node.text)
+        if (embedded !== node.text) next = embedded
+      }
       if (!next && map.has(file) && node.text.startsWith('.') && isImport) {
         const target = slash(relative(root, resolve(root, dirname(file), node.text)))
         if (extensions.some(extension => existsSync(resolve(root, target + extension)))) next = localPath(map.get(file).new, target)
       }
+      if (isImport) next = nativeSpecifier(file, next ?? node.text)
       if (next && next !== node.text) edits.push([node.getStart(source) + 1, node.getEnd() - 1, next])
     }
     ts.forEachChild(node, visit)

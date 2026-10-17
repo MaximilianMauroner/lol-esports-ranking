@@ -1,5 +1,5 @@
-import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast'
-import type { ObservationEvidence } from './worldsObservedRules'
+import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import type { ObservationEvidence } from './worldsObservedRules.ts'
 
 /** Conditional on a supplied draw, not a simulation of the draw procedure. */
 export const WORLDS_2026_KNOCKOUT_RULES = {

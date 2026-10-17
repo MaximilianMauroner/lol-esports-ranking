@@ -1,4 +1,4 @@
-import type { SeriesFormatBasis, SeriesFormatConfidence, SeriesState } from '../../types'
+import type { SeriesFormatBasis, SeriesFormatConfidence, SeriesState } from '../../types.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type TimelineResult = 'W' | 'L'

@@ -1,13 +1,66 @@
-export * from './internal/evidence/seriesResolver'
-export * from './internal/evidence/matchFormat'
-export * from './internal/evidence/matchContext'
-export * from './internal/evidence/teamProfiles'
-export * from './internal/evidence/ratingUniverse'
-export * from './internal/evidence/internationalTournaments'
-export * from './internal/evidence/seasonHistory'
-export * from './internal/evidence/sourceFreshness'
-export * from './internal/evidence/communitySources'
-export * from './internal/evidence/teamIdentity'
-export * from './internal/evidence/competitionTaxonomy'
-export * from './internal/evidence/regionTaxonomy'
-export * from './internal/scenarios/contest'
+export {
+  type LolEsportsReferenceEvent,
+  type LolEsportsReferenceGame,
+  type LolEsportsReferenceTeam,
+  mergeCommunityMatchSources,
+} from './internal/evidence/communitySources.ts'
+export {
+  formatCompetitionRegionLabel,
+  inferEventTier,
+  inferLeagueFromEvent,
+  regionForCompetitionSide,
+  regionForLeague,
+  resolveHomeLeagueForCompetition,
+} from './internal/evidence/competitionTaxonomy.ts'
+export {
+  type TournamentFilterValue,
+  type TournamentInstanceId,
+  canonicalScheduleReferences,
+  deriveTournamentInstances,
+  tournamentBoundaryLabel,
+  tournamentEntriesForScope,
+  tournamentIdFromFilter,
+  tournamentInstanceForEvent,
+} from './internal/evidence/internationalTournaments.ts'
+export {
+  filterPublishedRatingUniverseInput,
+} from './internal/evidence/ratingUniverse.ts'
+export {
+  isSeasonHistoryLeadIn,
+} from './internal/evidence/seasonHistory.ts'
+export {
+  canonicalSeriesForMatches,
+  canonicalSeriesOutcomeForTeam,
+  resolveCanonicalSeries,
+} from './internal/evidence/seriesResolver.ts'
+export {
+  LEAGUEPEDIA_SOURCE_PREFIX,
+  ORACLE_SOURCE_PREFIX,
+  type ProviderFreshness,
+  providerFreshness,
+} from './internal/evidence/sourceFreshness.ts'
+export {
+  canonicalTeamNameFor,
+  cleanDisplayName,
+  knownTeamIdentities,
+  teamCodeFor,
+  teamIdentityFor,
+} from './internal/evidence/teamIdentity.ts'
+export {
+  deriveTeamProfilesFromMatches,
+  mergeTeamProfiles,
+  resolveCompetitionHomeLeagues,
+} from './internal/evidence/teamProfiles.ts'
+export {
+  type ConditionalSeriesOutcome,
+  type PowerPreviewUnavailable,
+  type RatingContest,
+  type RatingContestStatus,
+  conditionalOutcomeProblem,
+  ratingContestStateVersion,
+  ratingContestStatus,
+  stableResultAssumptions,
+  stableResultPolicy,
+  unavailablePowerPreview,
+} from './internal/scenarios/contest.ts'
+export { legalConditionalScores } from './internal/scenarios/contest.ts'

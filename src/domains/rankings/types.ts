@@ -723,5 +723,5 @@ export type SeasonSummary = {
   endDate: string
 }
 
-export type * from './internal/projections/snapshotTypes'
-export type * from './internal/queries/publishedTypes'
+export type * from './internal/projections/snapshotTypes.ts'
+export type * from './internal/queries/publishedTypes.ts'

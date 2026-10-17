@@ -1,10 +1,10 @@
-import { legalConditionalScores, unavailablePowerPreview } from '../../src/domains/tournaments/forecast'
-import type { ConditionalPowerReplayBasis } from '../../src/domains/rankings/build'
-import { evaluateConditionalPowerResultComponent } from '../../src/domains/rankings/build'
-import { isConditionalPowerResultLedger, stableResultPolicy, type ConditionalPowerResultReceipt } from '../../src/domains/tournaments/forecast'
-import { forecastTournamentSeries, type ForecastBasis } from '../../src/domains/tournaments/forecast'
-import type { TournamentSeries } from '../../src/domains/tournaments/read'
-import { ratingScaleFromUnknown } from '../../src/domains/rankings/build'
+import { legalConditionalScores, unavailablePowerPreview } from '../../src/domains/tournaments/forecast.ts'
+import type { ConditionalPowerReplayBasis } from '../../src/domains/rankings/build.ts'
+import { evaluateConditionalPowerResultComponent } from '../../src/domains/rankings/build.ts'
+import { isConditionalPowerResultLedger, stableResultPolicy, type ConditionalPowerResultReceipt } from '../../src/domains/tournaments/forecast.ts'
+import { forecastTournamentSeries, type ForecastBasis } from '../../src/domains/tournaments/forecast.ts'
+import type { TournamentSeries } from '../../src/domains/tournaments/read.ts'
+import { ratingScaleFromUnknown } from '../../src/domains/rankings/build.ts'
 
 /** Builds a compact outcome table from exact producer inputs. It has no fetch or write API. */
 export function createConditionalPowerResultReceipt(input: {

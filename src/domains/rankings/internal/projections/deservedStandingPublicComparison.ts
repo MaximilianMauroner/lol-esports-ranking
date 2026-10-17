@@ -4,13 +4,13 @@ import type {
   MatchRosterSnapshot,
   TeamProfile,
   TeamStanding,
-} from '../../types'
-import { isDevelopmentalTeamName } from '../replay/model'
-import type { PublicDeservedStandingComparison, PublicTeamRollingMovement } from '../../types'
-import { type RegionDeservedStandingComparison, type RegionStrength } from './regionStrength'
-import { dssRosterValidity, type DssReferenceStrengthContext, type DssSeriesLedgerEntry } from './deservedStanding'
-import { buildDeservedStandingModel, type DeservedStandingTeamSummary } from './deservedStandingModel'
-import { buildDeservedStandingRegionModel, type DeservedStandingRegionSummary } from './deservedStandingRegions'
+} from '../../types.ts'
+import { isDevelopmentalTeamName } from '../replay/model.ts'
+import type { PublicDeservedStandingComparison, PublicTeamRollingMovement } from '../../types.ts'
+import { type RegionDeservedStandingComparison, type RegionStrength } from './regionStrength.ts'
+import { dssRosterValidity, type DssReferenceStrengthContext, type DssSeriesLedgerEntry } from './deservedStanding.ts'
+import { buildDeservedStandingModel, type DeservedStandingTeamSummary } from './deservedStandingModel.ts'
+import { buildDeservedStandingRegionModel, type DeservedStandingRegionSummary } from './deservedStandingRegions.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type ComputedTeamStanding = TeamStanding & {

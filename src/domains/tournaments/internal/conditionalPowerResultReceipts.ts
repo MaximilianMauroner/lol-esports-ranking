@@ -1,11 +1,11 @@
-import type { PublishedRatingScale } from '../../rankings/types'
-import { conditionalOutcomeProblem, legalConditionalScores, unavailablePowerPreview, type ConditionalSeriesOutcome } from './conditionalPowerPreview'
-import { ratingScaleFromUnknown } from '../../rankings/read'
-import { tournamentEventStateVersion, type ForecastBasis, type ForecastReady } from './tournamentForecast'
-import type { TournamentSeries } from './tournamentFeed'
+import type { PublishedRatingScale } from '../../rankings/types.ts'
+import { conditionalOutcomeProblem, legalConditionalScores, unavailablePowerPreview, type ConditionalSeriesOutcome } from './conditionalPowerPreview.ts'
+import { ratingScaleFromUnknown } from '../../rankings/read.ts'
+import { tournamentEventStateVersion, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import type { TournamentSeries } from './tournamentFeed.ts'
 
-import { stableResultAssumptions, stableResultPolicy } from '../../rankings/evidence'
-export { stableResultAssumptions, stableResultPolicy } from '../../rankings/evidence'
+import { stableResultAssumptions, stableResultPolicy } from '../../rankings/evidence.ts'
+export { stableResultAssumptions, stableResultPolicy } from '../../rankings/evidence.ts'
 
 type ComponentTeam = { sourceTeamId: string; teamId: string; team: string; before: number; after: number; delta: number }
 export type ConditionalPowerResultReceipt = {

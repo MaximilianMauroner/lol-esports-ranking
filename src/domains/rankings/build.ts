@@ -1,27 +1,68 @@
-export * from './internal/replay/model'
-export * from './internal/replay/ratingRunState'
-export * from './internal/replay/ratingContext'
-export * from './internal/replay/ratingCalculations'
-export * from './internal/replay/seriesResultUpdate'
-export * from './internal/replay/leagueRatings'
-export * from './internal/replay/eventWeighting'
-export * from './internal/replay/placementResiduals'
-export * from './internal/replay/rosterContinuityRating'
-export * from './internal/replay/sideAdjustments'
-export * from './internal/replay/causalRecompute'
-export * from './internal/replay/ratingCheckpoint'
-export * from './internal/replay/ratingCheckpointInventory'
-export * from './internal/players/playerModel'
-export * from './internal/players/playerResumeLedger'
-export * from './internal/projections/snapshot'
-export * from './internal/projections/deservedStandingModel'
-export * from './internal/projections/predictionModel'
-export * from './internal/projections/predictionVariants'
-export * from './internal/replay/incremental/types'
-export * from './internal/replay/incremental/replayOrchestrator'
-export * from './internal/replay/incremental/externalCausalState'
-export * from './internal/scenarios/conditionalPowerReplay'
-export * from './internal/scenarios/conditionalPowerReplayBasis'
-export * from './internal/scenarios/conditionalPowerResultComponent'
-export * from './internal/projections/deservedStandingPublicComparison'
-export * from './internal/projections/deservedStandingRegions'
+export {
+  type PregamePlayerRatingEdge,
+  buildPlayerModel,
+} from './internal/players/playerModel.ts'
+export {
+  transparentGprModelMetadata,
+} from './internal/policy/modelConfig.ts'
+export {
+  createStaticRankingData,
+} from './internal/projections/snapshot.ts'
+export {
+  CAUSAL_PREFIX_SCHEMA_VERSION,
+  type CausalInputRow,
+  type CausalSurfaceId,
+  buildCausalContextIdentity,
+  causalInputRow,
+  digestCausalValue,
+} from './internal/replay/causalRecompute.ts'
+export {
+  type ExternalCausalBundle,
+  type ExternalCausalSurfaceInput,
+  REQUIRED_EXTERNAL_CAUSAL_SURFACES,
+  buildExternalCausalBundle,
+  reconcileExternalCausalBundle,
+} from './internal/replay/incremental/externalCausalState.ts'
+export {
+  replayRankingState,
+} from './internal/replay/incremental/replayOrchestrator.ts'
+export {
+  type CanonicalMatchLedger,
+  type RankingChangeClassification,
+  stableDigest,
+  stableJson,
+} from './internal/replay/incremental/types.ts'
+export {
+  type RankingModelOutput,
+  buildRankingModel,
+  createRatingEventContext,
+  createRatingReplayContext,
+  makeDirectHeadToHeadContextAdjustments,
+  makeDisplayRatings,
+  materializeRankingModel,
+  replayRatingDates,
+} from './internal/replay/model.ts'
+export {
+  evidenceWeightedPublishedLeagueAnchor,
+  evidenceWeightedPublishedStanding,
+  publishedLeagueAnchorContextAdjustment,
+  publishedRosterPriorOffset,
+  ratingComponents,
+  ratingFromComponents,
+  ratingScaleFromUnknown,
+} from './internal/replay/ratingCalculations.ts'
+export {
+  RATING_CHECKPOINT_SCHEMA_VERSION,
+  encodeRatingCheckpointEnvelope,
+  selectSafeCheckpoint,
+} from './internal/replay/ratingCheckpoint.ts'
+export {
+  buildRatingCheckpointEventContract,
+  reconcileRatingCheckpointEvents,
+} from './internal/replay/ratingCheckpointInventory.ts'
+export {
+  type ConditionalPowerReplayBasis,
+} from './internal/scenarios/conditionalPowerReplay.ts'
+export {
+  evaluateConditionalPowerResultComponent,
+} from './internal/scenarios/conditionalPowerResultComponent.ts'

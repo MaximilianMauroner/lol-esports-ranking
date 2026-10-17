@@ -1,5 +1,5 @@
-import type { MatchRecord, TeamProfile } from '../../types'
-import type { CanonicalSeries } from './seriesResolver'
+import type { MatchRecord, TeamProfile } from '../../types.ts'
+import type { CanonicalSeries } from './seriesResolver.ts'
 
 export function matchesByDate(matches: MatchRecord[]) {
   const groups: MatchRecord[][] = []

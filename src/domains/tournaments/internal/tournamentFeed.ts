@@ -3,8 +3,8 @@ import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
 export const TOURNAMENT_FEED_VERSION = 1
 
 export type TournamentCompetition = 'lcs' | 'lec' | 'lpl' | 'lck' | 'worlds' | 'msi' | 'first-stand'
-import { ratingContestStatus as normalizeStatus, type RatingContest, type RatingContestStatus } from '../../rankings/evidence'
-export { ratingContestStatus as normalizeStatus } from '../../rankings/evidence'
+import { ratingContestStatus as normalizeStatus, type RatingContest, type RatingContestStatus } from '../../rankings/evidence.ts'
+export { ratingContestStatus as normalizeStatus } from '../../rankings/evidence.ts'
 export type TournamentSeriesStatus = RatingContestStatus
 export type TournamentSeries = RatingContest
 

@@ -1,4 +1,4 @@
-import type { EventTier, LeagueTierName, Region } from '../../types'
+import type { EventTier, LeagueTierName, Region } from '../../types.ts'
 
 export type LeagueTierDefinition = {
   tier: LeagueTierName

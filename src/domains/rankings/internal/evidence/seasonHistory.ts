@@ -1,5 +1,5 @@
-import type { SnapshotFilter } from '../../types'
-import { isDemaciaCupEvent } from './competitionTaxonomy'
+import type { SnapshotFilter } from '../../types.ts'
+import { isDemaciaCupEvent } from './competitionTaxonomy.ts'
 
 /** December's Demacia Cup supplies context for the following season's history. */
 export function isSeasonHistoryLeadIn(date: string, event: string, filter: SnapshotFilter) {

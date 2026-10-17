@@ -1,6 +1,6 @@
-import { leaguePriorFor } from '../policy/leagueTiers'
-import type { MatchRecord } from '../../types'
-import { isInternationalMatch } from './ratingCalculations'
+import { leaguePriorFor } from '../policy/leagueTiers.ts'
+import type { MatchRecord } from '../../types.ts'
+import { isInternationalMatch } from './ratingCalculations.ts'
 
 export function ensureLeague(
   league: string,
