@@ -47,7 +47,8 @@ data/reference/
 *.sw?
 
 /lol-ranking-dev-current-branch.png
-/.agent/sessions/
+
+/.agents/artifacts
 
 # Rust build products
 /worker/target/
