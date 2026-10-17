@@ -112,3 +112,54 @@ test('a result-only row cannot supply a slot-based series identity', () => {
   assert.equal(merged.length, 2)
   assert.equal(merged.find((match) => match.sourceGameId === 'LOLTMNT03_336246')?.sourceMatchId, undefined)
 })
+
+function midnightSweep(firstDate: string, nextDate: string, seriesId = '2026Worlds_PlayIn_Round1_1') {
+  return importLeaguepediaSnapshot({ matches: [1, 2, 3].map((game) => ({
+    id: `${seriesId}_${game}`,
+    date: game === 1 ? firstDate : nextDate,
+    datetimeUtc: `${game === 1 ? firstDate : nextDate} ${game === 1 ? '23:30' : game === 2 ? '00:30' : '01:30'}:00`,
+    event: 'Worlds 2026 Play-In',
+    bestOf: 5,
+    teamA: game === 2 ? 'MGN Vikings Esports' : 'FURIA',
+    teamB: game === 2 ? 'FURIA' : 'MGN Vikings Esports',
+    winner: 'MGN Vikings Esports',
+    teamAKills: 10 + game,
+    teamBKills: 20 + game,
+    teamAGold: 50000 + game,
+    teamBGold: 60000 + game,
+  })) }).matches.map((match) => ({ ...match, sourceMatchId: match.sourceGameId }))
+}
+
+for (const [firstDate, nextDate] of [['2026-10-15', '2026-10-16'], ['2026-12-31', '2027-01-01']]) {
+  test(`explicit source series remains one 0-3 sweep across ${firstDate} and ${nextDate}`, () => {
+    const games = midnightSweep(firstDate, nextDate)
+    for (const ordered of [games, [...games].reverse()]) {
+      const series = resolveCanonicalSeries(ordered)
+      assert.equal(series.length, 1)
+      assert.equal(series[0].date, firstDate)
+      assert.equal(series[0].teamA, 'FURIA')
+      assert.equal(series[0].games.length, 3)
+      assert.deepEqual([series[0].winsA, series[0].winsB], [0, 3])
+      assert.equal(series[0].state, 'completed')
+    }
+  })
+}
+
+test('distinct explicit series IDs keep rematches and seasons separate', () => {
+  const games = [
+    ...midnightSweep('2026-10-15', '2026-10-16'),
+    ...midnightSweep('2026-10-15', '2026-10-16', '2026Worlds_PlayIn_Round1_2'),
+    ...midnightSweep('2025-10-15', '2025-10-16', '2025Worlds_PlayIn_Round1_1'),
+  ]
+  const series = resolveCanonicalSeries(games)
+  assert.equal(series.length, 3)
+  assert.ok(series.every((item) => item.games.length === 3 && item.winsA === 0 && item.winsB === 3))
+})
+
+test('games without source IDs retain fallback date grouping', () => {
+  const games = midnightSweep('2026-10-15', '2026-10-16')
+    .map((match) => ({ ...match, sourceMatchId: undefined, sourceGameId: undefined }))
+  const series = resolveCanonicalSeries(games)
+  assert.deepEqual(series.map((item) => item.date), ['2026-10-15', '2026-10-16'])
+  assert.deepEqual(series.map((item) => item.games.length), [1, 2])
+})
