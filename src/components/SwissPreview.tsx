@@ -384,10 +384,10 @@ function RoundColumn({ round, boxes, scenario, team, pools, canDraw, focus, onFo
       <ColumnHeader ref={header} title={`Round ${round}`} titleId={titleId}
         badge={resolved ? resolved.liveDraw ? <Badge>Live draw</Badge> : <Badge variant="preview">Your draw</Badge> : null}>
         {resolved ? resolved.liveDraw ? null : <>
-          <Button variant="tab" size="xs" aria-pressed={editing} onClick={() => setEditing((value) => !value)}>Change pairings</Button>
+          <Button variant={editing ? 'default' : 'outline'} size="sm" aria-pressed={editing} onClick={() => setEditing((value) => !value)}>Change pairings</Button>
           {scenario.rounds.length === round && !resolved.matches.some((match) => match.winnerId)
-            ? <Button variant="ghost" size="xs" onClick={() => { setEditing(false); edits.redraw(round, resolved.context) }}>Draw again</Button> : null}
-          <Button variant="ghost" size="xs" onClick={() => edits.clear(round)}>Clear draw</Button>
+            ? <Button variant="outline" size="sm" onClick={() => { setEditing(false); edits.redraw(round, resolved.context) }}>Draw again</Button> : null}
+          <Button variant="outline" size="sm" onClick={() => edits.clear(round)}>Clear draw</Button>
         </> : nextDraw?.round === round
           ? <Button size="sm" disabled={!canDraw} onClick={() => edits.draw(round, nextDraw.context)}>Fill a valid draw</Button>
           : <span className="text-2xs text-[var(--faint)]">Drawn after Round {round - 1}</span>}
