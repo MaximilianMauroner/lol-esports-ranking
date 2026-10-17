@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { createProviderFetchTelemetry, fetchWithRetry, snapshotProviderFetchTelemetry } from './provider-fetch-retry.mjs'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 const publicPersistedApiKey = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
 const defaultPersistedBaseUrl = 'https://esports-api.lolesports.com/persisted/gw'

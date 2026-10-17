@@ -4,7 +4,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { canonicalJsonFor, NonCanonicalJsonError, parseCanonicalJson } from './public-artifact-storage.mjs'
 import { replaceDirectory } from './replace-directory.ts'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 export const RAW_SOURCE_STORAGE_MODE = 'content-addressed-raw-gzip-v2'
 export const ORACLE_GAME_INVENTORY_DIGEST_SCHEME = 'oracle-game-inventory-v1'

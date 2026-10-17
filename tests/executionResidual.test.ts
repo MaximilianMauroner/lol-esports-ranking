@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { executionIndexFromStats, executionSoftOutcome, teamExecutionIndex } from '../src/lib/executionResidual.ts'
-import type { MatchRecord } from '../src/types.ts'
+import { executionIndexFromStats, executionSoftOutcome, teamExecutionIndex } from '../src/domains/rankings/internal/policy/executionResidual.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 
 test('execution index is bounded and rewards stronger stat lines', () => {
   const dominant = executionIndexFromStats(30, 5, 76000, 42000, 12, 2)

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { SyntheticSeriesOutcome } from '../src/lib/offlineForecastCohort.ts'
-import { isForecastLedger, type ForecastReceipt } from '../src/lib/tournamentForecast.ts'
+import type { SyntheticSeriesOutcome } from '../tools/calibration/lib/offlineForecastCohort.ts'
+import { isForecastLedger, type ForecastReceipt } from '../src/domains/tournaments/internal/tournamentForecast.ts'
 import { before, outcome, receipt, replay } from './fixtures/offlineForecastFixtures.ts'
 
 test('latest compatible pre-start receipt supplies one series row with explicit offline ineligibility', () => {

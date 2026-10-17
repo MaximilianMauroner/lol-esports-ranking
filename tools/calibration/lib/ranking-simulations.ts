@@ -1,6 +1,6 @@
-import { buildRankingModel } from '../../../src/lib/model'
-import { seededRandom, type EvaluationRow } from '../../../src/lib/rankingEvaluation'
-import type { MatchRecord, TeamProfile } from '../../../src/types'
+import { buildRankingModel } from '../../../src/domains/rankings/build'
+import { seededRandom, type EvaluationRow } from './rankingEvaluation'
+import type { MatchRecord, TeamProfile } from '../../../src/domains/rankings/types'
 import { fitHierarchicalLeagues } from './hierarchical-leagues'
 
 export function simulatedLeagueRows(seed = 334462) {

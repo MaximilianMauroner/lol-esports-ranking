@@ -4,7 +4,7 @@ import {
   PROJECT_REPOSITORY_URL,
   RIOT_PROJECT_NOTICE,
   type LegalPageName,
-} from '../lib/legal'
+} from '../data/legal'
 
 const UPDATED_AT = 'July 11, 2026'
 const OPERATOR_NAME = 'Maximilian Mauroner'

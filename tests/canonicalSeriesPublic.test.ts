@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compactStanding } from '../src/lib/publicArtifacts/schema.ts'
-import { compactPlayerRecentMatches } from '../src/lib/snapshot.ts'
-import type { PlayerStanding, TeamHistoryPoint, TeamStanding } from '../src/types.ts'
+import { compactStanding } from '../src/domains/rankings/internal/published/schema.ts'
+import { compactPlayerRecentMatches } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { PlayerStanding, TeamHistoryPoint, TeamStanding } from '../src/domains/rankings/types.ts'
 
 test('public recent matches retain completed Bo2 ties and canonical provenance', () => {
   const compact = compactStanding({

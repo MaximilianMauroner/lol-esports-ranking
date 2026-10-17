@@ -6,7 +6,7 @@ import {
   summarizeTimelineResults,
   timelineGroupKey,
   timelineSourceSummary,
-} from '../src/lib/timelineCompaction.ts'
+} from '../src/domains/rankings/internal/queries/timelineCompaction.ts'
 
 test('timeline compaction groups adjacent series and shapes source provenance', () => {
   const entries = [

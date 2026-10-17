@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { legalPageFromPath } from '../src/lib/legal'
+import { legalPageFromPath } from '../src/data/legal'
 
 test('legalPageFromPath recognizes only public legal routes', () => {
   assert.equal(legalPageFromPath('/legal'), 'legal')

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { HOMEPAGE_PRERENDER_MARKER, PUBLIC_SITE_ORIGIN } from '../scripts/seo-prerender.ts'
-import { RIOT_PROJECT_NOTICE } from '../src/lib/legal.ts'
+import { RIOT_PROJECT_NOTICE } from '../src/data/legal.ts'
 
 test('crawler and social metadata use the custom canonical host', async () => {
   const html = await readFile('index.html', 'utf8')
@@ -54,7 +54,7 @@ test('web app manifest includes installable icon sizes', async () => {
 
 test('app shell includes the Riot project disclaimer footer', async () => {
   const app = await readFile('src/App.tsx', 'utf8')
-  const legal = await readFile('src/lib/legal.ts', 'utf8')
+  const legal = await readFile('src/data/legal.ts', 'utf8')
 
   assert.match(RIOT_PROJECT_NOTICE, /created under Riot Games' "Legal Jibber Jabber" policy/)
   assert.match(RIOT_PROJECT_NOTICE, /Riot Games does not endorse or sponsor this project/)

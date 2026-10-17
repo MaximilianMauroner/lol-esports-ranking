@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { evaluateTeamEligibility, matchLevelEligibilityHistory } from '../src/lib/eligibility.ts'
-import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
-import type { TeamHistoryPoint } from '../src/types.ts'
+import { evaluateTeamEligibility, matchLevelEligibilityHistory } from '../src/domains/rankings/internal/projections/eligibility.ts'
+import { emptyRatingUpdateLedger } from '../src/domains/rankings/internal/replay/ratingCalculations.ts'
+import type { TeamHistoryPoint } from '../src/domains/rankings/types.ts'
 
 test('eligibility reports explicit current-window and staleness reasons', () => {
   const eligibility = evaluateTeamEligibility({

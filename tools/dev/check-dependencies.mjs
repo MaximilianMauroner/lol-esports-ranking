@@ -3,7 +3,7 @@ import { dirname, resolve, relative } from 'node:path'
 import { builtinModules } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
-import { ownerOf, browserGlobals, isProducer } from './ownership-policy.mjs'
+import { ownerOf, browserGlobals, isProducer, pureOwners, domainImportError } from './ownership-policy.mjs'
 
 const sourceExtension = /\.(?:[cm]?[jt]sx?)$/
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]))
@@ -129,6 +129,7 @@ export function checkDependencies(root = process.cwd()) {
     const report = (node, message) => errors.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}: ${message}`)
     const runtimeEdges = []
     const visit = node => {
+      if (owner.name !== 'tools' && owner.name !== 'tests' && ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && !ts.isStringLiteralLike(node.arguments[0])) report(node, 'Dynamic source imports require a literal target')
       const entry = importReference(node)
       if (entry) {
         const specifier = entry.literal.text
@@ -144,10 +145,12 @@ export function checkDependencies(root = process.cwd()) {
         const target = local && ownerOf(local)
         if (target) {
           if (!owner.imports.includes(target.name)) report(node, `${owner.name} cannot import ${target.name} source ${local}`)
+          const boundary = domainImportError(file, local)
+          if (boundary) report(node, boundary)
           if (!entry.type) runtimeEdges.push(local)
         } else if (specifier.startsWith('.') || specifier.startsWith('@/') || specifier.startsWith('/src/')) {
           if (sourceExtension.test(specifier) || (!entry.url && !/\.[a-z0-9]+(?:\?|$)/i.test(specifier))) report(node, `Unresolved source import ${specifier}`)
-        } else if ((owner.name === 'shared' || owner.name === 'browser') && (builtins.has(specifier) || specifier.startsWith('node:'))) {
+        } else if ((pureOwners.has(owner.name) || owner.name === 'browser') && (builtins.has(specifier) || specifier.startsWith('node:'))) {
           report(node, `${owner.name} cannot import Node builtin ${specifier}`)
         } else if (owner.name !== 'browser' && owner.name !== 'tests' && /^(react|react-dom)(\/|$)/.test(specifier)) {
           report(node, `${owner.name} cannot import React`)
@@ -157,7 +160,7 @@ export function checkDependencies(root = process.cwd()) {
     }
     visit(source)
     edges.set(file, runtimeEdges)
-    if (owner.name === 'shared' && !source.isDeclarationFile) checkGlobals(source, checker, report)
+    if (pureOwners.has(owner.name) && !source.isDeclarationFile) checkGlobals(source, checker, report)
   }
   for (const [file] of edges) {
     if (ownerOf(file)?.name !== 'browser') continue

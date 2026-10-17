@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { rankingScopePeriod } from '../src/lib/rankingScopeLabel.ts'
-import { gameWinChanceForGap, estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
-import { publishedRatingScale } from '../src/lib/modelConfig.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
+import { rankingScopePeriod } from '../src/domains/rankings/internal/queries/rankingScopeLabel.ts'
+import { gameWinChanceForGap, estimatePublicMatchup } from '../src/domains/rankings/internal/queries/publicMatchup.ts'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 test('full-season selection does not end at the last split checkpoint', () => {
   assert.match(rankingScopePeriod('2026'), /Dec 31, 2026/)

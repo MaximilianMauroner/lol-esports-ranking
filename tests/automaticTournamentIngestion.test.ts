@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import fixture from './fixtures/demaciaCup2026.json' with { type: 'json' }
-import { importRankingSourceData } from '../scripts/ranking-source-import.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
+import { importRankingSourceData } from '../scripts/rankings/source-input.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 const refreshScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
 const { refreshDataIfChanged }: {
   refreshDataIfChanged: (args: string[], options: { env: Record<string, string> }) => Promise<unknown>

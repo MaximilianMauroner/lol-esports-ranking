@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createRatingReplayContext, replayRatingDates } from '../src/lib/model.ts'
-import { createRatingRunState } from '../src/lib/ratingRunState.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData, createTeamHistoryArtifacts, teamStandingKey } from '../src/lib/snapshot.ts'
-import { parsePublicMatchHistoryCatalog, parsePublicMatchHistoryIndex, parsePublicMatchHistoryPage, snapshotKey } from '../src/lib/publicArtifacts/schema.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { createRatingReplayContext, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
+import { createRatingRunState } from '../src/domains/rankings/internal/replay/ratingRunState.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData, createTeamHistoryArtifacts, teamStandingKey } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { parsePublicMatchHistoryCatalog, parsePublicMatchHistoryIndex, parsePublicMatchHistoryPage, snapshotKey } from '../src/domains/rankings/internal/published/schema.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 const teams: Record<string, TeamProfile> = {
   'Gen.G': { name: 'Gen.G', code: 'GEN', region: 'LCK', league: 'LCK' },

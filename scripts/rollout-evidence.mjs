@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
 import { bucketConfigFromEnv, createBucketClient, readBucketJson, safeObjectPath, writeBucketJson } from './railway-bucket.mjs'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 export const ROLLOUT_EVIDENCE_KIND = 'ranking-rollout-run-evidence'
 export const ROLLOUT_EVIDENCE_CLASSES = ['live', 'production-like-fixture']

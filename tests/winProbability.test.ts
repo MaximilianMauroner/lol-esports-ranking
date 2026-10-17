@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { seriesSwingStateProbability } from '../src/lib/matchupMath.ts'
-import { neutralWinProbability } from '../src/lib/winProbability.ts'
+import { seriesSwingStateProbability } from '../src/domains/rankings/internal/projections/matchupMath.ts'
+import { neutralWinProbability } from '../src/domains/rankings/internal/queries/winProbability.ts'
 
 test('neutral win probability is symmetric for equal ratings', () => {
   const prediction = neutralWinProbability(

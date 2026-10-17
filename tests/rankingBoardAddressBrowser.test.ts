@@ -3,9 +3,9 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 // Ten teams in each of two regions, so region, size and page each change the rows on the board.
 const regions = ['LEC', 'LCS'] as const

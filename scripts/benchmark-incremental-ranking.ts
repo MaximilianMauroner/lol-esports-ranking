@@ -9,13 +9,13 @@ import { fileURLToPath } from 'node:url'
 import { basename, dirname, join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { buildRankingIncrementally, persistIncrementalStateBuild, type IncrementalRankingBuildResult, type RestoredIncrementalAuthority } from './incremental-ranking-orchestrator.ts'
-import { importRankingSourceData, type RankingSourceImport } from './ranking-source-import.ts'
+import { importRankingSourceData, type RankingSourceImport } from './rankings/source-input.ts'
 import { readActiveIncrementalState } from './incremental-state-storage.mjs'
 import { acquireBucketLease, readActiveContentAddressedGeneration, readActiveRawSourceAuthority, uploadContentAddressedRawSourceGeneration, uploadRankingArtifacts } from './railway-bucket.mjs'
 import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { finalizeRawSourceGeneration, prepareRawSourceGeneration, type ActiveRawSourceAuthority } from './raw-source-generation.mjs'
 import { parseRawSourceReceipt } from './raw-source-storage.mjs'
-import { buildPlayerModel } from '../src/lib/model.ts'
+import { buildPlayerModel } from '../src/domains/rankings/build.ts'
 import { readProcessPeakRssBytes, refreshWorkerExecArgv } from './refresh-worker-memory.mjs'
 import {
   aggregateBenchmarkMetrics,
@@ -27,7 +27,7 @@ import {
   passesIncrementalSafetyPeak,
 } from './incremental-benchmark-assertions.ts'
 import { runCalibrationWorkload } from './benchmark-calibration.ts'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 import { verifyRustRawSource } from '../tools/audit/verify-rust-raw-source.ts'
 
 const requestedMatchCount = parseBenchmarkPositiveInteger('RANKING_BENCHMARK_MATCH_COUNT', process.env.RANKING_BENCHMARK_MATCH_COUNT)

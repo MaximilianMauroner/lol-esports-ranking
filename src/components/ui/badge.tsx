@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '../../lib/utils'
+import { cn } from '../../shared/utils'
 
 /**
  * Every small labelled chip in the product. If a chip needs styling that no

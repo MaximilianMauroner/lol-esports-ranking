@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { groupedMatchEvents } from '../src/lib/matchEventGroups.ts'
-import { compatibleMatchEvents } from '../src/lib/matchLedger.ts'
+import { groupedMatchEvents } from '../src/domains/rankings/internal/queries/matchEventGroups.ts'
+import { compatibleMatchEvents } from '../src/domains/rankings/internal/queries/matchLedger.ts'
 
 test('premier events lead domestic families while qualifiers and development stay lower', () => {
   const refs = [

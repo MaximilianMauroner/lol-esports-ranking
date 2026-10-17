@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
-import { normalizeTournamentFeed } from '../src/lib/tournamentFeed'
+import { normalizeTournamentFeed } from '../src/domains/tournaments/internal/tournamentFeed'
 import { acquireBucketLease } from '../scripts/railway-bucket.mjs'
 import { publishTournamentFeedBucket, readTournamentFeedBucket, TOURNAMENT_LEASE_KEY } from '../scripts/tournament-feed-storage'
 

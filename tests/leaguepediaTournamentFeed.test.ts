@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import test from 'node:test'
 import { collectLeaguepediaTournamentFeed, createTournamentFeedService, normalizeLeaguepediaSchedule } from '../scripts/leaguepedia-tournament-feed'
-import { groupTournamentSeries, isTournamentFeed, type TournamentFeed } from '../src/lib/tournamentFeed'
+import { groupTournamentSeries, isTournamentFeed, type TournamentFeed } from '../src/domains/tournaments/internal/tournamentFeed'
 
 const now = new Date('2026-10-15T20:00:00.000Z')
 const window = { now, coverageStart: '2026-10-01T00:00:00.000Z', coverageEnd: '2026-11-29T23:59:59.999Z' }

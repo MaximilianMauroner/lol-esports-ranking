@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildDeservedStandingRegionModel } from '../src/lib/deservedStandingRegions.ts'
-import type { MatchRecord, Region, TeamProfile } from '../src/types.ts'
+import { buildDeservedStandingRegionModel } from '../src/domains/rankings/internal/projections/deservedStandingRegions.ts'
+import type { MatchRecord, Region, TeamProfile } from '../src/domains/rankings/types.ts'
 
 test('buildDeservedStandingRegionModel ranks regions from cross-region resume ledgers', () => {
   const model = buildDeservedStandingRegionModel([

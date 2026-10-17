@@ -2,11 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { WhatChanged } from '../src/components/WhatChanged.tsx'
-import { deriveRankingBoard, deriveRankingUniverse, type RankingBoardSelection, type RankingEvidence } from '../src/lib/rankingBoard.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
-import type { PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam } from '../src/lib/publicArtifacts/schema.ts'
-import type { TournamentInstanceId } from '../src/lib/internationalTournaments.ts'
+import { WhatChanged } from '../src/views/rankings/WhatChanged.tsx'
+import { deriveRankingBoard, deriveRankingUniverse, type RankingBoardSelection, type RankingEvidence } from '../src/domains/rankings/internal/queries/rankingBoard.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam } from '../src/domains/rankings/internal/published/schema.ts'
+import type { TournamentInstanceId } from '../src/domains/rankings/internal/evidence/internationalTournaments.ts'
 
 test('What changed names the upset event like the match ledger, not by its source path', () => {
   // Issue #115 F2.

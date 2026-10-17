@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
-import { compareCodeUnits } from '../../src/lib/codeUnitOrder.mjs'
-import { parseProviderInstant, providerDate, providerDatetimeUtc } from '../../src/lib/importers/providerTime'
-import { stableDigest, stableJson } from '../../src/lib/incremental/types'
-import { configHashFor } from '../../src/lib/modelConfig'
+import { compareCodeUnits } from '../../src/shared/codeUnitOrder.mjs'
+import { parseProviderInstant, providerDate, providerDatetimeUtc } from '../../scripts/rankings/providers/providerTime'
+import { stableDigest, stableJson } from '../../src/domains/rankings/build'
+import { configHashFor } from '../../src/domains/rankings/policy'
 import { canonicalJsonFor, prepareSemanticArtifact } from '../../scripts/public-artifact-storage.mjs'
 
 /**

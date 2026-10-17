@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createMatchHistoryArtifacts, createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, createTournamentMovementArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
-import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
-import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/lib/publicArtifacts/schema.ts'
-import { resolvePlayerScope } from '../src/lib/playerScopes.ts'
-import type { StaticRankingData } from '../src/lib/snapshot.ts'
-import type { LeagueStrengthHistoryPoint, MatchRecord, PlayerStanding, Region, Role, Side, TeamProfile, TeamStanding } from '../src/types.ts'
+import { createMatchHistoryArtifacts, createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, createTournamentMovementArtifacts, snapshotKey, teamStandingKey } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { emptyRatingUpdateLedger } from '../src/domains/rankings/internal/replay/ratingCalculations.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/domains/rankings/internal/published/schema.ts'
+import { resolvePlayerScope } from '../src/domains/rankings/internal/queries/playerScopes.ts'
+import type { StaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { LeagueStrengthHistoryPoint, MatchRecord, PlayerStanding, Region, Role, Side, TeamProfile, TeamStanding } from '../src/domains/rankings/types.ts'
 import { rosters, sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 const ROLE_ORDER: Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']

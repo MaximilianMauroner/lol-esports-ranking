@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TournamentBracket } from '../src/components/TournamentBracket.tsx'
-import type { TournamentSeries } from '../src/lib/tournamentFeed'
+import { TournamentBracket } from '../src/views/tournaments/TournamentBracket.tsx'
+import type { TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
 
 /** [Leaguepedia tab_N, start, team 1, team 2, winner (1 or 2)] */
 function completed(rows: Array<[string, string, string, string, 1 | 2]>): TournamentSeries[] {

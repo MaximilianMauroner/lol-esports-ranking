@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import test from 'node:test'
-import { stableJson } from '../src/lib/incremental/types.ts'
+import { stableJson } from '../src/domains/rankings/internal/replay/incremental/types.ts'
 import { stableJsonSha256 } from '../scripts/stable-json-digest.ts'
 
 test('streamed state identity preserves the existing canonical byte contract', () => {

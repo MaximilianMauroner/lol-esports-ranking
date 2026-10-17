@@ -3,12 +3,12 @@ import test from 'node:test'
 import {
   PLAY_IN_REGIONS, SWISS_BRACKET, SWISS_ROUND_SIZES, decodeChoices, drawContext, drawProblem, encodeChoices, fillDraw, knockoutEntry,
   liveSwissBaseline, opponentOptions, pairReason, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawnRound, type SwissBaseline,
-} from '../src/lib/swissScenario'
+} from '../src/domains/tournaments/internal/swissScenario'
 import { teamBrandingFor } from '../src/data/teamBranding'
-import { canonicalTeamNameFor, teamIdentityFor } from '../src/data/teamIdentity'
-import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/lib/worlds2026Swiss'
-import type { TournamentEvent, TournamentSeries } from '../src/lib/tournamentFeed'
-import { worldsRandom } from '../src/lib/worldsSimulation'
+import { canonicalTeamNameFor, teamIdentityFor } from '../src/domains/rankings/internal/evidence/teamIdentity'
+import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/domains/tournaments/internal/worlds2026Swiss'
+import type { TournamentEvent, TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
+import { worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
 
 /** Draws every round with `fillDraw` and lets `pick` choose each winner. */
 function playOut(baseline: SwissBaseline, pick: (pair: [string, string], round: number) => string) {

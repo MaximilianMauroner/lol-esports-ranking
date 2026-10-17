@@ -1,44 +1,41 @@
 import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from 'react'
 import { AlertTriangle, BarChart3, CalendarDays, Globe2, History, RefreshCw, Search } from 'lucide-react'
-import type {
-  SnapshotCheckpointOption,
-  PublicTeamStanding as RankingSummaryStanding,
-} from './lib/publicArtifacts/schema'
-import type { PublicSnapshotState } from './browser/publicArtifacts/resolver'
+import type { SnapshotCheckpointOption, PublicTeamStanding as RankingSummaryStanding } from './domains/rankings/types'
+import type { PublicSnapshotState } from './browser/rankings/published/resolver'
 import {
   formatDate,
   formatRating,
   teamKey,
-} from './lib/display'
-import type { RegionStrength } from './lib/regionStrength'
+} from './shared/display'
+import type { RegionStrength } from './domains/rankings/read'
 import {
   REGION_COMPARE_ROWS,
   TEAM_COMPARE_ROWS,
   regionCompareColumns,
   regionKey,
   teamCompareColumns,
-} from './components/compareAnalysisData'
-import { TeamsView, type PlayerLoadState } from './views/TeamsView'
+} from './views/rankings/compareAnalysisData'
+import { TeamsView, type PlayerLoadState } from './views/rankings/TeamsView'
 import { DataState, RegionBadge } from './components/ui'
-import { ScopeBar } from './components/ScopeBar'
-import { CompareDock, type CompareDockEntity } from './components/CompareDock'
-import { HeadToHead } from './components/HeadToHead'
+import { ScopeBar } from './views/rankings/ScopeBar'
+import { CompareDock, type CompareDockEntity } from './views/rankings/CompareDock'
+import { HeadToHead } from './views/rankings/HeadToHead'
 import { Button, buttonVariants } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { Alert } from './components/ui/alert'
 import { Card } from './components/ui/card'
 import { LoadingState, type PageLayout } from './components/ui/loading'
 import { TooltipProvider } from './components/ui/tooltip'
-import { RegionCompareDrawer, TeamCompareDrawer } from './components/CompareDrawer'
-import { currentSeasonScope } from './lib/defaultScope'
-import { emptyPlayerScope, resolvePlayerScope } from './lib/playerScopes'
-import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './lib/legal'
-import { tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
-import { deriveRankingUniverse } from './lib/rankingBoard'
-import { cn } from './lib/utils'
-import { currentHashQuery, hashParam } from './hooks/urlState'
-import { canUseBackgroundPrefetch, scheduleIdleWork } from './browser/prefetch'
-import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './lib/bootstrap'
+import { RegionCompareDrawer, TeamCompareDrawer } from './views/rankings/CompareDrawer'
+import { currentSeasonScope } from './domains/rankings/read'
+import { emptyPlayerScope, resolvePlayerScope } from './domains/rankings/read'
+import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from './data/legal'
+import { tournamentIdFromFilter, type TournamentFilterValue } from './domains/rankings/evidence'
+import { deriveRankingUniverse } from './domains/rankings/read'
+import { cn } from './shared/utils'
+import { currentHashQuery, hashParam } from './browser/navigation'
+import { canUseBackgroundPrefetch, scheduleIdleWork } from './browser/rankings/prefetch'
+import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './browser/bootstrap'
 import {
   checkpointFromScope,
   checkpointOptionsForSeason,
@@ -46,7 +43,7 @@ import {
   scopeLabel,
   seasonFromScope,
   usePublicArtifacts,
-} from './hooks/usePublicArtifacts'
+} from './browser/rankings/usePublicArtifacts'
 
 type Mode = AppMode
 type MovementBaseline = {
@@ -54,10 +51,10 @@ type MovementBaseline = {
 }
 const COMPARE_LIMIT = 4
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
-const loadRegionsView = () => import('./views/RegionsView').then((module) => ({ default: module.RegionsView }))
-const loadMatchesView = () => import('./views/MatchesView').then((module) => ({ default: module.MatchesView }))
-const loadTournamentsView = () => import('./views/TournamentsView').then((module) => ({ default: module.TournamentsView }))
-const loadCompareAnalysis = () => import('./components/CompareAnalysis')
+const loadRegionsView = () => import('./views/regions/RegionsView').then((module) => ({ default: module.RegionsView }))
+const loadMatchesView = () => import('./views/matches/MatchesView').then((module) => ({ default: module.MatchesView }))
+const loadTournamentsView = () => import('./views/tournaments/TournamentsView').then((module) => ({ default: module.TournamentsView }))
+const loadCompareAnalysis = () => import('./views/rankings/CompareAnalysis')
 const RegionsView = lazy(loadRegionsView)
 const MatchesView = lazy(loadMatchesView)
 const TournamentsView = lazy(loadTournamentsView)

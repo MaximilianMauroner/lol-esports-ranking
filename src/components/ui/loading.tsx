@@ -1,6 +1,6 @@
 import { BarChart3 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 import { Card } from './card'
 import { Panel } from './panel'
 import { Skeleton } from './skeleton'

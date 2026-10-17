@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { compareCodeUnits } from '../../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../../src/shared/codeUnitOrder.mjs'
 
 void (async () => {
   const [rootArg, manifestArg, outputArg, scoreStart = '2025-01-01'] = process.argv.slice(2)
@@ -11,10 +11,10 @@ void (async () => {
   }
 
   const root = resolve(rootArg)
-  const sourceModule: typeof import('../../scripts/ranking-source-import') = await import(pathToFileURL(`${root}/scripts/ranking-source-import.ts`).href)
-  const modelModule: typeof import('../../src/lib/model') = await import(pathToFileURL(`${root}/src/lib/model.ts`).href)
-  const evaluationModule: typeof import('../../src/lib/rankingEvaluationData') = await import(pathToFileURL(`${root}/src/lib/rankingEvaluationData.ts`).href)
-  const tournamentModule: typeof import('../../src/lib/internationalTournaments') = await import(pathToFileURL(`${root}/src/lib/internationalTournaments.ts`).href)
+  const sourceModule: typeof import('../../scripts/rankings/source-input') = await import(pathToFileURL(`${root}/scripts/rankings/source-input.ts`).href)
+  const modelModule: typeof import('../../src/domains/rankings/build') = await import(pathToFileURL(`${root}/src/domains/rankings/internal/replay/model.ts`).href)
+  const evaluationModule: typeof import('./lib/rankingEvaluationData') = await import(pathToFileURL(`${root}/tools/calibration/lib/rankingEvaluationData.ts`).href)
+  const tournamentModule: typeof import('../../src/domains/rankings/evidence') = await import(pathToFileURL(`${root}/src/domains/rankings/internal/evidence/internationalTournaments.ts`).href)
   const source = await sourceModule.importRankingSourceData({ manifestPath: resolve(manifestArg) })
   const matches = source.matches
   if (!matches.length || source.dataMode === 'no-data' || matches.some((match) => match.sourceProvider === 'seed')) {

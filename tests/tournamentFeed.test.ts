@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promise
 import { hostname, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { acquireCollectorLock, collectTournamentFeed, publishTournamentFeed } from '../scripts/tournament-feed-collector'
-import { competitionForLeague, formatTournamentTime, groupTournamentSeries, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/lib/tournamentFeed'
+import { competitionForLeague, formatTournamentTime, groupTournamentSeries, isTournamentFeed, normalizeTournamentFeed, reconcileTournamentFeed } from '../src/domains/tournaments/internal/tournamentFeed'
 
 const at = '2026-09-26T12:00:00.000Z'
 

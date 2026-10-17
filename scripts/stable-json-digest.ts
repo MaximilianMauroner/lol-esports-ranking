@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 /** SHA-256 of incremental/types.stableJson without retaining the complete text. */
 export function stableJsonSha256(value: unknown): string {

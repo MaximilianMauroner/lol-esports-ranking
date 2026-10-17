@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { tournamentSections, type EliminationSection, type GroupSection, type SwissSection } from '../src/lib/tournamentBracket'
-import type { TournamentSeries } from '../src/lib/tournamentFeed'
+import { tournamentSections, type EliminationSection, type GroupSection, type SwissSection } from '../src/domains/tournaments/internal/tournamentBracket'
+import type { TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
 
 /** [Leaguepedia tab_N, start day (null when not supplied), team 1, team 2, winner (1, 2 or 0 for unplayed)] */
 type Row = [string, string | null, string | null, string | null, 0 | 1 | 2]

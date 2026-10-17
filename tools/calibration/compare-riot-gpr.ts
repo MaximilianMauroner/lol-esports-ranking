@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
-import { parsePublicRankingManifest, parsePublicRankingShard, type PublicRankingShard, type PublicTeamStanding } from '../../src/lib/publicArtifacts/schema.ts'
+import { parsePublicRankingManifest, parsePublicRankingShard } from '../../src/domains/rankings/published-read.ts'
+import type { PublicRankingShard, PublicTeamStanding } from '../../src/domains/rankings/types'
 
 export type RiotGprEntry = {
   rank: number

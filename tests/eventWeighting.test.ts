@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { inferEventTier } from '../src/data/competitionTaxonomy.ts'
-import { dssSeriesWeight } from '../src/lib/deservedStanding.ts'
-import { eventWeightContextForMatches, eventWeightForMatch } from '../src/lib/eventWeighting.ts'
-import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources.ts'
-import { createRatingReplayContext, finalizeRatingRunStateAtUtcBoundary, replayRatingDates } from '../src/lib/model.ts'
-import { playerResumeCreditEntries } from '../src/lib/playerResumeLedger.ts'
-import { predictionSegmentsFor } from '../src/lib/predictionContext.ts'
-import { isInternationalMatch } from '../src/lib/ratingCalculations.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { inferEventTier } from '../src/domains/rankings/internal/evidence/competitionTaxonomy.ts'
+import { dssSeriesWeight } from '../src/domains/rankings/internal/projections/deservedStanding.ts'
+import { eventWeightContextForMatches, eventWeightForMatch } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
+import { createRatingReplayContext, finalizeRatingRunStateAtUtcBoundary, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
+import { playerResumeCreditEntries } from '../src/domains/rankings/internal/players/playerResumeLedger.ts'
+import { predictionSegmentsFor } from '../src/domains/rankings/internal/projections/predictionContext.ts'
+import { isInternationalMatch } from '../src/domains/rankings/internal/replay/ratingCalculations.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 test('regional finals and play-ins override Worlds aliases and generic playoff flags', () => {
   assert.equal(inferEventTier({ league: 'WLDs', event: 'LPL/2025 Season/Regional Finals', phase: 'Final', playoffs: true }), 'major-playoffs')

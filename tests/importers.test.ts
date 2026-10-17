@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources.ts'
-import { canonicalTeamNameFor, teamCodeFor } from '../src/data/teamIdentity.ts'
-import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
-import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports.ts'
-import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
-import { buildRankingModel } from '../src/lib/model.ts'
-import { resolveCanonicalSeries } from '../src/lib/seriesResolver.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
+import { canonicalTeamNameFor, teamCodeFor } from '../src/domains/rankings/internal/evidence/teamIdentity.ts'
+import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
+import { importLolEsportsScheduleSnapshot } from '../scripts/rankings/providers/lolEsports.ts'
+import { importOraclesElixirCsv } from '../scripts/rankings/providers/oraclesElixir.ts'
+import { buildRankingModel } from '../src/domains/rankings/internal/replay/model.ts'
+import { resolveCanonicalSeries } from '../src/domains/rankings/internal/evidence/seriesResolver.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 test('Leaguepedia international rows use known team home leagues when explicit fields are absent', () => {
   const result = importLeaguepediaSnapshot({

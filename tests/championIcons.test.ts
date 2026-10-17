@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { championIconUrl, championInitials } from '../src/lib/championIcons.ts'
+import { championIconUrl, championInitials } from '../src/browser/branding/championIcons.ts'
 
 const icon = (version: string, id: string) => `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${id}.png`
 

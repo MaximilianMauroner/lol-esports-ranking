@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { publishedRatingScale } from '../src/lib/modelConfig.ts'
-import { estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
-import { toPublishedRating, toPublishedRatingDelta } from '../src/lib/ratingCalculations.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import { estimatePublicMatchup } from '../src/domains/rankings/internal/queries/publicMatchup.ts'
+import { toPublishedRating, toPublishedRatingDelta } from '../src/domains/rankings/internal/replay/ratingCalculations.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 test('public matchup defaults preserve game probability compatibility', () => {
   const estimate = estimatePublicMatchup(

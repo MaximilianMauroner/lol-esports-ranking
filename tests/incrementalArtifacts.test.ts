@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord } from '../src/types.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 import { affectedPublicArtifacts, assertArtifactDependencyPlanMatchesSemanticChanges } from '../src/lib/incremental/artifactDependencies.ts'
 import { compareSemanticArtifactMaps } from '../src/lib/incremental/semanticParity.ts'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
+import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 test('semantic parity reports missing, unexpected, digest, and generation/provenance mismatches', () => {
   const report = compareSemanticArtifactMaps({

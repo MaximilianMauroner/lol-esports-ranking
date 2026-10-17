@@ -1,41 +1,41 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { LeagueStrength, MatchRecord, MatchRosterSnapshot, Region, Role, Side, TeamProfile } from '../src/types.ts'
-import type { CausalRecomputeDecision } from '../src/lib/causalRecompute.ts'
+import type { LeagueStrength, MatchRecord, MatchRosterSnapshot, Region, Role, Side, TeamProfile } from '../src/domains/rankings/types.ts'
+import type { CausalRecomputeDecision } from '../src/domains/rankings/internal/replay/causalRecompute.ts'
 import {
   buildPlayerModel,
   buildPregamePlayerRatingEdges,
   buildSourcedPlayerCausalSummary,
   reconcileSourcedPlayerCausality,
   recomputeSourcedPlayerCausalOutputs,
-} from '../src/lib/playerModel.ts'
+} from '../src/domains/rankings/internal/players/playerModel.ts'
 import {
   buildDeservedStandingModel,
   buildDssTeamCausalSummary,
   reconcileDssTeamCausality,
   recomputeDssTeamCausalState,
-} from '../src/lib/deservedStandingModel.ts'
+} from '../src/domains/rankings/internal/projections/deservedStandingModel.ts'
 import {
   buildDeservedStandingRegionModel,
   buildDssRegionCausalSummary,
   reconcileDssRegionCausality,
   recomputeDssRegionCausalState,
-} from '../src/lib/deservedStandingRegions.ts'
+} from '../src/domains/rankings/internal/projections/deservedStandingRegions.ts'
 import {
   buildDssRosterEraCausalSummary,
   buildDssRosterEras,
   reconcileDssRosterEraCausality,
   recomputeDssRosterEraCausalState,
-} from '../src/lib/rosterEras.ts'
+} from '../src/domains/rankings/internal/players/rosterEras.ts'
 import {
   buildDssPlayerResumeCausalSummary,
   buildDssPlayerResumeLedgers,
   reconcileDssPlayerResumeCausality,
   recomputeDssPlayerResumeCausalState,
   type DssPlayerResumeSeriesInput,
-} from '../src/lib/playerResumeLedger.ts'
-import { ratingCheckpointInventory } from '../src/lib/ratingCheckpointInventory.ts'
-import { snapshotExternalCausalSurfaces } from '../src/lib/snapshot.ts'
+} from '../src/domains/rankings/internal/players/playerResumeLedger.ts'
+import { ratingCheckpointInventory } from '../src/domains/rankings/internal/replay/ratingCheckpointInventory.ts'
+import { snapshotExternalCausalSurfaces } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 test('sourced-player causality accepts append and replays same-day inserts or source corrections', () => {
   const first = sourcedMatch({ id: 'first', date: '2026-01-02' })

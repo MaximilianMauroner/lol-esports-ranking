@@ -1,18 +1,18 @@
-import { chronologicalCohorts, seededRandom, summarizeEvaluation, type EvaluationExport } from '../../../src/lib/rankingEvaluation'
+import { chronologicalCohorts, seededRandom, summarizeEvaluation, type EvaluationExport } from './rankingEvaluation'
 
 export const searchParameters = [
-  { file: 'src/lib/modelConfig.ts', key: 'recencyHalfLifeDays', group: 'temporal', low: 240, high: 720 },
-  { file: 'src/lib/modelConfig.ts', key: 'normalPatchTeamRetention', group: 'temporal', low: .95, high: 1 },
-  { file: 'src/lib/modelConfig.ts', key: 'splitBreakTeamRetention', group: 'temporal', low: .8, high: 1 },
-  { file: 'src/lib/modelConfig.ts', key: 'seasonStartTeamRetention', group: 'temporal', low: .6, high: 1 },
-  { file: 'src/lib/modelConfig.ts', key: 'winProbabilityUncertaintyScale', group: 'probability', low: 400, high: 1200 },
-  { file: 'src/lib/modelConfig.ts', key: 'winProbabilityUncertaintyFloor', group: 'probability', low: .35, high: .65 },
-  { file: 'src/lib/playerModel.ts', key: 'playerPregameEdgeCoefficient', group: 'player', low: 1, high: 4 },
-  { file: 'src/lib/modelConfig.ts', key: 'momentumGameDecay', group: 'momentum', low: .75, high: .97 },
-  { file: 'src/lib/modelConfig.ts', key: 'momentumCap', group: 'momentum', low: 30, high: 100 },
-  { file: 'src/lib/modelConfig.ts', key: 'tier-two', group: 'transfer', low: .45, high: 1 },
-  { file: 'src/lib/modelConfig.ts', key: 'tier-three', group: 'transfer', low: .25, high: .45 },
-  { file: 'src/lib/modelConfig.ts', key: 'emerging', group: 'transfer', low: .1, high: .25 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'recencyHalfLifeDays', group: 'temporal', low: 240, high: 720 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'normalPatchTeamRetention', group: 'temporal', low: .95, high: 1 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'splitBreakTeamRetention', group: 'temporal', low: .8, high: 1 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'seasonStartTeamRetention', group: 'temporal', low: .6, high: 1 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'winProbabilityUncertaintyScale', group: 'probability', low: 400, high: 1200 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'winProbabilityUncertaintyFloor', group: 'probability', low: .35, high: .65 },
+  { file: 'src/domains/rankings/internal/policy/playerPolicy.ts', key: 'playerPregameEdgeCoefficient', group: 'player', low: 1, high: 4 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'momentumGameDecay', group: 'momentum', low: .75, high: .97 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'momentumCap', group: 'momentum', low: 30, high: 100 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'tier-two', group: 'transfer', low: .45, high: 1 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'tier-three', group: 'transfer', low: .25, high: .45 },
+  { file: 'src/domains/rankings/internal/policy/modelConfig.ts', key: 'emerging', group: 'transfer', low: .1, high: .25 },
 ] as const
 export type SearchValues = Record<typeof searchParameters[number]['key'], number>
 

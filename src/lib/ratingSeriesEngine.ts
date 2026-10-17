@@ -1,4 +1,4 @@
-import { effectiveLeagueRating, leaguePriorFor } from '../data/leagueTiers'
+import { effectiveLeagueRating, leaguePriorFor } from '../domains/rankings/internal/policy/leagueTiers'
 import type {
   FactorBreakdown,
   LeagueStrengthHistoryPoint,
@@ -9,20 +9,20 @@ import type {
   Region,
   TeamHistoryPoint,
   TeamProfile,
-} from '../types'
+} from '../domains/rankings/types'
 import {
   executionResidualPredictionWeight,
   executionResidualShadowWeight,
   executionSoftOutcome,
   teamExecutionIndex,
-} from './executionResidual'
-import { eventKFactorForMatch, eventWeightForMatch } from './eventWeighting'
-import { updateLeagueStrengthForSeries } from './leagueRatings'
-import { homeLeagueForMatch, sourceTraceFor } from './matchContext'
-import type { PregamePlayerRatingEdge } from './playerModel'
-import { trackMatchForPlacement } from './placementResiduals'
-import { predictionSegmentsFor, recordTeamContext } from './predictionContext'
-import { predictionVariantFromWinProbability } from './predictionVariants'
+} from '../domains/rankings/internal/policy/executionResidual'
+import { eventKFactorForMatch, eventWeightForMatch } from '../domains/rankings/internal/replay/eventWeighting'
+import { updateLeagueStrengthForSeries } from '../domains/rankings/internal/replay/leagueRatings'
+import { homeLeagueForMatch, sourceTraceFor } from '../domains/rankings/internal/evidence/matchContext'
+import type { PregamePlayerRatingEdge } from '../domains/rankings/internal/players/playerModel'
+import { trackMatchForPlacement } from '../domains/rankings/internal/replay/placementResiduals'
+import { predictionSegmentsFor, recordTeamContext } from '../domains/rankings/internal/projections/predictionContext'
+import { predictionVariantFromWinProbability } from '../domains/rankings/internal/projections/predictionVariants'
 import {
   clamp,
   expectedScore,
@@ -37,14 +37,14 @@ import {
   ratingFromComponents,
   recencyWeight,
   roundedRatingUpdateLedger,
-} from './ratingCalculations'
-import type { RatingRunState } from './ratingRunState'
-import { makeRankMap } from './ratingRunState'
-import { applyRosterContinuityForSeries, roundedContinuity } from './rosterContinuityRating'
-import { recordSideAdjustmentSample, sideAdjustmentFor } from './sideAdjustments'
-import { resolveCanonicalSeries, type CanonicalSeries } from './seriesResolver'
-import { neutralWinProbability } from './winProbability'
-import { calculateSeriesResultUpdate, seriesStrengthSignal } from './seriesResultUpdate'
+} from '../domains/rankings/internal/replay/ratingCalculations'
+import type { RatingRunState } from '../domains/rankings/internal/replay/ratingRunState'
+import { makeRankMap } from '../domains/rankings/internal/replay/ratingRunState'
+import { applyRosterContinuityForSeries, roundedContinuity } from '../domains/rankings/internal/replay/rosterContinuityRating'
+import { recordSideAdjustmentSample, sideAdjustmentFor } from '../domains/rankings/internal/replay/sideAdjustments'
+import { resolveCanonicalSeries, type CanonicalSeries } from '../domains/rankings/internal/evidence/seriesResolver'
+import { neutralWinProbability } from '../domains/rankings/internal/queries/winProbability'
+import { calculateSeriesResultUpdate, seriesStrengthSignal } from '../domains/rankings/internal/replay/seriesResultUpdate'
 import {
   initialTeamRating,
   latentStrengthResultBudgetShares,
@@ -55,7 +55,7 @@ import {
   playerRatingShadowWeight,
   ratingUpdateRecencyWeight,
   transparentGprModelMetadata,
-} from './modelConfig'
+} from '../domains/rankings/internal/policy/modelConfig'
 
 type PregamePlayerRatingEdges = Map<string, PregamePlayerRatingEdge>
 

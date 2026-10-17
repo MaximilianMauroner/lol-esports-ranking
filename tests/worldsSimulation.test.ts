@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { forecastWorlds2026Knockout } from '../src/lib/worlds2026Knockout'
-import { forecastWorlds2026PlayIn } from '../src/lib/worlds2026PlayIn'
-import { replayWorlds2026Swiss, WORLDS_2026_SWISS_RULES } from '../src/lib/worlds2026Swiss'
-import { drawWorlds2026Knockout, runWorldsSimulation, worldsRandom, worldsSamplingInterval, WORLD_STAGES, WORLD_FINISHES, type WorldsSimulationResult } from '../src/lib/worldsSimulation'
+import { forecastWorlds2026Knockout } from '../src/domains/tournaments/internal/worlds2026Knockout'
+import { forecastWorlds2026PlayIn } from '../src/domains/tournaments/internal/worlds2026PlayIn'
+import { replayWorlds2026Swiss, WORLDS_2026_SWISS_RULES } from '../src/domains/tournaments/internal/worlds2026Swiss'
+import { drawWorlds2026Knockout, runWorldsSimulation, worldsRandom, worldsSamplingInterval, WORLD_STAGES, WORLD_FINISHES, type WorldsSimulationResult } from '../src/domains/tournaments/internal/worldsSimulation'
 import { historicalWorldsFixture, worldsBasis, worldsFixture, worldsEvidence } from './fixtures/worldsFixtures'
-import { replayWorlds2022Group } from '../src/lib/worlds2022ObservedGroups'
+import { replayWorlds2022Group } from '../src/domains/tournaments/internal/worlds2022ObservedGroups'
 
 const options = { seed: 47, trials: 10_000 }
 function report(result: WorldsSimulationResult) { assert.equal(result.status, 'supported', JSON.stringify(result)); return result.report }

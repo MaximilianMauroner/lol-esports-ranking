@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { publishedRatingScale } from '../src/lib/modelConfig.ts'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
 import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   filterFromSnapshotKey,
@@ -25,7 +25,7 @@ import {
   type PublicTournamentMovementIndex,
   type PublicTournamentMovementShard,
   type SnapshotFilter,
-} from '../src/lib/publicArtifacts/schema.ts'
+} from '../src/domains/rankings/internal/published/schema.ts'
 
 test('public ranking manifest parser validates nested filters and data URL paths', () => {
   assert.doesNotThrow(() => parsePublicRankingManifest(manifest()))

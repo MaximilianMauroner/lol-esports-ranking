@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
-import { createArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
-import { assertCanonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
-import { mapArtifactReferences, normalizeLogicalArtifactUrl } from '../src/lib/publicArtifacts/logicalReferences.mjs'
+import { createArchive, ARCHIVE_PAGE_BYTES } from '../src/domains/rankings/internal/published/archive.mjs'
+import { assertCanonicalPublicLogicalPath } from '../src/domains/rankings/internal/published/logicalPath.mjs'
+import { mapArtifactReferences, normalizeLogicalArtifactUrl } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
 
-export { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
+export { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from '../src/domains/rankings/internal/published/logicalPath.mjs'
 
 export const CONTENT_ADDRESSED_STORAGE_MODE = 'content-addressed-gzip-v1'
 

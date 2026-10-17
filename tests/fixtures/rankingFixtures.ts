@@ -1,5 +1,5 @@
-import { knownTeamIdentities } from '../../src/data/teamIdentity.ts'
-import type { MatchRecord, PlayerProfile, TeamProfile } from '../../src/types.ts'
+import { knownTeamIdentities } from '../../src/domains/rankings/evidence.ts'
+import type { MatchRecord, PlayerProfile, TeamProfile } from '../../src/domains/rankings/types.ts'
 
 export const teams: Record<string, TeamProfile> = knownTeamIdentities
 

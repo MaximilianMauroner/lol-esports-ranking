@@ -21,9 +21,9 @@ function fixture(t, files) {
 
 test('resolved aliases and parent escapes cannot cross source ownership', (t) => {
   const { root } = fixture(t, {
-    'src/lib/reader.ts': "import '@/browser/state'; export * from './nested/../../browser/state'",
+    'src/shared/reader.ts': "import '@/browser/state'; export * from './nested/../../browser/state'",
     'src/browser/state.ts': 'export const state = 1',
-    'src/lib/nested/placeholder.ts': 'export {}',
+    'src/shared/nested/placeholder.ts': 'export {}',
     'scripts/server.ts': "import '../tools/dev/helper'",
     'tools/dev/helper.ts': 'export {}',
   })
@@ -35,69 +35,89 @@ test('resolved aliases and parent escapes cannot cross source ownership', (t) =>
 
 test('browser runtime traversal follows re-exports, literal dynamic imports and worker URLs', (t) => {
   const { root } = fixture(t, {
-    'src/browser/page.ts': "import('@/lib/facade'); import('/src/lib/snapshot.ts'); new Worker(new URL('../lib/worker.ts', import.meta.url))",
-    'src/lib/facade.ts': "export { replay } from './snapshot'",
-    'src/lib/snapshot.ts': 'export const replay = 1',
-    'src/lib/worker.ts': "import './importers/provider'",
-    'src/lib/importers/provider.ts': 'export {}',
+    'src/browser/page.ts': "import('@/domains/rankings/read'); import('/src/domains/rankings/internal/projections/snapshot.ts'); new Worker(new URL('../domains/rankings/internal/worker.ts', import.meta.url))",
+    'src/domains/rankings/read.ts': "export { replay } from './internal/projections/snapshot'",
+    'src/domains/rankings/internal/projections/snapshot.ts': 'export const replay = 1',
+    'src/domains/rankings/internal/worker.ts': "import '../../../../scripts/rankings/providers/provider'",
+    'scripts/rankings/providers/provider.ts': 'export {}',
   })
   const errors = checkDependencies(root).join('\n')
   assert.match(errors, /Browser runtime reaches producer .*snapshot\.ts/)
-  assert.match(errors, /Browser runtime reaches producer .*importers\/provider\.ts/)
+  assert.match(errors, /Browser runtime reaches producer .*providers\/provider\.ts/)
 })
 
 test('runtime traversal follows mjs implementations even when declarations exist', (t) => {
   const { root } = fixture(t, {
-    'src/browser/page.ts': "import '../lib/facade.mjs'",
-    'src/lib/facade.mjs': "export { replay } from './snapshot.ts'",
-    'src/lib/facade.d.mts': 'export declare const replay: number',
-    'src/lib/snapshot.ts': 'export const replay = 1',
+    'src/browser/page.ts': "import '../domains/rankings/read.mjs'",
+    'src/domains/rankings/read.mjs': "export { replay } from './internal/projections/snapshot.ts'",
+    'src/domains/rankings/read.d.mts': 'export declare const replay: number',
+    'src/domains/rankings/internal/projections/snapshot.ts': 'export const replay = 1',
   })
   assert.match(checkDependencies(root).join('\n'), /Browser runtime reaches producer .*snapshot\.ts/)
 })
 
 test('browser configuration values do not authorize indirect player replay', (t) => {
   const { root, write } = fixture(t, {
-    'src/browser/page.ts': "import { parameters } from '../lib/modelConfig'; console.log(parameters)",
-    'src/lib/modelConfig.ts': "export { parameters } from './playerPolicy'",
-    'src/lib/playerPolicy.ts': 'export const parameters = { rating: 100 }',
-    'src/lib/playerModel.ts': 'export const replay = 1',
+    'src/browser/page.ts': "import { parameters } from '../domains/rankings/policy'; console.log(parameters)",
+    'src/domains/rankings/policy.ts': "export { parameters } from './internal/policy/playerPolicy'",
+    'src/domains/rankings/internal/policy/playerPolicy.ts': 'export const parameters = { rating: 100 }',
+    'src/domains/rankings/internal/players/playerModel.ts': 'export const replay = 1',
   })
   assert.deepEqual(checkDependencies(root), [])
-  write('src/lib/playerPolicy.ts', "export { replay as parameters } from './playerModel'")
+  write('src/domains/rankings/internal/policy/playerPolicy.ts', "export { replay as parameters } from '../players/playerModel'")
   assert.match(checkDependencies(root).join('\n'), /Browser runtime reaches producer .*playerModel\.ts/)
 })
 
 test('shared producer types remain available without adding producer runtime edges', (t) => {
   const { root, write } = fixture(t, {
-    'src/browser/page.ts': "import type { Snapshot } from '../lib/snapshot'; export type { Snapshot as Result } from '../lib/snapshot'; type Deferred = import('../lib/snapshot').Snapshot; export type { Deferred }",
-    'src/lib/snapshot.ts': 'export type Snapshot = { value: number }; export const replay = 1',
+    'src/browser/page.ts': "import type { Snapshot } from '../domains/rankings/types'; export type { Snapshot as Result } from '../domains/rankings/types'; type Deferred = import('../domains/rankings/types').Snapshot; export type { Deferred }",
+    'src/domains/rankings/types.ts': 'export type Snapshot = { value: number }',
+    'src/domains/rankings/internal/projections/snapshot.ts': 'export type Snapshot = { value: number }; export const replay = 1',
   })
   assert.deepEqual(checkDependencies(root), [])
-  write('src/browser/page.ts', "import { type Snapshot, replay } from '../lib/snapshot'; console.log(replay)")
+  write('src/browser/page.ts', "import { type Snapshot, replay } from '../domains/rankings/internal/projections/snapshot'; console.log(replay)")
   assert.match(checkDependencies(root).join('\n'), /Browser runtime reaches producer/)
 })
 
 test('type-only imports do not permit cross-owner dependencies', (t) => {
   const { root } = fixture(t, {
-    'src/lib/shared.ts': "import type { State } from '../browser/state'",
+    'src/shared/shared.ts': "import type { State } from '../browser/state'",
     'src/browser/state.ts': 'export type State = number',
   })
   assert.match(checkDependencies(root).join('\n'), /shared cannot import browser/)
 })
 
+test('domain internals and codec adapters cannot be entered through aliases or parent paths', (t) => {
+  const { root } = fixture(t, {
+    'src/views/page.ts': "export * from '@/domains/rankings/internal/queries/detail'; import '../domains/rankings/published-read'",
+    'src/domains/rankings/internal/queries/detail.ts': 'export const detail = 1',
+    'src/domains/rankings/published-read.ts': 'export const parse = 1',
+    'src/domains/rankings/read.ts': "import '../tournaments/read'",
+    'src/domains/tournaments/read.ts': 'export const schedule = 1',
+  })
+  const errors = checkDependencies(root).join('\n')
+  assert.match(errors, /Domain implementation is private/)
+  assert.match(errors, /Published codecs are private/)
+  assert.match(errors, /rankings cannot import tournaments/)
+})
+
+test('runtime dynamic imports require a finite literal graph', (t) => {
+  const { root } = fixture(t, { 'src/browser/worker.ts': 'const target = location.hash; import(target)' })
+  assert.match(checkDependencies(root).join('\n'), /Dynamic source imports require a literal target/)
+})
+
 test('shared browser globals include cast aliases and destructuring but exclude local names and gc', (t) => {
   const { root, write } = fixture(t, {
-    'src/lib/shared.ts': "const runtime = globalThis as typeof globalThis; const alias = runtime; alias.location; runtime['localStorage']; const { document: doc } = alias; window.location",
+    'src/shared/shared.ts': "const runtime = globalThis as typeof globalThis; const alias = runtime; alias.location; runtime['localStorage']; const { document: doc } = alias; window.location",
   })
   const errors = checkDependencies(root).join('\n')
   for (const name of ['location', 'localStorage', 'document', 'window']) assert.match(errors, new RegExp(`browser global ${name}`))
-  write('src/lib/shared.ts', "globalThis.gc?.(); export function local(window: { location: string }, history: string) { return window.location + history }; const location = 'local'; console.log(location)")
+  write('src/shared/shared.ts', "globalThis.gc?.(); export function local(window: { location: string }, history: string) { return window.location + history }; const location = 'local'; console.log(location)")
   assert.deepEqual(checkDependencies(root), [])
 })
 
 test('source ownership checking succeeds without Git metadata', (t) => {
-  const { root } = fixture(t, { 'src/lib/shared.ts': 'export const value = 1' })
+  const { root } = fixture(t, { 'src/shared/shared.ts': 'export const value = 1' })
   const source = spawnSync(process.execPath, [resolve('tools/dev/check-dependencies.mjs'), root], { cwd: root, encoding: 'utf8' })
   assert.equal(source.status, 0, source.stderr)
   const tracking = checkLayout(root)
@@ -120,7 +140,7 @@ test('tracked-file hygiene accepts source fixtures and assets and rejects forced
     'public/help.html': '<p>Help</p>',
     'public/team-colors.csv': 'team,color\nA,blue\n',
     'ops/safety/receipt.json': '{"schemaVersion":1}',
-    'src/lib/shared.ts': 'export {}',
+    'src/shared/shared.ts': 'export {}',
   })
   execFileSync('git', ['init', '-q', root])
   execFileSync('git', ['-C', root, 'add', '.'])

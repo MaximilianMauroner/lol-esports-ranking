@@ -3,12 +3,12 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { archiveReferences } from '../src/lib/publicArtifacts/archive.mjs'
-import { parsePublicMatchHistoryPage, parsePublicRegionHistory, type PublicMatchHistoryImpact } from '../src/lib/publicArtifacts/schema.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { archiveReferences } from '../src/domains/rankings/internal/published/archive.mjs'
+import { parsePublicMatchHistoryPage, parsePublicRegionHistory, type PublicMatchHistoryImpact } from '../src/domains/rankings/internal/published/schema.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 test('ranking browser bootstraps without archive history, selects a year, pages, and reports missing archive objects', { timeout: 60_000 }, async () => {
   const matches: MatchRecord[] = Array.from({ length: 120 }, (_, index) => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { replayWorlds2025Knockout } from '../src/lib/worldsObservedBracket.ts'
-import { WORLDS_2025_SWISS_RULES, type ObservedSwissMatch, type SwissReplayResult } from '../src/lib/worldsObservedRules.ts'
+import { replayWorlds2025Knockout } from '../src/domains/tournaments/internal/worldsObservedBracket.ts'
+import { WORLDS_2025_SWISS_RULES, type ObservedSwissMatch, type SwissReplayResult } from '../src/domains/tournaments/internal/worldsObservedRules.ts'
 
 // Entirely synthetic standings and draw; no entrant or result is asserted as official.
 const fixtureEvidence = { kind: 'synthetic-fixture' as const, reference: 'tests/worldsObservedBracket.test.ts' }

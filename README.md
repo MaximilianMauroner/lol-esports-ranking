@@ -56,7 +56,10 @@ workspace. It has one JavaScript dependency set and no package split.
 
 | Path | Owner |
 | --- | --- |
-| `src/lib/`, `src/data/`, `src/types.ts` | Shared rating engine, types, and read helpers. |
+| `src/domains/rankings/` | Ranking evidence, policy, queries, replay, and publication codecs. |
+| `src/domains/tournaments/` | Schedule rules, forecasts, and deterministic simulations. |
+| `src/lib/` | Five ranking safety implementations whose paths are bound by stored evidence. |
+| `src/shared/`, `src/data/` | Deterministic ordering, shared presentation helpers, branding facts, and legal text. |
 | `src/browser/`, `src/hooks/`, `src/components/`, `src/views/`, app entries | Browser state, UI, artifact I/O, and simulation worker. |
 | `scripts/` | Production Node server, refresh, publication, storage, and operator commands. |
 | `tools/` | Developer calibration, audits, assets, and test tools. |
@@ -68,8 +71,9 @@ workspace. It has one JavaScript dependency set and no package split.
 The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is a developer
 entry with tools ownership. Its path stays fixed for stored safety evidence.
 
-Lint checks resolved import directions. Browser runtime code cannot reach replay
-producers or publication plans. Type-only imports can use shared engine types.
+Lint checks resolved import directions and public domain entries. Browser runtime
+code cannot reach replay producers or publication plans. Ranking adapters own
+private publication codecs. Views consume domain queries and types.
 The test runner discovers `*Browser.test.ts` journeys and runs them one at a time.
 
 ## Railway services

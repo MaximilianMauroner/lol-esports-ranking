@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CompareDock } from '../src/components/CompareDock.tsx'
-import { CompareProfileChart } from '../src/components/CompareAnalysis.tsx'
+import { CompareDock } from '../src/views/rankings/CompareDock.tsx'
+import { CompareProfileChart } from '../src/views/rankings/CompareAnalysis.tsx'
 
 const noop = () => {}
 

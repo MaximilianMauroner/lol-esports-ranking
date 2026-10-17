@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { startWorldsWorker } from '../src/browser/worldsWorkerClient'
-import type { WorldsWorkerMessage } from '../src/browser/worldsSimulationWorker'
+import { startWorldsWorker } from '../src/browser/tournaments/worldsWorkerClient'
+import type { WorldsWorkerMessage } from '../src/browser/tournaments/worldsSimulationWorker'
 import { historicalWorldsFixture, worldsBasis, worldsFixture } from './fixtures/worldsFixtures'
-import { isWorldsArtifact, loadWorldsArtifact, worldsFeedEventKey, type HistoricalWorldsInput, type WorldsArtifact } from '../src/browser/worldsArtifacts'
+import { isWorldsArtifact, loadWorldsArtifact, worldsFeedEventKey, type HistoricalWorldsInput, type WorldsArtifact } from '../src/browser/tournaments/worldsArtifacts'
 import { worldsArtifact, worldsEvent } from './fixtures/worldsFixtures'
-import { groupTournamentSeries, normalizeStatus, normalizeTournamentFeed, type TournamentEvent, type TournamentSeries } from '../src/lib/tournamentFeed'
+import { groupTournamentSeries, normalizeStatus, normalizeTournamentFeed, type TournamentEvent, type TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
 
 function historicalEvent(state: HistoricalWorldsInput): TournamentEvent {
   const game = state.group.games[0]

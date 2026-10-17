@@ -19,7 +19,7 @@ import {
   prepareRankingSourceAuthorityEvidence,
 } from './ranking-source-authority.mjs'
 import { materializePublicArtifactPatch } from './public-artifact-materialization.mjs'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 const wrapperOnlyArgs = new Set([
   'force',

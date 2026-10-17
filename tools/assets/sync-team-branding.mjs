@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
-import { compareCodeUnits } from '../../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../../src/shared/codeUnitOrder.mjs'
 import { logoFileTreatment, requireFfmpeg } from './team-logo-treatment.mjs'
 import { optimizeTeamLogo } from './team-logo-image.mjs'
 

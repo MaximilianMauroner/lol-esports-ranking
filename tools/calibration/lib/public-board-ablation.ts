@@ -1,7 +1,7 @@
-import type { TeamStanding } from '../../../src/types'
-import { matchLevelEligibilityHistory } from '../../../src/lib/eligibility'
-import { initialTeamRating } from '../../../src/lib/modelConfig'
-import { evidenceWeightedPublishedLeagueAnchor, evidenceWeightedPublishedStanding, publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, ratingComponents, ratingFromComponents } from '../../../src/lib/ratingCalculations'
+import type { TeamStanding } from '../../../src/domains/rankings/types'
+import { matchLevelEligibilityHistory } from '../../../src/domains/rankings/read'
+import { initialTeamRating } from '../../../src/domains/rankings/policy'
+import { evidenceWeightedPublishedLeagueAnchor, evidenceWeightedPublishedStanding, publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, ratingComponents, ratingFromComponents } from '../../../src/domains/rankings/build'
 
 export const boardLayerNames = ['current', 'noCompression', 'noAnchorRelief', 'noSparseBlend', 'noRosterCap', 'noHeadToHead', 'noAnchorShrinkage', 'spine'] as const
 

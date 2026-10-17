@@ -5,7 +5,7 @@ import {
   extractRiotGprEntries,
   type RiotGprComparisonThresholds,
 } from '../tools/calibration/compare-riot-gpr.ts'
-import type { PublicRankingShard, PublicTeamStanding } from '../src/lib/publicArtifacts/schema.ts'
+import type { PublicRankingShard, PublicTeamStanding } from '../src/domains/rankings/internal/published/schema.ts'
 
 const thresholds: RiotGprComparisonThresholds = {
   maxRankDelta: 3,

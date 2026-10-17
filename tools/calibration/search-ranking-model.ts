@@ -3,7 +3,7 @@ import { cp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'no
 import { dirname, join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
-import { readEvaluationExport } from '../../src/lib/rankingEvaluation'
+import { readEvaluationExport } from './lib/rankingEvaluation'
 import { applySearchValues, readSearchValues, scoreTrial, searchParameters, searchTrials } from './lib/ranking-experiments'
 
 const [manifestArg, protocolArg, outputArg] = process.argv.slice(2)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { transparentGprModelMetadata } from '../../src/lib/modelConfig'
+import { transparentGprModelMetadata } from '../../src/domains/rankings/policy'
 
 const binary = process.argv[2] ?? 'worker/target/debug/ranking-refresh'
 const result = spawnSync(binary, ['contracts'], { encoding: 'utf8' })

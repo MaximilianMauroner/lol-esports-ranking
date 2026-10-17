@@ -1,12 +1,12 @@
 import { join } from 'node:path'
 import { referencePublicDataDir } from '../scripts/reference-public-data.mjs'
-import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/domains/rankings/internal/published/schema.ts'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { fetchPublicSnapshotShard } from '../src/browser/publicArtifacts/resolver.ts'
-import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
-import { createPublicRankingManifestLoader } from '../src/browser/publicArtifacts/manifestLoader.ts'
+import { fetchPublicSnapshotShard } from '../src/browser/rankings/published/resolver.ts'
+import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/domains/rankings/internal/published/schema.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/rankings/published/manifestLoader.ts'
 import {
   createPublicSemanticArtifact,
   fetchPublicArtifact,
@@ -16,8 +16,8 @@ import {
   type PublicArtifactGenerationManifest,
   type PublicGenerationArtifactEntry,
   type PublicSemanticArtifact,
-} from '../src/browser/publicArtifacts/artifactIdentity.ts'
-import type { PublicRankingManifest, PublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
+} from '../src/browser/rankings/published/artifactIdentity.ts'
+import type { PublicRankingManifest, PublicRankingShard } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('manifest loader deduplicates requests and synchronously retains only a resolved manifest', async () => {
   const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir.ts'
-import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
-import { mergeCommunityMatchSources } from '../src/lib/importers/communitySources.ts'
-import { resolveCanonicalSeries } from '../src/lib/seriesResolver.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
+import { importOraclesElixirCsv } from '../scripts/rankings/providers/oraclesElixir.ts'
+import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
+import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
+import { resolveCanonicalSeries } from '../src/domains/rankings/internal/evidence/seriesResolver.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 const oracleCsv = [
   'gameid,date,year,league,split,playoffs,game,patch,position,side,teamname,result,kills,totalgold,gamelength',

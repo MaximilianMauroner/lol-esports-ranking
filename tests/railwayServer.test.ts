@@ -16,9 +16,9 @@ import {
   type PublicationObject,
   type PublicationObjectOutcome,
 } from '../scripts/generation-publication.mjs'
-import { createPublicRankingManifestLoader } from '../src/browser/publicArtifacts/manifestLoader.ts'
-import { fetchPublicSnapshotShard } from '../src/browser/publicArtifacts/resolver.ts'
-import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/rankings/published/manifestLoader.ts'
+import { fetchPublicSnapshotShard } from '../src/browser/rankings/published/resolver.ts'
+import { parsePublicRankingManifest } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('Railway server serves the live Leaguepedia tournament feed without configuration', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))

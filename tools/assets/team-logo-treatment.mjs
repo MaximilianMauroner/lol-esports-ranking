@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { logoTreatment } from '../../src/lib/teamLogo.mjs'
+import { logoTreatment } from '../../src/shared/teamLogo.mjs'
 
 const run = promisify(execFile)
 /** The rule was tuned on a 24 x 24 area-averaged RGBA sample. */

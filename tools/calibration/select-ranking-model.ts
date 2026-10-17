@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { compareEvaluationExports, readEvaluationExport } from '../../src/lib/rankingEvaluation'
+import { compareEvaluationExports, readEvaluationExport } from './lib/rankingEvaluation'
 import type { scoreTrial } from './lib/ranking-experiments'
 
 const [baselinePath, directory, outputPath] = process.argv.slice(2)

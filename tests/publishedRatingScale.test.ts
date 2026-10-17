@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { minimumUncertainty, publishedRatingScale } from '../src/lib/modelConfig.ts'
-import { estimateMatchupProbability } from '../src/lib/matchupMath.ts'
-import { estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
+import { minimumUncertainty, publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import { estimateMatchupProbability } from '../src/domains/rankings/internal/projections/matchupMath.ts'
+import { estimatePublicMatchup } from '../src/domains/rankings/internal/queries/publicMatchup.ts'
 import {
   toInternalRating,
   toInternalRatingDelta,
   toPublishedRating,
   toPublishedRatingComponents,
   toPublishedRatingDelta,
-} from '../src/lib/ratingCalculations.ts'
-import { createStaticRankingData, createStaticRankingSummaryData, createTeamHistoryArtifacts } from '../src/lib/snapshot.ts'
-import { toPublishedRegionStrength } from '../src/lib/publishedRatingArtifacts.ts'
-import type { RegionStrength } from '../src/lib/regionStrength.ts'
+} from '../src/domains/rankings/internal/replay/ratingCalculations.ts'
+import { createStaticRankingData, createStaticRankingSummaryData, createTeamHistoryArtifacts } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { toPublishedRegionStrength } from '../src/domains/rankings/internal/projections/publishedRatingArtifacts.ts'
+import type { RegionStrength } from '../src/domains/rankings/internal/projections/regionStrength.ts'
 import { sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 test('published rating scale is monotonic, invertible, and scales deltas', () => {

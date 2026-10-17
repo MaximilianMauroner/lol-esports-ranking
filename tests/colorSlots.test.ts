@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { assignColorSlots } from '../src/lib/colorSlots.ts'
+import { assignColorSlots } from '../src/shared/colorSlots.ts'
 
 test('teams that stay keep their colour when others leave or join', () => {
   const first = assignColorSlots(new Map(), ['HLE', 'BLG', 'GEN'], 5)

@@ -4,10 +4,10 @@ import { dirname, join } from 'node:path'
 import {
   appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, isForecastLedger, pinPreMatchReceipt,
   type ForecastBasis, type ForecastLedger, type ForecastReceipt, type ForecastUnavailable,
-} from '../src/lib/tournamentForecast'
-import type { TournamentSeries } from '../src/lib/tournamentFeed'
-import { createConditionalPowerResultReceipt } from '../src/lib/conditionalPowerResultReceiptBuilder'
-import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/lib/conditionalPowerResultReceipts'
+} from '../src/domains/tournaments/forecast'
+import type { TournamentSeries } from '../src/domains/tournaments/read'
+import { createConditionalPowerResultReceipt } from './tournaments/conditionalPowerResultReceiptBuilder'
+import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/domains/tournaments/forecast'
 import { observeForecastDelivery } from './tournament-forecast-delivery'
 
 /** Offline-only receipt store. Nothing calls this from the collector or production worker. */

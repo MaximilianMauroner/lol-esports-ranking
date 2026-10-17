@@ -1,4 +1,4 @@
-import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { compareCodeUnits } from '../../shared/codeUnitOrder.mjs'
 
 export type SemanticArtifactIdentity = {
   digest: string

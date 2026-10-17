@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { effectiveLeagueRating, leagueEffectiveRatingCapsByTier } from '../src/data/leagueTiers.ts'
-import { preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
+import { effectiveLeagueRating, leagueEffectiveRatingCapsByTier } from '../src/domains/rankings/internal/policy/leagueTiers.ts'
+import { preseasonEventWeightMultiplier } from '../src/domains/rankings/internal/policy/rankingConfig.ts'
 import {
   eventKFactorForMatch,
   eventWeightContextForMatches,
   eventWeightForMatch,
   isPostWorldsPreseasonMatch,
-} from '../src/lib/eventWeighting.ts'
-import { ensureLeague, updateLeagueStrengthForSeries } from '../src/lib/leagueRatings.ts'
-import { buildPlayerModel, buildRankingModel, createRatingEventContext, createRatingReplayContext } from '../src/lib/model.ts'
-import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, publishedTeamStableOffset } from '../src/lib/ratingCalculations.ts'
-import { compactPlayerRecentMatches } from '../src/lib/snapshot.ts'
-import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/types.ts'
+} from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { ensureLeague, updateLeagueStrengthForSeries } from '../src/domains/rankings/internal/replay/leagueRatings.ts'
+import { buildPlayerModel, buildRankingModel, createRatingEventContext, createRatingReplayContext } from '../src/domains/rankings/internal/replay/model.ts'
+import { publishedLeagueAnchorContextAdjustment, publishedRosterPriorOffset, publishedTeamStableOffset } from '../src/domains/rankings/internal/replay/ratingCalculations.ts'
+import { compactPlayerRecentMatches } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { LeagueStrength, MatchRecord, PlayerProfile, Region, Role, Side, TeamProfile } from '../src/domains/rankings/types.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

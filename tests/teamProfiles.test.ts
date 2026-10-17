@@ -5,9 +5,9 @@ import {
   inferEventTier,
   regionForCompetitionSide,
   resolveHomeLeagueForCompetition,
-} from '../src/data/competitionTaxonomy.ts'
-import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+} from '../src/domains/rankings/internal/evidence/competitionTaxonomy.ts'
+import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/domains/rankings/internal/evidence/teamProfiles.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 test('mergeTeamProfiles does not let later unknown profiles replace useful league identity', () => {
   const merged = mergeTeamProfiles([

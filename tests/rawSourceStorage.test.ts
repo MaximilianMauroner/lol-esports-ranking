@@ -30,7 +30,7 @@ import {
   type RawReceiptNarrowSource,
 } from '../scripts/raw-source-storage.mjs'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
-import { importRankingSourceData } from '../scripts/ranking-source-import.ts'
+import { importRankingSourceData } from '../scripts/rankings/source-input.ts'
 
 const IMPORTER_VERSION = 'community-source-import-v1'
 const ORACLE_FILE = '2026_LoL_esports_match_data_from_OraclesElixir.csv'

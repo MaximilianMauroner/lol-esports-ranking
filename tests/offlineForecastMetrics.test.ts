@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { binaryPredictionLoss } from '../src/lib/binaryPredictionMetrics.ts'
-import { summarizeOfflineForecastMetrics, type SyntheticBaselineFixture } from '../src/lib/offlineForecastMetrics.ts'
+import { binaryPredictionLoss } from '../src/domains/rankings/internal/projections/binaryPredictionMetrics.ts'
+import { summarizeOfflineForecastMetrics, type SyntheticBaselineFixture } from '../tools/calibration/lib/offlineForecastMetrics.ts'
 import { before, outcome, receipt, replay } from './fixtures/offlineForecastFixtures.ts'
 
 function cohort(probabilities: number[], wins = probabilities.map(() => true)) {

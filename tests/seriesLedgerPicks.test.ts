@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { SeriesCards, SeriesTable, type MatchSeries } from '../src/components/matches/SeriesLedger.tsx'
-import type { PublicMatchHistoryEntry } from '../src/lib/publicArtifacts/schema.ts'
+import { SeriesCards, SeriesTable, type MatchSeries } from '../src/views/matches/SeriesLedger.tsx'
+import type { PublicMatchHistoryEntry } from '../src/domains/rankings/internal/published/schema.ts'
 
 const c9 = { id: 'team:c9', name: 'Cloud9', code: 'C9' }
 const kc = { id: 'team:kc', name: 'Karmine Corp', code: 'KC' }

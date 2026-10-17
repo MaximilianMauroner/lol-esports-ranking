@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { boardHeadline } from '../src/lib/boardHeadline.ts'
-import { publishedRatingScale } from '../src/lib/modelConfig.ts'
-import { isNearTie, nearTieGroups, nearTiePositions } from '../src/lib/nearTies.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
+import { boardHeadline } from '../src/views/rankings/boardHeadline.ts'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import { isNearTie, nearTieGroups, nearTiePositions } from '../src/domains/rankings/internal/queries/nearTies.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 const model = { version: 'model-v1', configHash: 'hash-v1', ratingScale: publishedRatingScale }
 

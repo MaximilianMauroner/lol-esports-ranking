@@ -1,7 +1,7 @@
 import { diagnosticBegin, diagnosticEnd } from './benchmark-diagnostics.mjs'
 import { createHash } from 'node:crypto'
-import { hydrateArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
-import { artifactReferences, assertReferenceClosure } from '../src/lib/publicArtifacts/logicalReferences.mjs'
+import { hydrateArchive, ARCHIVE_PAGE_BYTES } from '../src/domains/rankings/internal/published/archive.mjs'
+import { artifactReferences, assertReferenceClosure } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -26,7 +26,7 @@ import {
 import { CONTENT_ADDRESSED_STORAGE_MODE, canonicalJsonFor, canonicalPublicLogicalPath, createGenerationManifest, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { assertStateManifestAuthority, parseIncrementalStateManifest, readStoredJsonStateObject } from './incremental-state-storage.mjs'
 import { decodeRawObject, parseRawSourceReceipt, rawObjectReferenceFor } from './raw-source-storage.mjs'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 export const PRESIGNED_URL_EXPIRY_SECONDS = 3600
 const IMMUTABLE_PUBLIC_CACHE_CONTROL = 'public, max-age=31536000, immutable'

@@ -1,13 +1,13 @@
-import { playerPerformancePolicy } from '../../src/lib/playerPerformancePolicy'
+import { playerPerformancePolicy } from '../../src/domains/rankings/policy'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { importOraclesElixirCsv } from '../../src/lib/importers/oraclesElixir.ts'
-import { sourcePipelineVersion, transparentGprModelMetadata } from '../../src/lib/modelConfig.ts'
-import { createPlayerPerformanceAccumulator, playerPerformanceMetricKeys, recordPlayerPerformance, type PlayerPerformanceAccumulator } from '../../src/lib/playerPerformance.ts'
-import type { MatchRecord } from '../../src/types.ts'
-import { compareCodeUnits } from '../../src/lib/codeUnitOrder.mjs'
+import { importOraclesElixirCsv } from '../../scripts/rankings/providers/oraclesElixir.ts'
+import { sourcePipelineVersion, transparentGprModelMetadata } from '../../src/domains/rankings/policy.ts'
+import { createPlayerPerformanceAccumulator, playerPerformanceMetricKeys, recordPlayerPerformance, type PlayerPerformanceAccumulator } from '../../src/domains/rankings/read.ts'
+import type { MatchRecord } from '../../src/domains/rankings/types.ts'
+import { compareCodeUnits } from '../../src/shared/codeUnitOrder.mjs'
 
 /** Coverage is counted before ranking eligibility, not inferred from header presence. */
 export function auditPlayerPerformance(matches: readonly MatchRecord[]) {

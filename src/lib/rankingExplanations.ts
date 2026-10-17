@@ -1,6 +1,6 @@
-import type { RosterBasis } from '../types'
-import type { WalkForwardMetrics } from './predictionModel'
-import { POWER_COMPONENT_LABELS } from './ratingComponentLabels'
+import type { RosterBasis } from '../domains/rankings/types'
+import type { WalkForwardMetrics } from '../domains/rankings/internal/projections/predictionModel'
+import { POWER_COMPONENT_LABELS } from '../domains/rankings/internal/queries/ratingComponentLabels'
 
 export type RankingExplanationTarget =
   | 'seasonal-anchoring'

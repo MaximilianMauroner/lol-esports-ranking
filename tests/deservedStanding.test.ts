@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { preseasonEventWeightMultiplier } from '../src/data/rankingConfig.ts'
+import { preseasonEventWeightMultiplier } from '../src/domains/rankings/internal/policy/rankingConfig.ts'
 import {
   deservedStandingModelParameters,
   dssConservativeScore,
@@ -35,8 +35,8 @@ import {
   dssTeamUncertainty,
   dssWeightedSeriesFromLedgerEntry,
   dssWeightedSeriesValue,
-} from '../src/lib/deservedStanding.ts'
-import type { MatchRecord } from '../src/types.ts'
+} from '../src/domains/rankings/internal/projections/deservedStanding.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 
 test('DSS defaults mirror the PDF constants', () => {
   assert.equal(deservedStandingModelParameters.baseScore, 1500)

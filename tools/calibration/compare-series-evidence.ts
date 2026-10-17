@@ -1,7 +1,7 @@
 import { cp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
-import { compareEvaluationExports, readEvaluationExport } from '../../src/lib/rankingEvaluation'
+import { compareEvaluationExports, readEvaluationExport } from './lib/rankingEvaluation'
 
 const [manifestArg, baselineArg, outputArg] = process.argv.slice(2)
 if (!manifestArg || !baselineArg || !outputArg) throw new Error('Usage: compare-series-evidence <manifest> <baseline> <output-directory>')
@@ -17,7 +17,7 @@ await mkdir(sandbox)
 for (const file of ['src', 'scripts', 'tools', 'package.json', 'tsconfig.app.json', 'tsconfig.node.json', 'tsconfig.json']) await cp(join(root, file), join(sandbox, file), { recursive: true })
 await symlink(join(root, 'node_modules'), join(sandbox, 'node_modules'), 'dir')
 const engine = await readFile(join(sandbox, 'src/lib/ratingSeriesEngine.ts'), 'utf8')
-const config = await readFile(join(sandbox, 'src/lib/modelConfig.ts'), 'utf8')
+const config = await readFile(join(sandbox, 'src/domains/rankings/internal/policy/modelConfig.ts'), 'utf8')
 const report = []
 try {
   for (const mode of ['game', 'dependent-score'] as const) {
@@ -29,7 +29,7 @@ try {
     'const seriesResidualB = series.observedOutcomeB - expectedOutcomeB', 'const seriesResidualB = -seriesResidualA'),
     'eventK * series.strengthSignal * ratingUpdateRecencyWeight * seriesResidualA', 'eventK * ratingUpdateRecencyWeight * seriesResidualA')
     await writeFile(join(sandbox, 'src/lib/ratingSeriesEngine.ts'), `${mode === 'dependent-score' ? "import { seriesScoreLikelihood } from '../../tools/calibration/lib/ranking-experiments'\n" : ''}${candidate}`)
-    await writeFile(join(sandbox, 'src/lib/modelConfig.ts'), replaceOnce(config, 'export const transparentGprModelParameters = {',
+    await writeFile(join(sandbox, 'src/domains/rankings/internal/policy/modelConfig.ts'), replaceOnce(config, 'export const transparentGprModelParameters = {',
       `export const transparentGprModelParameters = {\n  offlineSeriesEvidenceExperiment: '${mode}',`))
     const path = join(output, `${mode}.json`)
     await new Promise<void>((done, reject) => {

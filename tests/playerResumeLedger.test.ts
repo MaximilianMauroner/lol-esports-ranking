@@ -4,7 +4,7 @@ import {
   buildDssPlayerResumeLedgers,
   playerResumeCreditEntries,
   type DssPlayerResumeSeriesInput,
-} from '../src/lib/playerResumeLedger.ts'
+} from '../src/domains/rankings/internal/players/playerResumeLedger.ts'
 
 test('playerResumeCreditEntries attributes weighted series value by contribution share', () => {
   const entries = playerResumeCreditEntries([

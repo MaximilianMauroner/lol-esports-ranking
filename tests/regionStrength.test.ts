@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deriveRegionStrength, displayRegionPowerScore, isRegionPowerTeam } from '../src/lib/regionStrength.ts'
-import type { LeagueStrength, Region } from '../src/types.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
+import { deriveRegionStrength, displayRegionPowerScore, isRegionPowerTeam } from '../src/domains/rankings/internal/projections/regionStrength.ts'
+import type { LeagueStrength, Region } from '../src/domains/rankings/types.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 function league(overrides: Partial<LeagueStrength> & Pick<LeagueStrength, 'league' | 'region'>): LeagueStrength {
   return {

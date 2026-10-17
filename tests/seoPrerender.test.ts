@@ -4,8 +4,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { renderFallbackHomepagePrerender, renderHomepagePrerender, renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
-import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
-import { showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
+import { preferredPublicSnapshotKey } from '../src/domains/rankings/internal/queries/defaultScope.ts'
+import { showsManifestErrorInAppShell } from '../src/browser/bootstrap.ts'
 
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData(join(referencePublicDir, '..'))

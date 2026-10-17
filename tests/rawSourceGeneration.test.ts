@@ -17,7 +17,7 @@ import {
   type PreparedRawSourceGeneration,
 } from '../scripts/raw-source-generation.mjs'
 import { ORACLE_BASELINE_KIND, ORACLE_DELTA_KIND, decodeRawObject, parseOracleCsv, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
-import { importRankingSourceData } from '../scripts/ranking-source-import'
+import { importRankingSourceData } from '../scripts/rankings/source-input'
 import { uploadContentAddressedRawSourceGeneration } from '../scripts/railway-bucket.mjs'
 import { rawSourceWorkerCommand } from '../scripts/raw-source-worker-command.mjs'
 
