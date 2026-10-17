@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { drawProblem, fillDraw, pairReason, resolveScenario, seedBaseline, type DrawnRound } from '../src/lib/swissScenario'
-import { drawByRulebook, simulateSwissOdds, type SeriesWinChance } from '../src/lib/swissOdds'
+import { drawByRulebook, drawProblem, fillDraw, pairReason, resolveScenario, seedBaseline, type DrawnRound } from '../src/lib/swissScenario'
+import { simulateSwissOdds, type SeriesWinChance } from '../src/lib/swissOdds'
 import { WORLDS_2026_SWISS_RULES } from '../src/lib/worlds2026Swiss'
 import { shuffled, worldsRandom } from '../src/lib/worldsSimulation'
 
@@ -54,10 +54,11 @@ test('a team that wins every match always advances, and one that loses every mat
 })
 
 test('picked results count as played, whatever the ratings say', () => {
+  const random = worldsRandom(1)
   let choices: DrawnRound[] = []
   for (let scenario = resolveScenario(baseline, choices); scenario.next.kind !== 'complete'; scenario = resolveScenario(baseline, choices)) {
     if (scenario.next.kind === 'draw') {
-      const pairs = fillDraw(scenario.next.context)!
+      const pairs = fillDraw(scenario.next.context, random)!
       choices = [...scenario.choices, { pairs, winners: pairs.map(() => null) }]
     } else {
       // The upset result: the later seed wins every picked match.
