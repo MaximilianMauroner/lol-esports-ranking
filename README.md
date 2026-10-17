@@ -65,6 +65,9 @@ workspace. It has one JavaScript dependency set and no package split.
 | `ops/` | Tracked safety receipts. |
 | `.agents/artifacts/` | Ignored reports, plans, audit output, and local evidence. |
 
+The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is a developer
+entry with tools ownership. Its path stays fixed for stored safety evidence.
+
 Lint checks resolved import directions. Browser runtime code cannot reach replay
 producers or publication plans. Type-only imports can use shared engine types.
 The test runner discovers `*Browser.test.ts` journeys and runs them one at a time.

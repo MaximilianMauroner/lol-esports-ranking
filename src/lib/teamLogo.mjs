@@ -5,7 +5,7 @@ const DARK_NEUTRAL_SHARE = 0.9
 
 /**
  * Decides how a team logo sits on the dark mark tile, from the image's natural
- * size and a downscaled RGBA sample. `scripts/sync-team-branding.mjs` runs it
+ * size and a downscaled RGBA sample. `tools/assets/sync-team-branding.mjs` runs it
  * once per logo file and stores the result in the generated branding data.
  * Only a logo that is almost entirely dark grey is inverted: inverting black
  * text beside a coloured symbol would also change the symbol's colour.

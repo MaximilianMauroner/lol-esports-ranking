@@ -14,7 +14,7 @@
 - `src/lib/`, `src/data/`, and `src/types.ts` own shared engine code. Keep them free of browser state, React, and Node-only dependencies.
 - `src/browser/`, `src/hooks/`, `src/components/`, `src/views/`, and app entries own the browser. Keep replay producers, checkpoints, importers, and write plans out of its runtime graph.
 - `scripts/` owns production Node code, storage, publication, and operator commands. It cannot import browser or developer code.
-- `tools/` owns developer calibration, audits, assets, and verification tools. It can consume shared and production code.
+- `tools/` owns developer calibration, audits, assets, and verification tools. It can consume shared and production code. The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is also a developer entry with tools ownership.
 - `tests/` owns tests and fixtures. Discover serial browser journeys by `*Browser.test.ts`.
 - `worker/` owns the Cargo workspace. `ops/` owns safety receipts.
 - Lint enforces import directions after resolving paths. Keep the ownership policy in `tools/dev/ownership-policy.mjs`.
