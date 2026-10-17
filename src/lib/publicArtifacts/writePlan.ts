@@ -48,7 +48,7 @@ export type PublicArtifactWritePlan = {
 }
 
 export const PUBLIC_ARTIFACT_BUDGETS = {
-  manifestBytes: 250_000,
+  manifestBytes: 500_000,
   defaultScopeBytes: 1_000_000,
   // Lazy-loaded directory includes nine coverage-aware stats across player scopes.
   playersBytes: 1_800_000,
