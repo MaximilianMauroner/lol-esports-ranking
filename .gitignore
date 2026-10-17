@@ -47,7 +47,6 @@ data/reference/
 *.sln
 *.sw?
 
-/lol-ranking-dev-current-branch.png
 
 /.agents/artifacts
 
