@@ -1,4 +1,3 @@
-# Local commands and generated output
 node_modules/
 dist/
 dist-ssr/
@@ -16,7 +15,6 @@ logs/
 /playwright-report/
 /.cache/
 
-# Provider inputs, reference cache and calculations stay local.
 /data/**
 !/data/raw/
 !/data/raw/manifest.json
@@ -25,7 +23,6 @@ logs/
 /public/.data-download-*/
 /worker/target/
 
-# Editor and local project settings
 .vscode/*
 !.vscode/extensions.json
 .idea/
