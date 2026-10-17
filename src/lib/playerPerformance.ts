@@ -1,10 +1,5 @@
+import { playerPerformancePolicy } from './playerPerformancePolicy'
 import type { PlayerGameStats, PlayerPerformanceMetric, PlayerPerformanceSummary } from '../types'
-
-export const playerPerformancePolicy = {
-  version: 'observed-player-performance-v1',
-  aggregation: 'unweighted-per-game-mean',
-  ratingEffect: 'none',
-} as const
 
 export const playerPerformanceMetrics = {
   killParticipation: { label: 'Kill participation', format: 'percent', decimals: 4, description: 'Average of (kills + assists) / team kills per game. Games with zero or unknown team kills are unavailable.' },

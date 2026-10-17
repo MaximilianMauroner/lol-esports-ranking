@@ -54,7 +54,7 @@ import type {
   TournamentMovementState,
 } from '../hooks/usePublicArtifacts'
 import { useHistoryDetail } from '../hooks/useHistoryDetail'
-import { currentHashQuery, hashEnum, hashInt, hashParam, useHashSync } from '../lib/urlState'
+import { currentHashQuery, hashEnum, hashInt, hashParam, useHashSync } from '../hooks/urlState'
 import { estimatePublicMatchup, gameWinChanceForGap, type PublicMatchupModel } from '../lib/publicMatchup'
 import { NEAR_TIE_WIN_PROBABILITY, nearTieGroups, nearTiePositions, type NearTiePosition } from '../lib/nearTies'
 import { boardHeadline } from '../lib/boardHeadline'

@@ -4,9 +4,9 @@ import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schem
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
+import { fetchPublicSnapshotShard } from '../src/browser/publicArtifacts/resolver.ts'
 import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
-import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/publicArtifacts/manifestLoader.ts'
 import {
   createPublicSemanticArtifact,
   fetchPublicArtifact,
@@ -16,7 +16,7 @@ import {
   type PublicArtifactGenerationManifest,
   type PublicGenerationArtifactEntry,
   type PublicSemanticArtifact,
-} from '../src/lib/publicArtifacts/artifactIdentity.ts'
+} from '../src/browser/publicArtifacts/artifactIdentity.ts'
 import type { PublicRankingManifest, PublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
 
 test('manifest loader deduplicates requests and synchronously retains only a resolved manifest', async () => {

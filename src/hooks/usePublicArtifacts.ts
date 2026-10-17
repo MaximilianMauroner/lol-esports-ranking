@@ -35,15 +35,15 @@ import {
   validatePublicTournamentMovementIndex,
   validatePublicTournamentMovementShard,
   type PublicSnapshotCacheEntry,
-} from '../lib/publicArtifacts/resolver'
+} from '../browser/publicArtifacts/resolver'
 import { tournamentEntriesForScope, type TournamentInstanceId } from '../lib/internationalTournaments'
-import { createPublicRankingManifestLoader } from '../lib/publicArtifacts/manifestLoader'
+import { createPublicRankingManifestLoader } from '../browser/publicArtifacts/manifestLoader'
 import {
   assertGenerationMapping,
   fetchPublicArtifact,
   PublicArtifactRequestError,
-} from '../lib/publicArtifacts/artifactIdentity'
-import { resolvePublicArtifactUrl } from '../lib/publicArtifacts/urlResolver'
+} from '../browser/publicArtifacts/artifactIdentity'
+import { resolvePublicArtifactUrl } from '../browser/publicArtifacts/urlResolver'
 
 export type PublicArtifactState<T> =
   | { status: 'idle' }

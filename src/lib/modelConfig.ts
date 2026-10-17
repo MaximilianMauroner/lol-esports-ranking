@@ -10,7 +10,7 @@ import { currentRegionTaxonomyModelParameters, ratedTeamUniverseModelParameters 
 import type { FactorBreakdown, PublishedRatingScale } from '../types'
 import { defaultEligibilityConfig } from './eligibility'
 import { executionResidualModelParameters } from './executionResidual'
-import { playerModelParameters } from './playerModel'
+import { playerModelParameters } from './playerPolicy'
 import { publishedFeatureWeight, shadowFeatureWeight, type PredictionFeaturePolicy } from './predictionFeaturePolicy'
 import { walkForwardSegmentKeys } from './predictionContext'
 import { defaultRosterContinuityConfig } from './rosters'

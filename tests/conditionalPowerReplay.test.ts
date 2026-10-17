@@ -7,7 +7,7 @@ import { prepareConditionalPowerReplayBasis } from '../src/lib/conditionalPowerR
 import { legalConditionalScores, publicConditionalPowerPreview } from '../src/lib/conditionalPowerPreview'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
 import { eventTrackerKey } from '../src/lib/placementResiduals'
-import { playerModelParameters } from '../src/lib/playerModel'
+import { playerModelParameters } from '../src/lib/playerPolicy'
 import { publishedRating } from '../src/lib/publishedRatingArtifacts'
 import { encodeRatingCheckpointEnvelope } from '../src/lib/ratingCheckpoint'
 import { buildRatingCheckpointEventContract } from '../src/lib/ratingCheckpointInventory'

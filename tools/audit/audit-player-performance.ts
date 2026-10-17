@@ -1,10 +1,11 @@
+import { playerPerformancePolicy } from '../../src/lib/playerPerformancePolicy'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { importOraclesElixirCsv } from '../../src/lib/importers/oraclesElixir.ts'
 import { sourcePipelineVersion, transparentGprModelMetadata } from '../../src/lib/modelConfig.ts'
-import { createPlayerPerformanceAccumulator, playerPerformanceMetricKeys, playerPerformancePolicy, recordPlayerPerformance, type PlayerPerformanceAccumulator } from '../../src/lib/playerPerformance.ts'
+import { createPlayerPerformanceAccumulator, playerPerformanceMetricKeys, recordPlayerPerformance, type PlayerPerformanceAccumulator } from '../../src/lib/playerPerformance.ts'
 import type { MatchRecord } from '../../src/types.ts'
 import { compareCodeUnits } from '../../src/lib/codeUnitOrder.mjs'
 

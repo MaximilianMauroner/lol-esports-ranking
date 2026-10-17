@@ -8,7 +8,7 @@ import type { RankingSummaryStanding } from '../lib/snapshot'
 import { simulateSwissOdds, type SeriesWinChance, type SwissOdds } from '../lib/swissOdds'
 import type { PreviewTeam, ResolvedScenario } from '../lib/swissScenario'
 import { WORLDS_2026_SWISS_RULES } from '../lib/worlds2026Swiss'
-import { loadCurrentRatingSnapshot } from '../lib/tournamentForecastArtifacts'
+import { loadCurrentRatingSnapshot } from '../browser/tournamentForecastArtifacts'
 
 const TRIALS = 4000
 const SEED = 20261023

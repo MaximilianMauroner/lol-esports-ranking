@@ -1,6 +1,6 @@
-import type { ForecastBasis } from './tournamentForecast'
+import type { ForecastBasis } from '../lib/tournamentForecast'
 import type { WorldsJourneyInput } from './worldsArtifacts'
-import type { SimulationOptions } from './worldsSimulation'
+import type { SimulationOptions } from '../lib/worldsSimulation'
 import type { WorldsWorkerMessage, WorldsWorkerRequest } from './worldsSimulationWorker'
 
 type SimulationWorker = Pick<Worker, 'postMessage' | 'terminate'> & {

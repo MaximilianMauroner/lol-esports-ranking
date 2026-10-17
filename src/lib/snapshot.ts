@@ -37,7 +37,7 @@ import {
   toPublishedTeamStanding,
 } from './publishedRatingArtifacts'
 import { evaluateTeamEligibility, matchLevelEligibilityHistory } from './eligibility'
-import { playerModelParameters } from './playerModel'
+import { playerModelParameters } from './playerPolicy'
 import { summarizePredictions, type WalkForwardMetrics } from './predictionModel'
 import { filterPublishedRatingUniverseInput } from './ratingUniverse'
 import { isSeasonHistoryLeadIn } from './seasonHistory'

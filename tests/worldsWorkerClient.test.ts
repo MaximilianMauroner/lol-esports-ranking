@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { startWorldsWorker } from '../src/lib/worldsWorkerClient'
-import type { WorldsWorkerMessage } from '../src/lib/worldsSimulationWorker'
+import { startWorldsWorker } from '../src/browser/worldsWorkerClient'
+import type { WorldsWorkerMessage } from '../src/browser/worldsSimulationWorker'
 import { historicalWorldsFixture, worldsBasis, worldsFixture } from './fixtures/worldsFixtures'
-import { isWorldsArtifact, loadWorldsArtifact, worldsFeedEventKey, type HistoricalWorldsInput, type WorldsArtifact } from '../src/lib/worldsArtifacts'
+import { isWorldsArtifact, loadWorldsArtifact, worldsFeedEventKey, type HistoricalWorldsInput, type WorldsArtifact } from '../src/browser/worldsArtifacts'
 import { worldsArtifact, worldsEvent } from './fixtures/worldsFixtures'
 import { groupTournamentSeries, normalizeStatus, normalizeTournamentFeed, type TournamentEvent, type TournamentSeries } from '../src/lib/tournamentFeed'
 

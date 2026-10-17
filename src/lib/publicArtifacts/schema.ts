@@ -1,3 +1,4 @@
+import { playerPerformancePolicy } from '../playerPerformancePolicy'
 import type {
   ChampionPicks,
   DeservedStandingEligibilityLabel,
@@ -38,7 +39,7 @@ import type {
   SnapshotSourceBreakdown,
 } from '../snapshot'
 import type { WalkForwardMetrics } from '../predictionModel'
-import { playerPerformanceMetricKeys, playerPerformancePolicy } from '../playerPerformance'
+import { playerPerformanceMetricKeys } from '../playerPerformance'
 import { compareCodeUnits } from '../codeUnitOrder.mjs'
 
 export type { SnapshotFilter, SnapshotCheckpointOption, SnapshotSourceBreakdown } from '../snapshot'

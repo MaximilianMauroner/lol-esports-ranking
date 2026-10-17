@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { SemanticArtifactCache } from '../src/lib/publicArtifacts/semanticCache.ts'
-import type { PublicSemanticArtifact } from '../src/lib/publicArtifacts/artifactIdentity.ts'
+import { SemanticArtifactCache } from '../src/browser/publicArtifacts/semanticCache.ts'
+import type { PublicSemanticArtifact } from '../src/browser/publicArtifacts/artifactIdentity.ts'
 
 const artifact: PublicSemanticArtifact = { artifactKind: 'public-semantic-artifact', schemaVersion: 1, content: { artifactKind: 'test' } }
 

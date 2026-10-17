@@ -1,7 +1,7 @@
-import type { ForecastBasis } from './tournamentForecast'
+import type { ForecastBasis } from '../lib/tournamentForecast'
 import type { WorldsJourneyInput } from './worldsArtifacts'
-import { replayWorlds2022Group, type GroupReplayResult } from './worlds2022ObservedGroups'
-import { runWorldsSimulation, type SimulationOptions, type WorldsSimulationResult } from './worldsSimulation'
+import { replayWorlds2022Group, type GroupReplayResult } from '../lib/worlds2022ObservedGroups'
+import { runWorldsSimulation, type SimulationOptions, type WorldsSimulationResult } from '../lib/worldsSimulation'
 
 export type WorldsWorkerRequest = { input: WorldsJourneyInput; basis: ForecastBasis | null; options: SimulationOptions }
 export type WorldsWorkerMessage =

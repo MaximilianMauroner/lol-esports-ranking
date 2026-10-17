@@ -16,8 +16,8 @@ import {
   type PublicationObject,
   type PublicationObjectOutcome,
 } from '../scripts/generation-publication.mjs'
-import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
-import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/publicArtifacts/manifestLoader.ts'
+import { fetchPublicSnapshotShard } from '../src/browser/publicArtifacts/resolver.ts'
 import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
 
 test('Railway server serves the live Leaguepedia tournament feed without configuration', async () => {

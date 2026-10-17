@@ -1,4 +1,4 @@
-import { parsePublicRankingManifest, type PublicRankingManifest } from './schema'
+import { parsePublicRankingManifest, type PublicRankingManifest } from '../../lib/publicArtifacts/schema'
 import {
   fetchPublicArtifact,
   parsePublicArtifactGenerationManifest,

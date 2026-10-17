@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 import type { ForecastBasis } from '../lib/tournamentForecast'
 import type { TournamentEvent } from '../lib/tournamentFeed'
-import { loadWorldsArtifact, type WorldsArtifact } from '../lib/worldsArtifacts'
+import { loadWorldsArtifact, type WorldsArtifact } from '../browser/worldsArtifacts'
 import { WORLD_FINISHES, WORLD_STAGES, worldsSamplingInterval, type WorldStage, type WorldsReport, type WorldsSimulationResult } from '../lib/worldsSimulation'
 import type { GroupReplayResult } from '../lib/worlds2022ObservedGroups'
-import { startWorldsWorker } from '../lib/worldsWorkerClient'
+import { startWorldsWorker } from '../browser/worldsWorkerClient'
 
 const STAGE_LABELS: Record<WorldStage, string> = { swiss: 'Swiss', knockout: 'Knockout', semifinal: 'Semifinal', final: 'Final', champion: 'Champion' }
 const OPTIONS = { seed: 20261009, trials: 10_000 }

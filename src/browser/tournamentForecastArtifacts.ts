@@ -1,8 +1,8 @@
 import { createPublicRankingManifestLoader } from './publicArtifacts/manifestLoader'
 import { fetchPublicSnapshotShard } from './publicArtifacts/resolver'
 import { resolvePublicArtifactUrl } from './publicArtifacts/urlResolver'
-import { isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from './tournamentForecast'
-import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from './conditionalPowerResultReceipts'
+import { isForecastLedger, isTournamentTeamIdentityMap, type ForecastBasis, type ForecastLedger } from '../lib/tournamentForecast'
+import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../lib/conditionalPowerResultReceipts'
 
 const MANIFEST_URL = import.meta.env?.VITE_RANKING_DATA_URL || '/data/ranking-summary.json'
 const IDENTITY_URL = '/tournament-data/forecasts/team-ids.json'

@@ -4,7 +4,7 @@ import type {
   SnapshotCheckpointOption,
   PublicTeamStanding as RankingSummaryStanding,
 } from './lib/publicArtifacts/schema'
-import type { PublicSnapshotState } from './lib/publicArtifacts/resolver'
+import type { PublicSnapshotState } from './browser/publicArtifacts/resolver'
 import {
   formatDate,
   formatRating,
@@ -36,8 +36,8 @@ import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } fro
 import { tournamentIdFromFilter, type TournamentFilterValue } from './lib/internationalTournaments'
 import { deriveRankingUniverse } from './lib/rankingBoard'
 import { cn } from './lib/utils'
-import { currentHashQuery, hashParam } from './lib/urlState'
-import { canUseBackgroundPrefetch, scheduleIdleWork } from './lib/prefetch'
+import { currentHashQuery, hashParam } from './hooks/urlState'
+import { canUseBackgroundPrefetch, scheduleIdleWork } from './browser/prefetch'
 import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './lib/bootstrap'
 import {
   checkpointFromScope,

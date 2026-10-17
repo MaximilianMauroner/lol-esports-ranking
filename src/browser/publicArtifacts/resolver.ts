@@ -1,4 +1,4 @@
-import { parsePublicRankingShard, snapshotKey } from './schema'
+import { parsePublicRankingShard, snapshotKey } from '../../lib/publicArtifacts/schema'
 import { fetchPublicArtifact, generationContextFor } from './artifactIdentity'
 import type {
   PublicRankingManifest,
@@ -9,7 +9,7 @@ import type {
   PublicTournamentMovementIndexEntry,
   PublicTournamentMovementShard,
   SnapshotFilter,
-} from './schema'
+} from '../../lib/publicArtifacts/schema'
 
 export type PublicSnapshotCacheEntry =
   | { status: 'loading' }

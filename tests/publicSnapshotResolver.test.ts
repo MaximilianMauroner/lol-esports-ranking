@@ -7,7 +7,7 @@ import {
   validatePublicTeamHistoryShard,
   validatePublicTournamentMovementIndex,
   validatePublicTournamentMovementShard,
-} from '../src/lib/publicArtifacts/resolver.ts'
+} from '../src/browser/publicArtifacts/resolver.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, publicScoreFamilies, snapshotKey, type PublicRankingManifest, type PublicRankingShard, type PublicTeamHistoryIndex, type PublicTeamHistoryShard, type PublicTournamentMovementIndex, type PublicTournamentMovementShard } from '../src/lib/publicArtifacts/schema.ts'
 
 test('non-default missing snapshot never falls back to embedded default snapshot', () => {

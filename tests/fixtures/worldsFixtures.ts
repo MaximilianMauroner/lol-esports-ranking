@@ -5,7 +5,7 @@ import { WORLDS_2026_PLAY_IN_RULES } from '../../src/lib/worlds2026PlayIn'
 import { WORLDS_2026_SWISS_RULES, type SwissRound, type Worlds2026SwissEntrant } from '../../src/lib/worlds2026Swiss'
 import { WORLDS_2026_KNOCKOUT_RULES } from '../../src/lib/worlds2026Knockout'
 import type { Worlds2026EventInput } from '../../src/lib/worldsSimulation'
-import { worldsFeedEventKey, type WorldsArtifact, type HistoricalWorldsInput } from '../../src/lib/worldsArtifacts'
+import { worldsFeedEventKey, type WorldsArtifact, type HistoricalWorldsInput } from '../../src/browser/worldsArtifacts'
 import type { TournamentEvent, TournamentFeed } from '../../src/lib/tournamentFeed'
 
 export const worldsEvidence = { kind: 'synthetic-fixture', reference: 'tests/fixtures/worldsFixtures.ts; fictional teams and results' } as const

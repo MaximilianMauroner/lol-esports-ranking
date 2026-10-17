@@ -1,7 +1,32 @@
+import {
+  initialPlayerRating,
+  sourcedPlayerKFactor,
+  playerRatingScale,
+  playerLeagueAnchorRating,
+  playerLeagueBaselineCoefficient,
+  playerLeagueBaselineBounds,
+  playerLeagueSignalMultiplierByTier,
+  playerPregameEdgeCoefficient,
+  playerPregameEdgeSoftCap,
+  playerPregameEdgeCap,
+  playerPregameEdgeOverflowMultiplier,
+  playerPregameMinCoverage,
+  playerPregameMinGames,
+  thinAppearanceSampleGames,
+  baseRoleShares,
+  playerImpactWeights,
+  playerImpactMultiplierBounds,
+  sourcedPerformanceWeights,
+  individualResidualMetricVersion,
+  individualResidualStrengthProxyWeight,
+  individualResidualScoreScale,
+  individualResidualMinimumRankedGames,
+  roleStatBaselines,
+  playerModelParameters,
+} from './playerPolicy'
 import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from '../data/leagueTiers'
 import type {
   LeagueStrength,
-  LeagueTierName,
   MatchRecord,
   MatchRosterSnapshot,
   PlayerAppearanceFlag,
@@ -18,7 +43,7 @@ import type {
   TeamProfile,
 } from '../types'
 import { executionIndexFromStats } from './executionResidual'
-import { createPlayerPerformanceAccumulator, playerPerformancePolicy, recordPlayerPerformance, summarizePlayerPerformance, type PlayerPerformanceAccumulator } from './playerPerformance'
+import { createPlayerPerformanceAccumulator, recordPlayerPerformance, summarizePlayerPerformance, type PlayerPerformanceAccumulator } from './playerPerformance'
 import {
   eventWeightContextForMatches,
   eventWeightForMatch,
@@ -36,92 +61,6 @@ import {
   type CausalPrefixSummary,
 } from './causalRecompute'
 import { compareCodeUnits } from './codeUnitOrder.mjs'
-
-const initialPlayerRating = 100
-const sourcedPlayerKFactor = 8
-const playerRatingScale = 80
-const playerLeagueAnchorRating = 1500
-const playerLeagueBaselineCoefficient = 0.2
-const playerLeagueBaselineBounds = {
-  min: 50,
-  max: 110,
-} as const
-const playerLeagueSignalMultiplierByTier: Record<LeagueTierName, number> = {
-  'tier-one': 1,
-  'tier-two': 0.9,
-  'tier-three': 0.65,
-  emerging: 0.35,
-  unknown: 0.25,
-} as const
-const playerPregameEdgeCoefficient = 2.5
-const playerPregameEdgeSoftCap = 40
-const playerPregameEdgeCap = 70
-const playerPregameEdgeOverflowMultiplier = 0.4
-const playerPregameMinCoverage = 0.6
-const playerPregameMinGames = 1
-const minimumRankedSourcedPlayerGames = 20
-const thinAppearanceSampleGames = 5
-export const baseRoleShares: Record<Role, number> = {
-  Top: 0.18,
-  Jungle: 0.22,
-  Mid: 0.22,
-  Bot: 0.2,
-  Support: 0.18,
-}
-const playerImpactWeights = {
-  objectiveImpactZ: 0.12,
-  awardResidualZ: 0.06,
-  recentFormZ: 0.04,
-} as const
-const playerImpactMultiplierBounds = {
-  min: 0.7,
-  max: 1.45,
-} as const
-const sourcedPerformanceWeights = {
-  win: 0.38,
-  damageShare: 0.2,
-  earnedGoldShare: 0.18,
-  kda: 0.14,
-  vision: 0.1,
-} as const
-const individualResidualMetricVersion = 'individual-residual-v0'
-const individualResidualStrengthProxyWeight = 0.28
-const individualResidualScoreScale = 100
-const individualResidualMinimumRankedGames = minimumRankedSourcedPlayerGames
-const roleStatBaselines: Record<Role, { damageShare: number; earnedGoldShare: number; kda: number; vspm: number }> = {
-  Top: { damageShare: 0.23, earnedGoldShare: 0.21, kda: 3, vspm: 0.9 },
-  Jungle: { damageShare: 0.16, earnedGoldShare: 0.18, kda: 3.4, vspm: 1.2 },
-  Mid: { damageShare: 0.25, earnedGoldShare: 0.22, kda: 3.6, vspm: 1 },
-  Bot: { damageShare: 0.28, earnedGoldShare: 0.25, kda: 3.8, vspm: 0.8 },
-  Support: { damageShare: 0.08, earnedGoldShare: 0.13, kda: 3.2, vspm: 2.4 },
-}
-
-export const playerModelParameters = {
-  initialPlayerRating,
-  sourcedPlayerKFactor,
-  playerRatingScale,
-  playerLeagueAnchorRating,
-  playerLeagueBaselineCoefficient,
-  playerLeagueBaselineBounds,
-  playerLeagueSignalMultiplierByTier,
-  playerPregameEdgeCoefficient,
-  playerPregameEdgeSoftCap,
-  playerPregameEdgeCap,
-  playerPregameEdgeOverflowMultiplier,
-  playerPregameMinCoverage,
-  playerPregameMinGames,
-  minimumRankedSourcedPlayerGames,
-  baseRoleShares,
-  playerImpactWeights,
-  playerImpactMultiplierBounds,
-  sourcedPerformanceWeights,
-  individualResidualMetricVersion,
-  individualResidualStrengthProxyWeight,
-  individualResidualScoreScale,
-  individualResidualMinimumRankedGames,
-  roleStatBaselines,
-  playerPerformancePolicy,
-} as const
 
 export type PregamePlayerRatingEdge = {
   teamAAdjustment: number
