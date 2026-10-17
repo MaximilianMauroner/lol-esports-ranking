@@ -23,7 +23,7 @@ test('dedicated provider children run with an empty PATH and retain failure diag
     const url = new URL(request.url ?? '/', 'http://fixture.invalid')
     requests.push(url.pathname)
     if (fail) response.writeHead(404, { connection: 'close' }).end('missing provider')
-    else if (url.pathname === '/cargo') response.writeHead(200, { 'content-type': 'text/csv', connection: 'close' }).end('OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold\n')
+    else if (url.pathname === '/cargo') response.writeHead(200, { 'content-type': 'text/csv', connection: 'close' }).end('OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold,Team1Picks,Team2Picks\n')
     else response.writeHead(200, { 'content-type': 'application/json', connection: 'close' }).end(JSON.stringify({ data: { schedule: { pages: {}, events: [] } } }))
   })
   try {
@@ -94,7 +94,7 @@ test('scheduled date-window downloads retain a new tournament across refreshes w
       'teamAGold' in game ? game.teamAGold : '', 'teamBGold' in game ? game.teamBGold : '',
     ].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','))
     response.writeHead(200, { 'content-type': 'text/csv' })
-    response.end(['OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold', ...csv].join('\n'))
+    response.end(['OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold,Team1Picks,Team2Picks', ...csv].join('\n'))
   })
   try {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))

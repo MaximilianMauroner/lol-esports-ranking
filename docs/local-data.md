@@ -54,6 +54,17 @@ shard. They read the same generation and verify its artifact identities; a faile
 bucket read uses the complete local snapshot. Later promotions appear without a
 server restart.
 
+HTML reuses the last verified immutable crawler snapshot only while the active
+pointer and its ETag are unchanged. Each request still reads that pointer. Legacy
+mutable and local files are read again, and legal and tournament HTML do not read
+ranking storage. Browser artifact validation and refresh cadence are unchanged.
+
+Team branding downloads are resized to at most 128 pixels per side with
+transparency and their PNG or WebP format preserved. Existing icon URLs stay
+valid. The branding script requires ffmpeg and ffprobe; image conversion uses
+one codec thread and a per-image timeout. The asset check limits each mark to
+32 KiB and all published team marks to 1 MiB.
+
 Existing Git history still contains earlier data snapshots. This change removes
 them from future commits without rewriting history. The pinned historical
 snapshot is a deliberate test and benchmark input, not a second tracked copy of

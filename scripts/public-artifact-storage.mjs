@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { createArchive, ARCHIVE_PAGE_BYTES } from '../src/lib/publicArtifacts/archive.mjs'
 import { assertCanonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
+import { mapArtifactReferences, normalizeLogicalArtifactUrl } from '../src/lib/publicArtifacts/logicalReferences.mjs'
 
 export { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from '../src/lib/publicArtifacts/logicalPath.mjs'
 
@@ -19,7 +20,7 @@ export function prepareSemanticArtifact(value, { compress = true } = {}) {
     children.push(prepared)
     return { sha256: prepared.digest, bytes: prepared.bytes, encoding: 'gzip' }
   }
-  const content = normalizeKnownLogicalUrls(withoutVolatileMetadata)
+  const content = mapArtifactReferences(withoutVolatileMetadata, normalizeLogicalArtifactUrl)
   // The ranking bootstrap keeps its existing size contract; history and entity
   // payloads use bounded immutable archive nodes when their logical view grows.
   const archived = content.artifactKind === 'public-ranking-manifest' || (content.artifactKind === 'public-snapshot-shard' && Buffer.byteLength(canonicalJsonFor(content)) <= 1_000_000)
@@ -184,67 +185,6 @@ export function parseCanonicalJson(text) {
   }
   if (!matchValue(value) || offset !== text.length) throw new NonCanonicalJsonError('JSON text is not canonical')
   return value
-}
-
-function normalizeKnownLogicalUrls(content) {
-  switch (content.artifactKind) {
-    case 'public-ranking-manifest':
-      return normalizeRankingManifestUrls(content)
-    case 'team-history-index':
-    case 'match-history-index':
-      return { ...content, scopeIndex: transformRecordEntryUrls(content.scopeIndex) }
-    case 'tournament-movement-index':
-      return { ...content, tournaments: transformArrayEntryUrls(content.tournaments) }
-    case 'match-history-catalog':
-      return { ...content, pages: transformArrayEntryUrls(content.pages) }
-    default:
-      return content
-  }
-}
-
-function normalizeRankingManifestUrls(content) {
-  const normalized = { ...content }
-  for (const key of [
-    'fullSnapshotUrl',
-    'playerDirectoryUrl',
-    'teamDirectoryUrl',
-    'teamHistoryIndexUrl',
-    'regionHistoryUrl',
-    'tournamentMovementIndexUrl',
-    'matchHistoryIndexUrl',
-  ]) {
-    if (typeof normalized[key] === 'string') normalized[key] = normalizeLogicalArtifactUrl(normalized[key])
-  }
-  normalized.snapshotIndex = transformRecordEntryUrls(normalized.snapshotIndex)
-  return normalized
-}
-
-function transformRecordEntryUrls(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, transformEntryUrl(entry)]))
-}
-
-function transformArrayEntryUrls(value) {
-  if (!Array.isArray(value)) return value
-  return value.map(transformEntryUrl)
-}
-
-function transformEntryUrl(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  return {
-    ...value,
-    ...(typeof value.url === 'string' ? { url: normalizeLogicalArtifactUrl(value.url) } : {}),
-    ...(Array.isArray(value.pages) ? { pages: transformArrayEntryUrls(value.pages) } : {}),
-  }
-}
-
-function normalizeLogicalArtifactUrl(value) {
-  const url = new URL(value, 'https://public-artifacts.invalid')
-  if (!url.pathname.startsWith('/data/')) return value
-  url.searchParams.delete('v')
-  url.searchParams.sort()
-  const query = url.searchParams.toString()
-  return `${url.pathname}${query ? `?${query}` : ''}`
 }
 
 function assertRecord(value, label) {

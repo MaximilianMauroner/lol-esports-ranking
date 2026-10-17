@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .rollout-evidence/
 /.agent/artifacts/
+/.agents/artifacts/
 
 # Local data inputs/caches. Fetch/update into data/raw locally, but do not
 # commit provider downloads; commit only the manifest that documents inputs.

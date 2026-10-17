@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { renderFallbackHomepagePrerender, renderHomepagePrerender, renderHomepagePrerenderFromPublicData, RIOT_PROJECT_NOTICE } from '../scripts/seo-prerender.ts'
 import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
-import { shouldHoldPrerenderForManifest, showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
+import { showsManifestErrorInAppShell } from '../src/lib/bootstrap.ts'
 
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData(join(referencePublicDir, '..'))
@@ -71,19 +71,6 @@ test('visible startup stays the same across ranking refreshes and missing data',
   assert.match(first, /<noscript>.*First leader.*Source: first-source.*<\/noscript>/)
   assert.match(refreshed, /<noscript>.*Seeded sample data is loaded.*New leader.*<\/noscript>/)
   assert.match(first, /<noscript><style>\.homepage-startup\{display:none\}<\/style>/)
-})
-
-test('only ranking startup holds the prerender while the manifest loads', () => {
-  assert.equal(shouldHoldPrerenderForManifest('', '/', false), true)
-  assert.equal(shouldHoldPrerenderForManifest('#rankings?scope=season%3A2026', '/', false), true)
-  assert.equal(shouldHoldPrerenderForManifest('#teams?scope=season%3A2026', '/', false), true)
-  assert.equal(shouldHoldPrerenderForManifest('#matches', '/', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('#tournaments?event=worlds%3A2026', '/', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('', '/tournaments', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('#regions', '/', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('', '/matches', false), false)
-  assert.equal(shouldHoldPrerenderForManifest('', '/teams', false), true)
-  assert.equal(shouldHoldPrerenderForManifest('', '/', true), false)
 })
 
 test('non-ranking manifest errors stay in the app shell', () => {

@@ -54,13 +54,27 @@ test('the Rankings board follows its address after load: typed and linked hashes
   const data = createStaticRankingData({ matches: [...regions.flatMap(roundRobin), msi], teams, rosters: {},
     generatedAt: '2026-07-01T00:00:00.000Z', dataMode: 'seeded-sample' })
   const bodies = new Map(createPublicArtifactWritePlan(data).writes.map((write) => [`/data/${write.relativePath}`, write.contents]))
+  const dataRequests: string[] = []
+  let holdManifest = false
+  const pendingManifest: Array<() => void> = []
   const fixture: Plugin = { name: 'ranking-board-address-fixture', configureServer(server) {
     server.middlewares.use((request, response, next) => {
       const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
+      if (path.startsWith('/tournament-data/')) {
+        response.statusCode = 503
+        response.setHeader('content-type', 'application/json')
+        response.end('{}')
+        return
+      }
       if (!path.startsWith('/data/')) return next()
+      dataRequests.push(path)
       const body = bodies.get(path)
       response.statusCode = body ? 200 : 404
       response.setHeader('content-type', 'application/json')
+      if (holdManifest && path === '/data/ranking-summary.json') {
+        pendingManifest.push(() => response.end(body ?? '{}'))
+        return
+      }
       response.end(body ?? '{}')
     })
   } }
@@ -76,8 +90,38 @@ test('the Rankings board follows its address after load: typed and linked hashes
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
     const setHash = (hash: string) => page.evaluate((next) => { location.hash = next }, hash)
 
+    await page.goto(`${base}#tournaments?scope=all`)
+    await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
+    await page.getByRole('alert').filter({ hasText: 'Tournament schedule unavailable:' }).waitFor()
+    assert.equal(dataRequests.length, 0, 'Cold Tournaments must not request ranking data')
     await page.goto(`${base}${board('region=LEC')}`)
     await expectBoard(page, 10, 'Euro', 'first load')
+
+    // Returning to Rankings must not insert the manifest shell, even for one commit.
+    await page.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('link', { name: 'Tournaments', exact: true }).click()
+    await page.getByRole('heading', { name: 'Tournaments', exact: true }).waitFor()
+    await page.getByRole('alert').filter({ hasText: 'Tournament schedule unavailable:' }).waitFor()
+    const manifestRequestsBeforeReturn = dataRequests.filter((path) => path === '/data/ranking-summary.json').length
+    const manifestShells = await page.evaluateHandle(() => {
+      const insertions: string[] = []
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (node.textContent?.includes('Requested scope:')) insertions.push(node.textContent)
+          }
+        }
+      })
+      observer.observe(document.body, { childList: true, subtree: true })
+      return { observer, insertions }
+    })
+    await setHash(board('region=LEC'))
+    await expectBoard(page, 10, 'Euro', 'warm return from Tournaments')
+    assert.deepEqual(await manifestShells.evaluate(({ observer, insertions }) => {
+      observer.disconnect()
+      return insertions
+    }), [], 'A warm ranking route must use its already validated manifest on the first render')
+    await manifestShells.dispose()
+    assert.equal(dataRequests.filter((path) => path === '/data/ranking-summary.json').length, manifestRequestsBeforeReturn)
 
     // A typed address and an in-app link change the hash in the open tab.
     await setHash(board('region=LCS'))
@@ -138,5 +182,58 @@ test('the Rankings board follows its address after load: typed and linked hashes
     await expectBoard(page, 20, '', 'sort on first load')
     assert.equal(await page.locator('.board-sort select').inputValue(), 'rating:descending')
     assert.equal(new URLSearchParams((await page.evaluate(() => location.hash)).split('?')[1]).get('dir'), null)
-  } finally { await browser?.close(); await server.close() }
+    // Startup presents the app shell before a delayed manifest completes.
+    // Keep the off-screen trajectory unobserved so comparison must request its own teams.
+    await page.addInitScript(() => {
+      window.IntersectionObserver = class extends window.IntersectionObserver {
+        observe() {}
+      }
+    })
+    dataRequests.length = 0
+    holdManifest = true
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
+    assert.equal(await page.locator('table tbody tr').count(), 0)
+    holdManifest = false
+    pendingManifest.splice(0).forEach((respond) => respond())
+    await expectBoard(page, 20, '', 'board after the delayed manifest')
+
+    const rows = page.locator('table tbody tr')
+    const compare = rows.locator('input[type="checkbox"]')
+    const comparisonNames = await rows.locator('td:nth-child(2) b').allTextContents()
+    const comparisonCodes = comparisonNames.map((name) => teams[name].code ?? name)
+    assert.equal(dataRequests.some((path) => path.startsWith('/data/history/team-series/')), false)
+    await compare.nth(5).check()
+    await compare.nth(6).check()
+    await compare.nth(7).check()
+    await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
+    const comparison = page.getByRole('dialog', { name: 'Team comparison', exact: true })
+    assert.equal(await comparison.count(), 1, 'Comparison opens its shell without a full-screen module loader')
+    const trend = comparison.getByRole('region', { name: 'Compared team power score trend', exact: true })
+    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(5, 8).join(', ')}`, exact: true }).waitFor()
+    await comparison.getByRole('button', { name: `Remove ${comparisonNames[5]} from comparison`, exact: true }).click()
+    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(6, 8).join(', ')}`, exact: true }).waitFor()
+    await comparison.getByRole('button', { name: 'Close', exact: true }).click()
+    await page.getByRole('region', { name: 'Compare teams: 2 selected', exact: true }).getByRole('button', { name: 'Clear', exact: true }).click()
+
+    // The closed Players panel must not compete with the selected team's chart.
+    await rows.first().getByRole('button').first().click()
+    const detail = page.getByRole('dialog')
+    await detail.locator('.recharts-surface').first().waitFor()
+    assert.equal(dataRequests.includes('/data/entities/players.json'), false)
+    const playerResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/data/entities/players.json')
+    await detail.locator('summary').filter({ hasText: /^Players$/ }).click()
+    assert.equal((await playerResponse).status(), 200)
+    await detail.getByRole('button', { name: 'Close', exact: true }).click()
+
+    // A prior single-team history selection must not leak into another comparison.
+    await compare.nth(8).check()
+    await compare.nth(9).check()
+    await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
+    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(8, 10).join(', ')}`, exact: true }).waitFor()
+  } finally {
+    pendingManifest.splice(0).forEach((respond) => respond())
+    await browser?.close()
+    await server.close()
+  }
 })

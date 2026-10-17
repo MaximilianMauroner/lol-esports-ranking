@@ -17,8 +17,8 @@ const FULL_YEAR = 'full-year'
  * small text button and drew a progress bar under the ongoing split, which
  * read as the selected tab while the full year was active.
  *
- * The sentence under the controls repeats the selection in words, with the
- * date of the latest rated match and the publication date.
+ * The line beside the controls gives the date of the latest rated match and
+ * the publication date. Screen readers also hear the selection in words.
  */
 export function ScopeBar({
   seasons,
@@ -98,9 +98,9 @@ export function ScopeBar({
       ) : null}
 
       <p className="text-xs text-muted-foreground max-md:basis-full" aria-live="polite">
-        Showing <b className="font-semibold text-[var(--text-strong)]">{selection}</b>
-        {scopeThroughDate ? <> · results through <b className="font-semibold text-foreground">{formatDate(scopeThroughDate)}</b></> : null}
-        {publishedAt ? <span className="max-sm:hidden"> · updated {formatDate(publishedAt)}</span> : null}
+        <span className="sr-only">Showing {selection}. </span>
+        {scopeThroughDate ? <>Results through <b className="font-semibold text-foreground">{formatDate(scopeThroughDate)}</b></> : null}
+        {publishedAt ? <span className="max-sm:hidden">{scopeThroughDate ? ' · ' : ''}Updated {formatDate(publishedAt)}</span> : null}
       </p>
     </div>
   )

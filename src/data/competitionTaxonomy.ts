@@ -228,6 +228,7 @@ const leagueInferenceRules: { league: string; patterns: RegExp[] }[] = [
   { league: 'LEC', patterns: [/\blec\b/i] },
   { league: 'LCS', patterns: [/\blcs\b/i] },
   { league: 'LTA', patterns: [/\blta\b/i] },
+  { league: 'LCP Wildcard', patterns: [/\blcp\s+wildcard\b/i] },
   { league: 'LCP', patterns: [/\blcp\b/i] },
   { league: 'CBLOL', patterns: [/\bcblol\b/i] },
   { league: 'VCS', patterns: [/\bvcs\b/i] },

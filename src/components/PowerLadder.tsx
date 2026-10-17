@@ -118,7 +118,6 @@ export function PowerLadder({
                     <span className="text-muted-foreground">Power</span>
                     <strong className="font-mono text-lg tabular-nums">{formatRating(team.rating)} <span className="text-xs font-normal text-muted-foreground">±{formatRating(uncertainty)}</span></strong>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatRating(team.rating - uncertainty)}–{formatRating(team.rating + uncertainty)} · model uncertainty range</p>
                 </div>
                 <dl className="flex justify-between gap-4 text-xs">
                   <div><dt className="text-muted-foreground">Record</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{team.wins}–{team.losses}</dd></div>
@@ -126,7 +125,6 @@ export function PowerLadder({
                   <div><dt className="mb-1 text-muted-foreground">Last five</dt><dd><FormDots form={team.form} /></dd></div>
                 </dl>
                 {neighbours.length > 0 ? <p className="mt-3 text-xs text-muted-foreground">Near tie with <span className="text-foreground">{neighbours.map((other) => other.code ?? other.team).join(', ')}</span>.</p> : null}
-                <p className="mt-3 text-xs text-[var(--faint)]">Select the row for team details.</p>
               </HoverCardContent>
             </HoverCard>
           )

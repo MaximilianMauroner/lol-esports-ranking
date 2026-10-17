@@ -26,6 +26,7 @@ export type StaticSnapshotBuildOptions = {
   generatedAt?: string
   precomputedGlobalRanking?: RankingModelOutput
   affectedLogicalPaths?: ReadonlySet<string>
+  retainedLogicalPaths?: ReadonlySet<string>
   affectedSnapshotKeys?: ReadonlySet<string>
   affectedTournamentIds?: ReadonlySet<TournamentInstanceId>
   previousArtifacts?: Readonly<Record<string, unknown>>
@@ -149,6 +150,7 @@ const serializationFinished = metrics.startStage('public-serialization', {
 })
 const publicPlan = createPublicArtifactWritePlan(snapshot, {
   ...(options.affectedLogicalPaths ? { affectedLogicalPaths: options.affectedLogicalPaths } : {}),
+  ...(options.retainedLogicalPaths ? { retainedLogicalPaths: options.retainedLogicalPaths } : {}),
   ...(options.previousArtifacts ? { previousArtifacts: options.previousArtifacts } : {}),
 })
 const summaryOutput = resolve(publicDataTargetDir, PUBLIC_ARTIFACT_PATHS.manifest)

@@ -1,6 +1,7 @@
 import { compareCodeUnits } from './codeUnitOrder.mjs'
 import { WORLDS_2026_SWISS_RULES, applySwissWinner, swissBestOf, type SwissSeed } from './worlds2026Swiss'
 import type { SwissTeamStanding } from './worldsObservedRules'
+import { shuffled } from './worldsSimulation'
 import type { TournamentEvent, TournamentSeries } from './tournamentFeed'
 
 /**
@@ -115,9 +116,9 @@ export type TeamOutcome =
   | { state: 'eliminated'; wins: number; losses: number; placement: string }
   | { state: 'active'; wins: number; losses: number; nextBestOf: 1 | 3 }
 
-export function seedBaseline(playInRegion: PlayInRegion | null): SwissBaseline {
+export function seedBaseline(playInRegion: PlayInRegion | null, playInTeam?: string): SwissBaseline {
   const teams = WORLDS_2026_SWISS_RULES.pools.flat().map((seed): PreviewTeam => seed === 'PLAYIN'
-    ? { id: seed, label: 'Play-In winner', seed, region: playInRegion }
+    ? { id: seed, label: playInRegion && playInTeam ? playInTeam : 'Play-In winner', seed, region: playInRegion }
     : { id: seed, label: QUALIFIED_TEAMS[seed], seed, region: seed.replace(/\d+$/, '') })
   return { kind: 'seeds', teams, rounds: [] }
 }
@@ -266,7 +267,7 @@ export function drawContext(round: number, teams: readonly PreviewTeam[], standi
       .sort((a, b) => Number(b.record[0]) - Number(a.record[0]) || Number(a.record[2]) - Number(b.record[2])),
   }
   for (const bucket of context.buckets) {
-    if (!findPairing(bucket.teamIds, (a, b) => !pairReason(a, b, context, false))) (context.rematchBuckets as Set<string>).add(bucket.record)
+    if (!canFinish([], bucket.teamIds, (a, b) => !pairReason(a, b, context, false))) (context.rematchBuckets as Set<string>).add(bucket.record)
   }
   return context
 }
@@ -309,31 +310,80 @@ export function drawProblem(pairs: readonly [string, string][], context: DrawCon
 }
 
 /**
- * One valid draw: the first legal pairing in baseline team order. This is a
- * convenience for building scenarios, not a prediction of the official draw.
- * Where officials may waive the rematch rule, pairings without a rematch are
- * still tried first.
+ * One random draw by Riot's procedure, `drawByRulebook`, with every pot order equally likely. In Round 1 the pot is
+ * Pool 1 then Pool 4, and Pool 2 then Pool 3 (rule 4.3.2.2). Later rounds draw each record group on its own
+ * (rule 4.3.3.1). This is a convenience for building scenarios, not a prediction of the official draw.
  */
-export function fillDraw(context: DrawContext): [string, string][] | null {
+export function fillDraw(
+  context: DrawContext,
+  random: () => number = Math.random,
+  legal: (a: string, b: string) => boolean = (a, b) => !pairReason(a, b, context),
+): [string, string][] | null {
   const pairs: [string, string][] = []
-  for (const bucket of context.buckets) {
-    const found = findPairing(bucket.teamIds, (a, b) => !pairReason(a, b, context, false))
-      ?? findPairing(bucket.teamIds, (a, b) => !pairReason(a, b, context))
-    if (!found) return null
-    pairs.push(...found)
+  for (const pot of drawPots(context)) {
+    const drawn = drawByRulebook(pot.flatMap((teamIds) => shuffled(teamIds, random)), legal)
+    if (!drawn) return null
+    pairs.push(...drawn)
   }
   return pairs
 }
 
-function findPairing(teamIds: readonly string[], legal: (a: string, b: string) => boolean): [string, string][] | null {
-  if (!teamIds.length) return []
-  const [first, ...rest] = teamIds
-  for (const [index, other] of rest.entries()) {
-    if (!legal(first, other)) continue
-    const remaining = findPairing(rest.filter((_, otherIndex) => otherIndex !== index), legal)
-    if (remaining) return [[first, other], ...remaining]
+/** Whether `fillDraw` can make a draw. This does not depend on chance, so render can ask it. */
+export function drawExists(context: DrawContext): boolean {
+  return drawPots(context).every((pot) => canFinish([], pot.flat(), (a, b) => !pairReason(a, b, context)))
+}
+
+/** The pots of one draw. Each pot is a list of groups whose teams come out in a random order, group after group. */
+export function drawPots(context: DrawContext): string[][][] {
+  const teams = [...context.teams.values()]
+  if (context.round !== 1 || teams.some((team) => !team.seed)) return context.buckets.map((bucket) => [bucket.teamIds])
+  const pool = (index: number) => teams.filter((team) => (WORLDS_2026_SWISS_RULES.pools[index] as readonly string[]).includes(team.seed!)).map((team) => team.id)
+  return [[pool(0), pool(3)], [pool(1), pool(2)]]
+}
+
+/**
+ * Riot's draw procedure, rules 4.3.2.2 to 4.3.3.2. Teams come out of the pot in `order`. Each team takes the first
+ * open slot, with matches filled in order. If that slot breaks a draw restriction, or leaves no legal way to finish
+ * the draw, the team moves to the next open slot. Returns null when no legal draw exists.
+ */
+export function drawByRulebook(order: readonly string[], legal: (a: string, b: string) => boolean): [string, string][] | null {
+  const matches: string[][] = Array.from({ length: order.length / 2 }, () => [])
+  for (const [index, team] of order.entries()) {
+    const rest = order.slice(index + 1)
+    const slot = matches.find((match) => match.length < 2 && (!match.length || legal(match[0], team)) && canFinish(
+      matches.flatMap((other) => other === match ? (match.length ? [] : [team]) : other.length === 1 ? [other[0]] : []), rest, legal))
+    if (!slot) return null
+    slot.push(team)
   }
-  return null
+  return matches as [string, string][]
+}
+
+/** Whether the teams left in the pot can fill every open slot: first the matches with one team, then empty ones. */
+function canFinish(waiting: readonly string[], pot: readonly string[], legal: (a: string, b: string) => boolean): boolean {
+  const used = pot.map(() => false)
+  const fill = (next: number): boolean => {
+    if (next < waiting.length) {
+      for (let index = 0; index < pot.length; index++) {
+        if (used[index] || !legal(waiting[next], pot[index])) continue
+        used[index] = true
+        if (fill(next + 1)) return true
+        used[index] = false
+      }
+      return false
+    }
+    const first = used.indexOf(false)
+    if (first < 0) return true
+    used[first] = true
+    for (let index = first + 1; index < pot.length; index++) {
+      if (used[index] || !legal(pot[first], pot[index])) continue
+      used[index] = true
+      if (fill(next)) return true
+      used[index] = false
+    }
+    used[first] = false
+    return false
+  }
+  return fill(0)
 }
 
 /**

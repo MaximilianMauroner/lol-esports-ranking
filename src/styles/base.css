@@ -185,6 +185,13 @@ body,
   height: 100%;
 }
 
+/* Keep the scrollbar's space on every page. Tournaments and loading states can
+   be shorter than the window, and without this the whole app moved sideways by
+   the scrollbar width whenever the scrollbar came or went. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   overflow-x: hidden;
@@ -324,6 +331,19 @@ body::before {
 .loading-dot {
   background-color: var(--surface-2);
   background-image: linear-gradient(100deg, transparent 30%, var(--surface-3) 50%, transparent 70%);
+}
+
+/* Placeholders hold their space at once and show after 180ms, so a fast
+   load never flashes one. The step is not motion, so reduced-motion users
+   get the same delay. */
+.loading-reveal {
+  animation: loading-reveal 0s linear 180ms backwards;
+}
+
+@keyframes loading-reveal {
+  from {
+    visibility: hidden;
+  }
 }
 
 .loading-dot {

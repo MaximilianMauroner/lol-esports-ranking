@@ -15,6 +15,7 @@ import { createTournamentFeedService } from './scripts/leaguepedia-tournament-fe
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [rankingManifestPreloadPlugin(), homepagePrerenderPlugin(), liveTournamentFeedPlugin(), react(), tailwindcss()],
+  build: { manifest: true },
   server: {
     allowedHosts: ['coding.tailbc92d.ts.net'],
   },

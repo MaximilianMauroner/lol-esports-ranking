@@ -1,4 +1,5 @@
 import type {
+  ChampionPicks,
   DeservedStandingEligibilityLabel,
   DeservedStandingLeaderboard,
   FactorBreakdown,
@@ -675,6 +676,8 @@ export type PublicMatchHistoryEntry = {
   teamA: PublicMatchHistoryTeam
   teamB: PublicMatchHistoryTeam
   winnerId: string
+  /** Picks for the entry's teamA and teamB, which can differ from the source's game sides. */
+  picks?: { teamA: ChampionPicks; teamB: ChampionPicks }
   impact: PublicMatchHistoryImpact
   source: {
     provider: NonNullable<MatchRecord['sourceProvider']>
@@ -1540,6 +1543,15 @@ function assertPublicMatchHistoryEntry(value: unknown, label: string) {
   const teamA = value.teamA as PublicMatchHistoryTeam
   const teamB = value.teamB as PublicMatchHistoryTeam
   if (value.winnerId !== teamA.id && value.winnerId !== teamB.id) throw new Error(`Invalid public artifact: ${label} winnerId must identify a team`)
+  if (value.picks !== undefined) {
+    assertObject(value.picks, `${label} picks`)
+    for (const teamKey of ['teamA', 'teamB'] as const) {
+      const picks = value.picks[teamKey]
+      assertArray(picks, `${label} picks ${teamKey}`)
+      if (picks.length !== 5) throw new Error(`Invalid public artifact: ${label} picks ${teamKey} must list five roles`)
+      picks.forEach((champion, index) => { if (champion !== null) assertString(champion, `${label} picks ${teamKey}[${index}]`) })
+    }
+  }
   assertObject(value.impact, `${label} impact`)
   assertEnum(value.impact.unit, ['held', 'series-applied'], `${label} impact unit`)
   assertOptionalNumber(value.impact.teamA, `${label} impact teamA`)

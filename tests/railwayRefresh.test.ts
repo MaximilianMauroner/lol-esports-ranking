@@ -1957,6 +1957,7 @@ async function runRawSyncCase(head: 'matching' | 'mismatch' | 'legacy' | 'error'
     async send(command: { input: { Key: string; Body?: unknown; ContentLength?: number; Metadata?: Record<string, string> } }) {
       const input = command.input
       sent.push({ input })
+      if (input.Body !== undefined) await bodyText(input.Body)
       if (input.Key !== rawKey || input.Body !== undefined) return {}
       if (head === 'error') throw new Error('HEAD unavailable')
       if (head === 'legacy') return { ContentLength: rawBytes, Metadata: {} }

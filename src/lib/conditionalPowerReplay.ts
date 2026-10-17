@@ -279,7 +279,8 @@ function seriesIdentityAliases(matches: readonly MatchRecord[]) {
   for (const series of [matches, sourceMatchViews, sourceGameViews].flatMap((view) => resolveCanonicalSeries(view))) {
     aliases.push(series.id)
     // Use the source-series identity already normalized by the production resolver.
-    const [kind, , sourceSeriesId] = series.id.split('\u0000')
+    const [kind, sourceMatchId, sourceGameId] = series.id.split('\u0000')
+    const sourceSeriesId = kind === 'source-match' ? sourceMatchId : sourceGameId
     if ((kind === 'source-match' || kind === 'source-game-series') && nonemptyString(sourceSeriesId)) aliases.push(sourceSeriesId)
   }
   return aliases

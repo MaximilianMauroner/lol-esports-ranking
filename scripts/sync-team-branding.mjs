@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { basename, extname, resolve } from 'node:path'
 import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
 import { logoFileTreatment, requireFfmpeg } from './team-logo-treatment.mjs'
+import { optimizeTeamLogo } from './team-logo-image.mjs'
 
 const args = parseArgs(process.argv.slice(2))
 const root = process.cwd()
@@ -219,7 +220,7 @@ async function downloadLogo(teamName, remoteUrl) {
     if (body.length < 100) throw new Error(`response was only ${body.length} bytes`)
     const fileName = `${slug(teamName)}${extension}`
     await writeFile(resolve(logoDirectory, fileName), body)
-    return `/team-logos/${fileName}`
+    return `/team-logos/${basename(await optimizeTeamLogo(resolve(logoDirectory, fileName)))}`
   } catch (error) {
     const existing = await existingLogo(teamName)
     console.warn(`Logo unavailable for ${teamName}: ${error instanceof Error ? error.message : String(error)}`)
@@ -231,7 +232,7 @@ async function existingLogo(teamName) {
   try {
     const prefix = `${slug(teamName)}.`
     const file = (await readdir(logoDirectory)).find((entry) => entry.startsWith(prefix))
-    return file ? `/team-logos/${file}` : undefined
+    return file ? `/team-logos/${basename(await optimizeTeamLogo(resolve(logoDirectory, file)))}` : undefined
   } catch {
     return undefined
   }

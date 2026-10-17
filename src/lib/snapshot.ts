@@ -1,4 +1,5 @@
 import type {
+  ChampionPicks,
   EventSummary,
   LeagueStrengthHistoryPoint,
   LeagueStrength,
@@ -1591,6 +1592,18 @@ export function createStaticRankingData({
   return result
 }
 
+const UNKNOWN_PICKS: ChampionPicks = [null, null, null, null, null]
+
+/** Game sides can swap between games of one series, so orient picks to the series teams. */
+function picksForSeriesTeams(match: MatchRecord, seriesTeamA: string) {
+  if (!match.teamAPicks && !match.teamBPicks) return undefined
+  const gamePicksA = match.teamAPicks ?? UNKNOWN_PICKS
+  const gamePicksB = match.teamBPicks ?? UNKNOWN_PICKS
+  return canonicalTeamNameFor(match.teamA) === seriesTeamA
+    ? { teamA: gamePicksA, teamB: gamePicksB }
+    : { teamA: gamePicksB, teamB: gamePicksA }
+}
+
 export function createMatchHistoryArtifacts(
   data: StaticRankingData,
   {
@@ -1624,6 +1637,7 @@ export function createMatchHistoryArtifacts(
         const finalGame = match.id === series.finalMatch.id
         const impactA = impact.get(`${teamA}\u0000${series.id}`)
         const impactB = impact.get(`${teamB}\u0000${series.id}`)
+        const picks = picksForSeriesTeams(match, teamA)
         return {
           id: match.officialGameId ?? match.sourceGameId ?? match.id,
           date: match.date,
@@ -1642,6 +1656,7 @@ export function createMatchHistoryArtifacts(
           teamA: { id: teamIdFor({ team: teamA, region: profileA?.region, code: profileA?.code }), name: teamA, code: profileA?.code ?? teamA.slice(0, 4).toUpperCase() },
           teamB: { id: teamIdFor({ team: teamB, region: profileB?.region, code: profileB?.code }), name: teamB, code: profileB?.code ?? teamB.slice(0, 4).toUpperCase() },
           winnerId: teamIdFor({ team: canonicalTeamNameFor(match.winner), region: data.teams[canonicalTeamNameFor(match.winner)]?.region, code: data.teams[canonicalTeamNameFor(match.winner)]?.code }),
+          ...(picks ? { picks } : {}),
           impact: finalGame && (impactA || impactB)
             ? { unit: 'series-applied', ...(impactA ? { teamA: impactA.delta, expectedTeamA: impactA.expected, eventWeight: impactA.eventWeight } : {}), ...(impactB ? { teamB: impactB.delta } : {}) }
             : { unit: 'held' },

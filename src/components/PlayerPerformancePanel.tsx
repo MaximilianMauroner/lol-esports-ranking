@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { CompactPlayer } from '../lib/publicArtifacts/schema'
 import { playerPerformanceMetricKeys, playerPerformanceMetrics } from '../lib/playerPerformance'
 import type { PlayerPerformanceMetric } from '../types'
-import { Panel, PanelBody, PanelFooter, PanelHeader } from './ui/panel'
+import { Panel, PanelBody, PanelHeader } from './ui/panel'
 import { Select } from './ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 
@@ -15,7 +15,7 @@ export function PlayerPerformancePanel({ players, scopeLabel }: { players: Compa
 
   return (
     <Panel className="mt-5" aria-label="Observed player stats">
-      <PanelHeader title="Observed player stats" description="Context for the player ratings. These additional stats do not change scores."
+      <PanelHeader title="Observed player stats"
         actions={
           <Select aria-label="Player stats" value={player.id} onChange={(event) => setSelectedId(event.target.value)}>
             {players.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
@@ -25,8 +25,7 @@ export function PlayerPerformancePanel({ players, scopeLabel }: { players: Compa
       {performance && diagnostics ? (
         <>
           <PanelBody className="text-xs leading-relaxed text-muted-foreground">
-            Oracle’s Elixir · {diagnostics.sampleGames} rated games in {scopeLabel} with complete role matchups.
-            Averages can include previous teams and roles. They are unweighted and are not adjusted for champion, opponent, or league strength.
+            Oracle’s Elixir · {diagnostics.sampleGames} games in {scopeLabel}. Raw averages, not used in scores.
           </PanelBody>
           <Table aria-label={`${player.name} observed stats`}>
             <TableHeader><TableRow><TableHead>Stat</TableHead><TableHead className="text-right">Average</TableHead><TableHead className="text-right">Coverage</TableHead></TableRow></TableHeader>
@@ -45,12 +44,8 @@ export function PlayerPerformancePanel({ players, scopeLabel }: { players: Compa
               })}
             </TableBody>
           </Table>
-          <PanelFooter className="text-xs leading-relaxed text-muted-foreground">
-            Each average uses games where that stat is available. Missing stats are unknown, never zero.
-            Damage–gold gap is measured in percentage points; a higher value is not automatically better.
-          </PanelFooter>
         </>
-      ) : <PanelBody className="text-sm text-muted-foreground">These stats are unavailable in this player’s source snapshot.</PanelBody>}
+      ) : <PanelBody className="text-sm text-muted-foreground">No stats for this player.</PanelBody>}
     </Panel>
   )
 }

@@ -1,18 +1,36 @@
-import { readdir, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-const assetsDir = resolve('dist/assets')
-const limitBytes = Number(process.env.RANKING_MAIN_BUNDLE_LIMIT_KB ?? 900) * 1024
-const files = (await readdir(assetsDir)).filter((file) => /^index-.*\.js$/.test(file))
-const sizes = await Promise.all(files.map(async (file) => ({ file, bytes: (await stat(resolve(assetsDir, file))).size })))
-const main = sizes.sort((left, right) => right.bytes - left.bytes)[0]
+const manifest = JSON.parse(await readFile(resolve('dist/.vite/manifest.json'), 'utf8'))
+const limitBytes = Number(process.env.RANKING_MAIN_BUNDLE_LIMIT_KB ?? 800) * 1024
 
-if (!main) throw new Error('No main JavaScript bundle found in dist/assets')
-if (main.bytes > limitBytes) {
-  throw new Error(`${main.file} is ${formatKb(main.bytes)} KB; limit is ${formatKb(limitBytes)} KB`)
+function dependencies(key, files = new Set()) {
+  const entry = manifest[key]
+  if (!entry) throw new Error(`Missing bundle entry ${key}`)
+  if (files.has(entry.file)) return files
+  files.add(entry.file)
+  for (const imported of entry.imports ?? []) dependencies(imported, files)
+  return files
 }
 
-console.log(`Main bundle ${main.file}: ${formatKb(main.bytes)} KB / ${formatKb(limitBytes)} KB`)
+const bootstrap = dependencies('index.html')
+const ranking = dependencies('src/App.tsx', new Set(bootstrap))
+const legal = dependencies('src/views/LegalPage.tsx', new Set(bootstrap))
+const initial = new Set([...ranking, ...legal])
+const contents = new Map(await Promise.all([...initial].map(async (file) => [
+  file, await readFile(resolve('dist', file), 'utf8'),
+])))
+const chartFiles = [...contents].filter(([, content]) => content.includes('recharts-wrapper')).map(([file]) => file)
+if (chartFiles.length) throw new Error(`Chart renderer leaked into startup dependencies: ${chartFiles.join(', ')}`)
+if (legal.has(manifest['src/App.tsx'].file)) throw new Error('Legal startup must not load the ranking app')
+
+const sizes = new Map(await Promise.all([...initial].map(async (file) => [file, (await stat(resolve('dist', file))).size])))
+const rankingBytes = [...ranking].reduce((sum, file) => sum + sizes.get(file), 0)
+const legalBytes = [...legal].reduce((sum, file) => sum + sizes.get(file), 0)
+if (rankingBytes > limitBytes) {
+  throw new Error(`Ranking startup is ${formatKb(rankingBytes)} KiB; limit is ${formatKb(limitBytes)} KiB`)
+}
+console.log(`Ranking startup: ${formatKb(rankingBytes)} KiB / ${formatKb(limitBytes)} KiB; legal startup: ${formatKb(legalBytes)} KiB; charts deferred`)
 
 function formatKb(bytes) {
   return Math.round(bytes / 1024)

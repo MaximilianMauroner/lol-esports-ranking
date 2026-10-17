@@ -19,7 +19,7 @@ import {
 } from '../src/lib/publicArtifacts/artifactIdentity.ts'
 import type { PublicRankingManifest, PublicRankingShard } from '../src/lib/publicArtifacts/schema.ts'
 
-test('manifest loader deduplicates concurrent bootstrap and hook requests', async () => {
+test('manifest loader deduplicates requests and synchronously retains only a resolved manifest', async () => {
   const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')
   let requests = 0
   const loader = createPublicRankingManifestLoader('/data/ranking-summary.json', async () => {
@@ -27,28 +27,38 @@ test('manifest loader deduplicates concurrent bootstrap and hook requests', asyn
     return new Response(manifestJson)
   })
 
+  assert.equal(loader.getCached(), undefined)
+  assert.equal(requests, 0, 'Reading the cache must not fetch the manifest')
   const bootstrapRequest = loader()
   const hookRequest = loader()
   assert.equal(bootstrapRequest, hookRequest)
+  assert.equal(loader.getCached(), undefined, 'A pending request must not be exposed as ready')
   const [bootstrapManifest, hookManifest] = await Promise.all([bootstrapRequest, hookRequest])
 
   assert.equal(requests, 1)
   assert.equal(bootstrapManifest, hookManifest)
+  assert.equal(loader.getCached(), bootstrapManifest)
+  assert.equal(loader(), bootstrapRequest)
+  assert.equal(requests, 1, 'Returning views reuse the validated manifest without another fetch')
 })
 
-test('manifest loader retries after a shared request rejects', async () => {
+test('manifest loader leaves failures uncached and retries HTTP and validation errors', async () => {
   const manifestJson = await readFile(join(referencePublicDataDir, 'ranking-summary.json'), 'utf8')
   let requests = 0
   const loader = createPublicRankingManifestLoader('/data/ranking-summary.json', async () => {
     requests += 1
-    return requests === 1 ? new Response(null, { status: 503 }) : new Response(manifestJson)
+    return requests === 1 ? new Response(null, { status: 503 }) : new Response(requests === 2 ? '{}' : manifestJson)
   })
 
   await assert.rejects(loader(), /Snapshot request failed with 503/)
+  assert.equal(loader.getCached(), undefined)
+  await assert.rejects(loader(), /ranking manifest artifactKind/)
+  assert.equal(loader.getCached(), undefined)
   const manifest = await loader()
 
-  assert.equal(requests, 2)
+  assert.equal(requests, 3)
   assert.equal(manifest.artifactKind, 'public-ranking-manifest')
+  assert.equal(loader.getCached(), manifest)
 })
 
 test('concurrent and returning views download and verify an immutable shard once', async () => {
@@ -176,23 +186,30 @@ test('generation-backed network plus proxy failure makes exactly two requests', 
 test('generation manifest loads semantic artifacts through the manifest loader and snapshot resolver', async () => {
   const fixture = await generationFixture()
   const requests: string[] = []
+  let invalidProvenance = true
   const fetcher: typeof fetch = async (input) => {
     const url = String(input)
     requests.push(url)
-    if (url === '/data/generation.json') return jsonResponse(fixture.generation)
+    if (url === '/data/generation.json') return jsonResponse(invalidProvenance
+      ? { ...fixture.generation, provenance: { ...fixture.generation.provenance, source: 'Invalid fixture provenance' } }
+      : fixture.generation)
     if (url === fixture.rootEntry.objectUrl) return jsonResponse(fixture.rootSemantic)
     if (url === fixture.shardEntry.objectUrl) return jsonResponse(fixture.shardSemantic)
     return new Response(null, { status: 404 })
   }
   const loader = createPublicRankingManifestLoader('/data/generation.json', fetcher)
+  await assert.rejects(loader(), /ranking manifest provenance mismatch/)
+  assert.equal(loader.getCached(), undefined, 'Generation validation must finish before a manifest becomes ready')
+  invalidProvenance = false
   const manifest = await loader()
   const key = '2026__All__All'
   const expected = manifest.snapshotIndex[key]
   const shard = await fetchPublicSnapshotShard(expected.url, key, expected, manifest, { fetcher })
 
   assert.equal(manifest.model.version, fixture.legacyManifest.model.version)
+  assert.equal(loader.getCached(), manifest)
   assert.equal(shard.matchCount, fixture.legacyShard.matchCount)
-  assert.deepEqual(requests, ['/data/generation.json', fixture.rootEntry.objectUrl, fixture.shardEntry.objectUrl])
+  assert.deepEqual(requests, ['/data/generation.json', fixture.rootEntry.objectUrl, '/data/generation.json', fixture.shardEntry.objectUrl])
 })
 
 test('semantic identity excludes volatile run metadata and uses deterministic key ordering', async () => {

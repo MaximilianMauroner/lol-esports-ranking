@@ -80,7 +80,7 @@ function MovementRow({ movement }: { movement: MovementSpotlight }) {
 /** Rank change as a small signed chip, shared by the board and this panel. */
 export function MovementChip({ places, title }: { places?: number; title?: string }) {
   if (places === undefined) {
-    return <span className="inline-flex min-w-9 justify-center rounded-sm bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-2xs font-bold text-[var(--faint)]" title={title}>idle</span>
+    return <span className="inline-flex min-w-9 justify-center rounded-sm bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-2xs font-bold text-[var(--faint)]" title={title}>—</span>
   }
   const tone = places > 0 ? 'up' : places < 0 ? 'down' : 'flat'
   return (

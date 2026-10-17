@@ -215,7 +215,7 @@ export function LineChart({
           ))}
         </RechartsLineChart>
       </ChartContainer>
-      {gaps.length > 0 ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines join recorded points more than 21 days apart. No ratings are recorded between them.</p> : null}
+      {gaps.length > 0 ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
       <div id={summaryId} className="sr-only">{summaryText}</div>
 
     </div>

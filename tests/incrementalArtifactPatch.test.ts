@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import test from 'node:test'
 import { uploadContentAddressedPublicArtifactPatch, uploadContentAddressedPublicArtifacts } from '../scripts/railway-bucket.mjs'
 import { materializePublicArtifactPatch } from '../scripts/public-artifact-materialization.mjs'
+import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
+import { createStaticRankingData } from '../src/lib/snapshot.ts'
 
 const config = { enabled: true, bucket: 'test', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
 
@@ -249,6 +251,109 @@ test('full uploads stream-verify same-length pre-existing content-addressed obje
   }
 })
 
+const closurePage = '/data/matches/pages/all-2026000001.json'
+const missingClosurePage = /\/data\/matches\/(all|index)\.json references missing \/data\/matches\/pages\/all-2026000001\.json/
+
+test('full upload rejects a generation that removes a match page its catalog still references', async () => {
+  const { dir, runId } = await closureFixture()
+  const client = memoryS3()
+  try {
+    await rm(join(dir, closurePage.slice('/data/'.length)))
+    await assert.rejects(uploadContentAddressedPublicArtifacts(client, config, dir, runId), missingClosurePage)
+    assert.equal(client.objects.has(`rankings/generations/${runId}/manifest.json`), false)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('patch upload rejects removing a match page that retained or changed catalogs still reference', async () => {
+  const { dir, runId, nextRoot, valueAt } = await closureFixture()
+  const client = memoryS3()
+  try {
+    const base = await uploadContentAddressedPublicArtifacts(client, config, dir, runId)
+    const basePaths = Object.keys(record(base.manifest.artifacts))
+    const removePage = {
+      previousManifest: base.manifest,
+      removedLogicalPaths: [closurePage],
+      expectedLogicalPaths: basePaths.filter((path) => path !== closurePage),
+    }
+    const putsBefore = client.putKeys.length
+    await assert.rejects(uploadContentAddressedPublicArtifactPatch(client, config, {
+      ...removePage,
+      generationId: 'closure-retained',
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: nextRoot('closure-retained') }],
+    }), missingClosurePage)
+    await assert.rejects(uploadContentAddressedPublicArtifactPatch(client, config, {
+      ...removePage,
+      generationId: 'closure-changed',
+      changedArtifacts: [
+        { logicalPath: '/data/ranking-summary.json', value: nextRoot('closure-changed') },
+        { logicalPath: '/data/matches/index.json', value: valueAt('/data/matches/index.json') },
+        { logicalPath: '/data/matches/all.json', value: valueAt('/data/matches/all.json') },
+      ],
+    }), missingClosurePage)
+    assert.equal(client.putKeys.length, putsBefore, 'a rejected patch writes no object or generation manifest')
+
+    const getsBefore = client.getKeys.length
+    await uploadContentAddressedPublicArtifactPatch(client, config, {
+      generationId: 'closure-unchanged',
+      previousManifest: base.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: nextRoot('closure-unchanged') }],
+      expectedLogicalPaths: basePaths,
+    })
+    const bodyReads = client.getKeys.slice(getsBefore)
+    assert.equal(new Set(bodyReads).size, bodyReads.length, 'closure reads no retained body twice')
+    assert.deepEqual(client.putKeys.slice(putsBefore), ['rankings/generations/closure-unchanged/manifest.json'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local materialization rejects removing a referenced match page and keeps the old root', async () => {
+  const { dir, runId, nextRoot } = await closureFixture()
+  try {
+    const base = await uploadContentAddressedPublicArtifacts(memoryS3(), config, dir, runId)
+    const basePaths = Object.keys(record(base.manifest.artifacts))
+    await assert.rejects(materializePublicArtifactPatch(dir, {
+      previousManifest: base.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: nextRoot('closure-local') }],
+      removedLogicalPaths: [closurePage],
+      expectedLogicalPaths: basePaths.filter((path) => path !== closurePage),
+    }), missingClosurePage)
+    assert.ok(JSON.parse(await readFile(join(dir, closurePage.slice('/data/'.length)), 'utf8')))
+    assert.equal(JSON.parse(await readFile(join(dir, 'ranking-summary.json'), 'utf8')).artifactMeta.runId, runId)
+    const unchanged = await materializePublicArtifactPatch(dir, {
+      previousManifest: base.manifest,
+      changedArtifacts: [{ logicalPath: '/data/ranking-summary.json', value: nextRoot('closure-local-unchanged') }],
+      expectedLogicalPaths: basePaths,
+    })
+    assert.deepEqual(Object.keys(unchanged.mapping).sort(), basePaths.toSorted())
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+async function closureFixture() {
+  const plan = createPublicArtifactWritePlan(createStaticRankingData({
+    matches: [{
+      id: 'closure', sourceProvider: 'oracles-elixir', date: '2026-01-01', datetimeUtc: '2026-01-01T12:00:00.000Z', season: 2026,
+      event: 'LCK 2026', phase: 'Regular season', region: 'LCK', league: 'LCK', patch: '26.1', bestOf: 1, tier: 'regional-regular',
+      teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000,
+    }],
+    teams: { Alpha: { name: 'Alpha', code: 'ALP', league: 'LCK', region: 'LCK' }, Beta: { name: 'Beta', code: 'BET', league: 'LCK', region: 'LCK' } },
+    rosters: {}, generatedAt: '2026-01-02T00:00:00.000Z', dataMode: 'scheduled-public-data', source: 'Reference closure fixture',
+  }))
+  const valueAt = (logicalPath: string) => plan.writes.find((write) => `/data/${write.relativePath}` === logicalPath)?.value
+  assert.ok(valueAt(closurePage))
+  const dir = await mkdtemp(join(tmpdir(), 'ranking-reference-closure-'))
+  for (const write of plan.writes) {
+    await mkdir(dirname(join(dir, write.relativePath)), { recursive: true })
+    await writeFile(join(dir, write.relativePath), write.contents)
+  }
+  const nextRoot = (runId: string) => ({ ...plan.manifest, artifactMeta: { ...record(plan.manifest.artifactMeta), runId } })
+  return { dir, valueAt, nextRoot, runId: String(record(plan.manifest.artifactMeta).runId) }
+}
+
 function root(runId: string) {
   return {
     artifactKind: 'public-ranking-manifest', schemaVersion: 23, generatedAt: '2026-07-22T00:00:00.000Z',
@@ -261,15 +366,17 @@ type Stored = { bytes: Buffer; etag: string; contentType?: string; contentEncodi
 function memoryS3() {
   const objects = new Map<string, Stored>()
   const putKeys: string[] = []
+  const getKeys: string[] = []
   let version = 0
   return {
-    objects, putKeys,
+    objects, putKeys, getKeys,
     async send(command: unknown) {
       const details = command as { constructor: { name: string }; input: Record<string, unknown> }
       const name = details.constructor.name
       const input = details.input
       const key = String(input.Key)
       if (name === 'HeadObjectCommand' || name === 'GetObjectCommand') {
+        if (name === 'GetObjectCommand') getKeys.push(key)
         const stored = objects.get(key)
         if (!stored) throw Object.assign(new Error('missing'), { name: name === 'HeadObjectCommand' ? 'NotFound' : 'NoSuchKey' })
         return {

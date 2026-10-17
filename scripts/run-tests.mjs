@@ -11,12 +11,14 @@ const browserJourneys = [
   'tests/matchesAddressBrowser.test.ts',
   'tests/rankingTournamentBoardBrowser.test.ts',
   'tests/tournamentBrowser.test.ts',
+  'tests/loadingStateBrowser.test.ts',
   'tests/tournamentForecastBrowser.test.ts',
   'tests/worldsSimulationBrowser.test.ts',
   'tests/swissPreviewBrowser.test.ts',
 ]
 const browserSet = new Set(browserJourneys)
-const otherTests = [...globSync('tests/**/*.test.ts'), ...globSync('tests/**/*.test.mjs')].filter((path) => !browserSet.has(path)).sort()
+const isolatedTests = ['tests/ciAffectedPaths.test.mjs']
+const otherTests = [...globSync('tests/**/*.test.ts'), ...globSync('tests/**/*.test.mjs')].filter((path) => !browserSet.has(path) && !isolatedTests.includes(path)).sort()
 
 async function run(files) {
   const child = spawn('pnpm', ['exec', 'tsx', '--tsconfig', 'tsconfig.app.json', '--test', ...files], { stdio: 'inherit' })
@@ -27,5 +29,6 @@ async function run(files) {
   if (code !== 0) process.exit(code)
 }
 
+await run(isolatedTests)
 await run(otherTests)
 for (const journey of browserJourneys) await run([journey])

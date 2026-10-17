@@ -9,6 +9,7 @@ import { Button } from '../ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { TeamMark } from '../TeamMark'
+import { ChampionPicks } from './ChampionPicks'
 import { deltaBarWidth, seriesRatingChange, seriesWinner, type SeriesRatingChange, type SeriesSide } from './seriesOutcome'
 
 export type MatchSeries = {
@@ -27,7 +28,7 @@ type SeriesListProps = {
 type TeamResult = 'won' | 'lost' | 'level'
 
 const DELTA_BAR_WIDTH = 36
-const MISSING_NOTE = 'The recorded Power changes do not reconcile for this series. Other results are unaffected.'
+const MISSING_NOTE = 'Power changes for this series do not reconcile.'
 
 /** Series ledger for tablet and desktop widths. The Source column drops below 1100px. */
 export function SeriesTable({ series, expanded, onToggle, publication }: SeriesListProps) {
@@ -114,15 +115,22 @@ function GameTableRow({ game }: { game: PublicMatchHistoryEntry }) {
         <span className="block text-2xs">{game.patch ? `Patch ${game.patch}` : 'Patch unknown'}</span>
       </TableCell>
       <TableCell>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 text-sm">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-sm">
           <TeamName team={game.teamA} result={teamResult(gameWinner, 'A')} align="end" className="pr-9" />
           <span className="font-mono text-sm text-[var(--faint)] tabular-nums" title={`Series score after game ${game.gameNumber}`}>
             {game.seriesWinsA}–{game.seriesWinsB}
           </span>
           <TeamName team={game.teamB} result={teamResult(gameWinner, 'B')} align="start" className="pl-9" />
+          {game.picks ? (
+            <>
+              <ChampionPicks teamName={game.teamA.name} picks={game.picks.teamA} patch={game.patch} align="end" className="lg:pr-9" />
+              <span />
+              <ChampionPicks teamName={game.teamB.name} picks={game.picks.teamB} patch={game.patch} align="start" className="lg:pl-9" />
+            </>
+          ) : null}
         </div>
       </TableCell>
-      <TableCell className="text-xs text-[var(--faint)]">Counted in series total</TableCell>
+      <TableCell />
       <TableCell className="hidden min-[1100px]:table-cell">
         <Badge variant="secondary" className="max-w-full text-[var(--faint)]">{providerLabel(game.source.provider)}</Badge>
       </TableCell>
@@ -191,11 +199,19 @@ function SeriesCard({ series, expanded, onToggle, publication }: { series: Match
           {series.games.map((game) => {
             const gameWinner: SeriesSide = game.winnerId === game.teamA.id ? 'A' : 'B'
             return (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-t border-dotted border-border py-2 text-sm first:border-0" key={game.id}>
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 border-t border-dotted border-border py-2 text-sm first:border-0" key={game.id}>
                 <span className="text-2xs text-[var(--faint)]">G{game.gameNumber}</span>
                 <TeamName team={game.teamA} result={teamResult(gameWinner, 'A')} align="end" useCode />
                 <span className="font-mono text-xs text-[var(--faint)] tabular-nums" title={`Series score after game ${game.gameNumber}`}>{game.seriesWinsA}–{game.seriesWinsB}</span>
                 <TeamName team={game.teamB} result={teamResult(gameWinner, 'B')} align="start" useCode />
+                {game.picks ? (
+                  <>
+                    <span />
+                    <ChampionPicks teamName={game.teamA.name} picks={game.picks.teamA} patch={game.patch} align="end" />
+                    <span />
+                    <ChampionPicks teamName={game.teamB.name} picks={game.picks.teamB} patch={game.patch} align="start" />
+                  </>
+                ) : null}
               </div>
             )
           })}

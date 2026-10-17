@@ -3,6 +3,7 @@ import {
   type PublicRankingManifest,
 } from './schema'
 import { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
+import { artifactReferences, mapArtifactReferences, normalizeLogicalArtifactUrl } from './logicalReferences.mjs'
 import {
   publicArtifactProxyFallbackUrl,
   publicArtifactResponseFollowedRedirect,
@@ -126,7 +127,7 @@ export function parsePublicArtifactGenerationManifest(value: unknown): PublicArt
 export function createPublicSemanticArtifact(value: unknown): PublicSemanticArtifact {
   assertRecord(value, 'semantic artifact source')
   const withoutVolatileMetadata = Object.fromEntries(Object.entries(value).filter(([key]) => !volatileArtifactKeys.has(key)))
-  const content = normalizeKnownLogicalUrls(withoutVolatileMetadata)
+  const content = mapArtifactReferences(withoutVolatileMetadata, normalizeLogicalArtifactUrl)
   return {
     artifactKind: 'public-semantic-artifact',
     schemaVersion: PUBLIC_SEMANTIC_ARTIFACT_SCHEMA_VERSION,
@@ -322,76 +323,6 @@ function isNetworkError(error: unknown) {
     || (typeof error === 'object' && error !== null && 'name' in error && error.name === 'TypeError')
 }
 
-function normalizeKnownLogicalUrls(content: Record<string, unknown>): Record<string, unknown> {
-  switch (content.artifactKind) {
-    case 'public-ranking-manifest':
-      return normalizeRankingManifestUrls(content)
-    case 'team-history-index':
-    case 'match-history-index':
-      return { ...content, scopeIndex: normalizeRecordEntryUrls(content.scopeIndex) }
-    case 'tournament-movement-index':
-      return { ...content, tournaments: normalizeArrayEntryUrls(content.tournaments) }
-    case 'match-history-catalog':
-      return { ...content, pages: normalizeArrayEntryUrls(content.pages) }
-    default:
-      return content
-  }
-}
-
-function normalizeRankingManifestUrls(content: Record<string, unknown>) {
-  const normalized = { ...content }
-  for (const key of [
-    'fullSnapshotUrl',
-    'playerDirectoryUrl',
-    'teamDirectoryUrl',
-    'teamHistoryIndexUrl',
-    'regionHistoryUrl',
-    'tournamentMovementIndexUrl',
-    'matchHistoryIndexUrl',
-  ] as const) {
-    if (typeof normalized[key] === 'string') normalized[key] = normalizeLogicalArtifactUrl(normalized[key])
-  }
-  normalized.snapshotIndex = normalizeRecordEntryUrls(normalized.snapshotIndex)
-  return normalized
-}
-
-function normalizeRecordEntryUrls(value: unknown) {
-  return transformRecordEntryUrls(value, normalizeLogicalArtifactUrl)
-}
-
-function transformRecordEntryUrls(value: unknown, transform: (value: string) => string) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, transformEntryUrl(entry, transform)]))
-}
-
-function normalizeArrayEntryUrls(value: unknown) {
-  return transformArrayEntryUrls(value, normalizeLogicalArtifactUrl)
-}
-
-function transformArrayEntryUrls(value: unknown, transform: (value: string) => string): unknown {
-  if (!Array.isArray(value)) return value
-  return value.map((entry) => transformEntryUrl(entry, transform))
-}
-
-function transformEntryUrl(value: unknown, transform: (value: string) => string): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
-  const entry = value as Record<string, unknown>
-  return {
-    ...entry,
-    ...(typeof entry.url === 'string' ? { url: transform(entry.url) } : {}),
-    ...(Array.isArray(entry.pages) ? { pages: transformArrayEntryUrls(entry.pages, transform) } : {}),
-  }
-}
-
-function normalizeLogicalArtifactUrl(value: string) {
-  const url = new URL(value, 'https://public-artifacts.invalid')
-  if (!url.pathname.startsWith('/data/')) return value
-  url.searchParams.delete('v')
-  url.searchParams.sort()
-  const query = url.searchParams.toString()
-  return `${url.pathname}${query ? `?${query}` : ''}`
-}
-
 function withGenerationVersion(value: string, runId: string) {
   const url = new URL(value, 'https://public-artifacts.invalid')
   if (!url.pathname.startsWith('/data/')) return value
@@ -466,7 +397,7 @@ export function validateGenerationRankingManifest(
     throw new Error('Invalid public artifact: ranking manifest source provenance mismatch')
   }
 
-  for (const logicalPath of rankingManifestLogicalPaths(rankingManifest)) {
+  for (const logicalPath of artifactReferences(rankingManifest)) {
     if (!generationManifest.artifacts[logicalPath] && !generationManifest.artifactDirectory) {
       throw new Error(`Invalid public artifact: generation mapping is incomplete for ${logicalPath}`)
     }
@@ -486,7 +417,7 @@ function hydrateSemanticArtifact(
   artifact: PublicSemanticArtifact,
   manifest: PublicArtifactGenerationManifest,
 ): Record<string, unknown> {
-  const content = hydrateKnownLogicalUrls(artifact.content, manifest.runId)
+  const content = mapArtifactReferences(artifact.content, (value) => withGenerationVersion(value, manifest.runId))
   return {
     ...content,
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
@@ -503,37 +434,6 @@ function hydrateSemanticArtifact(
   }
 }
 
-function hydrateKnownLogicalUrls(content: Record<string, unknown>, runId: string) {
-  const hydrateUrl = (value: string) => withGenerationVersion(value, runId)
-  switch (content.artifactKind) {
-    case 'public-ranking-manifest': {
-      const hydrated = { ...content }
-      for (const key of [
-        'fullSnapshotUrl',
-        'playerDirectoryUrl',
-        'teamDirectoryUrl',
-        'teamHistoryIndexUrl',
-        'regionHistoryUrl',
-        'tournamentMovementIndexUrl',
-        'matchHistoryIndexUrl',
-      ] as const) {
-        if (typeof hydrated[key] === 'string') hydrated[key] = hydrateUrl(hydrated[key])
-      }
-      hydrated.snapshotIndex = transformRecordEntryUrls(hydrated.snapshotIndex, hydrateUrl)
-      return hydrated
-    }
-    case 'team-history-index':
-    case 'match-history-index':
-      return { ...content, scopeIndex: transformRecordEntryUrls(content.scopeIndex, hydrateUrl) }
-    case 'tournament-movement-index':
-      return { ...content, tournaments: transformArrayEntryUrls(content.tournaments, hydrateUrl) }
-    case 'match-history-catalog':
-      return { ...content, pages: transformArrayEntryUrls(content.pages, hydrateUrl) }
-    default:
-      return content
-  }
-}
-
 function assertArtifactModelIdentity(
   artifact: object,
   manifest: PublicArtifactGenerationManifest,
@@ -546,20 +446,6 @@ function assertArtifactModelIdentity(
   if (candidate.modelConfigHash !== undefined && candidate.modelConfigHash !== manifest.model.configHash) {
     throw new Error(`Invalid public artifact: modelConfigHash mismatch for ${logicalPath}`)
   }
-}
-
-function rankingManifestLogicalPaths(manifest: PublicRankingManifest) {
-  const urls = [
-    manifest.playerDirectoryUrl,
-    manifest.fullSnapshotUrl,
-    manifest.teamDirectoryUrl,
-    manifest.teamHistoryIndexUrl,
-    manifest.regionHistoryUrl,
-    manifest.tournamentMovementIndexUrl,
-    manifest.matchHistoryIndexUrl,
-    ...Object.values(manifest.snapshotIndex).map((entry) => entry.url),
-  ].filter((url): url is string => Boolean(url))
-  return [...new Set(urls.map(canonicalPublicLogicalPath))]
 }
 
 function assertSafeObjectUrl(value: unknown, label: string): asserts value is string {

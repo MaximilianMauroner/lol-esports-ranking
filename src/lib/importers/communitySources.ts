@@ -282,30 +282,48 @@ function compatibleGameIdentities(left: MatchRecord, right: MatchRecord) {
     || left.sourceGameId === right.sourceGameId
 }
 
-/** Exact scoreboard links must be unique in both source directions, with compatible clocks when present. */
 function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMatches: MatchRecord[]) {
-  const oracleByStats = new Map<string, MatchRecord[]>()
-  const leaguepediaByStats = new Map<string, MatchRecord[]>()
-  for (const match of oracleMatches) if (!isResultOnlyGapFill(match)) appendMatch(oracleByStats, matchStatOutcomeKey(match), match)
-  for (const match of leaguepediaMatches) if (!isResultOnlyGapFill(match)) appendMatch(leaguepediaByStats, matchStatOutcomeKey(match), match)
   const links = new Map<MatchRecord, MatchRecord>()
-  for (const match of oracleMatches) {
-    const candidates = (leaguepediaByStats.get(matchStatOutcomeKey(match)) ?? []).filter((candidate) => gameTimesCompatible(match, candidate))
-    const identities = new Set(candidates.map((candidate) => candidate.sourceGameId ?? candidate.id))
-    if (identities.size !== 1) continue
-    const duplicate = candidates[0]
-    const reverseCandidates = (oracleByStats.get(matchStatOutcomeKey(duplicate)) ?? []).filter((candidate) => gameTimesCompatible(candidate, duplicate))
-    if (reverseCandidates.length === 1 && reverseCandidates[0] === match) links.set(match, duplicate)
-  }
-  const linksPerIdentity = new Map<string, number>()
-  for (const duplicate of links.values()) {
-    const identity = duplicate.sourceGameId ?? duplicate.id
-    linksPerIdentity.set(identity, (linksPerIdentity.get(identity) ?? 0) + 1)
-  }
-  for (const [oracle, duplicate] of links) {
-    if (linksPerIdentity.get(duplicate.sourceGameId ?? duplicate.id) !== 1) links.delete(oracle)
+  for (const keyFor of [matchStatOutcomeKey, declaredGameSlotKey]) {
+    const reservedIdentities = new Set([...links.values()].map((match) => match.sourceGameId ?? match.id))
+    const oracleByKey = new Map<string, MatchRecord[]>()
+    const leaguepediaByKey = new Map<string, MatchRecord[]>()
+    for (const match of oracleMatches) {
+      const key = keyFor(match)
+      if (key && !links.has(match) && !isResultOnlyGapFill(match)) appendMatch(oracleByKey, key, match)
+    }
+    for (const match of leaguepediaMatches) {
+      const key = keyFor(match)
+      if (key && !reservedIdentities.has(match.sourceGameId ?? match.id) && !isResultOnlyGapFill(match)) {
+        appendMatch(leaguepediaByKey, key, match)
+      }
+    }
+    const proposed = new Map<MatchRecord, MatchRecord>()
+    for (const [key, oracleCandidates] of oracleByKey) for (const match of oracleCandidates) {
+      const candidates = (leaguepediaByKey.get(key) ?? []).filter((candidate) => gameTimesCompatible(match, candidate))
+      const identities = new Set(candidates.map((candidate) => candidate.sourceGameId ?? candidate.id))
+      if (identities.size !== 1) continue
+      const duplicate = candidates[0]
+      const reverseCandidates = oracleCandidates.filter((candidate) => gameTimesCompatible(candidate, duplicate))
+      if (reverseCandidates.length === 1 && reverseCandidates[0] === match) proposed.set(match, duplicate)
+    }
+    const linksPerIdentity = new Map<string, number>()
+    for (const duplicate of proposed.values()) {
+      const identity = duplicate.sourceGameId ?? duplicate.id
+      linksPerIdentity.set(identity, (linksPerIdentity.get(identity) ?? 0) + 1)
+    }
+    for (const [oracle, duplicate] of proposed) {
+      if (linksPerIdentity.get(duplicate.sourceGameId ?? duplicate.id) === 1) links.set(oracle, duplicate)
+    }
   }
   return links
+}
+
+function declaredGameSlotKey(match: MatchRecord) {
+  const gameNumber = match.sourceProvider === 'oracles-elixir' ? match.gameNumber : sharedSeriesIdentity(match)?.gameNumber
+  const league = normalizeText(match.league)
+  if (!gameNumber || !Number.isInteger(gameNumber) || gameNumber < 1 || gameNumber > 5 || !league || league === 'unknown') return undefined
+  return `${matchOutcomeKey(match)}::${league}::${match.season}::${gameNumber}`
 }
 
 function gameTimesCompatible(left: MatchRecord, right: MatchRecord) {
