@@ -1,0 +1,84 @@
+✔ source excerpts resolve to one 2-0 series with synthetic gold revision false (10.880441ms)
+✔ source excerpts resolve to one 2-0 series with synthetic gold revision true (1.481337ms)
+✔ Oracle imports only integer game slots from one through five (2.712361ms)
+✔ declared slots require unique candidates in both source directions (3.843291ms)
+✔ slot links preserve exact-stat reservations in either input order (2.626615ms)
+✔ different winners, competitions, missing slots, and distant clocks do not establish slot links (3.531946ms)
+✔ a result-only row cannot supply a slot-based series identity (0.944527ms)
+✖ explicit source series remains one 0-3 sweep across 2026-10-15 and 2026-10-16 (8.346051ms)
+✖ explicit source series remains one 0-3 sweep across 2026-12-31 and 2027-01-01 (0.996808ms)
+✖ distinct explicit series IDs keep rematches and seasons separate (1.521307ms)
+✔ games without source IDs retain fallback date grouping (0.692777ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 8
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 271.178218
+
+✖ failing tests:
+
+test at tests/communitySourceIdentity.test.ts:1:6425
+✖ explicit source series remains one 0-3 sweep across 2026-10-15 and 2026-10-16 (8.346051ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (/tmp/lol-2026-series-slots/tests/communitySourceIdentity.test.ts:138:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/communitySourceIdentity.test.ts:1:6425
+✖ explicit source series remains one 0-3 sweep across 2026-12-31 and 2027-01-01 (0.996808ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (/tmp/lol-2026-series-slots/tests/communitySourceIdentity.test.ts:138:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/communitySourceIdentity.test.ts:1:6908
+✖ distinct explicit series IDs keep rematches and seasons separate (1.521307ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  6 !== 3
+  
+      at TestContext.<anonymous> (/tmp/lol-2026-series-slots/tests/communitySourceIdentity.test.ts:155:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 6,
+    expected: 3,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
