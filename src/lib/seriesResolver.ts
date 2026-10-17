@@ -102,7 +102,7 @@ function canonicalSeriesId(match: MatchRecord) {
   if (match.sourceMatchId) {
     const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
       .sort((left, right) => compareCodeUnits(left, right))
-    return joinKey('source-match', match.date, sourceSeriesId(match.sourceMatchId), ...teams)
+    return joinKey('source-match', sourceSeriesId(match.sourceMatchId), ...teams)
   }
   const sourceGameSeriesId = sourceGameSeriesIdFor(match)
   if (sourceGameSeriesId) return joinKey('source-game-series', provider, sourceGameSeriesId)
