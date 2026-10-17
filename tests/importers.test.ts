@@ -79,24 +79,34 @@ test('Leaguepedia import retains the public export URL from a downloaded snapsho
   assert.equal(result.matches[0].sourceUrl, sourceUrl)
 })
 
-test('Leaguepedia import restores two decimal places in numeric CargoExport patches', () => {
+test('Leaguepedia import restores trailing zeros in numeric calendar patches', () => {
   const result = importLeaguepediaSnapshot({
-    matches: [26.01, 26.1, 26.2, 26.14, 26.18].map((patch, index) => ({
+    matches: [25.1, 26.01, 26.1, 26.2, 26.14, 26.18].map((patch, index) => ({
       id: `numeric-patch-${index}`, date: '2026-08-01', event: 'LCK 2026', patch, teamA: 'T1', teamB: 'Gen.G', winner: 'T1',
     })),
   })
 
-  assert.deepEqual(result.matches.map((match) => match.patch), ['26.01', '26.10', '26.20', '26.14', '26.18'])
+  assert.deepEqual(result.matches.map((match) => match.patch), ['25.10', '26.01', '26.10', '26.20', '26.14', '26.18'])
 })
 
-test('Leaguepedia import preserves source patch strings and leaves missing or non-finite patches empty', () => {
+test('Leaguepedia import restores trailing zeros in retained calendar patch strings', () => {
   const result = importLeaguepediaSnapshot({
-    matches: ['26.1', '26.10', '26.01', '26.20', '', null, undefined, NaN, Infinity, -Infinity].map((patch, index) => ({
+    matches: ['25.1', '26.1', '26.2', '26.10', '26.01', '26.18', '26.20'].map((patch, index) => ({
       id: `source-patch-${index}`, date: '2026-08-01', event: 'LCK 2026', patch, teamA: 'T1', teamB: 'Gen.G', winner: 'T1',
     })),
   })
 
-  assert.deepEqual(result.matches.map((match) => match.patch), ['26.1', '26.10', '26.01', '26.20', '', '', '', '', '', ''])
+  assert.deepEqual(result.matches.map((match) => match.patch), ['25.10', '26.10', '26.20', '26.10', '26.01', '26.18', '26.20'])
+})
+
+test('Leaguepedia import preserves legacy patches and leaves missing or non-finite patches empty', () => {
+  const result = importLeaguepediaSnapshot({
+    matches: [13.1, '13.1', 24.1, '24.1', '', null, undefined, NaN, Infinity, -Infinity].map((patch, index) => ({
+      id: `legacy-patch-${index}`, date: '2023-01-01', event: 'LCK 2023', patch, teamA: 'T1', teamB: 'Gen.G', winner: 'T1',
+    })),
+  })
+
+  assert.deepEqual(result.matches.map((match) => match.patch), ['13.1', '13.1', '24.1', '24.1', '', '', '', '', '', ''])
 })
 
 test('Leaguepedia competition rows resolve exact team aliases before known identity fallback', () => {
