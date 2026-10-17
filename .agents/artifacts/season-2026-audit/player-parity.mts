@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
-import { buildPlayerModel } from '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/src/lib/model.ts'
-import { buildPlayerModel as baselineModel } from '/tmp/lol-2026-audit-baseline/src/lib/model.ts'
-import { prepareSemanticArtifact } from '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/scripts/public-artifact-storage.mjs'
-import type { MatchRecord, MatchRosterSnapshot, Role, Side } from '/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/src/types.ts'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { buildPlayerModel } from '../../../src/lib/model.ts'
+import { prepareSemanticArtifact } from '../../../scripts/public-artifact-storage.mjs'
+import type { MatchRecord, MatchRosterSnapshot, Role, Side } from '../../../src/types.ts'
+const baselineRoot = process.argv[2]
+if (!baselineRoot) throw new Error('Pass an unchanged baseline checkout as the first argument')
+const { buildPlayerModel: baselineModel } = await import(pathToFileURL(resolve(baselineRoot, 'src/lib/model.ts')).href)
 const teams = { Alpha: {name:'Alpha',code:'ALP',region:'LCK',league:'LCK'}, Beta: {name:'Beta',code:'BET',region:'LCK',league:'LCK'} } as const
 function sourcedPlayerMatchesWithSubstitutionAndCorrection(): MatchRecord[] {
   return Array.from({ length: 25 }, (_, index) => {
@@ -74,5 +78,5 @@ function normalize(value: unknown): unknown {
 }
 assert.deepEqual(after, normalize(before))
 const summary = {onlyChange:'canonical sourceSeriesId omits date; every other player value matches baseline',digest:prepareSemanticArtifact({artifactKind:'player-model-regression',players:after}).digest}
-await writeFile('/home/codex/.t3/worktrees/lol-esports-ranking/fix-season-2026-match-audit/.agents/artifacts/season-2026-audit/player-parity.json',JSON.stringify(summary,null,2)+'\n')
+await writeFile(new URL('./player-parity.json', import.meta.url),JSON.stringify(summary,null,2)+'\n')
 console.log(JSON.stringify(summary,null,2))

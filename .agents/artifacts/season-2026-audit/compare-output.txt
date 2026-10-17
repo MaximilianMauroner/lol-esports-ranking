@@ -9,12 +9,13 @@
     "unique-clock-and-teams": 19
   },
   "seriesStatus": {
-    "checked": 905,
-    "different": 287
+    "checked": 901,
+    "different": 291
   },
   "seriesIndependence": {
-    "second-provider-series": 1182,
-    "same-provider-only": 10
+    "second-provider-series": 1178,
+    "same-provider-only": 7,
+    "second-provider-series-team-conflict": 7
   },
   "issueCounts": {
     "score": 124,
@@ -23,13 +24,14 @@
     "league": 6,
     "duplicate-game": 139,
     "patch": 11,
-    "teams-source-conflict": 3,
+    "teams-source-conflict": 7,
     "qualifier-as-main-event": 3
   },
-  "cargoRiotScoreAgreements": 933,
-  "uniqueCargoRiotScoreAgreements": 867,
+  "cargoRiotScoreAgreements": 953,
+  "uniqueCargoRiotScoreAgreements": 887,
   "duplicateReferenceGames": 80,
   "duplicateExtraRows": 80,
   "leaguepediaGamesWithRiotSeriesReference": 95,
-  "leaguepediaGamesWithoutSecondProvider": 37
+  "leaguepediaGamesWithoutSecondProvider": 30,
+  "leaguepediaGamesWithLiquipediaSeriesReference": 7
 }

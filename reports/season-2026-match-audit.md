@@ -1,6 +1,6 @@
 # 2026 season match audit
 
-The deployed season scope has 2,945 games in 1,192 displayed series. The script flags 287 series for correction or source review.
+The deployed season scope has 2,945 games in 1,192 displayed series. The script flags 291 series for correction or source review.
 
 The complete game list is in [season-2026-matches.csv](season-2026-matches.csv). Each row includes the public values, source game IDs, reference values, and series findings.
 
@@ -20,14 +20,14 @@ Counts overlap because one displayed series can have several faults.
 | league | 6 |
 | duplicate-game | 139 |
 | patch | 11 |
-| teams-source-conflict | 3 |
+| teams-source-conflict | 7 |
 | qualifier-as-main-event | 3 |
 
 There are 80 extra published rows for 80 paired reference games. There are 13 wrong patch rows in 11 series. Direct game-ID checks found 0 team, UTC date, or winner differences after the listed brand aliases were applied.
 
 Oracle's `16.xx` patch notation and Leaguepedia's `26.xx` notation describe the same 2026 patch. These are not counted as errors. `26.1` versus `26.10` is a retained precision error.
 
-Three EWC qualifier series name Team Secret Whales in Oracle-derived rows. Cargo names Team Secret (Vietnamese Team). The wiki API gives the teams distinct page IDs. These remain source conflicts. The patch does not merge their identities.
+Seven displayed EWC qualifier series have a team-source conflict across four source matches. Three Oracle-derived series name Team Secret Whales, while Cargo and the three duplicate Leaguepedia-derived series name Team Secret (Vietnamese Team). The May 20 Oracle-derived series also names Team Secret. Liquipedia names Secret Whales in all four source matches and agrees with Cargo's dates and scores. The wiki API gives Team Secret and Team Secret Whales distinct page IDs. The patch keeps this conflict open and does not merge their identities.
 
 ## Root causes and fixes
 
@@ -55,9 +55,9 @@ The public rows omit source filename and enrichment history. The retained local 
 
 ## Evidence and limits
 
-The collector retains fresh Cargo ScoreboardGames CSV, MatchSchedule, tournament metadata, and Riot schedule JSON. Riot independently agrees with Cargo's series score for 867 unique Cargo series. These references cover 933 displayed series because some source series appear more than once.
+The collector retains fresh Cargo ScoreboardGames CSV, MatchSchedule, tournament metadata, and Riot schedule JSON. Riot independently agrees with Cargo's series score for 887 unique Cargo series. These references cover 953 displayed series because some source series appear more than once.
 
-Of 132 Leaguepedia-sourced public games, 95 have a second-provider Riot series reference. The remaining 37 have fresh Cargo rechecks only. They are 29 LCP Wildcard games, seven EWC Asia-Pacific qualifier games, and one December Demacia game. Games of Legends returned an empty LCP Wildcard match list. Liquipedia was also attempted. These rows cannot be certified against a second provider in this run.
+Of 132 Leaguepedia-sourced public games, 95 have a second-provider Riot series reference. A retained Liquipedia APAC capture gives date and score references for 7 more games, with the team conflict described above. The remaining 30 have fresh Cargo rechecks only. They are 29 LCP Wildcard games and one December Demacia game. Games of Legends returned no usable match list for these events, and Liquipedia search found no LCP Wildcard event. These rows cannot be certified against a second provider in this run.
 
 All 1,192 displayed series were compared. Per-game rows are paired for 2,894 of 2,945 rows. Exactly 2,748 pair by source game ID. The other pairings use unique clocks and teams or source game numbers. The remaining 51 have series-level checks only, often because scheduled series start replaced the original game clock. These checks do not prove each game ordinal. 4 games have no patch in fresh Cargo and remain unverified for that field. The CSV labels same-provider rechecks separately. No missing reference is treated as a clean pass.
 
@@ -77,11 +77,13 @@ Collect a later public generation with `python3 scripts/audit-season-matches.py 
 
 ## Verification and handoff
 
-Regression evidence records failure before each fix and success after it. Full local verification, bundle status, and review results are recorded in the PR body with raw output links. Hosted Actions is billing-blocked. All branch commits use `[skip ci]`; no workflow is dispatched.
+The initial full local verification failed. It passed typecheck and lint, then recorded 1,208 passed, seven failed, and 21 skipped tests out of 1,236. Source edits occurred during that run, so it has no single verified commit and gives no current-head verification credit. The raw output is retained. Later fixes address those failures. Final focused checks, player-output parity, full verification, and bundle validation await a host allocation. The PR body records the final results with raw output links. Hosted Actions is billing-blocked. All branch commits use `[skip ci]`; no workflow is dispatched.
+
+The focused replay uses an unchanged checkout at `904919f97b8059b2b152ae2c40d699c187e47178`. Create one with `git worktree add --detach /tmp/lol-2026-audit-baseline 904919f97b8059b2b152ae2c40d699c187e47178`, provide its dependencies, and extract the archive first. Then run `heavy-check -- bash .agents/artifacts/season-2026-audit/final-focused.sh`. The script accepts a different baseline path as its first argument. It performs no dependency install.
 
 Merging this code does not repair the live public objects. A full raw-data replay and a later approved publication are required. Rankings and series IDs can change. The new taxonomy also changes the model config hash. No merge, deployment, force-push, or rebase of a pushed branch is authorized.
 
-Max owns acceptance and the decision to permit a later production replay. The maintainer owns the stage and format ingest change, the three team identity conflicts, and the remaining independent-source checks.
+Max owns acceptance and the decision to permit a later production replay. The maintainer owns the stage and format ingest change, the four source-match team identity conflicts, and the remaining independent-source checks. A later schema change can store series IDs and game numbers separately to remove consumer suffix guesses. It changes stored public IDs and is outside this repair.
 
 ## Every flagged displayed series
 
@@ -184,6 +186,7 @@ Each correction uses the public team order. A team conflict names the source's c
 | 2026-05-22 | DN SOOPers 0-3 Kiwoom DRX; LCK 2026 Rounds 1-2; Regular season; patch 16.10, 26.1 | DN SOOPers 0-2 Kiwoom DRX; patch 26.10 | LCK/2026 Season/Rounds 1-2 / Week 8 | score, patch, duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 8_5 |
 | 2026-05-21 | Dplus KIA 1-0 HANJIN BRION; LCK 2026 Rounds 1-2; Regular season; patch 16.10 | Dplus KIA 2-1 HANJIN BRION | LCK/2026 Season/Rounds 1-2 / Week 8 | score, duplicate-game, best-of | Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 8_4 |
 | 2026-05-21 | Dplus KIA 2-1 HANJIN BRION; LCK 2026 Rounds 1-2; Regular season; patch 16.10, 26.1 | Dplus KIA 2-1 HANJIN BRION; patch 26.10 | LCK/2026 Season/Rounds 1-2 / Week 8 | patch, duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 8_4 |
+| 2026-05-20 | GAM Esports 1-3 Team Secret; Esports World Cup 2026/Online Qualifiers/Asia-Pacific; Final; patch 16.10 | Cargo: GAM Esports 1-3 Team Secret; Liquipedia: Secret Whales vs GAM Esports (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Finals | teams-source-conflict | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Finals_1; Liquipedia EWC/APAC R5M1 |
 | 2026-05-20 | Kiwoom DRX 1-2 T1; LCK 2026 Rounds 1-2; Regular season; patch 16.10, 26.1 | Kiwoom DRX 1-2 T1; patch 26.10 | LCK/2026 Season/Rounds 1-2 / Week 8 | patch, duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 8_1 |
 | 2026-05-20 | Kiwoom DRX 1-1 T1; LCK 2026 Rounds 1-2; Regular season; patch 16.10 | Kiwoom DRX 1-2 T1 | LCK/2026 Season/Rounds 1-2 / Week 8 | score, duplicate-game, best-of | Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 8_1 |
 | 2026-05-17 | FlyQuest 2-1 LYON; LCS 2026 Spring; Regular season; patch 16.10, 26.1 | FlyQuest 2-1 LYON; patch 26.10 | LCS/2026 Season/Spring Season / Week 7 | patch, duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCS/2026 Season/Spring Season_Week 7_4 |
@@ -192,7 +195,8 @@ Each correction uses the public team order. A team conflict names the source's c
 | 2026-05-17 | HANJIN BRION 1-2 Kiwoom DRX; LCK 2026 Rounds 1-2; Regular season; patch 16.09, 26.09 | HANJIN BRION 1-2 Kiwoom DRX | LCK/2026 Season/Rounds 1-2 / Week 7 | duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 7_10 |
 | 2026-05-16 | Gen.G 1-2 T1; LCK 2026 Rounds 1-2; Regular season; patch 16.09, 26.09 | Gen.G 1-2 T1 | LCK/2026 Season/Rounds 1-2 / Week 7 | duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 7_7 |
 | 2026-05-16 | Gen.G 1-0 T1; LCK 2026 Rounds 1-2; Regular season; patch 16.09 | Gen.G 1-2 T1 | LCK/2026 Season/Rounds 1-2 / Week 7 | score, duplicate-game, best-of | Oracle; merge or series grouping | LCK/2026 Season/Rounds 1-2_Week 7_7 |
-| 2026-05-14 | Fukuoka SoftBank HAWKS gaming 1-2 Team Secret Whales; EWC 2026; Regular season; patch 16.09 | Fukuoka SoftBank HAWKS gaming 1-2 Team Secret (Vietnamese Team) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 4 | teams-source-conflict, qualifier-as-main-event | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 4_1 |
+| 2026-05-14 | Fukuoka SoftBank HAWKS gaming 1-2 Team Secret Whales; EWC 2026; Regular season; patch 16.09 | Cargo: Fukuoka SoftBank HAWKS gaming 1-2 Team Secret (Vietnamese Team); Liquipedia: Secret Whales vs Fukuoka SoftBank HAWKS gaming (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 4 | teams-source-conflict, qualifier-as-main-event | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 4_1; Liquipedia EWC/APAC R4M1 |
+| 2026-05-14 | Fukuoka SoftBank HAWKS gaming 1-2 Team Secret; Esports World Cup 2026/Online Qualifiers/Asia-Pacific; Regular season; patch 26.09 | Cargo: Fukuoka SoftBank HAWKS gaming 1-2 Team Secret; Liquipedia: Secret Whales vs Fukuoka SoftBank HAWKS gaming (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 4 | teams-source-conflict | Leaguepedia; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 4_1; Liquipedia EWC/APAC R4M1 |
 | 2026-05-11 | LYON 1-0 Team Liquid; LCS 2026 Spring; Regular season; patch 16.09 | LYON 2-1 Team Liquid | LCS/2026 Season/Spring Season / Week 6 | score, best-of | Oracle; merge or series grouping | LCS/2026 Season/Spring Season_Week 6_4 |
 | 2026-05-10 | LYON 1-1 Team Liquid; LCS 2026 Spring; Regular season; patch 16.09 | LYON 2-1 Team Liquid | LCS/2026 Season/Spring Season / Week 6 | score, best-of | Oracle; merge or series grouping | LCS/2026 Season/Spring Season_Week 6_4 |
 | 2026-05-10 | Cloud9 2-1 FlyQuest; LCS 2026 Spring; Regular season; patch 16.09, 26.09 | Cloud9 2-1 FlyQuest | LCS/2026 Season/Spring Season / Week 6 | duplicate-game | Leaguepedia + Oracle; merge or series grouping | LCS/2026 Season/Spring Season_Week 6_3 |
@@ -205,8 +209,10 @@ Each correction uses the public team order. A team conflict names the source's c
 | 2026-05-09 | Sentinels 1-0 Shopify Rebellion; LCS 2026 Spring; Regular season; patch 16.09 | Sentinels 2-0 Shopify Rebellion | LCS/2026 Season/Spring Season / Week 6 | score, duplicate-game, best-of | Oracle; merge or series grouping | LCS/2026 Season/Spring Season_Week 6_1 |
 | 2026-05-08 | GiantX 0-2 Movistar KOI; LEC 2026 Spring; Regular season; patch 16.09, 26.09 | GiantX 0-2 Movistar KOI | LEC/2026 Season/Spring Season / Week 7 | duplicate-game | Leaguepedia + Oracle; merge or series grouping | LEC/2026 Season/Spring Season_Week 7_2 |
 | 2026-05-08 | GiantX 0-1 Movistar KOI; LEC 2026 Spring; Regular season; patch 16.09 | GiantX 0-2 Movistar KOI | LEC/2026 Season/Spring Season / Week 7 | score, duplicate-game, best-of | Oracle; merge or series grouping | LEC/2026 Season/Spring Season_Week 7_2 |
-| 2026-05-07 | GAM Esports 0-2 Team Secret Whales; EWC 2026; Regular season; patch 16.09 | GAM Esports 0-2 Team Secret (Vietnamese Team) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 2 | teams-source-conflict, qualifier-as-main-event | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 2_1 |
-| 2026-05-05 | DetonatioN FocusMe 0-2 Team Secret Whales; EWC 2026; Regular season; patch 16.09 | DetonatioN FocusMe 0-2 Team Secret (Vietnamese Team) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 1 | teams-source-conflict, qualifier-as-main-event | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 1_1 |
+| 2026-05-07 | GAM Esports 0-2 Team Secret Whales; EWC 2026; Regular season; patch 16.09 | Cargo: GAM Esports 0-2 Team Secret (Vietnamese Team); Liquipedia: Secret Whales vs GAM Esports (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 2 | teams-source-conflict, qualifier-as-main-event | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 2_1; Liquipedia EWC/APAC R2M1 |
+| 2026-05-07 | GAM Esports 0-2 Team Secret; Esports World Cup 2026/Online Qualifiers/Asia-Pacific; Regular season; patch 26.09 | Cargo: GAM Esports 0-2 Team Secret; Liquipedia: Secret Whales vs GAM Esports (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 2 | teams-source-conflict | Leaguepedia; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 2_1; Liquipedia EWC/APAC R2M1 |
+| 2026-05-05 | DetonatioN FocusMe 0-2 Team Secret Whales; EWC 2026; Regular season; patch 16.09 | Cargo: DetonatioN FocusMe 0-2 Team Secret (Vietnamese Team); Liquipedia: Secret Whales vs DetonatioN FocusMe (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 1 | teams-source-conflict, qualifier-as-main-event | Oracle; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 1_1; Liquipedia EWC/APAC R1M1 |
+| 2026-05-05 | DetonatioN FocusMe 0-2 Team Secret; Esports World Cup 2026/Online Qualifiers/Asia-Pacific; Regular season; patch 26.09 | Cargo: DetonatioN FocusMe 0-2 Team Secret; Liquipedia: Secret Whales vs DetonatioN FocusMe (identity unresolved) | Esports World Cup 2026/Online Qualifiers/Asia-Pacific / Round 1 | teams-source-conflict | Leaguepedia; stage inference | Esports World Cup 2026/Online Qualifiers/Asia-Pacific_Round 1_1; Liquipedia EWC/APAC R1M1 |
 | 2026-05-04 | Fnatic 1-2 Team Vitality; LEC 2026 Spring; Regular season; patch 16.09, 26.09 | Fnatic 1-2 Team Vitality | LEC/2026 Season/Spring Season / Week 6 | duplicate-game | Leaguepedia + Oracle; merge or series grouping | LEC/2026 Season/Spring Season_Week 6_5 |
 | 2026-05-04 | Fnatic 1-0 Team Vitality; LEC 2026 Spring; Regular season; patch 16.09 | Fnatic 1-2 Team Vitality | LEC/2026 Season/Spring Season / Week 6 | score, duplicate-game, best-of | Oracle; merge or series grouping | LEC/2026 Season/Spring Season_Week 6_5 |
 | 2026-05-03 | FlyQuest 1-0 Shopify Rebellion; LCS 2026 Spring; Regular season; patch 16.09 | FlyQuest 2-1 Shopify Rebellion | LCS/2026 Season/Spring Season / Week 5 | score, duplicate-game, best-of | Oracle; merge or series grouping | LCS/2026 Season/Spring Season_Week 5_4 |

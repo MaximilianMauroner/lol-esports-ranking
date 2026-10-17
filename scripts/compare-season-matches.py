@@ -4,7 +4,9 @@
 import argparse
 from collections import Counter, defaultdict
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
+import gzip
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -20,6 +22,7 @@ ALIASES = {
     "Cloud9 Kia": "Cloud9", "Team Liquid Alienware": "Team Liquid", "Gen.G Esports": "Gen.G",
     "Xi'an Team WE": "Team WE", "Beijing JDG Esports": "JD Gaming", "NAVI": "Natus Vincere",
     "Relove Deep Cross Gaming": "Deep Cross Gaming",
+    "LEVIATÁN": "Leviatan",
 }
 LEAGUES = {
     "Americas Cup": "AC", "First Stand": "FST", "Mid-Season Invitational": "MSI",
@@ -64,6 +67,34 @@ def phase(value):
     return "round"
 
 
+def liquipedia_apac(root):
+    path = root / "secondary/liquipedia-ewc-apac.json"
+    if not path.exists():
+        return []
+    body = path.read_bytes()
+    receipt = json.loads(path.with_name(path.name + ".receipt.json").read_text())
+    if receipt["sha256"] != hashlib.sha256(body).hexdigest():
+        raise ValueError("Liquipedia capture hash mismatch")
+    value = json.loads(gzip.decompress(body) if body[:2] == b"\x1f\x8b" else body)
+    if value["parse"]["title"] != "Esports World Cup/2026/APAC":
+        raise ValueError("Unexpected Liquipedia tournament")
+    codes = {"tsw": "Secret Whales", "dfm": "DetonatioN FocusMe", "dcg": "Deep Cross Gaming",
+             "gam": "GAM Esports", "gz": "Ground Zero Gaming", "cfo": "CTBC Flying Oyster",
+             "shg": "Fukuoka SoftBank HAWKS gaming", "vke": "MVK Esports"}
+    result = []
+    for part in re.split(r"(?=\|R\d+M\d+=\{\{Match)", value["parse"]["wikitext"]["*"])[1:]:
+        opponents = re.findall(r"\|opponent[12]=\{\{TeamOpponent\|([^}|]+)", part)
+        clock = re.search(r"\|date=(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) \{\{Abbr/ICT\}\}", part)
+        if len(opponents) != 2 or clock is None:
+            raise ValueError("Unsupported Liquipedia match layout")
+        winners = Counter(re.findall(r"\|winner=([12])(?:\s|\|)", part))
+        result.append({"id": re.search(r"\|(R\d+M\d+)", part)[1],
+                       "date": str(datetime.fromisoformat(clock[1]) - timedelta(hours=7))[:10],
+                       "teams": [codes[code] for code in opponents],
+                       "score": [winners["1"], winners["2"]]})
+    return result
+
+
 def compare(directory):
     root = Path(directory)
     load = lambda name: json.loads((root / name).read_text())
@@ -73,6 +104,7 @@ def compare(directory):
     schedules = load("cargo/MatchSchedule.json")
     tournaments = {row["OverviewPage"]: row for row in load("cargo/Tournaments.json")}
     riot = {row["match"]["id"]: row for row in load("riot/events.json")}
+    secondary = liquipedia_apac(root)
     originals = {}
     for item in load("oracle/team-rows.json") if (root / "oracle/team-rows.json").exists() else []:
         originals[item["row"]["gameid"]] = item["row"]
@@ -224,6 +256,21 @@ def compare(directory):
         providers = sorted({row["source"]["provider"] for row in rows})
         independence = "same-provider-only" if providers == ["leaguepedia-cargo"] and not official else (
             "mixed-with-source-gap" if "leaguepedia-cargo" in providers and not official else "second-provider-series")
+        supplemental = None
+        if schedule and schedule["OverviewPage"] == "Esports World Cup 2026/Online Qualifiers/Asia-Pacific":
+            candidates = [item for item in secondary if item["date"] == schedule["DateTime UTC"][:10]
+                          and set(pair(*item["teams"])) & set(pair(schedule["Team1"], schedule["Team2"]))]
+            if len(candidates) == 1:
+                item = candidates[0]
+                first = team(a["name"]) == team(item["teams"][0]) or team(b["name"]) == team(item["teams"][1])
+                score = item["score"] if first else list(reversed(item["score"]))
+                supplemental = {**item, "scoreInPublicOrder": score, "cargoScoreAgrees": score == expected_score,
+                                "cargoTeamsAgree": pair(*item["teams"]) == pair(schedule["Team1"], schedule["Team2"])}
+                independence = "second-provider-series" if supplemental["cargoTeamsAgree"] else "second-provider-series-team-conflict"
+                if not supplemental["cargoTeamsAgree"] and "teams-source-conflict" not in issues:
+                    issues.append("teams-source-conflict")
+                if not supplemental["cargoScoreAgrees"] and "source-score-conflict" not in issues:
+                    issues.append("source-score-conflict")
         results.append({"seriesId": sid, "date": entry["date"], "teamA": a["name"], "teamB": b["name"],
                         "shownScore": shown_score, "correctScore": expected_score if expected_score is not None else riot_score,
                         "event": entry["event"], "league": entry["league"], "phase": rows[0]["phase"],
@@ -236,6 +283,7 @@ def compare(directory):
                         "cargoMatchId": schedule["MatchId"] if schedule else None,
                         "riotMatchId": official["match"]["id"] if official else None,
                         "riotScore": riot_score, "providers": providers,
+                        "liquipedia": supplemental,
                         "publicGameIds": [row["id"] for row in rows],
                         "unresolvedGameIds": [row["id"] for row in game_refs if not row["cargoGameId"]],
                         "candidateScheduleIds": [row["MatchId"] for row in refs]})
@@ -249,7 +297,7 @@ def compare(directory):
                "seriesStatus": dict(Counter(row["status"] for row in results)),
                "seriesIndependence": dict(Counter(row["independence"] for row in results)),
                "issueCounts": dict(Counter(issue for row in results for issue in row["issues"])),
-               "cargoRiotScoreAgreements": sum(row["riotScore"] is not None and row["riotScore"] == row["correctScore"] for row in results),
+               "cargoRiotScoreAgreements": sum(bool(row["cargoMatchId"]) and row["riotScore"] is not None and row["riotScore"] == row["correctScore"] for row in results),
                "uniqueCargoRiotScoreAgreements": len({row["cargoMatchId"] for row in results if row["cargoMatchId"] and row["riotScore"] is not None and row["riotScore"] == row["correctScore"]}),
                "duplicateReferenceGames": sum(len(ids) > 1 for ids in public_by_cargo.values()),
                "duplicateExtraRows": sum(max(0, len(ids) - 1) for ids in public_by_cargo.values())}
@@ -257,7 +305,10 @@ def compare(directory):
     summary["leaguepediaGamesWithRiotSeriesReference"] = sum(
         row["provider"] == "leaguepedia-cargo" and results_by_id[row["seriesId"]]["riotMatchId"] is not None for row in checked_games)
     summary["leaguepediaGamesWithoutSecondProvider"] = sum(
-        row["provider"] == "leaguepedia-cargo" and results_by_id[row["seriesId"]]["riotMatchId"] is None for row in checked_games)
+        row["provider"] == "leaguepedia-cargo" and results_by_id[row["seriesId"]]["riotMatchId"] is None
+        and results_by_id[row["seriesId"]]["liquipedia"] is None for row in checked_games)
+    summary["leaguepediaGamesWithLiquipediaSeriesReference"] = sum(
+        row["provider"] == "leaguepedia-cargo" and results_by_id[row["seriesId"]]["liquipedia"] is not None for row in checked_games)
     (target / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary, indent=2))
     for row in results:
@@ -287,8 +338,9 @@ def export_report(directory, destination, results, checked_games, summary):
         fields = ["public_game_id", "date", "team_a", "team_b", "winner", "league", "event", "phase", "patch",
                   "provider", "source_game_id", "source_match_id", "cargo_game_id", "cargo_date", "cargo_team_1", "cargo_team_2",
                   "cargo_winner", "cargo_patch", "game_identity_basis", "series_id", "shown_score", "correct_score",
-                  "correct_stage", "correct_league", "cargo_match_id", "riot_match_id", "series_reference_independence", "series_issues"]
-        writer = csv.DictWriter(output, fieldnames=fields)
+                  "correct_stage", "correct_league", "cargo_match_id", "riot_match_id", "liquipedia_match_id",
+                  "liquipedia_teams", "liquipedia_score", "series_reference_independence", "series_issues"]
+        writer = csv.DictWriter(output, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in checked_games:
             public, reference = row["public"], row["reference"] or {}
@@ -300,7 +352,9 @@ def export_report(directory, destination, results, checked_games, summary):
                 public["source"].get("gameId"), public["source"].get("matchId"), row["cargoGameId"],
                 reference.get("DateTime UTC"), reference.get("Team1"), reference.get("Team2"), reference.get("WinTeam"), reference.get("Patch"),
                 row["basis"], row["seriesId"].replace("\x00", " | "), str(series["shownScore"]), str(series["correctScore"]),
-                series["correctStage"], series["correctLeague"], series["cargoMatchId"], series["riotMatchId"], series["independence"], ", ".join(series["issues"]),
+                series["correctStage"], series["correctLeague"], series["cargoMatchId"], series["riotMatchId"],
+                (series["liquipedia"] or {}).get("id"), (series["liquipedia"] or {}).get("teams"),
+                (series["liquipedia"] or {}).get("scoreInPublicOrder"), series["independence"], ", ".join(series["issues"]),
             ])))
     wrong = [row for row in results if row["issues"]]
     lines = [
@@ -318,7 +372,7 @@ def export_report(directory, destination, results, checked_games, summary):
         "",
         f"There are {summary['duplicateExtraRows']} extra published rows for {summary['duplicateReferenceGames']} paired reference games. There are {wrong_patches} wrong patch rows in {summary['issueCounts'].get('patch', 0)} series. Direct game-ID checks found {direct_fact_differences} team, UTC date, or winner differences after the listed brand aliases were applied.", "",
         "Oracle's `16.xx` patch notation and Leaguepedia's `26.xx` notation describe the same 2026 patch. These are not counted as errors. `26.1` versus `26.10` is a retained precision error.", "",
-        "Three EWC qualifier series name Team Secret Whales in Oracle-derived rows. Cargo names Team Secret (Vietnamese Team). The wiki API gives the teams distinct page IDs. These remain source conflicts. The patch does not merge their identities.", "",
+        "Seven displayed EWC qualifier series have a team-source conflict across four source matches. Three Oracle-derived series name Team Secret Whales, while Cargo and the three duplicate Leaguepedia-derived series name Team Secret (Vietnamese Team). The May 20 Oracle-derived series also names Team Secret. Liquipedia names Secret Whales in all four source matches and agrees with Cargo's dates and scores. The wiki API gives Team Secret and Team Secret Whales distinct page IDs. The patch keeps this conflict open and does not merge their identities.", "",
         "## Root causes and fixes", "",
         "1. The deployed duplicates show a failed cross-provider link. Exact kills and gold are the current primary link key. A synthetic stat revision proves one way this path can retain two rows and create an orphan Oracle Bo1. This is a demonstrated failure mode, not the confirmed trigger for every deployed duplicate. The retained local baseline has identical Oracle and Leaguepedia stats for all 77 duplicate pairs it covers. The production source delta remains unknown. The code change handles valid stat revisions with unique declared game slots after exact-stat matching. It requires matching date, teams, winner, league, season, and compatible clocks. Ambiguous games remain separate. A full production repair is not certified.", "",
         "2. Source-series grouping included the UTC date. Schedule enrichment also matched by date, so only the first game of some overnight series received an official ID. FURIA versus MVK on October 15 and 16 appears as 0-1 and 0-2 instead of one 0-3 result. The fix groups explicit source series IDs across dates and shares a unique official anchor within a verified source series. Conflicting official IDs remain separate. Declared series-level IDs keep their numeric match suffixes. Date grouping remains for games without a source series ID.", "",
@@ -333,7 +387,7 @@ def export_report(directory, destination, results, checked_games, summary):
         "The public rows omit source filename and enrichment history. The retained local excerpts identify baseline rows where available. Exact production-row attribution after the local Oracle baseline ends on July 10 is limited to the public provider and game ID. Production cache access or a later successful source download is needed for stronger attribution.", "",
         "## Evidence and limits", "",
         f"The collector retains fresh Cargo ScoreboardGames CSV, MatchSchedule, tournament metadata, and Riot schedule JSON. Riot independently agrees with Cargo's series score for {summary['uniqueCargoRiotScoreAgreements']} unique Cargo series. These references cover {summary['cargoRiotScoreAgreements']} displayed series because some source series appear more than once.", "",
-        f"Of 132 Leaguepedia-sourced public games, {summary['leaguepediaGamesWithRiotSeriesReference']} have a second-provider Riot series reference. The remaining {summary['leaguepediaGamesWithoutSecondProvider']} have fresh Cargo rechecks only. They are 29 LCP Wildcard games, seven EWC Asia-Pacific qualifier games, and one December Demacia game. Games of Legends returned an empty LCP Wildcard match list. Liquipedia was also attempted. These rows cannot be certified against a second provider in this run.", "",
+        f"Of 132 Leaguepedia-sourced public games, {summary['leaguepediaGamesWithRiotSeriesReference']} have a second-provider Riot series reference. A retained Liquipedia APAC capture gives date and score references for {summary['leaguepediaGamesWithLiquipediaSeriesReference']} more games, with the team conflict described above. The remaining {summary['leaguepediaGamesWithoutSecondProvider']} have fresh Cargo rechecks only. They are 29 LCP Wildcard games and one December Demacia game. Games of Legends returned no usable match list for these events, and Liquipedia search found no LCP Wildcard event. These rows cannot be certified against a second provider in this run.", "",
         f"All {summary['series']:,} displayed series were compared. Per-game rows are paired for {summary['games'] - unresolved_games:,} of {summary['games']:,} rows. Exactly {summary['gameMatchBasis'].get('source-game-id', 0):,} pair by source game ID. The other pairings use unique clocks and teams or source game numbers. The remaining {unresolved_games} have series-level checks only, often because scheduled series start replaced the original game clock. These checks do not prove each game ordinal. {missing_patches} games have no patch in fresh Cargo and remain unverified for that field. The CSV labels same-provider rechecks separately. No missing reference is treated as a clean pass.", "",
         "The stage flags use explicit stage words in MatchSchedule tabs or playoff and play-in paths. Generic Round and Day labels remain unknown. The 120 stage flags are heuristic candidates for correction, not a complete stage certification.", "",
         "Raw downloads, request URLs, hashes, source excerpts, comparison JSON, and check output stay under `.agents/artifacts/season-2026-audit/`. The committed raw evidence archive preserves the inputs used by this report. Source data is an audit capture, not a refreshed production dataset.", "",
@@ -343,9 +397,10 @@ def export_report(directory, destination, results, checked_games, summary):
         "heavy-check -- pnpm run verify", "```", "",
         "Collect a later public generation with `python3 scripts/audit-season-matches.py --output <new-directory>`. Pass that directory to the comparator with `--evidence`. Optional `--oracle-baseline <csv>` arguments retain original clocks and source receipts. Without those excerpts, game identity coverage can be lower. The written root-cause report is restricted to the audited generation; comparison JSON works for later captures.", "",
         "## Verification and handoff", "",
-        "Regression evidence records failure before each fix and success after it. Full local verification, bundle status, and review results are recorded in the PR body with raw output links. Hosted Actions is billing-blocked. All branch commits use `[skip ci]`; no workflow is dispatched.", "",
+        "The initial full local verification failed. It passed typecheck and lint, then recorded 1,208 passed, seven failed, and 21 skipped tests out of 1,236. Source edits occurred during that run, so it has no single verified commit and gives no current-head verification credit. The raw output is retained. Later fixes address those failures. Final focused checks, player-output parity, full verification, and bundle validation await a host allocation. The PR body records the final results with raw output links. Hosted Actions is billing-blocked. All branch commits use `[skip ci]`; no workflow is dispatched.", "",
+        "The focused replay uses an unchanged checkout at `904919f97b8059b2b152ae2c40d699c187e47178`. Create one with `git worktree add --detach /tmp/lol-2026-audit-baseline 904919f97b8059b2b152ae2c40d699c187e47178`, provide its dependencies, and extract the archive first. Then run `heavy-check -- bash .agents/artifacts/season-2026-audit/final-focused.sh`. The script accepts a different baseline path as its first argument. It performs no dependency install.", "",
         "Merging this code does not repair the live public objects. A full raw-data replay and a later approved publication are required. Rankings and series IDs can change. The new taxonomy also changes the model config hash. No merge, deployment, force-push, or rebase of a pushed branch is authorized.", "",
-        "Max owns acceptance and the decision to permit a later production replay. The maintainer owns the stage and format ingest change, the three team identity conflicts, and the remaining independent-source checks.", "",
+        "Max owns acceptance and the decision to permit a later production replay. The maintainer owns the stage and format ingest change, the four source-match team identity conflicts, and the remaining independent-source checks. A later schema change can store series IDs and game numbers separately to remove consumer suffix guesses. It changes stored public IDs and is outside this repair.", "",
         "## Every flagged displayed series", "",
         "Each correction uses the public team order. A team conflict names the source's correct team pair. The full CSV contains the exact source game IDs for each row.", "",
         "| Date | Shown | Correct score and teams | Correct event or stage | Faults | Bad record path | Reference |",
@@ -359,6 +414,8 @@ def export_report(directory, destination, results, checked_games, summary):
         correct = f"{row['correctTeams'][0]} {score[0]}-{score[1]} {row['correctTeams'][1]}" if score else "Score unresolved"
         if "patch" in row["issues"]:
             correct += "; patch " + ", ".join(row["correctPatches"])
+        if row["liquipedia"] and not row["liquipedia"]["cargoTeamsAgree"]:
+            correct = "Cargo: " + correct + "; Liquipedia: " + " vs ".join(row["liquipedia"]["teams"]) + " (identity unresolved)"
         provider = " + ".join("Oracle" if item == "oracles-elixir" else "Leaguepedia" for item in row["providers"])
         step = "merge or series grouping" if any(issue in row["issues"] for issue in ("score", "duplicate-game")) else "stage inference"
         if "league" in row["issues"]:
@@ -366,6 +423,8 @@ def export_report(directory, destination, results, checked_games, summary):
         elif "patch" in row["issues"] and len(row["issues"]) == 1:
             step = "patch ingest"
         reference = row["cargoMatchId"] or "Riot " + str(row["riotMatchId"])
+        if row["liquipedia"]:
+            reference += "; Liquipedia EWC/APAC " + row["liquipedia"]["id"]
         lines.append("| " + " | ".join(map(clean, [row["date"], shown, correct,
                      row["correctStage"], ", ".join(row["issues"]), provider + "; " + step, reference])) + " |")
     (destination / "season-2026-match-audit.md").write_text("\n".join(lines) + "\n")
