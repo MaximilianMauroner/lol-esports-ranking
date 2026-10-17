@@ -33,7 +33,7 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(existsSync(join(referencePublicDataDir, 'team-history.json')), false)
   assert.equal(existsSync(join(referencePublicDataDir, 'history/team-series.json')), false)
   assert.equal(existsSync(join(referencePublicDataDir, 'ranking-summary.json')), true)
-  assert.ok(statSync(join(referencePublicDataDir, 'ranking-summary.json')).size < 250_000)
+  assert.ok(statSync(join(referencePublicDataDir, 'ranking-summary.json')).size <= PUBLIC_ARTIFACT_BUDGETS.manifestBytes)
   assert.ok(statSync(join(referencePublicDataDir, 'entities/players.json')).size < PUBLIC_ARTIFACT_BUDGETS.playersBytes)
   assert.equal(existsSync(join(referencePublicDataDir, 'matches/index.json')), true)
 
