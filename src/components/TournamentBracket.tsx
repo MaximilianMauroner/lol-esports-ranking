@@ -46,7 +46,7 @@ export function TournamentBracket({ series, timezone }: { series: TournamentSeri
       {pinned
         ? <><span>Tracing <strong className="text-[var(--text-strong)]">{displayName(names.get(pinned) ?? pinned)}</strong></span>
           <Button variant="outline" size="xs" onClick={() => setPinned(null)}>Clear</Button></>
-        : <span>Select a team to trace its path. Press Escape to clear.</span>}
+        : <span>Bracket inferred from schedule results.</span>}
     </div>
     {sections.map((section, index) => <section key={index} className="grid min-w-0 gap-2.5" aria-label={sectionTitle(section, sections)}>
       {sections.length > 1 ? <h3 className="text-base font-semibold text-[var(--text-strong)]">{sectionTitle(section, sections)}</h3> : null}
@@ -54,7 +54,6 @@ export function TournamentBracket({ series, timezone }: { series: TournamentSeri
         : section.kind === 'swiss' ? <SwissView section={section} trace={trace} timezone={timezone} />
           : <GroupsView section={section} trace={trace} names={names} />}
     </section>)}
-    <p className="text-xs leading-[1.6] text-muted-foreground">Bracket sides, Swiss records and groups are worked out from the source schedule and results. The source does not label them.</p>
   </div>
 }
 
@@ -258,7 +257,7 @@ function SwissView({ section, trace, timezone }: { section: SwissSection; trace:
         <StandingList title="Eliminated" standings={eliminated} trace={trace} />
       </div> : null}
     </div>
-    {!section.standings.length ? <p className="mt-3 text-xs text-muted-foreground">Teams appear here once the source publishes the opening draw.</p> : null}
+    {!section.standings.length ? <p className="mt-3 text-xs text-muted-foreground">Awaiting the opening draw.</p> : null}
   </BracketScroller>
 }
 
@@ -300,7 +299,7 @@ function GroupsView({ section, trace, names }: { section: GroupSection; trace: T
       <p className="flex items-baseline justify-between px-2.5 pb-1 text-xs"><span className="font-semibold text-[var(--text-strong)]">{group.label ?? (section.groups.length > 1 ? `Group ${index + 1}` : 'Standings')}</span>
         <span className="text-2xs text-muted-foreground">{group.series.length} series</span></p>
       {group.standings.length ? group.standings.map((standing) => <StandingRow key={standing.team} standing={standing} trace={trace} name={names.get(standing.team)} />)
-        : <p className="px-2.5 text-xs text-muted-foreground">Teams appear here once the source publishes them.</p>}
+        : <p className="px-2.5 text-xs text-muted-foreground">Teams to be decided.</p>}
     </div>)}
   </div>
 }

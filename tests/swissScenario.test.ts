@@ -5,18 +5,20 @@ import {
   liveSwissBaseline, opponentOptions, pairReason, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawnRound, type SwissBaseline,
 } from '../src/lib/swissScenario'
 import { teamBrandingFor } from '../src/data/teamBranding'
-import { canonicalTeamNameFor } from '../src/data/teamIdentity'
+import { canonicalTeamNameFor, teamIdentityFor } from '../src/data/teamIdentity'
 import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/lib/worlds2026Swiss'
 import type { TournamentEvent, TournamentSeries } from '../src/lib/tournamentFeed'
+import { worldsRandom } from '../src/lib/worldsSimulation'
 
 /** Draws every round with `fillDraw` and lets `pick` choose each winner. */
 function playOut(baseline: SwissBaseline, pick: (pair: [string, string], round: number) => string) {
+  const random = worldsRandom(1)
   let choices: DrawnRound[] = []
   for (;;) {
     const resolved = resolveScenario(baseline, choices)
     if (resolved.next.kind === 'complete') return { resolved, choices }
     if (resolved.next.kind === 'draw') {
-      const pairs = fillDraw(resolved.next.context)
+      const pairs = fillDraw(resolved.next.context, random)
       assert.ok(pairs, `Round ${resolved.next.round} has a valid draw`)
       choices = [...resolved.choices, { pairs, winners: pairs.map(() => null) }]
       continue
@@ -32,12 +34,18 @@ function poolOf(seed: string) {
   return WORLDS_2026_SWISS_RULES.pools.findIndex((pool) => (pool as readonly string[]).includes(seed))
 }
 
+test('each 2026 Play-In team names its own Play-In region, so the preview can show it by name', () => {
+  // The Worlds 2026 Play-In field from the Leaguepedia schedule.
+  const regions = ['Cloud9', 'Karmine Corp', 'FURIA', 'MVK Esports'].map((name) => teamIdentityFor(name)?.region)
+  assert.deepEqual(regions.sort(), [...PLAY_IN_REGIONS].sort())
+})
+
 test('round one pairs matched pools across regions, including the chosen Play-In region', () => {
   const baseline = seedBaseline('LCS')
   const context = resolveScenario(baseline, []).next
   assert.equal(context.kind, 'draw')
   if (context.kind !== 'draw') return
-  const pairs = fillDraw(context.context)!
+  const pairs = fillDraw(context.context, worldsRandom(1))!
   assert.equal(pairs.length, 8)
   for (const [a, b] of pairs) {
     assert.equal(poolOf(a) + poolOf(b), 3, `${a} v ${b} is a matched pool`)
@@ -56,7 +64,7 @@ test('without a Play-In region, a round one draw stays valid for every possible 
   assert.equal(pairReason('LCS1', 'PLAYIN', open.context), 'Play-In region not chosen')
   assert.equal(pairReason('PLAYIN', 'LEC1', open.context), 'Play-In region not chosen')
   assert.equal(pairReason('LCK1', 'PLAYIN', open.context), null)
-  const pairs = fillDraw(open.context)!
+  const pairs = fillDraw(open.context, worldsRandom(1))!
   assert.deepEqual(opponentOptions(pairs, 'PLAYIN', open.context).filter((option) => option.reason === 'Play-In region not chosen').map((option) => option.id).sort(), ['LCS1', 'LEC1'])
   for (const region of PLAY_IN_REGIONS) {
     const known = resolveScenario(seedBaseline(region), []).next
@@ -123,11 +131,11 @@ test('a played-out scenario follows the Swiss format and passes the sourced rule
 
 test('changing an earlier pick drops later draws that no longer fit and keeps earlier picks', () => {
   const baseline = seedBaseline(null)
-  const firstRound = fillDraw((resolveScenario(baseline, []).next as { kind: 'draw'; context: Parameters<typeof fillDraw>[0] }).context)!
+  const firstRound = fillDraw((resolveScenario(baseline, []).next as { kind: 'draw'; context: Parameters<typeof fillDraw>[0] }).context, worldsRandom(1))!
   const afterOne = resolveScenario(baseline, [{ pairs: firstRound, winners: firstRound.map((pair) => pair[0]) }])
   assert.equal(afterOne.next.kind, 'draw')
   if (afterOne.next.kind !== 'draw') return
-  const secondRound = fillDraw(afterOne.next.context)!
+  const secondRound = fillDraw(afterOne.next.context, worldsRandom(1))!
   const choices: DrawnRound[] = [...afterOne.choices, { pairs: secondRound, winners: secondRound.map((pair) => pair[1]) }]
   assert.equal(resolveScenario(baseline, choices).next.kind, 'draw')
 
@@ -145,11 +153,11 @@ test('changing an earlier pick drops later draws that no longer fit and keeps ea
 
 test('opponent swaps stay inside the record bucket and never create an unwaived rematch', () => {
   const baseline = seedBaseline(null)
-  const one = fillDraw((resolveScenario(baseline, []).next as { kind: 'draw'; context: Parameters<typeof fillDraw>[0] }).context)!
+  const one = fillDraw((resolveScenario(baseline, []).next as { kind: 'draw'; context: Parameters<typeof fillDraw>[0] }).context, worldsRandom(1))!
   const afterOne = resolveScenario(baseline, [{ pairs: one, winners: one.map((pair) => pair[0]) }])
   if (afterOne.next.kind !== 'draw') return assert.fail('expected a round two draw')
   const context = afterOne.next.context
-  const two = fillDraw(context)!
+  const two = fillDraw(context, worldsRandom(1))!
   const team = two[0][0]
   const options = opponentOptions(two, team, context)
   assert.equal(options.length, 7, 'seven other teams share a 1-0 record')
@@ -162,7 +170,7 @@ test('opponent swaps stay inside the record bucket and never create an unwaived 
   const afterTwo = resolveScenario(baseline, [...afterOne.choices, { pairs: two, winners: two.map((pair) => pair[0]) }])
   if (afterTwo.next.kind !== 'draw') return assert.fail('expected a round three draw')
   const roundThree = afterTwo.next.context
-  const three = fillDraw(roundThree)!
+  const three = fillDraw(roundThree, worldsRandom(1))!
   assert.equal(roundThree.rematchBuckets.size, 0)
   let rematchOptions = 0
   for (const id of three.flat()) {
@@ -178,19 +186,24 @@ test('opponent swaps stay inside the record bucket and never create an unwaived 
   assert.equal(swapOpponent(two, team, otherRecord, context), null)
 })
 
-test('a record bucket with no draw free of rematches allows the officials waiver and fills it last', () => {
+test('a record bucket with no draw free of rematches allows the officials waiver, and a rematch-free draw never repeats a match', () => {
   const teams = ['A', 'B', 'C', 'D'].map((id) => ({ id, label: id, seed: null, region: null }))
   const standings = teams.map(({ id }) => ({ id, wins: 1, losses: 1, status: 'active' as const, opponents: id === 'A' ? ['B', 'C', 'D'] : ['A'] }))
+  const opponentsOfA = (context: ReturnType<typeof drawContext>) => new Set(Array.from({ length: 50 }, (_, seed) => {
+    const pairs = fillDraw(context, worldsRandom(seed))!
+    assert.equal(drawProblem(pairs, context), null)
+    return pairs.find((pair) => pair.includes('A'))!.find((id) => id !== 'A')
+  }))
   const context = drawContext(3, teams, standings)
   assert.ok(context.rematchBuckets.has('1-1'))
   assert.equal(pairReason('A', 'B', context, false), 'already played')
   assert.equal(pairReason('A', 'B', context), null)
-  assert.deepEqual(fillDraw(context), [['A', 'B'], ['C', 'D']])
+  assert.deepEqual([...opponentsOfA(context)].sort(), ['B', 'C', 'D'])
 
   const free = drawContext(3, teams, standings.map((row) => ({ ...row, opponents: row.id === 'A' ? ['B'] : row.id === 'B' ? ['A'] : [] })))
   assert.equal(free.rematchBuckets.size, 0)
   assert.equal(pairReason('A', 'B', free), 'already played')
-  assert.deepEqual(fillDraw(free), [['A', 'C'], ['B', 'D']])
+  assert.deepEqual([...opponentsOfA(free)].sort(), ['C', 'D'])
 })
 
 function series(round: number, slot: number, teams: [string | null, string | null], winner: 0 | 1 | null = null, status?: TournamentSeries['status']): TournamentSeries {

@@ -36,7 +36,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
   let feedStatus = 200
   let holdHealth = true
   const pendingHealth: Array<() => void> = []
-  let holdNextFeed = false
+  let holdNextFeed = true
   const pendingFeed: Array<() => void> = []
   const dataRequests: string[] = []
   const fixturePlugin: Plugin = {
@@ -75,8 +75,16 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     const externalRequests: string[] = []
     page.on('request', (request) => { if (!request.url().startsWith(base)) externalRequests.push(request.url()) })
     await page.clock.install({ time: new Date(at) })
+    await page.addInitScript((cached) => {
+      if (!localStorage.getItem('tournament-feed')) localStorage.setItem('tournament-feed', JSON.stringify(cached))
+    }, { ...feed, events: feed.events.slice(0, 1) })
 
     await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
+    await waitForPendingFeed(pendingFeed)
+    assert.equal(await page.getByRole('heading', { name: 'LCS 2026', exact: true }).count(), 0, 'A cache without the addressed event must not substitute another competition')
+    assert.match(page.url(), /event=worlds%3A2026/)
+    await page.getByText('Loading tournament schedule', { exact: true }).waitFor()
+    pendingFeed.splice(0).forEach((respond) => respond())
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.doesNotMatch(await page.locator('body').innerText(), /Schedule may be stale/, 'Pending health is not a stale result')
     holdHealth = false
@@ -93,8 +101,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     holdHealth = false
     pendingHealth.splice(0).forEach((respond) => respond())
     assert.match(await page.locator('body').innerText(), /Gamma.*Delta/)
-    assert.match(await page.locator('body').innerText(), /Local synthetic fixture\. These are not official/)
-    assert.match(await page.locator('body').innerText(), /Forecast unavailable: rules not verified/)
+    assert.match(await page.locator('body').innerText(), /Test fixture data\. Not official/)
     assert.equal(await page.getByRole('link', { name: 'Leaguepedia' }).getAttribute('href'), 'https://lol.fandom.com/wiki/fixture-worlds')
     assert.equal(await page.getByRole('link', { name: 'CC BY-SA 3.0' }).getAttribute('href'), 'https://creativecommons.org/licenses/by-sa/3.0/')
     assert.ok(dataRequests.includes(tournamentPath))
@@ -123,7 +130,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.clock.fastForward(60_000)
     await page.getByText(/Schedule may be stale/).waitFor()
     assert.match(await page.locator('body').innerText(), /Synthetic provider outage/)
-    assert.match(await page.getByText(/Schedule may be stale/).innerText(), /Feed last changed: 1 minute ago.*Last collector check: less than a minute ago/)
+    assert.match(await page.getByText(/Schedule may be stale/).innerText(), /Feed changed 1 minute ago, last checked less than a minute ago/)
     assert.match(await page.locator('body').innerText(), /Alpha 3–1 Beta/)
 
     health = { checkedAt: '2026-09-27T12:03:00.000Z', complete: true, warnings: [] }
@@ -137,7 +144,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     feedStatus = 200
     health = { checkedAt: '2026-09-27T12:04:00.000Z', complete: true, warnings: [] }
     const requestsBeforeRetry = dataRequests.length
-    await page.getByRole('button', { name: 'Retry schedule', exact: true }).click()
+    await page.getByRole('button', { name: 'Retry', exact: true }).click()
     await page.getByText(/Schedule may be stale/).waitFor({ state: 'hidden' })
     assert.ok(dataRequests.slice(requestsBeforeRetry).includes(tournamentPath))
     await page.clock.fastForward(60_000)
@@ -146,7 +153,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     feed.fetchedAt = '2026-09-27T12:06:00.000Z'
     health.checkedAt = feed.fetchedAt
     await page.clock.fastForward(60_000)
-    await page.getByText('No supported tournament is in the available schedule window.').waitFor()
+    await page.getByText('No tournaments in the schedule window.').waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), '')
     feed.events = originalEvents
     feed.fetchedAt = '2026-09-27T12:07:00.000Z'
@@ -217,7 +224,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
       if (width < 640) {
         const clearance = await page.evaluate(() => {
           window.scrollTo(0, document.documentElement.scrollHeight)
-          const finalContent = document.querySelector('section[aria-label="unresolved"] p')
+          const finalContent = [...document.querySelectorAll('#main-content p')].at(-1)
           const tabBar = [...document.querySelectorAll('nav[aria-label="Primary"]')]
             .find((element) => getComputedStyle(element).position === 'fixed')
           return { finalContentBottom: finalContent?.getBoundingClientRect().bottom, tabBarTop: tabBar?.getBoundingClientRect().top }
@@ -245,6 +252,13 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     })
     await resumed
     assert.ok(dataRequests.length > requestsWhileHidden, 'Returning to the tournament page refreshes immediately')
+
+    holdNextFeed = true
+    await page.reload()
+    await page.locator('#tournament-event').waitFor()
+    await waitForPendingFeed(pendingFeed)
+    assert.equal(await page.getByText('Loading tournament schedule', { exact: true }).count(), 0, 'A return visit shows the last schedule while the feed request is held')
+    pendingFeed.splice(0).forEach((respond) => respond())
     assert.deepEqual(externalRequests, [])
   } finally {
     pendingHealth.splice(0).forEach((respond) => respond())

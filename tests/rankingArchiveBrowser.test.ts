@@ -153,15 +153,15 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
 
 test('Regions drawer distinguishes unavailable series contributions from zero and complete signed impacts', { timeout: 60_000 }, async () => {
   const cases: Array<{ event: string; teamA: string; teamB: string; impact: PublicMatchHistoryImpact; expected: string }> = [
-    { event: 'Missing regional A', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied', teamB: 12 }, expected: 'Series contribution unavailable' },
-    { event: 'Missing regional B', teamA: 'Aardvark', teamB: 'Alpha', impact: { unit: 'series-applied', teamA: 12 }, expected: 'Series contribution unavailable' },
-    { event: 'Partial regional clash', teamA: 'Alpha', teamB: 'Beta', impact: { unit: 'series-applied', teamA: 12 }, expected: 'Series contribution unavailable' },
-    { event: 'Known zero', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied', teamA: 0 }, expected: 'No score change from this series' },
-    { event: 'Complete regional clash', teamA: 'Alpha', teamB: 'Beta', impact: { unit: 'series-applied', teamA: 12, teamB: -3 }, expected: '≈ +3 pts from this series' },
-    { event: 'Complete negative', teamA: 'Gamma', teamB: 'Omega', impact: { unit: 'series-applied', teamA: -12 }, expected: '≈ -4 pts from this series' },
-    { event: 'Outside contributors', teamA: 'Delta', teamB: 'Omega', impact: { unit: 'series-applied', teamA: 12, teamB: -12 }, expected: 'Outside the top three' },
-    { event: 'No impact', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied' }, expected: 'Series contribution unavailable' },
-    { event: 'Held impact', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'held', teamA: 12 }, expected: 'Series contribution unavailable' },
+    { event: 'Missing regional A', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied', teamB: 12 }, expected: 'Unavailable' },
+    { event: 'Missing regional B', teamA: 'Aardvark', teamB: 'Alpha', impact: { unit: 'series-applied', teamA: 12 }, expected: 'Unavailable' },
+    { event: 'Partial regional clash', teamA: 'Alpha', teamB: 'Beta', impact: { unit: 'series-applied', teamA: 12 }, expected: 'Unavailable' },
+    { event: 'Known zero', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied', teamA: 0 }, expected: 'No change' },
+    { event: 'Complete regional clash', teamA: 'Alpha', teamB: 'Beta', impact: { unit: 'series-applied', teamA: 12, teamB: -3 }, expected: '≈ +3 pts' },
+    { event: 'Complete negative', teamA: 'Gamma', teamB: 'Omega', impact: { unit: 'series-applied', teamA: -12 }, expected: '≈ -4 pts' },
+    { event: 'Outside contributors', teamA: 'Delta', teamB: 'Omega', impact: { unit: 'series-applied', teamA: 12, teamB: -12 }, expected: 'Not top three' },
+    { event: 'No impact', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'series-applied' }, expected: 'Unavailable' },
+    { event: 'Held impact', teamA: 'Alpha', teamB: 'Omega', impact: { unit: 'held', teamA: 12 }, expected: 'Unavailable' },
   ]
   const matches: MatchRecord[] = cases.map((entry, index) => {
     const date = `2026-01-${String(index + 1).padStart(2, '0')}`
@@ -230,9 +230,9 @@ test('Regions drawer distinguishes unavailable series contributions from zero an
     for (const entry of cases) {
       const row = history.locator('article').filter({ has: page.getByText(entry.event, { exact: true }) })
       await row.getByText(entry.expected, { exact: true }).waitFor({ timeout: 5_000 })
-      const unavailable = entry.expected === 'Series contribution unavailable'
-      assert.equal(await row.getByText('Series contribution unavailable', { exact: true }).count(), unavailable ? 1 : 0, entry.event)
-      assert.equal(await row.getByText('No score change from this series', { exact: true }).count(), entry.expected === 'No score change from this series' ? 1 : 0, entry.event)
+      const unavailable = entry.expected === 'Unavailable'
+      assert.equal(await row.getByText('Unavailable', { exact: true }).count(), unavailable ? 1 : 0, entry.event)
+      assert.equal(await row.getByText('No change', { exact: true }).count(), entry.expected === 'No change' ? 1 : 0, entry.event)
     }
   } finally { await browser?.close(); await server.close() }
 })

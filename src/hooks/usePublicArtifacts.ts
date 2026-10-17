@@ -356,7 +356,13 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     setMatchHistoryPages(matchHistoryPagesRef.current)
     for (const pageNumber of [...new Set(pageNumbers)]) {
       const expected = catalog.pages.find((page) => page.page === pageNumber)
-      if (!expected || matchHistoryPagesRef.current[pageNumber]?.status === 'ready' || matchHistoryPagesRef.current[pageNumber]?.status === 'loading') continue
+      if (!expected) {
+        const missing: MatchHistoryPageState = { status: 'missing', message: `Match history page ${pageNumber} is not in the catalog.` }
+        matchHistoryPagesRef.current = { ...matchHistoryPagesRef.current, [pageNumber]: missing }
+        setMatchHistoryPages((current) => ({ ...current, [pageNumber]: missing }))
+        continue
+      }
+      if (matchHistoryPagesRef.current[pageNumber]?.status === 'ready' || matchHistoryPagesRef.current[pageNumber]?.status === 'loading') continue
       const loading: MatchHistoryPageState = { status: 'loading' }
       matchHistoryPagesRef.current = { ...matchHistoryPagesRef.current, [pageNumber]: loading }
       setMatchHistoryPages((current) => ({ ...current, [pageNumber]: loading }))

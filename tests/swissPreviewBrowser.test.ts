@@ -3,7 +3,11 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium, type Locator, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
+import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan'
+import { createStaticRankingData } from '../src/lib/snapshot'
 import { encodeChoices, fillDraw, resolveScenario, seedBaseline, type DrawnRound, type SwissBaseline } from '../src/lib/swissScenario'
+import { worldsRandom } from '../src/lib/worldsSimulation'
+import type { MatchRecord, TeamProfile } from '../src/types'
 
 const at = '2026-10-20T12:00:00.000Z'
 const mainId = '2026 Season World Championship/Main Event'
@@ -21,6 +25,22 @@ function swissSeries(round: number, slot: number, teams: FixtureTeam[] = [team(n
     stage: `Round ${round}`, status, sourceState: status === 'completed' ? 'completed' : 'scheduled', bestOf: round > 3 ? 3 : 1, teams, vodUrls: [],
   }
 }
+/** Power ratings for the seeded field and Fnatic. Each team beats every team after it, so ratings fall down the list. */
+function rankingArtifacts() {
+  const field: Array<[string, TeamProfile['region']]> = [['Gen.G', 'LCK'], ['Hanwha Life Esports', 'LCK'], ['T1', 'LCK'], ['Dplus KIA', 'LCK'], ["Anyone's Legend", 'LPL'],
+    ['Bilibili Gaming', 'LPL'], ['Top Esports', 'LPL'], ['Invictus Gaming', 'LPL'], ['G2 Esports', 'LEC'], ['Movistar KOI', 'LEC'], ['Fnatic', 'LEC'],
+    ['Team Liquid', 'LCS'], ['LYON', 'LCS'], ['Team Secret Whales', 'LCP'], ['CTBC Flying Oyster', 'LCP'], ['LØS', 'CBLOL']]
+  const teams: Record<string, TeamProfile> = Object.fromEntries(field.map(([name, region]) => [name, { name, code: name.slice(0, 3), league: region, region }]))
+  const matches = field.flatMap(([teamA], a) => field.slice(a + 1).map(([teamB], offset): MatchRecord => {
+    const date = `2026-0${1 + (a % 8)}-${String(offset + 1).padStart(2, '0')}`
+    return { id: `${teamA}-${teamB}`, sourceProvider: 'oracles-elixir', date, datetimeUtc: `${date}T12:00:00.000Z`, season: 2026, event: 'MSI 2026',
+      phase: 'Bracket', region: 'International', league: 'MSI', patch: '', bestOf: 1, bestOfBasis: 'provider', tier: 'msi-bracket', teamA, teamB,
+      winner: teamA, teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
+  }))
+  const data = createStaticRankingData({ matches, teams, rosters: {}, generatedAt: '2026-10-01T00:00:00.000Z', dataMode: 'seeded-sample' })
+  return new Map(createPublicArtifactWritePlan(data).writes.map((write) => [`/data/${write.relativePath}`, write.contents]))
+}
+
 function fixtureFeed() {
   return {
     version: 1, source: 'leaguepedia-cargo', unsupportedApi: false, dataMode: 'synthetic-fixture', fetchedAt: at, sourceUpdatedAt: null,
@@ -29,7 +49,7 @@ function fixtureFeed() {
       { id: mainId, sourceTournamentId: mainId, competition: 'worlds', label: 'Worlds 2026 Main Event', season: '2026',
         series: sizes.flatMap((size, index) => Array.from({ length: size }, (_, slot) => swissSeries(index + 1, slot))) },
       { id: playInId, sourceTournamentId: playInId, competition: 'worlds', label: 'Worlds 2026 Play-In', season: '2026',
-        series: [{ ...swissSeries(1, 0, [team('Sierra'), team('Tango')]), id: 'worlds-play-in', eventId: playInId, stage: 'Play-In', startTime: '2026-10-14T10:00:00.000Z' }] },
+        series: [{ ...swissSeries(1, 0, [team('Fnatic'), team('Tango')]), id: 'worlds-play-in', eventId: playInId, stage: 'Play-In', startTime: '2026-10-14T10:00:00.000Z' }] },
       { id: 'lcs:2027:promotion', sourceTournamentId: 'LCS/2027 Season/Promotion', competition: 'lcs', label: 'LCS 2027 Promotion', season: '2027',
         series: [{ ...swissSeries(1, 0, [team('Rook'), team('Pawn')]), id: 'lcs-promo', eventId: 'lcs:2027:promotion', stage: 'Finals', bestOf: 5 }] },
     ],
@@ -38,6 +58,7 @@ function fixtureFeed() {
 
 test('Swiss preview builds, compares, shares and resets scenarios without changing live data', { timeout: 90_000 }, async () => {
   const feed = fixtureFeed()
+  const ratings = rankingArtifacts()
   const requests: string[] = []
   const fixturePlugin: Plugin = {
     name: 'swiss-preview-fixture',
@@ -49,6 +70,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
         response.setHeader('content-type', 'application/json')
         if (path === '/tournament-data/feed.json') return response.end(JSON.stringify(feed))
         if (path === '/tournament-data/feed.json.health.json') return response.end(JSON.stringify({ checkedAt: feed.fetchedAt, complete: true, warnings: [] }))
+        if (ratings.has(path)) return response.end(ratings.get(path))
         response.statusCode = 503
         response.end(JSON.stringify({ error: 'ranking artifacts unavailable' }))
       })
@@ -78,9 +100,32 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.match(await body(page), /Live draws are not available: The Round 1 draw is not in the schedule yet\./)
     assert.equal(await page.locator('#swiss-start').inputValue(), 'seeds')
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
-    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'the preview shows no odds')
+    const odds = page.getByRole('region', { name: 'Region odds' })
+    await odds.getByText('Choose the Play-In winner to see the odds.').waitFor()
+    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'no odds without the full field')
 
+    await page.locator('#swiss-playin').selectOption('LEC')
+    assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
+    await odds.getByRole('table').waitFor()
+    const regionOdds = new Map((await odds.getByRole('row').allInnerTexts()).slice(1).map((row) => {
+      const [region, any, average] = row.split('\t')
+      return [region, { any: parseFloat(any), average: parseFloat(average) }]
+    }))
+    assert.deepEqual([...regionOdds.keys()].sort(), ['CBLOL', 'LCK', 'LCP', 'LCS', 'LEC', 'LPL', 'West (LEC + LCS)'])
+    const regionTotal = [...regionOdds].filter(([region]) => !region.startsWith('West')).reduce((sum, [, row]) => sum + row.average, 0)
+    assert.ok(Math.abs(regionTotal - 8) < 0.35, `eight teams get out on average, got ${regionTotal}`)
+    const west = regionOdds.get('West (LEC + LCS)')!
+    assert.ok(west.any >= Math.max(regionOdds.get('LEC')!.any, regionOdds.get('LCS')!.any), 'the West gets a team out at least as often as each of its regions')
+    assert.ok(regionOdds.get('LCK')!.any > regionOdds.get('CBLOL')!.any, 'the higher-rated region gets out more often')
+    assert.match(await odds.innerText(), /FNC \d+%/, 'the Play-In team has its own share')
+    const playInPool = page.getByRole('list', { name: 'Round 1 pools' })
+    assert.match(await playInPool.getByTitle('Fnatic', { exact: true }).innerText(), /FNC[\s\S]*LEC/)
+    await page.reload()
+    await page.getByRole('heading', { name: 'Worlds 2026 Swiss preview' }).waitFor()
+    assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
+    assert.equal(await playInPool.getByTitle('Fnatic', { exact: true }).count(), 1)
     await page.locator('#swiss-playin').selectOption('LCS')
+    await odds.getByText('The LCS Play-In team is not in the schedule yet, so the odds are unavailable.').waitFor()
     // The whole bracket is visible before the draw: Round 1 offers the draw, later rounds wait for it.
     assert.equal(await fillButton(page, 1).count(), 1)
     for (const round of [2, 3, 4, 5]) assert.match(await page.getByRole('region', { name: `Round ${round}` }).innerText(), new RegExp(`Drawn after Round ${round - 1}`))
@@ -98,13 +143,31 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await roundOne.getByRole('group', { name: 'Round 1: Team Liquid against Play-In winner' }).count(), 0, 'no same-region pairing')
     assert.equal(await roundOne.getByRole('button', { name: /^GEN LCK 1\W+Gen\.G$/ }).count(), 1, 'a pick is named by its visible code and slot, then the full name')
 
+    const shownDraw = () => roundOne.getByRole('group').evaluateAll((groups) => groups.map((group) => group.getAttribute('aria-label')).sort().join('\n'))
+    const firstDraw = await shownDraw()
+    const draws = new Set([firstDraw])
+    for (let clicks = 0; clicks < 10 && draws.size < 2; clicks++) {
+      await roundOne.getByRole('button', { name: 'Draw again' }).click()
+      draws.add(await shownDraw())
+    }
+    assert.equal(draws.size, 2, '"Draw again" gives another valid draw')
+    await roundOne.getByRole('button', { name: 'Clear draw' }).click()
+    await fillButton(page, 1).click()
+    await roundOne.getByRole('button', { name: 'Draw again' }).waitFor()
+    const kept = await shownDraw()
+    await page.reload()
+    await roundOne.getByRole('group').first().waitFor()
+    assert.equal(await shownDraw(), kept, 'a reload shows the same draw from the address')
+    await roundOne.focus()
+
     const firstPick = roundOne.getByRole('group').first().getByRole('button').first()
     for (let presses = 0; presses < 6 && !await firstPick.evaluate((element) => element === document.activeElement); presses++) await page.keyboard.press('Tab')
     assert.equal(await firstPick.evaluate((element) => element === document.activeElement), true, 'the first pick is reachable by keyboard')
     await page.keyboard.press('Enter')
     assert.equal(await firstPick.getAttribute('aria-pressed'), 'true')
     // A picked winner moves on to its next record group before the next draw.
-    assert.match(await page.getByRole('region', { name: 'Round 2' }).innerText(), /1–0[\s\S]*GEN[\s\S]*0–1/)
+    const winnerCode = (await firstPick.innerText()).trim().split(/\s+/)[0]
+    assert.match(await page.getByRole('region', { name: 'Round 2' }).innerText(), new RegExp(`1–0[\\s\\S]*${winnerCode}[\\s\\S]*0–1`))
     await pickAll(page, 1, 0)
     await page.getByText('Round 2 is not drawn yet.').waitFor()
     assert.equal(await fillButton(page, 2).count(), 1)
@@ -122,13 +185,17 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await isFocused(scenarioA), true, 'switching scenarios leaves focus on the scenario button')
 
     await roundTwo.getByRole('button', { name: 'Change pairings' }).click()
-    const swap = roundTwo.getByLabel('Opponent for GEN')
+    // The draw is random, so the swap uses whichever team leads the first match.
+    const swap = roundTwo.getByLabel(/^Opponent for /).first()
+    const matchName = await swap.evaluate((select) => select.closest('li')!.querySelector('[role="group"]')!.getAttribute('aria-label')!)
+    const leader = matchName.replace(/^Round 2: /, '').split(' against ')[0]
     const before = await swap.inputValue()
     await swap.focus()
-    await page.keyboard.press('ArrowDown')
+    const atLast = await swap.evaluate((select: HTMLSelectElement) => [...select.options].filter((option) => !option.disabled).at(-1)?.value === select.value)
+    await page.keyboard.press(atLast ? 'ArrowUp' : 'ArrowDown')
     const choice = await swap.inputValue()
     assert.notEqual(choice, before, 'the arrow key chooses another valid opponent')
-    await roundTwo.getByRole('group', { name: `Round 2: Gen.G against ${teamName(choice)}`, exact: true }).waitFor()
+    await roundTwo.getByRole('group', { name: `Round 2: ${leader} against ${teamName(choice)}`, exact: true }).waitFor()
     assert.equal(await isFocused(swap), true, 'focus stays on the opponent select after a swap')
     await roundTwo.getByRole('button', { name: 'Clear draw' }).click()
     await fillButton(page, 2).waitFor()
@@ -228,7 +295,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     main.series.filter((series) => series.stage === 'Round 2').forEach((series, slot) => { series.teams = [team(names[slot]), team(names[15 - slot])] })
     feed.fetchedAt = '2026-10-23T22:00:00.000Z'
     await page.getByRole('button', { name: 'Refresh' }).click()
-    await page.getByText(/Your live scenarios stay in the page address/).waitFor()
+    await page.getByText(/Your live picks stay in the page address/).waitFor()
     assert.match(await body(page), /Live draws are not available: Round 2 in the schedule does not follow the Swiss draw rules: Alpha and Papa: different record\./)
     assert.equal(await page.locator('#swiss-start').inputValue(), 'live')
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
@@ -245,9 +312,13 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
       await page.getByRole('button', { name: 'A', exact: true }).click()
       await page.locator('#swiss-playin').selectOption('LCS')
       await fillButton(page, 1).click()
-      const playInMatch = (await page.getByRole('group', { name: /Play-In winner/ }).getAttribute('aria-label'))!
-      const opponent = playInMatch.replace(/^Round 1: /, '').split(' against ').find((entry) => entry !== 'Play-In winner')!
-      await page.locator('#swiss-playin').selectOption(seedBaseline(null).teams.find((entry) => entry.label === opponent)!.region!)
+      // With LCS chosen, G2 Esports (LEC 1) is the only Pool 1 opponent that a change to LEC makes illegal, so draw until it meets the Play-In winner.
+      const playInMatch = page.getByRole('group', { name: /Play-In winner/ })
+      for (let clicks = 0; clicks < 40 && !(await playInMatch.getAttribute('aria-label'))!.includes('G2 Esports'); clicks++) {
+        await page.getByRole('region', { name: 'Round 1' }).getByRole('button', { name: 'Draw again' }).click()
+      }
+      assert.match((await playInMatch.getAttribute('aria-label'))!, /G2 Esports/)
+      await page.locator('#swiss-playin').selectOption('LEC')
       await fillButton(page, 1).waitFor()
       await page.getByRole('button', { name: action }).click()
       await page.locator('#swiss-playin').selectOption('LCS')
@@ -276,7 +347,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     finished.delete('scenario')
     finished.set('a', playedOut(seedBaseline('LCS')))
     await page.goto(`${base}/#tournaments?${finished}`)
-    await page.getByText('Every Swiss match has a winner. The eight teams in the green Advanced groups (3–0, 3–1 and 3–2) go to the quarterfinals.').waitFor()
+    await page.getByText('Swiss stage complete. The eight Advanced teams go to the quarterfinals.').waitFor()
     assert.match(await page.getByRole('region', { name: 'Standings' }).innerText(), /Scenarios A and B differ for 16 teams\./)
 
     // The page fits from phone to desktop widths. Only the bracket scrolls sideways, inside its own region.
@@ -314,9 +385,10 @@ function fillButton(page: Page, round: number) {
 }
 /** The address text of a scenario that fills every draw and picks the first team of every match. */
 function playedOut(baseline: SwissBaseline) {
+  const random = worldsRandom(1)
   const choices: DrawnRound[] = []
   for (let scenario = resolveScenario(baseline, choices); scenario.next.kind === 'draw'; scenario = resolveScenario(baseline, choices)) {
-    const pairs = fillDraw(scenario.next.context)!
+    const pairs = fillDraw(scenario.next.context, random)!
     choices.push({ pairs, winners: pairs.map(([first]) => first) })
   }
   return encodeChoices(baseline, choices)

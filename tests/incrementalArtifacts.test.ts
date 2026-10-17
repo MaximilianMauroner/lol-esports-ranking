@@ -3,6 +3,8 @@ import test from 'node:test'
 import type { MatchRecord } from '../src/types.ts'
 import { affectedPublicArtifacts, assertArtifactDependencyPlanMatchesSemanticChanges } from '../src/lib/incremental/artifactDependencies.ts'
 import { compareSemanticArtifactMaps } from '../src/lib/incremental/semanticParity.ts'
+import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
+import { createStaticRankingData } from '../src/lib/snapshot.ts'
 
 test('semantic parity reports missing, unexpected, digest, and generation/provenance mismatches', () => {
   const report = compareSemanticArtifactMaps({
@@ -127,6 +129,36 @@ test('early corrections rewrite every subsequent inventoried page while post-che
   const append = affectedPublicArtifacts({ changes: [{ after: appended, kind: 'latest-append' }], inventory })
   assert.equal(append.logicalPaths.includes('scopes/closed.json'), false)
   assert.equal(append.logicalPaths.includes('scopes/ongoing.json'), true)
+})
+
+test('partial write plans write referenced targets the retained generation lacks and reject unresolved references', () => {
+  const data = createStaticRankingData({
+    matches: [match({ id: 'closure', event: 'LCK 2026', phase: 'Regular season', tier: 'regional-regular' })],
+    teams: {
+      Alpha: { name: 'Alpha', code: 'ALP', league: 'LCK', region: 'LCK' },
+      Beta: { name: 'Beta', code: 'BET', league: 'LCK', region: 'LCK' },
+    },
+    rosters: {},
+    generatedAt: '2026-01-02T00:00:00.000Z',
+    dataMode: 'scheduled-public-data',
+    source: 'Write plan closure fixture',
+  })
+  const generatedPaths = createPublicArtifactWritePlan(data).writes.map((write) => write.relativePath)
+  const newScope = ['matches/all.json', 'matches/pages/all-2026000001.json']
+  assert.ok(newScope.every((path) => generatedPaths.includes(path)))
+  const retained = (paths: string[]) => new Set(paths.map((path) => `/data/${path}`))
+
+  const plan = createPublicArtifactWritePlan(data, {
+    affectedLogicalPaths: new Set(['matches/index.json']),
+    retainedLogicalPaths: retained(generatedPaths.filter((path) => !newScope.includes(path))),
+  })
+  assert.deepEqual(plan.writes.map((write) => write.relativePath).sort(), ['matches/index.json', ...newScope].sort())
+
+  assert.throws(() => createPublicArtifactWritePlan(data, {
+    affectedLogicalPaths: new Set(['matches/index.json']),
+    retainedLogicalPaths: retained(generatedPaths),
+    previousArtifacts: { '/data/matches/index.json': { scopeIndex: { retired: { url: '/data/matches/retired.json', pages: [] } } } },
+  }), /\/data\/matches\/index\.json references missing \/data\/matches\/retired\.json/)
 })
 
 function match(overrides: Partial<MatchRecord>): MatchRecord {

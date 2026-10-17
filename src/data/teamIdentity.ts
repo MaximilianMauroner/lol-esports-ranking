@@ -27,6 +27,7 @@ const baseKnownTeamIdentities: Record<string, TeamProfile> = {
   'LØS': { name: 'LØS', code: 'LS', region: 'CBLOL', league: 'CBLOL' },
   LYON: { name: 'LYON', code: 'LYON', region: 'LCS', league: 'LCS' },
   'Movistar KOI': { name: 'Movistar KOI', code: 'MK', region: 'LEC', league: 'LEC' },
+  'MVK Esports': { name: 'MVK Esports', code: 'MVK', region: 'LCP', league: 'LCP' },
   Sentinels: { name: 'Sentinels', code: 'SENT', region: 'LCS', league: 'LCS' },
   T1: { name: 'T1', code: 'T1', region: 'LCK', league: 'LCK' },
   'Team Liquid': { name: 'Team Liquid', code: 'TL', region: 'LCS', league: 'LCS' },

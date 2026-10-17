@@ -21,7 +21,6 @@ export function HeadToHead({ home, away, model }: { home: RankingSummaryStanding
   const low = band ? Math.round(band.lower * 100) : undefined
   const high = band ? Math.round(band.upper * 100) : undefined
   const homeName = home.code ?? home.team
-  const awayName = away.code ?? away.team
 
   return (
     <section className="grid gap-3 border-b border-border px-5 py-5 max-sm:px-3.5" aria-label={`${home.team} against ${away.team}`}>
@@ -58,9 +57,9 @@ export function HeadToHead({ home, away, model }: { home: RankingSummaryStanding
       </div>
       <p className="text-sm text-muted-foreground">
         {low !== undefined && high !== undefined
-          ? <>Model evidence range for {homeName}: {low}% to {high}%. {low < 50 && high > 50 ? 'Either team can win this.' : `${homeChance >= 50 ? homeName : awayName} are favoured.`} </>
+          ? <>{homeName} range {low}–{high}%. </>
           : null}
-        <span className="text-xs text-[var(--faint)]">Neutral side, best of {bestOf}. Model {formatModelVersion(model?.version)}.</span>
+        <span className="text-xs text-[var(--faint)]">Neutral side · model {formatModelVersion(model?.version)}</span>
       </p>
     </section>
   )

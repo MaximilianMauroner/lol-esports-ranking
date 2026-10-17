@@ -107,7 +107,7 @@ test('the Rankings board follows its address after load: typed and linked hashes
       const observer = new MutationObserver((mutations) => {
         for (const mutation of mutations) {
           for (const node of mutation.addedNodes) {
-            if (node.textContent?.includes('Fetching the published ranking manifest.')) insertions.push(node.textContent)
+            if (node.textContent?.includes('Requested scope:')) insertions.push(node.textContent)
           }
         }
       })

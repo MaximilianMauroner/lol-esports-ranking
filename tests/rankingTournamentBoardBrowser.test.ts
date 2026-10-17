@@ -1,50 +1,57 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import test from 'node:test'
-import { chromium } from 'playwright-core'
+import { chromium, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
 import { createStaticRankingData } from '../src/lib/snapshot.ts'
 import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { tournamentMovementShardUrlPathForId } from '../src/lib/publicArtifacts/schema.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
 // Four LCK teams with a full season, and Rookie, which plays only MSI 2026 and so stays unranked.
 const strength: Record<string, number> = { Alpha: 4, Beta: 3, Gamma: 2, Delta: 1, Rookie: 0 }
 const teams: Record<string, TeamProfile> = Object.fromEntries(Object.keys(strength).map((name) => [name, { name, code: name.slice(0, 3).toUpperCase(), region: 'LCK', league: 'LCK' }]))
 
-function game(id: string, date: string, teamA: string, teamB: string, international: boolean, upset = false): MatchRecord {
+const EVENTS = {
+  lck: { event: 'LCK 2026 Rounds 1-2', phase: 'Regular season', region: 'LCK', league: 'LCK', tier: 'regional-regular' },
+  fst: { event: 'First Stand 2026', phase: 'Bracket', region: 'International', league: 'FST', tier: 'msi-bracket' },
+  msi: { event: 'MSI 2026', phase: 'Bracket', region: 'International', league: 'MSI', tier: 'msi-bracket' },
+} as const
+
+function game(id: string, date: string, teamA: string, teamB: string, event: keyof typeof EVENTS, upset = false): MatchRecord {
   const favourite = strength[teamA]! >= strength[teamB]! ? teamA : teamB
   const winner = upset ? (favourite === teamA ? teamB : teamA) : favourite
   return {
     id, sourceProvider: 'seed', dataCompleteness: 'complete', date, datetimeUtc: `${date}T12:00:00.000Z`, season: 2026,
-    event: international ? 'MSI 2026' : 'LCK 2026 Rounds 1-2', phase: international ? 'Bracket' : 'Regular season',
-    region: international ? 'International' : 'LCK', league: international ? 'MSI' : 'LCK',
+    ...EVENTS[event],
     teamAHomeLeague: 'LCK', teamBHomeLeague: 'LCK', teamARegion: 'LCK', teamBRegion: 'LCK', patch: '26.1', bestOf: 1,
-    tier: international ? 'msi-bracket' : 'regional-regular', teamA, teamB, winner,
+    teamA, teamB, winner,
     teamAKills: winner === teamA ? 20 : 12, teamBKills: winner === teamB ? 20 : 12,
     teamAGold: winner === teamA ? 70_000 : 58_000, teamBGold: winner === teamB ? 70_000 : 58_000,
   }
 }
 
+const pairs = [['Alpha', 'Beta'], ['Gamma', 'Delta'], ['Alpha', 'Gamma'], ['Beta', 'Delta'], ['Alpha', 'Delta'], ['Beta', 'Gamma']] as const
+
 function fixtureMatches() {
-  const pairs = [['Alpha', 'Beta'], ['Gamma', 'Delta'], ['Alpha', 'Gamma'], ['Beta', 'Delta'], ['Alpha', 'Delta'], ['Beta', 'Gamma']] as const
   const season = Array.from({ length: 60 }, (_, index) => {
     const date = new Date(Date.UTC(2026, 2, 1) + Math.floor(index / 2) * 3 * 86_400_000).toISOString().slice(0, 10)
     const [teamA, teamB] = pairs[index % pairs.length]!
-    return game(`lck-${index}`, date, teamA, teamB, false, index % 7 === 0)
+    return game(`lck-${index}`, date, teamA, teamB, 'lck', index % 7 === 0)
   })
   return [
     ...season,
-    game('msi-1', '2026-06-28', 'Alpha', 'Rookie', true),
-    game('msi-2', '2026-06-29', 'Beta', 'Rookie', true, true),
-    game('msi-3', '2026-06-30', 'Gamma', 'Rookie', true),
-    game('msi-4', '2026-07-01', 'Alpha', 'Beta', true),
-    game('msi-5', '2026-07-02', 'Beta', 'Gamma', true),
+    game('msi-1', '2026-06-28', 'Alpha', 'Rookie', 'msi'),
+    game('msi-2', '2026-06-29', 'Beta', 'Rookie', 'msi', true),
+    game('msi-3', '2026-06-30', 'Gamma', 'Rookie', 'msi'),
+    game('msi-4', '2026-07-01', 'Alpha', 'Beta', 'msi'),
+    game('msi-5', '2026-07-02', 'Beta', 'Gamma', 'msi'),
   ]
 }
 
-test('a tournament board lists every participant without changing the unranked setting', { timeout: 60_000 }, async () => {
-  const data = createStaticRankingData({ matches: fixtureMatches(), teams, rosters: {}, generatedAt: '2026-07-03T00:00:00.000Z', dataMode: 'seeded-sample' })
+async function withBoard(matches: MatchRecord[], run: (page: Page, base: string, objectPathFor: (logicalPath: string) => string) => Promise<void>) {
+  const data = createStaticRankingData({ matches, teams, rosters: {}, generatedAt: '2026-07-03T00:00:00.000Z', dataMode: 'seeded-sample' })
   const plan = createPublicArtifactWritePlan(data)
   const entries: Array<{ logicalPath: string; digest: string; bytes: number }> = []
   const objects = new Map<string, string>()
@@ -67,17 +74,25 @@ test('a tournament board lists every participant without changing the unranked s
       response.end(body ?? '{}')
     })
   } }
+  const objectPathFor = (logicalPath: string) => {
+    const entry = entries.find((candidate) => candidate.logicalPath === logicalPath)
+    assert.ok(entry, `generated ${logicalPath}`)
+    return `/data/objects/sha256/${entry.digest}`
+  }
   const server = await createServer({ logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixture] })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     await server.listen()
     const address = server.httpServer!.address()
     assert.ok(address && typeof address !== 'string')
-    const base = `http://127.0.0.1:${address.port}`
     const executablePath = chromium.executablePath()
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
-    // At phone width the Filters button shows the active filter count.
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+    await run(await browser.newPage({ viewport: { width: 390, height: 844 } }), `http://127.0.0.1:${address.port}`, objectPathFor)
+  } finally { await browser?.close(); await server.close() }
+}
+
+test('a tournament board lists every participant without changing the unranked setting', { timeout: 60_000 }, async () => {
+  await withBoard(fixtureMatches(), async (page, base) => {
     const hashParams = () => page.evaluate(() => Object.fromEntries(new URLSearchParams(location.hash.split('?')[1] ?? '')))
     const rows = page.locator('table tbody tr')
     const tournamentSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Any tournament' }) })
@@ -127,5 +142,37 @@ test('a tournament board lists every participant without changing the unranked s
     await page.getByRole('heading', { name: 'Power ranking' }).waitFor()
     assert.equal(await unrankedSetting.isChecked(), true)
     assert.equal(await rows.count(), 5)
-  } finally { await browser?.close(); await server.close() }
+  })
+})
+
+test('a comparison shows the board values when the address names a tournament outside the scope', { timeout: 60_000 }, async () => {
+  const january = Array.from({ length: 30 }, (_, index) => {
+    const [teamA, teamB] = pairs[index % pairs.length]!
+    return game(`lck-january-${index}`, new Date(Date.UTC(2026, 0, 5) + index * 86_400_000).toISOString().slice(0, 10), teamA, teamB, 'lck')
+  })
+  const matches = [
+    ...january,
+    ...fixtureMatches(),
+    game('fst-1', '2026-03-20', 'Alpha', 'Gamma', 'fst'),
+    game('fst-2', '2026-03-21', 'Beta', 'Delta', 'fst'),
+    game('fst-3', '2026-03-22', 'Alpha', 'Beta', 'fst'),
+  ]
+  await withBoard(matches, async (page, base, objectPathFor) => {
+    const shardPath = objectPathFor(tournamentMovementShardUrlPathForId('msi:2026'))
+    const shardLoaded = page.waitForResponse((response) => new URL(response.url()).pathname === shardPath && response.ok())
+    await page.goto(`${base}/#rankings?scope=season:2026:checkpoint:split-1&tournament=tournament:msi:2026`)
+    await page.getByRole('heading', { name: 'Power ranking' }).waitFor()
+    await shardLoaded
+    await page.waitForLoadState('networkidle')
+
+    const row = page.locator('table tbody tr').filter({ has: page.getByRole('cell', { name: /^Rank \d+$/ }) }).first()
+    const team = (await row.getByTitle(/^Open /).getAttribute('title'))!.replace('Open ', '')
+    const rank = (await row.getByRole('cell', { name: /^Rank \d+$/ }).getAttribute('aria-label'))!.replace('Rank ', '')
+    const power = (await row.getByRole('cell', { name: /^Power / }).getAttribute('aria-label'))!.replace('Power ', '')
+    await row.getByRole('checkbox', { name: `Compare ${team}` }).check()
+
+    const dock = page.getByRole('region', { name: 'Compare teams: 1 selected' })
+    assert.equal(await dock.locator('span[title]').first().getAttribute('title'), `${team.slice(0, 3).toUpperCase()} · ${power} · #${rank}`)
+    assert.equal(await page.getByRole('heading', { name: 'MSI 2026 standings' }).count(), 0)
+  })
 })

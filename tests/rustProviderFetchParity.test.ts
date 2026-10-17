@@ -82,7 +82,7 @@ test('malformed event-detail JSON has stable warnings without retries and later 
 test('native fetch matches Node files and manifests on recorded paginated provider responses', { skip: !binary }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'rust-fetch-parity-'))
   const requests: string[] = []
-  const fields = 'OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold'
+  const fields = 'OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold,Team1Picks,Team2Picks'
   const beyondU64 = (1n << 128n) + (1n << 75n) + 1n
   const numbers = [
     ['', ' ', '0x10', '0b10'], ['0o10', '-2.5', '+3', '1e20'], ['1e-6', 'Infinity', 'NaN', 'invalid'],
@@ -96,7 +96,7 @@ test('native fetch matches Node files and manifests on recorded paginated provid
     [2 ** 61 + 1024, 2 ** 128 + 2 ** 76, 2 ** 128 + 2 ** 76, null],
     [null, null, null, null],
   ]
-  const csv = (count: number, offset: number) => [fields, ...Array.from({ length: count }, (_, index) => `LCK,A,B,A,B,2026-01-02 12:00:00,26.1,game-${offset + index},${numbers[(offset + index) % numbers.length].join(',')}`)].join('\n') + '\n'
+  const csv = (count: number, offset: number) => [fields, ...Array.from({ length: count }, (_, index) => `LCK,A,B,A,B,2026-01-02 12:00:00,26.1,game-${offset + index},${numbers[(offset + index) % numbers.length].join(',')},"K'Sante,Lee Sin,,Jinx,Nunu & Willump",`)].join('\n') + '\n'
   const oracleCsv = '\ufeffgameid,date,league,side\na,2026-01-01,LCK,Blue\na,2026-01-01,LCK,Red\n'
   const event = (id: string, startTime: string) => ({ startTime, match: { id }, league: { slug: 'lck' }, blockName: 'Regular Season' })
   const schedule = (token: string | null) => ({ data: { schedule: {
@@ -164,6 +164,7 @@ test('native fetch matches Node files and manifests on recorded paginated provid
               assert.equal(payload.matches.length, 501)
               assert.deepEqual(payload.matches.slice(0, expectedNumbers.length).map(({ teamAKills, teamBKills, teamAGold, teamBGold }) =>
                 [teamAKills, teamBKills, teamAGold, teamBGold]), expectedNumbers)
+              assert.deepEqual([payload.matches[0].teamAPicks, payload.matches[0].teamBPicks], [["K'Sante", 'Lee Sin', '', 'Jinx', 'Nunu & Willump'], []])
             }
           }
         }
