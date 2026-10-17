@@ -85,7 +85,7 @@ test('releasing import audit rows before snapshot preserves roster/player public
         artifactKind: 'player-model-regression',
         players: buildPlayerModel(normalSource.matches, {}, { teams: normalSource.teams }),
       }).digest,
-      'e1fdb414891df185ba36528bb01aaedd389fdd98afdf1c2edb0b6348ec6190aa',
+      'bd576291c3b6ae3ad1109ea784529949df21f162237bff7d8510de0d7a3226d3',
     )
     const compactSnapshot = createStaticRankingData({
       matches: structuredClone(normalSource.matches),

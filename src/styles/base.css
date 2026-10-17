@@ -185,6 +185,13 @@ body,
   height: 100%;
 }
 
+/* Keep the scrollbar's space on every page. Tournaments and loading states can
+   be shorter than the window, and without this the whole app moved sideways by
+   the scrollbar width whenever the scrollbar came or went. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   overflow-x: hidden;

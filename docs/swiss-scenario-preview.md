@@ -6,7 +6,9 @@ winners and valid draws, then sees records, advancement, elimination placings
 and the quarterfinal draw groups. Two scenarios, A and B, can be compared,
 copied and reset.
 
-The preview is deterministic. It shows no odds and no win probabilities.
+The same address always shows the same scenario. Only "Fill a valid draw" and
+"Draw again" use chance. The bracket itself shows no odds and no win
+probabilities.
 Riot's ruleset does not define the Swiss draw procedure precisely enough to
 weight one valid draw over another (see the draw gap in
 [the simulation notes](worlds-simulation-47.md)), so the preview only enforces
@@ -74,7 +76,8 @@ diagram:
   before the next draw. Live results show the winner in green and cannot be
   changed; picks have a dashed outline.
 - **Column header.** "Live draw" or "Your draw", "N to pick", and for a preview
-  draw "Change pairings" and "Clear draw". A round that gets a new draw starts
+  draw "Change pairings" and "Clear draw". The latest preview draw also shows
+  "Draw again" until it has a pick. A round that gets a new draw starts
   with "Change pairings" off. The next round to draw shows "Fill a valid draw";
   later rounds say which round they are drawn after. Before the Round 1 draw
   from qualified teams, Round 1 lists the four pools and which pool each one
@@ -122,8 +125,14 @@ rechecked on 12 October 2026.
 | §§4.3.2.3 and 4.3.3.2: "would force this scenario in a future draw" | A draw is valid only as a whole, so every team in the round must have a valid opponent. The text does not say whether officials also look ahead to later rounds, so the preview does not. |
 | §4.3.4: quarterfinal draw | When eight teams have advanced, the page lists the 3–0 teams and the 3–2 teams they can meet on opposite halves. It does not simulate the knockout. |
 
-"Fill a valid draw" takes the first valid pairing in starting-point order. It is
-a convenience, not the official draw and not a prediction. "Change pairings"
+"Fill a valid draw" makes a new random draw on each click. It follows the draw
+procedure in §§4.3.2.2 and 4.3.3.1: teams come out of the pot in a random order,
+and a team whose slot breaks a restriction, or leaves no legal way to finish the
+draw, moves to the next open slot. In Round 1 the pot is Pool 1 then Pool 4, and
+Pool 2 then Pool 3. The regional odds use the same procedure, so the button and
+the odds cannot disagree about which draws are possible. The draw is then stored
+in the page address like any other choice, so a shared link shows the same draw.
+It is a convenience, not the official draw and not a prediction. "Change pairings"
 swaps opponents inside a record group. Options that would break a rule are
 shown disabled with the reason.
 

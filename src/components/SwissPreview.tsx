@@ -13,7 +13,7 @@ import { cn } from '../lib/utils'
 import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
 import {
-  PLAY_IN_REGIONS, SWISS_BRACKET, SWISS_ROUND_SIZES, SWISS_TEAM_SOURCES, decodeChoices, encodeChoices, fillDraw, knockoutEntry,
+  PLAY_IN_REGIONS, SWISS_BRACKET, SWISS_ROUND_SIZES, SWISS_TEAM_SOURCES, decodeChoices, drawExists, encodeChoices, fillDraw, knockoutEntry,
   liveSwissBaseline, opponentOptions, resolveScenario, seedBaseline, swapOpponent, teamOutcome, type BracketBox, type DrawContext,
   type DrawnRound, type PreviewTeam, type ResolvedMatch, type ResolvedScenario, type SwissBaseline,
 } from '../lib/swissScenario'
@@ -32,7 +32,8 @@ type BracketEdits = {
   pick: (round: number, matchIndex: number, winner: string | null) => void
   swap: (round: number, teamId: string, opponentId: string, context: DrawContext) => void
   clear: (round: number) => void
-  fill: (round: number, pairs: [string, string][]) => void
+  draw: (round: number, context: DrawContext) => void
+  redraw: (round: number, context: DrawContext) => void
 }
 
 /**
@@ -98,7 +99,7 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
     const byId = new Map(baseline.teams.map((entry) => [entry.id, teamInfo(entry)]))
     return (id) => byId.get(id) ?? { name: id, code: id, slot: null, mark: null }
   }, [baseline])
-  const drawPairs = useMemo(() => current.next.kind === 'draw' ? fillDraw(current.next.context) : null, [current])
+  const canDraw = useMemo(() => current.next.kind === 'draw' && drawExists(current.next.context), [current])
 
   useHashSync('tournaments', {
     start,
@@ -137,7 +138,12 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
       return [...choices.slice(0, index), { pairs, winners: pairs.map((pair) => kept.get(pair.join('\n')) ?? null) }, ...choices.slice(index + 1)]
     }),
     clear: (round) => update(round, (choices) => choices.slice(0, round - 1), true),
-    fill: (round, pairs) => update(round, (choices) => [...choices, { pairs, winners: pairs.map(() => null) }], true),
+    draw: (round, context) => drawRound(round, context, true),
+    redraw: (round, context) => drawRound(round, context, false),
+  }
+  function drawRound(round: number, context: DrawContext, moveFocus: boolean) {
+    const pairs = fillDraw(context)
+    if (pairs) update(round, (choices) => [...choices.slice(0, round - 1), { pairs, winners: pairs.map(() => null) }], moveFocus)
   }
   function undo() {
     const last = history.at(-1)
@@ -236,9 +242,9 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
 
       <div className="grid min-w-0 items-start gap-4 min-[1700px]:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="grid min-w-0 gap-2">
-          <NextStep scenario={current} drawPairs={drawPairs} team={team} playInOpen={baseline.kind === 'seeds' && !playIn} />
+          <NextStep scenario={current} canDraw={canDraw} team={team} playInOpen={baseline.kind === 'seeds' && !playIn} />
           <SwissBracket scenario={current} team={team} pools={baseline.kind === 'seeds' ? WORLDS_2026_SWISS_RULES.pools : null}
-            drawPairs={drawPairs} focusRound={focusRound} onFocused={focusDone} edits={edits} />
+            canDraw={canDraw} focusRound={focusRound} onFocused={focusDone} edits={edits} />
         </div>
         <StandingsPanel scenarios={scenarios} slot={slot} team={team} />
       </div>
@@ -274,7 +280,7 @@ function teamInfo(team: PreviewTeam): TeamInfo {
 }
 
 /** What the scenario needs next. When a round can be drawn, also its draw rules. */
-function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: ResolvedScenario; drawPairs: [string, string][] | null; team: TeamLookup; playInOpen: boolean }) {
+function NextStep({ scenario, canDraw, team, playInOpen }: { scenario: ResolvedScenario; canDraw: boolean; team: TeamLookup; playInOpen: boolean }) {
   const next = scenario.next
   if (next.kind === 'complete') return <p className="text-sm text-muted-foreground">Swiss stage complete. The eight Advanced teams go to the quarterfinals.</p>
   if (next.kind === 'results') {
@@ -297,7 +303,7 @@ function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: Resolve
       </p>
       {playInOpen && next.round === 1 ? <p className="text-muted-foreground">The Play-In winner’s region is not chosen, so it meets only {team('LCK1').name} or {team('LPL1').name}.</p> : null}
       {waived.length ? <p className="text-[var(--warn)]">No draw for {waived.map((bucket) => bucket.record.replace('-', '–')).join(' or ')} avoids a rematch, so rematches are allowed there (rule 4.3.3.2).</p> : null}
-      {!drawPairs ? <p className="text-[var(--warn)]">No valid draw exists for these records.</p> : null}
+      {!canDraw ? <p className="text-[var(--warn)]">No valid draw exists for these records.</p> : null}
     </div>
   )
 }
@@ -306,12 +312,12 @@ function NextStep({ scenario, drawPairs, team, playInOpen }: { scenario: Resolve
  * The whole Swiss stage as a bracket: one column per round with its record groups, then the records after Round 5.
  * Advanced groups sit at the top of a column and eliminated groups at the bottom. Narrow screens scroll it sideways.
  */
-function SwissBracket({ scenario, team, pools, drawPairs, focusRound, onFocused, edits }: {
+function SwissBracket({ scenario, team, pools, canDraw, focusRound, onFocused, edits }: {
   scenario: ResolvedScenario
   team: TeamLookup
   /** The four Round 1 pools, shown in Round 1 before a draw from qualified teams. */
   pools: ReadonlyArray<readonly string[]> | null
-  drawPairs: [string, string][] | null
+  canDraw: boolean
   focusRound: number | null
   onFocused: () => void
   edits: BracketEdits
@@ -322,7 +328,7 @@ function SwissBracket({ scenario, team, pools, drawPairs, focusRound, onFocused,
         {SWISS_BRACKET.map((boxes, index) => index < SWISS_ROUND_SIZES.length
           // A round that gets a new draw mounts again, so it starts with "Change pairings" off.
           ? <RoundColumn key={`${index}:${scenario.rounds[index] ? 'drawn' : 'open'}`} round={index + 1} boxes={boxes} scenario={scenario} team={team} pools={index === 0 ? pools : null}
-            drawPairs={drawPairs} focus={focusRound === index + 1} onFocused={onFocused} edits={edits} />
+            canDraw={canDraw} focus={focusRound === index + 1} onFocused={onFocused} edits={edits} />
           : (
             <div key="final" className="row-span-2 grid min-w-0 grid-rows-subgrid">
               <ColumnHeader title="After Round 5" />
@@ -336,13 +342,13 @@ function SwissBracket({ scenario, team, pools, drawPairs, focusRound, onFocused,
   )
 }
 
-function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, onFocused, edits }: {
+function RoundColumn({ round, boxes, scenario, team, pools, canDraw, focus, onFocused, edits }: {
   round: number
   boxes: BracketBox[]
   scenario: ResolvedScenario
   team: TeamLookup
   pools: ReadonlyArray<readonly string[]> | null
-  drawPairs: [string, string][] | null
+  canDraw: boolean
   focus: boolean
   onFocused: () => void
   edits: BracketEdits
@@ -351,8 +357,7 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
   const { target: column, header } = useFocusWhen(focus, onFocused)
   const [editing, setEditing] = useState(false)
   const resolved = scenario.rounds.at(round - 1)
-  const drawNext = scenario.next.kind === 'draw' && scenario.next.round === round
-  const drawAfter = scenario.next.kind === 'draw' && scenario.next.round === round + 1
+  const nextDraw = scenario.next.kind === 'draw' ? scenario.next : null
   const missing = resolved?.matches.filter((match) => !match.winnerId).length ?? 0
   const pairs = resolved?.matches.map((match) => match.teamIds) ?? []
 
@@ -380,9 +385,11 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
         badge={resolved ? resolved.liveDraw ? <Badge>Live draw</Badge> : <Badge variant="preview">Your draw</Badge> : null}>
         {resolved ? resolved.liveDraw ? null : <>
           <Button variant="tab" size="xs" aria-pressed={editing} onClick={() => setEditing((value) => !value)}>Change pairings</Button>
+          {scenario.rounds.length === round && !resolved.matches.some((match) => match.winnerId)
+            ? <Button variant="ghost" size="xs" onClick={() => { setEditing(false); edits.redraw(round, resolved.context) }}>Draw again</Button> : null}
           <Button variant="ghost" size="xs" onClick={() => edits.clear(round)}>Clear draw</Button>
-        </> : drawNext
-          ? <Button size="sm" disabled={!drawPairs} onClick={() => drawPairs && edits.fill(round, drawPairs)}>Fill a valid draw</Button>
+        </> : nextDraw?.round === round
+          ? <Button size="sm" disabled={!canDraw} onClick={() => edits.draw(round, nextDraw.context)}>Fill a valid draw</Button>
           : <span className="text-2xs text-[var(--faint)]">Drawn after Round {round - 1}</span>}
         {missing ? <span className="text-2xs font-medium text-[var(--preview)]">{missing} to pick</span> : null}
       </ColumnHeader>
@@ -391,8 +398,8 @@ function RoundColumn({ round, boxes, scenario, team, pools, drawPairs, focus, on
           {boxes.map((box) => <RecordBox key={box.record.join('-')} box={box}>{content(box)}</RecordBox>)}
         </div>
         {/* Next to the last pick, because on narrow screens the next column is out of view. */}
-        {drawAfter ? (
-          <Button size="sm" className="h-auto min-h-7 py-1 text-center whitespace-normal" disabled={!drawPairs} onClick={() => drawPairs && edits.fill(round + 1, drawPairs)}>
+        {nextDraw?.round === round + 1 ? (
+          <Button size="sm" className="h-auto min-h-7 py-1 text-center whitespace-normal" disabled={!canDraw} onClick={() => edits.draw(round + 1, nextDraw.context)}>
             Fill a valid draw for Round {round + 1}
           </Button>
         ) : null}
