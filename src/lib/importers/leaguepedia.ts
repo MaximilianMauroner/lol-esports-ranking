@@ -176,8 +176,9 @@ function text(value: unknown) {
 }
 
 function patchText(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value.toFixed(2)
-  return text(value)
+  const patch = typeof value === 'number' && Number.isFinite(value) ? String(value) : text(value)
+  const singleDecimal = /^(\d+)\.\d$/.exec(patch)
+  return singleDecimal && Number(singleDecimal[1]) >= 25 ? `${patch}0` : patch
 }
 
 function numberOrZero(value: unknown) {
