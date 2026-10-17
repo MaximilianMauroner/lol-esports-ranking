@@ -8,6 +8,7 @@ import {
 } from '../../data/competitionTaxonomy'
 import { canonicalTeamNameFor, cleanDisplayName, teamCodeFor, teamIdentityFor } from '../../data/teamIdentity'
 import { compareCodeUnits } from '../codeUnitOrder.mjs'
+import { championPicks } from './championPicks'
 import { providerDate, providerDatetimeUtc } from './providerTime'
 
 export type LeaguepediaSnapshot = {
@@ -42,6 +43,8 @@ type LeaguepediaGame = {
   teamBKills?: unknown
   teamAGold?: unknown
   teamBGold?: unknown
+  teamAPicks?: unknown
+  teamBPicks?: unknown
 }
 
 export type LeaguepediaImportResult = {
@@ -133,6 +136,8 @@ function normalizeGame(game: LeaguepediaGame, options: { sourceUrl?: string; sou
     teamBHomeLeague,
     teamARegion,
     teamBRegion,
+    teamAPicks: picksText(game.teamAPicks),
+    teamBPicks: picksText(game.teamBPicks),
     patch: patchText(game.patch),
     bestOf: format.bestOf,
     bestOfBasis: format.basis,
@@ -179,6 +184,11 @@ function patchText(value: unknown) {
   const patch = typeof value === 'number' && Number.isFinite(value) ? String(value) : text(value)
   const singleDecimal = /^(\d+)\.\d$/.exec(patch)
   return singleDecimal && Number(singleDecimal[1]) >= 25 ? `${patch}0` : patch
+}
+
+/** ScoreboardGames lists picks in scoreboard order, which is role order (checked against ScoreboardPlayers.Role_Number). */
+function picksText(value: unknown) {
+  return championPicks(Array.isArray(value) ? value.map(text) : [])
 }
 
 function numberOrZero(value: unknown) {

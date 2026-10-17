@@ -9,7 +9,7 @@ use reqwest::Url;
 use serde_json::{Value, json};
 use std::{collections::HashMap, path::Path, time::Duration};
 
-const FIELDS: [&str; 12] = [
+const FIELDS: [&str; 14] = [
     "OverviewPage",
     "Team1",
     "Team2",
@@ -22,6 +22,8 @@ const FIELDS: [&str; 12] = [
     "Team2Kills",
     "Team1Gold",
     "Team2Gold",
+    "Team1Picks",
+    "Team2Picks",
 ];
 
 pub fn download(
@@ -85,6 +87,14 @@ pub fn download(
                     })
                     .collect::<HashMap<_, _>>();
                 let get = |key| fields.get(key).copied().unwrap_or("");
+                let list = |key| {
+                    let value = get(key);
+                    if value.is_empty() {
+                        Vec::new()
+                    } else {
+                        value.split(',').collect::<Vec<_>>()
+                    }
+                };
                 let number = |key| {
                     let value = get(key);
                     if value.is_empty() {
@@ -93,7 +103,7 @@ pub fn download(
                         js_number(value).map_or(Value::Null, |v| json!(v))
                     }
                 };
-                matches.push(json!({"id":get("GameId"),"date":get("DateTime UTC").chars().take(10).collect::<String>(),"datetimeUtc":get("DateTime UTC"),"event":get("OverviewPage"),"patch":get("Patch"),"teamA":get("Team1"),"teamB":get("Team2"),"winner":get("WinTeam"),"loser":get("LossTeam"),"teamAKills":number("Team1Kills"),"teamBKills":number("Team2Kills"),"teamAGold":number("Team1Gold"),"teamBGold":number("Team2Gold")}));
+                matches.push(json!({"id":get("GameId"),"date":get("DateTime UTC").chars().take(10).collect::<String>(),"datetimeUtc":get("DateTime UTC"),"event":get("OverviewPage"),"patch":get("Patch"),"teamA":get("Team1"),"teamB":get("Team2"),"winner":get("WinTeam"),"loser":get("LossTeam"),"teamAKills":number("Team1Kills"),"teamBKills":number("Team2Kills"),"teamAGold":number("Team1Gold"),"teamBGold":number("Team2Gold"),"teamAPicks":list("Team1Picks"),"teamBPicks":list("Team2Picks")}));
             }
             if count < 500 {
                 break;

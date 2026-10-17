@@ -146,7 +146,7 @@ test('Oracle HTML quota failure still allows Leaguepedia fallback download', asy
     if (url.pathname === '/wiki/Special:CargoExport') {
       response.writeHead(200, { 'content-type': 'text/csv; charset=utf-8' })
       response.end([
-        'OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold',
+        'OverviewPage,Team1,Team2,WinTeam,LossTeam,DateTime UTC,Patch,GameId,Team1Kills,Team2Kills,Team1Gold,Team2Gold,Team1Picks,Team2Picks',
         'LCK 2026,Blue,Red,Blue,Red,2026-07-08 12:00:00,16.10,leaguepedia-game-1,10,5,50000,45000',
       ].join('\n'))
       return

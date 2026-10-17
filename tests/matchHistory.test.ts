@@ -116,6 +116,29 @@ test('match history preserves an unknown patch as an empty string', () => {
   assert.equal(shard.matches[0].patch, '')
 })
 
+test('match history orients picks to the series teams when game sides swap', () => {
+  const genPicks: MatchRecord['teamAPicks'] = ['Rumble', 'Wukong', 'Azir', 'Varus', 'Rakan']
+  const t1Picks: MatchRecord['teamAPicks'] = ["K'Sante", 'Vi', 'Taliyah', "Kai'Sa", null]
+  const opening = { ...game(1, 'Gen.G'), teamAPicks: genPicks, teamBPicks: t1Picks }
+  const swapped = { ...game(2, 'Gen.G'), teamAPicks: t1Picks }
+  const unpicked = game(3, 'Gen.G')
+  const data = createStaticRankingData({ matches: [opening, swapped], teams, rosters: {} })
+  const shard = parsePublicMatchHistoryPage(Object.values(createMatchHistoryArtifacts(data).pages[data.defaultSnapshotKey])[0])
+  const [first, second] = shard.matches.toSorted((left, right) => left.gameNumber - right.gameNumber)
+
+  assert.equal(second.teamA.name, 'Gen.G')
+  assert.deepEqual(first.picks, { teamA: genPicks, teamB: t1Picks })
+  assert.deepEqual(second.picks, { teamA: [null, null, null, null, null], teamB: t1Picks })
+
+  const plain = createStaticRankingData({ matches: [unpicked], teams, rosters: {} })
+  const plainShard = parsePublicMatchHistoryPage(Object.values(createMatchHistoryArtifacts(plain).pages[plain.defaultSnapshotKey])[0])
+  assert.equal('picks' in plainShard.matches[0], false)
+  assert.throws(() => parsePublicMatchHistoryPage({
+    ...shard,
+    matches: shard.matches.map((match) => ({ ...match, picks: { teamA: ['Ahri'], teamB: t1Picks } })),
+  }), /must list five roles/)
+})
+
 test('match history impact stays tied to the series when published ratings also move for other reasons', () => {
   const opening = game(1, 'Gen.G')
   opening.id = 'opening-game'

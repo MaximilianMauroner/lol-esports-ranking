@@ -1847,3 +1847,46 @@ function matchFixture(overrides: Partial<MatchRecord>): MatchRecord {
     ...overrides,
   }
 }
+
+test('Oracle imports order picks by role and mark a missing champion as unknown', () => {
+  const csv = [
+    'gameid,date,year,league,position,side,teamname,result,champion',
+    'picked,2026-07-26,2026,LCK,team,Blue,T1,1,',
+    'picked,2026-07-26,2026,LCK,team,Red,Gen.G,0,',
+    'picked,2026-07-26,2026,LCK,sup,Blue,T1,1,Rakan',
+    'picked,2026-07-26,2026,LCK,mid,Blue,T1,1,Azir',
+    'picked,2026-07-26,2026,LCK,top,Blue,T1,1,Rumble',
+    'picked,2026-07-26,2026,LCK,bot,Blue,T1,1,Varus',
+    'picked,2026-07-26,2026,LCK,jng,Blue,T1,1,Wukong',
+    "picked,2026-07-26,2026,LCK,bot,Red,Gen.G,0,Kai'Sa",
+    "picked,2026-07-26,2026,LCK,top,Red,Gen.G,0,K'Sante",
+    'picked,2026-07-26,2026,LCK,jng,Red,Gen.G,0,',
+    'picked,2026-07-26,2026,LCK,sup,Red,Gen.G,0,Nautilus',
+    'picked,2026-07-26,2026,LCK,mid,Red,Gen.G,0,Taliyah',
+    'unpicked,2026-07-26,2026,LCK,team,Blue,T1,0,',
+    'unpicked,2026-07-26,2026,LCK,team,Red,Gen.G,1,',
+  ].join('\n')
+  const matches = importOraclesElixirCsv(csv).matches
+  const picked = matches.find((match) => match.sourceGameId === 'picked')
+  const unpicked = matches.find((match) => match.sourceGameId === 'unpicked')
+
+  assert.deepEqual(picked?.teamAPicks, ['Rumble', 'Wukong', 'Azir', 'Varus', 'Rakan'])
+  assert.deepEqual(picked?.teamBPicks, ["K'Sante", null, 'Taliyah', "Kai'Sa", 'Nautilus'])
+  assert.equal(unpicked?.teamAPicks, undefined)
+  assert.equal(unpicked?.teamBPicks, undefined)
+})
+
+test('Leaguepedia imports keep five scoreboard picks and drop lists that cannot be role ordered', () => {
+  const game = { date: '2026-10-15', event: 'LCK 2026 Rounds 3-5', patch: '26.20', teamA: 'T1', teamB: 'Gen.G', winner: 'Gen.G' }
+  const matches = importLeaguepediaSnapshot({ matches: [
+    { ...game, id: 'full', teamAPicks: ['Ambessa', 'Jarvan IV', '', 'Jhin', 'Karma'], teamBPicks: [] },
+    { ...game, id: 'short', teamAPicks: ['Ahri'], teamBPicks: ['Rumble', 'Skarner', 'Ryze', 'Ezreal', 'Seraphine'] },
+  ] }).matches
+  const full = matches.find((match) => match.sourceGameId === 'full')
+  const short = matches.find((match) => match.sourceGameId === 'short')
+
+  assert.deepEqual(full?.teamAPicks, ['Ambessa', 'Jarvan IV', null, 'Jhin', 'Karma'])
+  assert.equal(full?.teamBPicks, undefined)
+  assert.equal(short?.teamAPicks, undefined)
+  assert.deepEqual(short?.teamBPicks, ['Rumble', 'Skarner', 'Ryze', 'Ezreal', 'Seraphine'])
+})
