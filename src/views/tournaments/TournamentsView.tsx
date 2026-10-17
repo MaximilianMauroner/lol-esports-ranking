@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button'
 import { Card, CardContent } from '../../components/ui/card'
 import { Select } from '../../components/ui/select'
 import { LoadingState } from '../../components/ui/loading'
-import { currentHashQuery, hashParam } from '../../browser/navigation'
+import { currentHashQuery, hashParam, writeNavigationHash } from '../../browser/navigation'
 import { loadTournamentForecastArtifacts, loadTournamentForecastLedger } from '../../browser/tournaments/tournamentForecastArtifacts'
 import { emptyForecastLedger, forecastTournamentSeries, pinnedForecast, scoreConditionedSeriesOdds, type ForecastBasis, type ForecastLedger, type ForecastReceipt, type TournamentForecast } from '../../domains/tournaments/forecast'
 import { ConditionalPowerPreview } from './ConditionalPowerPreview'
@@ -333,7 +333,7 @@ function selectEvent(id: string, update: (value: string) => void) {
   const query = currentHashQuery()
   if (id) query.set('event', id)
   else query.delete('event')
-  window.location.hash = `tournaments${query.size ? `?${query}` : ''}`
+  writeNavigationHash(`tournaments${query.size ? `?${query}` : ''}`, 'navigate')
 }
 type TournamentPanel = 'bracket' | 'schedule' | 'swiss'
 function selectView(view: TournamentPanel, update: (value: string | undefined) => void) {
@@ -342,7 +342,7 @@ function selectView(view: TournamentPanel, update: (value: string | undefined) =
   const query = currentHashQuery()
   if (value) query.set('view', value)
   else query.delete('view')
-  window.location.hash = `tournaments${query.size ? `?${query}` : ''}`
+  writeNavigationHash(`tournaments${query.size ? `?${query}` : ''}`, 'navigate')
 }
 function isHealth(value: unknown): value is FeedHealth {
   if (!value || typeof value !== 'object') return false

@@ -1,3 +1,5 @@
+import { initialModeFromLocation, type AppMode } from './bootstrap'
+import type { TournamentFilterValue } from '../domains/rankings/evidence'
 import { useEffect } from 'react'
 
 /**
@@ -58,6 +60,58 @@ export function useHashSync(route: string, params: Record<string, string | undef
 
     const queryString = query.toString()
     const next = queryString ? `#${route}?${queryString}` : `#${route}`
-    if (window.location.hash !== next) window.history.replaceState(null, '', next)
+    if (window.location.hash !== next) writeNavigationHash(next, 'replace')
   }, [route, serialized])
+}
+
+export function readModeFromHash(): AppMode {
+  return typeof window === 'undefined'
+    ? 'rankings'
+    : initialModeFromLocation(window.location.hash, window.location.pathname)
+}
+
+export function readScopeFromHash() {
+  if (typeof window === 'undefined') return undefined
+  const query = window.location.hash.slice(1).split('?', 2)[1] ?? window.location.search.slice(1)
+  if (!query) return undefined
+  const scope = new URLSearchParams(query).get('scope')
+  return isKnownScope(scope) ? scope : undefined
+}
+
+export function readTournamentFilterFromHash(query = currentHashQuery()) {
+  return (hashParam('tournament', query) as TournamentFilterValue | undefined) ?? 'All'
+}
+
+export function replaceHashForModeAndScope(mode: AppMode, scope: string) {
+  if (typeof window === 'undefined') return
+  const nextHash = hashForModeAndScope(mode, scope, window.location.hash.slice(1))
+  if (window.location.hash === nextHash) return
+  writeNavigationHash(nextHash, 'replace')
+}
+
+export function hashForModeAndScope(mode: AppMode, scope: string, currentHash = '') {
+  const query = new URLSearchParams(currentHash.split('?', 2)[1] ?? '')
+  query.set('scope', scope)
+  const queryString = query.toString()
+  return `#${mode}${queryString ? `?${queryString}` : ''}`
+}
+
+export function isKnownScope(value: string | null): value is string {
+  return value === 'all' || Boolean(value?.startsWith('event:')) || /^season:\d{4}(?::(?:checkpoint:)?[A-Za-z0-9_-]+)?$/.test(value ?? '')
+}
+
+
+export function writeNavigationHash(hash: string, method: 'navigate' | 'push' | 'replace') {
+  if (method === 'navigate') window.location.hash = hash
+  else if (method === 'push') window.history.pushState(null, '', hash)
+  else window.history.replaceState(null, '', hash)
+}
+
+export function hashWithParam(key: string, value: string | null) {
+  const [route] = window.location.hash.slice(1).split('?', 2)
+  const query = currentHashQuery()
+  if (value === null) query.delete(key)
+  else query.set(key, value)
+  const queryString = query.toString()
+  return `#${route}${queryString ? `?${queryString}` : ''}`
 }

@@ -33,9 +33,9 @@ import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } fro
 import { tournamentIdFromFilter, type TournamentFilterValue } from './domains/rankings/evidence'
 import { deriveRankingUniverse } from './domains/rankings/read'
 import { cn } from './shared/utils'
-import { currentHashQuery, hashParam } from './browser/navigation'
+import { currentHashQuery, hashParam, readModeFromHash, readScopeFromHash, readTournamentFilterFromHash, replaceHashForModeAndScope, hashForModeAndScope, writeNavigationHash } from './browser/navigation'
 import { canUseBackgroundPrefetch, scheduleIdleWork } from './browser/rankings/prefetch'
-import { initialModeFromLocation, showsManifestErrorInAppShell, type AppMode } from './browser/bootstrap'
+import { showsManifestErrorInAppShell, type AppMode } from './browser/bootstrap'
 import {
   checkpointFromScope,
   checkpointOptionsForSeason,
@@ -126,7 +126,7 @@ function TournamentRoute() {
   const mainRef = useRef<HTMLElement | null>(null)
   const goHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
-    window.location.hash = hashForModeAndScope('rankings', scope)
+    writeNavigationHash(hashForModeAndScope('rankings', scope), 'navigate')
   }, [scope])
   return <div className="flex min-h-full flex-col">
     <a className="fixed top-[-56px] left-3 z-80 rounded-md border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
@@ -199,7 +199,7 @@ function RankingApp() {
       // old page before loading, while address restoration keeps its own page.
       const query = currentHashQuery()
       query.delete('page')
-      window.history.replaceState(null, '', `#matches?${query.toString()}`)
+      writeNavigationHash(`#matches?${query.toString()}`, 'replace')
     }
     selectScope(nextScope)
   }
@@ -312,7 +312,7 @@ function RankingApp() {
   // board filters, or another view's page, into the board.
   const goHome = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
-    window.location.hash = hashForModeAndScope('rankings', effectiveScope)
+    writeNavigationHash(hashForModeAndScope('rankings', effectiveScope), 'navigate')
   }, [effectiveScope])
 
   const activePlayerScope = useMemo(
@@ -746,42 +746,6 @@ function AppNavigation({
 
 function scopeForSeasonTab(season: string) {
   return season === 'All' ? 'all' : `season:${season}`
-}
-
-function readModeFromHash(): Mode {
-  return typeof window === 'undefined'
-    ? 'rankings'
-    : initialModeFromLocation(window.location.hash, window.location.pathname)
-}
-
-function readScopeFromHash() {
-  if (typeof window === 'undefined') return undefined
-  const query = window.location.hash.slice(1).split('?', 2)[1] ?? window.location.search.slice(1)
-  if (!query) return undefined
-  const scope = new URLSearchParams(query).get('scope')
-  return isKnownScope(scope) ? scope : undefined
-}
-
-function readTournamentFilterFromHash(query = currentHashQuery()) {
-  return (hashParam('tournament', query) as TournamentFilterValue | undefined) ?? 'All'
-}
-
-function replaceHashForModeAndScope(mode: Mode, scope: string) {
-  if (typeof window === 'undefined') return
-  const nextHash = hashForModeAndScope(mode, scope, window.location.hash.slice(1))
-  if (window.location.hash === nextHash) return
-  window.history.replaceState(null, '', nextHash)
-}
-
-function hashForModeAndScope(mode: Mode, scope: string, currentHash = '') {
-  const query = new URLSearchParams(currentHash.split('?', 2)[1] ?? '')
-  query.set('scope', scope)
-  const queryString = query.toString()
-  return `#${mode}${queryString ? `?${queryString}` : ''}`
-}
-
-function isKnownScope(value: string | null): value is string {
-  return value === 'all' || Boolean(value?.startsWith('event:')) || /^season:\d{4}(?::(?:checkpoint:)?[A-Za-z0-9_-]+)?$/.test(value ?? '')
 }
 
 function pendingCheckpointForSeason(
