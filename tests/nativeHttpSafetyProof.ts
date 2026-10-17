@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { once } from 'node:events'
 import { mkdir, mkdtemp, open, readlink, readdir, rename, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
-import { connect, type Socket } from 'node:net'
+import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -17,11 +17,57 @@ async function socketTo(port: number) {
   return socket
 }
 
-function firstBytes(socket: Socket) {
+function firstBytes(socket: Socket, timeoutMs = 5_000) {
   return new Promise<Buffer>((accept, reject) => {
-    socket.once('data', accept)
-    socket.once('error', reject)
-    socket.setTimeout(5_000, () => { socket.destroy(); reject(new Error('Socket response timed out')) })
+    const cleanup = () => {
+      clearTimeout(timer)
+      socket.off('data', onData)
+      socket.off('error', onError)
+      socket.off('close', onClose)
+    }
+    const onData = (bytes: Buffer) => { cleanup(); accept(bytes) }
+    const onError = (error: Error) => { cleanup(); reject(error) }
+    const onClose = () => { cleanup(); reject(new Error('Socket closed before response')) }
+    const timer = setTimeout(() => {
+      cleanup()
+      socket.destroy()
+      reject(new Error('Socket response timed out'))
+    }, timeoutMs)
+    socket.once('data', onData)
+    socket.once('error', onError)
+    socket.once('close', onClose)
+  })
+}
+
+for (const outcome of ['data', 'error', 'close', 'timeout'] as const) {
+  test(`first-byte observation cleans up after ${outcome}`, async () => {
+    const listener = createServer()
+    listener.listen(0, '127.0.0.1')
+    await once(listener, 'listening')
+    const accepted = once(listener, 'connection')
+    const socket = await socketTo((listener.address() as AddressInfo).port)
+    const [peer] = await accepted as [Socket]
+    const events = ['data', 'error', 'close', 'timeout'] as const
+    const before = events.map((event) => socket.listenerCount(event))
+    try {
+      const reading = firstBytes(socket, 200)
+      if (outcome === 'data') {
+        peer.write('response')
+        assert.equal((await reading).toString(), 'response')
+        await new Promise((accept) => setTimeout(accept, 300))
+        assert.equal(socket.destroyed, false, 'a completed observation must not close an idle socket')
+      } else {
+        if (outcome === 'error') socket.destroy(new Error('response failed'))
+        if (outcome === 'close') socket.destroy()
+        await assert.rejects(reading, outcome === 'error' ? /response failed/ : outcome === 'close' ? /closed/ : /timed out/)
+      }
+      assert.deepEqual(events.map((event) => socket.listenerCount(event)), before)
+      assert.equal(socket.timeout ?? 0, 0, 'the operation must not leave a socket inactivity timer')
+    } finally {
+      socket.destroy()
+      peer.destroy()
+      await new Promise<void>((accept, reject) => listener.close((error) => error ? reject(error) : accept()))
+    }
   })
 }
 
@@ -95,6 +141,36 @@ test('native sockets reject invalid framing and close unread request bodies', as
         assert.match(response, /HTTP\/1\.1 (400|405|431)/)
         assert.match(response.toLowerCase(), /connection: close/)
         if (!socket.destroyed) await once(socket, 'close')
+      } finally { socket.destroy() }
+    }
+    assert.equal((await httpRead(server.port, '/api/live')).status, 200)
+  } finally {
+    await server.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native closes body-bearing requests without treating body text as another request', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'native-body-framing-'))
+  const server = await nativeServer(root)
+  const body = 'GET /api/live HTTP/1.1\r\nHost: local\r\n\r\n'
+  try {
+    for (const framing of ['fixed', 'chunked']) {
+      const socket = await socketTo(server.port)
+      const chunks: Buffer[] = []
+      socket.on('data', (bytes: Buffer) => chunks.push(bytes))
+      const ended = once(socket, 'close', { signal: AbortSignal.timeout(5_000) })
+      void ended.catch(() => {})
+      try {
+        const reading = firstBytes(socket)
+        const headers = framing === 'fixed' ? `Content-Length: ${Buffer.byteLength(body)}` : 'Transfer-Encoding: chunked'
+        const payload = framing === 'fixed' ? body : `${Buffer.byteLength(body).toString(16)}\r\n${body}\r\n0\r\n\r\n`
+        socket.write(`POST /data/file HTTP/1.1\r\nHost: local\r\n${headers}\r\n\r\n${payload}${body}`)
+        assert.match((await reading).toString(), /HTTP\/1\.1 405/)
+        await ended
+        const wire = Buffer.concat(chunks).toString()
+        assert.equal(wire.match(/HTTP\/1\.1 /g)?.length, 1, framing)
+        assert.match(wire.toLowerCase(), /connection: close/)
       } finally { socket.destroy() }
     }
     assert.equal((await httpRead(server.port, '/api/live')).status, 200)
@@ -181,7 +257,12 @@ test('native forced drain of a slow body exits with failure', async () => {
     socket.write('GET /data/large.json HTTP/1.1\r\nHost: local\r\n\r\n')
     assert.match((await reading).toString(), /HTTP\/1\.1 200/)
     socket.pause()
+    assert.equal(socket.timeout ?? 0, 0)
+    assert.equal(socket.listenerCount('timeout'), 0)
+    const started = performance.now()
     await server.close('SIGTERM', 1)
+    assert.ok(performance.now() - started >= 4_500, 'the server must reach its drain deadline')
+    assert.equal(socket.destroyed, false, 'the paused client must not end the server drain')
     closed = true
     await assert.rejects(httpRead(server.port, '/api/live'))
   } finally {
