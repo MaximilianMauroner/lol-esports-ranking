@@ -176,7 +176,7 @@ function text(value: unknown) {
 }
 
 function patchText(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'number' && Number.isFinite(value)) return value.toFixed(2)
   return text(value)
 }
 
