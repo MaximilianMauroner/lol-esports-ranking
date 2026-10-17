@@ -29,7 +29,7 @@ function ChampionIcon({ champion, patch }: { champion: string | null; patch: str
       role="img"
       aria-label={label}
       title={label}
-      className="relative inline-flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-[var(--surface-2)] font-mono text-[0.5625rem] leading-none font-bold text-muted-foreground lg:size-6"
+      className="relative inline-flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-[var(--surface-2)] font-mono text-2xs leading-none font-bold text-muted-foreground lg:size-6"
     >
       <span className={showImage && loadedUrl === url ? 'invisible' : undefined}>{champion ? championInitials(champion) : '?'}</span>
       {showImage ? (
