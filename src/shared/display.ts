@@ -40,11 +40,6 @@ export function extent(values: number[]): [number, number] {
   return [min, max]
 }
 
-export function pctWithin(value: number, min: number, max: number) {
-  if (max <= min) return 100
-  return Math.max(2, Math.min(100, Math.round(((value - min) / (max - min)) * 100)))
-}
-
 export function formatNumber(value?: number) {
   return typeof value === 'number' && Number.isFinite(value) ? numberFormatter.format(value) : '—'
 }
@@ -69,12 +64,6 @@ export function formatMultiplier(value?: number) {
 export function formatModelVersion(value?: string) {
   if (!value) return 'unknown'
   return value.replaceAll('transparent-gpr', 'transparent-power-index')
-}
-
-/** Confidence-style values already on a 0-100 scale. */
-export function formatPercentValue(value?: number) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
-  return `${oneDecimal.format(value)}%`
 }
 
 /** Ratios on a 0-1 scale. */
@@ -110,11 +99,6 @@ export function formatDateTime(value?: string) {
 export function formatDateRange(start?: string, end?: string) {
   if (!start && !end) return 'Unknown window'
   return `${formatDate(start)} – ${formatDate(end)}`
-}
-
-export function movementClass(value?: number) {
-  if (!value) return 'flat'
-  return value > 0 ? 'up' : 'down'
 }
 
 /** Stable identity for a team standing, falling back for pre-v17 artifacts. */
