@@ -1,11 +1,10 @@
 import type { FactorBreakdown } from '../../domains/rankings/types'
 import type { RankingSummaryStanding, TeamHistorySeries } from '../../domains/rankings/types'
 
-/** Plain-language labels for the model factor that most explains a rating. */
 export const FACTOR_LABELS: Record<keyof FactorBreakdown, string> = {
   context: 'stage context',
   recency: 'recent results',
-  execution: 'in-game execution',
+  execution: 'result signal',
   opponent: 'strength of schedule',
   league: 'league strength',
 }
@@ -23,15 +22,16 @@ export type TrajectoryInsight = {
   rankChange?: number
   /** Dominant model factor behind the current rating, if known. */
   driver?: { key: keyof FactorBreakdown; label: string }
-  /** One-sentence explanation of what moved the trajectory. */
   summary: string
 }
 
 const monthDay = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
+const calendarMonthDay = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 function fmtDate(value: string) {
   const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? monthDay.format(new Date(parsed)) : value
+  const formatter = /^\d{4}-\d{2}-\d{2}$/.test(value) ? calendarMonthDay : monthDay
+  return Number.isFinite(parsed) ? formatter.format(new Date(parsed)) : value
 }
 
 function signed(value: number) {
@@ -83,8 +83,6 @@ export function deriveTrajectoryInsight(
   const form = (standing.form ?? []).slice(-5)
   const wins = form.filter((result) => result.toLowerCase() === 'w').length
 
-  // Lead with the most recent swing: if the peak is the more recent extreme the
-  // team has come off it (a slide); otherwise it has climbed off its low.
   const lastDate = points[points.length - 1][0]
   const peakTime = Date.parse(peak.date)
   const troughTime = Date.parse(trough.date)

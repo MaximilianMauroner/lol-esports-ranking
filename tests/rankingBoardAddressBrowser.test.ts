@@ -87,7 +87,7 @@ test('the Rankings board follows its address after load: typed and linked hashes
     const base = `http://127.0.0.1:${address.port}/`
     const executablePath = chromium.executablePath()
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, timezoneId: 'America/Los_Angeles' })
     const setHash = (hash: string) => page.evaluate((next) => { location.hash = next }, hash)
 
     await page.goto(`${base}#tournaments?scope=all`)
@@ -96,6 +96,11 @@ test('the Rankings board follows its address after load: typed and linked hashes
     assert.equal(dataRequests.length, 0, 'Cold Tournaments must not request ranking data')
     await page.goto(`${base}${board('region=LEC')}`)
     await expectBoard(page, 10, 'Euro', 'first load')
+    await page.getByRole('heading', { name: 'Power over time', exact: true }).scrollIntoViewIfNeeded()
+    const trajectory = page.getByRole('article').filter({ has: page.getByText('E01', { exact: true }) })
+    await trajectory.locator('p').waitFor()
+    assert.match(await trajectory.locator('p').innerText(), /on Jan 1 to .* on Jun 20\./)
+    await trajectory.getByText('Driven by result signal', { exact: true }).waitFor()
 
     // Returning to Rankings must not insert the manifest shell, even for one commit.
     await page.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('link', { name: 'Tournaments', exact: true }).click()
