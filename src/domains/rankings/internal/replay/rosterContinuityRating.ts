@@ -9,40 +9,6 @@ import {
 import { clamp } from './ratingCalculations.ts'
 import { rosterContinuity } from '../players/rosters.ts'
 
-export function applyRosterContinuityForDate(
-  matches: MatchRecord[],
-  ratings: Map<string, number>,
-  executionRatings: Map<string, number>,
-  uncertainties: Map<string, number>,
-  lastRosterByTeam: Map<string, MatchRosterSnapshot>,
-  currentRosterContinuity: Map<string, number>,
-) {
-  const processedTeams = new Set<string>()
-
-  for (const match of matches) {
-    applyRosterContinuityForTeam({
-      team: match.teamA,
-      observedRoster: match.teamARoster,
-      processedTeams,
-      ratings,
-      executionRatings,
-      uncertainties,
-      lastRosterByTeam,
-      currentRosterContinuity,
-    })
-    applyRosterContinuityForTeam({
-      team: match.teamB,
-      observedRoster: match.teamBRoster,
-      processedTeams,
-      ratings,
-      executionRatings,
-      uncertainties,
-      lastRosterByTeam,
-      currentRosterContinuity,
-    })
-  }
-}
-
 export function applyRosterContinuityForSeries(
   match: MatchRecord,
   ratings: Map<string, number>,
