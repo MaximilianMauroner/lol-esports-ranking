@@ -26,11 +26,11 @@ export function syntheticArtifacts() {
     defaultFilter: filter, defaultSnapshotKey: 'All__All__All', tournamentMovementIndexUrl: '/data/history/tournament-moves/index.json', teamCount: 0,
     snapshotIndex: { All__All__All: { url: '/data/scopes/all.json', filter, matchCount: 0, sourceBreakdown: [] } },
   })
-  return { manifest, shard }
+  return { manifest, shard, artifactMeta }
 }
 
 export async function writeSyntheticArtifacts(root: string, generation: boolean) {
-  const { manifest, shard } = syntheticArtifacts()
+  const { manifest, shard, artifactMeta } = syntheticArtifacts()
   const files = [
     { logicalPath: '/data/ranking-summary.json', value: manifest },
     { logicalPath: '/data/scopes/all.json', value: shard },
@@ -46,9 +46,9 @@ export async function writeSyntheticArtifacts(root: string, generation: boolean)
   if (generation) {
     for (const { artifact } of prepared) {
       await write(`/data/objects/sha256/${artifact.digest}`, artifact.canonicalBytes)
-      for (const child of artifact.children) await write(`/data/objects/sha256/${child.digest}`, child.canonicalBytes)
+      for (const child of artifact.children ?? []) await write(`/data/objects/sha256/${child.digest}`, child.canonicalBytes)
     }
-    const index = createGenerationManifest({ generationId: manifest.artifactMeta.runId, rootManifest: manifest, entries: prepared.map(({ logicalPath, artifact }) => ({ logicalPath, digest: artifact.digest, bytes: artifact.bytes })) })
+    const index = createGenerationManifest({ generationId: artifactMeta.runId, rootManifest: manifest, entries: prepared.map(({ logicalPath, artifact }) => ({ logicalPath, digest: artifact.digest, bytes: artifact.bytes })) })
     await write('/data/ranking-summary.json', canonicalJsonFor(index))
   }
   return { manifest, shard, prepared }

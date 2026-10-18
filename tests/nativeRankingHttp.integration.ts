@@ -31,7 +31,7 @@ test('native CLI rejects unsafe roots, nonloopback addresses and invalid options
       ['--data-root', join(root, 'missing')], ['--data-root', join(root, 'link')],
       ['--data-root', join(root, 'link/child')],
     ]) {
-      await assert.rejects(run(binary, args, { timeout: 5_000 }), undefined, args.join(' '))
+      await assert.rejects(run(binary, args, { timeout: 5_000 }), args.join(' '))
     }
     const relative = await nativeServer(join(root, 'real/../real'))
     await relative.close()
