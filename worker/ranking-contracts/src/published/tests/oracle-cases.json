@@ -124,6 +124,7 @@
   "references": [
     {
       "content": "{\"artifactKind\":\"public-ranking-manifest\",\"fullSnapshotUrl\":\"https://audit.example/retained.json\",\"playerDirectoryUrl\":\"/data/players.json?v=a\",\"teamDirectoryUrl\":\"/data/teams.json#section\",\"teamHistoryIndexUrl\":\"/data/team-index.json\",\"regionHistoryUrl\":\"/data/regions.json\",\"tournamentMovementIndexUrl\":\"/data/movement.json\",\"matchHistoryIndexUrl\":\"/data/matches.json\",\"snapshotIndex\":{\"z\":{\"url\":\"/data/players.json?v=b\",\"pages\":[{\"url\":\"/data/snapshot-page.json\"}]},\"a\":{\"url\":\"/data/%F0%9F%98%80.json\"}},\"ignoredUrl\":\"/data/not-an-edge.json\"}",
+      "canonical": "{\"artifactKind\":\"public-ranking-manifest\",\"fullSnapshotUrl\":\"https://audit.example/retained.json\",\"ignoredUrl\":\"/data/not-an-edge.json\",\"matchHistoryIndexUrl\":\"/data/matches.json\",\"playerDirectoryUrl\":\"/data/players.json?v=a\",\"regionHistoryUrl\":\"/data/regions.json\",\"snapshotIndex\":{\"a\":{\"url\":\"/data/%F0%9F%98%80.json\"},\"z\":{\"pages\":[{\"url\":\"/data/snapshot-page.json\"}],\"url\":\"/data/players.json?v=b\"}},\"teamDirectoryUrl\":\"/data/teams.json#section\",\"teamHistoryIndexUrl\":\"/data/team-index.json\",\"tournamentMovementIndexUrl\":\"/data/movement.json\"}",
       "paths": [
         "/data/players.json",
         "/data/teams.json",
@@ -137,6 +138,7 @@
     },
     {
       "content": "{\"artifactKind\":\"team-history-index\",\"scopeIndex\":{\"z\":{\"url\":\"/data/z.json\"},\"2\":{\"url\":\"/data/two.json\"},\"1\":{\"url\":\"/data/one.json\",\"pages\":[{\"url\":\"/data/one-page.json\",\"pages\":[{\"url\":\"/data/deep.json\"}]}]}}}",
+      "canonical": "{\"artifactKind\":\"team-history-index\",\"scopeIndex\":{\"1\":{\"pages\":[{\"pages\":[{\"url\":\"/data/deep.json\"}],\"url\":\"/data/one-page.json\"}],\"url\":\"/data/one.json\"},\"2\":{\"url\":\"/data/two.json\"},\"z\":{\"url\":\"/data/z.json\"}}}",
       "paths": [
         "/data/one.json",
         "/data/one-page.json",
@@ -147,12 +149,14 @@
     },
     {
       "content": "{\"artifactKind\":\"match-history-index\",\"scopeIndex\":{\"a\":{\"url\":\"https://example.invalid/data/catalog.json?v=old\"}}}",
+      "canonical": "{\"artifactKind\":\"match-history-index\",\"scopeIndex\":{\"a\":{\"url\":\"https://example.invalid/data/catalog.json?v=old\"}}}",
       "paths": [
         "/data/catalog.json"
       ]
     },
     {
       "content": "{\"artifactKind\":\"tournament-movement-index\",\"tournaments\":[{\"url\":\"/data/t1.json\"},null,{\"pages\":[{\"url\":\"/data/t2.json\"}]}]}",
+      "canonical": "{\"artifactKind\":\"tournament-movement-index\",\"tournaments\":[{\"url\":\"/data/t1.json\"},null,{\"pages\":[{\"url\":\"/data/t2.json\"}]}]}",
       "paths": [
         "/data/t1.json",
         "/data/t2.json"
@@ -160,6 +164,7 @@
     },
     {
       "content": "{\"artifactKind\":\"match-history-catalog\",\"pages\":[{\"url\":\"/data/match-1.json\"},{\"url\":\"/data/match-2.json\"},{\"url\":\"/data/match-1.json?v=other\"}]}",
+      "canonical": "{\"artifactKind\":\"match-history-catalog\",\"pages\":[{\"url\":\"/data/match-1.json\"},{\"url\":\"/data/match-2.json\"},{\"url\":\"/data/match-1.json?v=other\"}]}",
       "paths": [
         "/data/match-1.json",
         "/data/match-2.json"
@@ -167,16 +172,19 @@
     },
     {
       "content": "{\"artifactKind\":\"public-ranking-manifest\",\"fullSnapshotUrl\":\"https://audit.example/data/audit.json?v=g\",\"playerDirectoryUrl\":5,\"snapshotIndex\":{\"x\":1,\"y\":[\"bad\"]}}",
+      "canonical": "{\"artifactKind\":\"public-ranking-manifest\",\"fullSnapshotUrl\":\"https://audit.example/data/audit.json?v=g\",\"playerDirectoryUrl\":5,\"snapshotIndex\":{\"x\":1,\"y\":[\"bad\"]}}",
       "paths": [
         "/data/audit.json"
       ]
     },
     {
       "content": "{\"artifactKind\":\"unknown-kind\",\"pages\":[{\"url\":\"/data/no.json\"}]}",
+      "canonical": "{\"artifactKind\":\"unknown-kind\",\"pages\":[{\"url\":\"/data/no.json\"}]}",
       "paths": []
     },
     {
       "content": "{\"artifactKind\":\"match-history-catalog\",\"pages\":[{\"url\":\"/data/\\ud800.json\"}]}",
+      "canonical": "{\"artifactKind\":\"match-history-catalog\",\"pages\":[{\"url\":\"/data/\\ud800.json\"}]}",
       "paths": [
         "/data/\ud800.json"
       ]
