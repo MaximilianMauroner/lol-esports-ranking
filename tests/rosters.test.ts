@@ -20,7 +20,7 @@ test('rosterBasisByTeam returns sourced for latest complete five-role roster', (
   assert.equal(basis.get('T1'), 'sourced')
 })
 
-test('latestRosterByTeam chooses the newest roster by date and stable id order', () => {
+test('latestRosterByTeam chooses the newest roster by date', () => {
   const rosters = latestRosterByTeam([
     matchFixture({
       id: 'b-match',
@@ -40,6 +40,24 @@ test('latestRosterByTeam chooses the newest roster by date and stable id order',
   ])
 
   assert.equal(rosters.get('T1')?.teamId, 'latest')
+})
+
+test('latestRosterByTeam breaks same-day ties by stable id regardless of input order', () => {
+  const first = matchFixture({
+    id: 'a-match',
+    date: '2026-01-02',
+    teamARoster: rosterFixture({ teamId: 'first-same-day' }),
+  })
+  const last = matchFixture({
+    id: 'b-match',
+    date: '2026-01-02',
+    teamARoster: rosterFixture({ teamId: 'last-same-day' }),
+  })
+
+  for (const matches of [[last, first], [first, last]]) {
+    const rosters = latestRosterByTeam(matches)
+    assert.equal(rosters.get('T1')?.teamId, 'last-same-day')
+  }
 })
 
 test('partial-only sourced appearances become assumed-continuous', () => {
