@@ -310,11 +310,6 @@
     "entry": "src/domains/rankings/read.ts"
   },
   {
-    "old": "src/lib/receipts.ts",
-    "new": "src/domains/rankings/internal/queries/receipts.ts",
-    "entry": "src/domains/rankings/read.ts"
-  },
-  {
     "old": "src/lib/timelineCompaction.ts",
     "new": "src/domains/rankings/internal/queries/timelineCompaction.ts",
     "entry": "src/domains/rankings/read.ts"
