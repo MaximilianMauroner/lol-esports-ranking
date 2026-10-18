@@ -1,23 +1,7 @@
 import { canonicalPublicLogicalPath } from './logicalPath.mjs'
+import vocabulary from './referenceFields.json' with { type: 'json' }
 
-const referenceFields = new Map([
-  ['public-ranking-manifest', {
-    urls: {
-      fullSnapshotUrl: 'audit',
-      playerDirectoryUrl: 'required',
-      teamDirectoryUrl: 'required',
-      teamHistoryIndexUrl: 'required',
-      regionHistoryUrl: 'required',
-      tournamentMovementIndexUrl: 'required',
-      matchHistoryIndexUrl: 'required',
-    },
-    records: ['snapshotIndex'],
-  }],
-  ['team-history-index', { records: ['scopeIndex'] }],
-  ['match-history-index', { records: ['scopeIndex'] }],
-  ['tournament-movement-index', { arrays: ['tournaments'] }],
-  ['match-history-catalog', { arrays: ['pages'] }],
-])
+const referenceFields = new Map(Object.entries(vocabulary))
 
 export function mapArtifactReferences(content, transform) {
   const fields = referenceFields.get(content.artifactKind)
