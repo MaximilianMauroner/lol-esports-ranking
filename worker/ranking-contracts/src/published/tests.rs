@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Utf16Json, Utf16String, gzip};
+use crate::{Utf16String, gzip};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -130,10 +130,34 @@ fn checked_generation(
 
 #[test]
 fn checked_documents_match_shared_node_reference_cases() {
-    for row in cases().references {
-        let mut content = String::new();
-        let expected: Utf16Json = serde_json::from_str(&row.content).unwrap();
-        expected.write_canonical(&mut content);
+    let mut references = cases().references;
+    references.push(ReferenceCase {
+        content: r#"{"n":1e400,"rounded":9007199254740993,"zero":-0,"dup":1,"dup":2,"text":"\ud800","\udc00":"\ud800"}"#.into(),
+        paths: vec![],
+    });
+    let inputs = references
+        .iter()
+        .map(|row| &row.content)
+        .collect::<Vec<_>>();
+    let oracle = std::process::Command::new("node")
+        .args([
+            "--input-type=module",
+            "-e",
+            r#"
+import assert from 'node:assert/strict'
+import { canonicalJsonFor } from './scripts/public-artifact-storage.mjs'
+assert.equal(process.versions.node.split('.')[0], '24', 'The reference runtime must be Node 24')
+console.log(JSON.stringify(JSON.parse(process.argv[1]).map(text => canonicalJsonFor(JSON.parse(text)))))
+"#,
+            &serde_json::to_string(&inputs).unwrap(),
+        ])
+        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .output()
+        .expect("Node 24 must be available for the published contracts oracle");
+    assert!(oracle.status.success(), "{:?}", oracle);
+    let expected: Vec<String> = serde_json::from_slice(&oracle.stdout).unwrap();
+    assert_eq!(expected.len(), references.len());
+    for (row, content) in references.into_iter().zip(expected) {
         let stored = Stored::content(&row.content);
         let verified = stored.verify().unwrap();
         assert_eq!(verified.document().canonical_json(), content);
