@@ -153,10 +153,13 @@ cargo +1.98.0 build --manifest-path worker/Cargo.toml --package league-platform 
 worker/target/debug/platform-api --data-root public/data --listen 127.0.0.1:4174
 ```
 
-The listener accepts loopback addresses only. It serves `/data/`, `/api/live`, and `/api/ready`.
-Readiness checks only local summary access. The root stays pinned until restart. All symlinks are refused.
-Errors use safe fixed text. Conditional dates use standard HTTP forms. This bounded Unix service does not establish production equivalence.
-Node remains the production start command.
+Supply `--data-root` explicitly. The default listen address is `127.0.0.1:4174`. Only loopback addresses are allowed.
+The service supports GET and HEAD on `/data/`, `/api/live`, and `/api/ready`.
+Readiness reports only safe local summary access. The root stays pinned until restart. All symlinks are refused.
+Logical files use `no-cache`. Canonical `/data/objects/sha256/<64 lowercase hex digits>` paths use immutable caching.
+Logical path segments decode once. Queries do not change the file or cache policy.
+Keep immutable objects unchanged. Update logical files through atomic replacement.
+Node remains the production start command. This service does not establish production equivalence.
 
 Run the explicit native proof after building the binary. Both paths must exist. The proof does not build or download inputs.
 

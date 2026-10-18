@@ -5,4 +5,4 @@ compile_error!("league-platform local HTTP requires Unix descriptor-relative fil
 
 mod http;
 
-pub use http::{LocalDataOptions, LocalDataServer};
+pub use http::LocalDataServer;

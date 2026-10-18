@@ -634,20 +634,16 @@ version = "0.1.0"
 dependencies = [
  "async-compression",
  "bytes",
- "chrono",
  "futures-util",
  "http-body-util",
  "httpdate",
  "hyper",
  "hyper-util",
- "percent-encoding",
- "regex",
  "rustix",
  "serde_json",
  "tempfile",
  "tokio",
  "tokio-util",
- "url",
 ]
 
 [[package]]
