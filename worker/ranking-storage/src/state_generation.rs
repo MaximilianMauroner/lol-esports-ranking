@@ -485,6 +485,60 @@ mod tests {
     }
 
     #[test]
+    fn gzip_consumer_receives_exact_payload_at_the_byte_limit() {
+        for bytes in [vec![], vec![b'x'], vec![b'x'; 150_003]] {
+            let encoded = gzip(&bytes);
+            let mut delivered = Vec::new();
+            let decoded = decode_gzip(&encoded, bytes.len() as u64, |chunk| {
+                delivered.extend_from_slice(chunk);
+            })
+            .unwrap();
+            assert_eq!(decoded, bytes.len() as u64);
+            assert_eq!(delivered, bytes);
+        }
+    }
+
+    #[test]
+    fn gzip_expansion_cannot_exceed_the_consumer_byte_limit() {
+        let bytes = vec![b'x'; 250_003];
+        let encoded = gzip(&bytes);
+        for limit in [0, 1, 31_337, 90_001, bytes.len() as u64 - 1] {
+            let mut delivered = 0;
+            let result = decode_gzip(&encoded, limit, |chunk| {
+                delivered += chunk.len() as u64;
+                assert!(delivered <= limit);
+            });
+            assert!(result.is_err(), "accepted expansion beyond {limit} bytes");
+        }
+    }
+
+    #[test]
+    fn concatenated_gzip_members_share_the_consumer_byte_limit() {
+        let first = vec![b'a'; 40_009];
+        let second = vec![b'b'; 60_013];
+        let mut encoded = gzip(&first);
+        encoded.extend_from_slice(&gzip(&second));
+        let expected = [first, second].concat();
+        let mut delivered = Vec::new();
+        assert_eq!(
+            decode_gzip(&encoded, expected.len() as u64, |chunk| {
+                delivered.extend_from_slice(chunk);
+            })
+            .unwrap(),
+            expected.len() as u64
+        );
+        assert_eq!(delivered, expected);
+
+        let limit = 60_013;
+        let mut delivered = 0;
+        let result = decode_gzip(&encoded, limit, |chunk| {
+            delivered += chunk.len() as u64;
+            assert!(delivered <= limit);
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn corrupt_and_truncated_gzip_headers_are_rejected() {
         let encoded = gzip(b"payload");
         for length in 0..10 {
