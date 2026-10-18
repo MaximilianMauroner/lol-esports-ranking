@@ -63,7 +63,7 @@ export async function minioFixture() {
     await writeFile(path, JSON.stringify(policy), { mode: 0o600 })
     let stdout: string
     try {
-      const response = await run(mc.path, ['--json', 'admin', 'user', 'svcacct', 'add', 'originfixture', '--policy', path], {
+      const response = await run(mc.path, ['--json', 'admin', 'user', 'svcacct', 'add', 'originfixture', admin.accessKeyId, '--policy', path], {
         env: fixtureEnvironment({ MC_CONFIG_DIR: join(directory, 'mc'),
           MC_HOST_originfixture: `http://${admin.accessKeyId}:${admin.secretAccessKey}@127.0.0.1:${port}` }),
         timeout: 10_000, maxBuffer: 32_768,
