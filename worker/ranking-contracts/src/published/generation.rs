@@ -77,7 +77,8 @@ pub struct SuppliedGeneration {
 impl SuppliedGeneration {
     pub fn new(authority: ManifestAuthority, context_json: &str, prefix: &str) -> Result<Self> {
         let context = parse_json(context_json.as_bytes())?;
-        if !matches!(context, Json::Object(_)) || !nonempty_string(field(&context, "generationId")) {
+        if !matches!(context, Json::Object(_)) || !nonempty_string(field(&context, "generationId"))
+        {
             return Err("Invalid public generation context".into());
         }
         let generation = field(&context, "generationId").expect("validated context generationId");
@@ -179,7 +180,9 @@ pub struct GenerationVerification {
 }
 
 impl GenerationVerification {
-    pub fn canonical_date(&self) -> std::result::Result<super::CanonicalDate, super::UnsupportedDate> {
+    pub fn canonical_date(
+        &self,
+    ) -> std::result::Result<super::CanonicalDate, super::UnsupportedDate> {
         let Some(Json::String(value)) = field(&self.manifest, "generatedAt") else {
             unreachable!("validated generation date string")
         };

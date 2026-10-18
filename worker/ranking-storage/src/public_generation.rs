@@ -17,7 +17,12 @@ pub(super) fn verify(
     scope: Scope,
 ) -> Result<String> {
     let supplied = SuppliedGeneration::new(authority, context_json, &bucket.prefix)?;
-    let remote = bucket.request(Method::GET, supplied.relative_key(), BTreeMap::new(), vec![])?;
+    let remote = bucket.request(
+        Method::GET,
+        supplied.relative_key(),
+        BTreeMap::new(),
+        vec![],
+    )?;
     if remote.status != 200 {
         return Err(format!(
             "Public manifest read failed with HTTP {}",
