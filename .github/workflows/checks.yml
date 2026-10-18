@@ -196,7 +196,7 @@ jobs:
         # Exclude host Cargo products, which would invalidate COPY layers on every run.
         run: |
           mkdir "$RUNNER_TEMP/worker-image"
-          git archive HEAD Dockerfile.refresh worker src/domains/rankings/internal/published/referenceFields.json | tar -x -C "$RUNNER_TEMP/worker-image"
+          git archive HEAD Dockerfile.refresh Dockerfile.refresh.dockerignore worker src/domains/rankings/internal/published/referenceFields.json | tar -x -C "$RUNNER_TEMP/worker-image"
       - name: Build worker image
         uses: docker/build-push-action@v7
         with:
