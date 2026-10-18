@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::${BUCKET}/${PREFIX}/active-generation.json",
+        "arn:aws:s3:::${BUCKET}/${PREFIX}/generations/*/manifest.json",
+        "arn:aws:s3:::${BUCKET}/${PREFIX}/generations/*/publish.json",
+        "arn:aws:s3:::${BUCKET}/${PREFIX}/generations/*/data/*",
+        "arn:aws:s3:::${BUCKET}/${PREFIX}/objects/sha256/*"
+      ]
+    }
+  ]
+}
