@@ -11,6 +11,31 @@ export function fixtureEnvironment(extra: NodeJS.ProcessEnv = {}): NodeJS.Proces
   return { PATH: process.env.PATH, LANG: 'C.UTF-8', TZ: 'UTC', ...extra }
 }
 
+export function sdkErrorDiagnostic(error: unknown) {
+  function field(value: unknown, name: string): unknown {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>)[name] : undefined
+  }
+  function token(value: unknown) {
+    return typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/.test(value) ? value : null
+  }
+  function number(value: unknown) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null
+  }
+  const metadata = field(error, '$metadata')
+  return {
+    class: token(error instanceof Error ? error.constructor.name : undefined),
+    name: token(field(error, 'name')),
+    code: token(field(error, 'code')),
+    causeCode: token(field(field(error, 'cause'), 'code')),
+    $metadata: {
+      httpStatusCode: number(field(metadata, 'httpStatusCode')),
+      attempts: number(field(metadata, 'attempts')),
+      totalRetryDelay: number(field(metadata, 'totalRetryDelay')),
+    },
+    $response: { statusCode: number(field(field(error, '$response'), 'statusCode')) },
+  }
+}
+
 export async function requiredBinary(name: string) {
   const path = process.env[name]
   assert.ok(path && isAbsolute(path), `${name} must name an existing absolute executable path`)

@@ -1,13 +1,50 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
-import { fixtureEnvironment } from './nativeRankingOriginProcesses.ts'
+import { fixtureEnvironment, sdkErrorDiagnostic } from './nativeRankingOriginProcesses.ts'
 import { maliciousUpstream } from './nativeRankingOriginUpstream.ts'
 
 test('origin process environment contains only explicit fixture configuration', () => {
   const environment = fixtureEnvironment({ RANKING_ORIGIN_ENDPOINT: 'http://127.0.0.1:1' })
   assert.deepEqual(Object.keys(environment).sort(), ['LANG', 'PATH', 'RANKING_ORIGIN_ENDPOINT', 'TZ'])
   assert.equal(environment.RANKING_ORIGIN_ENDPOINT, 'http://127.0.0.1:1')
+})
+
+test('SDK diagnostics distinguish response status from retry-only metadata without exposing request secrets', () => {
+  const secret = 'sentinel-secret'
+  const error = Object.assign(new TypeError(`Authorization: ${secret}`), {
+    name: 'TypeError', code: 'ERR_STREAM_PREMATURE_CLOSE',
+    cause: Object.assign(new Error(secret), { code: 'ECONNRESET' }),
+    $metadata: { attempts: 1, totalRetryDelay: 0, requestId: secret },
+    request: { url: `http://user:${secret}@127.0.0.1/?X-Amz-Signature=${secret}` },
+  })
+  Object.defineProperty(error, '$response', { value: {
+    statusCode: 403, headers: { Authorization: secret }, body: secret,
+  } })
+  assert.deepEqual(sdkErrorDiagnostic(error), {
+    class: 'TypeError', name: 'TypeError', code: 'ERR_STREAM_PREMATURE_CLOSE', causeCode: 'ECONNRESET',
+    $metadata: { httpStatusCode: null, attempts: 1, totalRetryDelay: 0 },
+    $response: { statusCode: 403 },
+  })
+  assert.doesNotMatch(JSON.stringify(sdkErrorDiagnostic(error)), /sentinel|Authorization|Signature/)
+  assert.equal(sdkErrorDiagnostic(Object.assign(new Error(), {
+    name: 'AccessDenied', $metadata: { httpStatusCode: 403 },
+  })).$metadata.httpStatusCode, 403)
+})
+
+test('SDK diagnostics omit unsafe or unbounded scalar values', () => {
+  const diagnostic = sdkErrorDiagnostic({
+    name: 'sentinel\nAuthorization: secret', code: 'a'.repeat(81),
+    cause: { code: 'https://user:secret@host/?signature=secret' },
+    $metadata: { httpStatusCode: '403', attempts: Infinity, totalRetryDelay: { secret: true } },
+    $response: { statusCode: NaN },
+  })
+  assert.deepEqual(diagnostic, {
+    class: null, name: null, code: null, causeCode: null,
+    $metadata: { httpStatusCode: null, attempts: null, totalRetryDelay: null },
+    $response: { statusCode: null },
+  })
+  assert.doesNotThrow(() => sdkErrorDiagnostic(null))
 })
 
 test('redirect canary independently detects followed redirects and leaves manual redirects unread', { timeout: 5_000 }, async () => {

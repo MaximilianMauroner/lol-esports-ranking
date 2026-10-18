@@ -9,6 +9,7 @@ import {
   UploadPartCommand,
 } from '@aws-sdk/client-s3'
 import { minioFixture } from './nativeRankingOriginFixtures.ts'
+import { sdkErrorDiagnostic } from './nativeRankingOriginProcesses.ts'
 
 test('isolated MinIO proves fixed public reads and denied mutations with the same principal', { timeout: 60_000 }, async t => {
   const fixture = await minioFixture()
@@ -60,21 +61,28 @@ test('isolated MinIO proves fixed public reads and denied mutations with the sam
         [`private-${path.split('/')[0]}`, async () => reader.send(new GetObjectCommand({ Bucket: bucket, Key: key(path) }))] as const),
       ['other-prefix', async () => reader.send(new GetObjectCommand({ Bucket: bucket, Key: 'other-prefix/active-generation.json' }))],
     ] as const
+    let deniedActions = 0
     for (const [name, operation] of denialAttempts) {
-      await t.test(name, async () => {
+      await t.test(name, async denial => {
         await assert.rejects(operation, (error: unknown) => {
-          assert.ok(error && typeof error === 'object' && '$metadata' in error && 'name' in error)
-          assert.equal((error.$metadata as { httpStatusCode?: number }).httpStatusCode, 403)
-          assert.equal(error.name, 'AccessDenied')
-          return true
+          try {
+            assert.ok(error && typeof error === 'object' && '$metadata' in error && 'name' in error)
+            assert.equal((error.$metadata as { httpStatusCode?: number }).httpStatusCode, 403)
+            assert.equal(error.name, 'AccessDenied')
+            return true
+          } catch (assertionError) {
+            denial.diagnostic(JSON.stringify({ operation: name, sdkError: sdkErrorDiagnostic(error) }))
+            throw assertionError
+          }
         })
+        deniedActions += 1
       })
     }
     assert.deepEqual(await fixture.inventory(), before, 'Denied requests must preserve the full bucket byte inventory')
     for (const [path, body] of publicBodies) assert.deepEqual(await fixture.get(path), body)
     assert.deepEqual(Object.keys(fixture.originEnvironment).filter(name => /MINIO|MC_|RANKING_BUCKET|AWS_|PROXY/.test(name)), [])
     t.diagnostic(JSON.stringify({ ...fixture.provenance, publicReadClasses: publicBodies.size,
-      deniedActions: denialAttempts.length, inventoryObjects: before.length, byteIdentity: 'passed' }))
+      denialAttempts: denialAttempts.length, deniedActions, inventoryObjects: before.length, byteIdentity: 'passed' }))
   } finally {
     try {
       if (uploadId) await publisher.send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: multipartKey, UploadId: uploadId }))
