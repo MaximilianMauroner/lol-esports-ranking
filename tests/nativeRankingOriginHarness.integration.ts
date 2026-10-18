@@ -85,6 +85,12 @@ test('isolated MinIO proves fixed public reads and denied mutations with the sam
     for (const [path, body] of publicBodies) {
       assert.deepEqual(await transport.run('public-after', () => fixture.get(path)), body)
     }
+    const { events, dropped } = transport.snapshot()
+    const assignments = events.filter(event => event.event === 'request-socket')
+    assert.equal(dropped, 0)
+    assert.equal(assignments.length, publicBodies.size * 2 + denialAttempts.length)
+    assert.ok(assignments.every(event => !event.reusedSocket), 'Each reader attempt must use a fresh connection')
+    assert.equal(new Set(assignments.map(event => event.socketId)).size, assignments.length)
     assert.deepEqual(Object.keys(fixture.originEnvironment).filter(name => /MINIO|MC_|RANKING_BUCKET|AWS_|PROXY/.test(name)), [])
     t.diagnostic(JSON.stringify({ ...fixture.provenance, publicReadClasses: publicBodies.size,
       denialAttempts: denialAttempts.length, deniedActions, inventoryObjects: before.length, byteIdentity: 'passed' }))

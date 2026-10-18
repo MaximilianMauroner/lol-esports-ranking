@@ -39,9 +39,11 @@ export async function minioFixture() {
       MINIO_BROWSER: 'off', MINIO_UPDATE: 'off', MINIO_CALLHOME_ENABLE: 'off' }))
   const clients: S3Client[] = []
   let cleanup: Promise<void> | undefined
-  function client(credentials: Credentials) {
+  function client(credentials: Credentials, isReader = false) {
     const value = new S3Client({ endpoint, region, forcePathStyle: true, maxAttempts: 1, credentials,
-      requestHandler: { connectionTimeout: 2_000, requestTimeout: 5_000 } })
+      requestHandler: { connectionTimeout: 2_000, requestTimeout: 5_000,
+        // Each IAM attempt needs its own server decision, independent of a prior peer close.
+        httpAgent: isReader ? { keepAlive: false } : undefined } })
     clients.push(value)
     return value
   }
@@ -89,7 +91,7 @@ export async function minioFixture() {
     assert.ok(readCredentials.accessKeyId !== publisherCredentials.accessKeyId, 'Reader and publisher must be separate principals')
     assert.ok(readCredentials.accessKeyId !== admin.accessKeyId, 'Reader and administrator must be separate principals')
     const publisher = client(publisherCredentials)
-    const reader = client(readCredentials)
+    const reader = client(readCredentials, true)
     const key = (relative: string) => `${prefix}/${relative}`
     async function put(relative: string, body: Buffer, options: { encoding?: string; metadata?: Record<string, string> } = {}) {
       return publisher.send(new PutObjectCommand({ Bucket: bucket, Key: key(relative), Body: body,
