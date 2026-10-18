@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Utf16Json, Utf16String, gzip};
+use crate::{Utf16String, gzip};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -16,6 +16,7 @@ struct DateCase {
 #[derive(Deserialize)]
 struct ReferenceCase {
     content: String,
+    canonical: String,
     paths: Vec<Utf16String>,
 }
 fn cases() -> Cases {
@@ -131,12 +132,9 @@ fn checked_generation(
 #[test]
 fn checked_documents_match_shared_node_reference_cases() {
     for row in cases().references {
-        let mut content = String::new();
-        let expected: Utf16Json = serde_json::from_str(&row.content).unwrap();
-        expected.write_canonical(&mut content);
         let stored = Stored::content(&row.content);
         let verified = stored.verify().unwrap();
-        assert_eq!(verified.document().canonical_json(), content);
+        assert_eq!(verified.document().canonical_json(), row.canonical);
         assert_eq!(verified.document().references().unwrap(), row.paths);
     }
 }

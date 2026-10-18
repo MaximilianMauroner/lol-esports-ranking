@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { artifactReferences, assertReferenceClosure } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
 
 type Cases = {
   dates: Array<{ value: string; canonical: boolean; nodeValid: boolean }>
-  references: Array<{ content: string; paths: string[] }>
+  references: Array<{ content: string; canonical: string; paths: string[] }>
 }
 const cases: Cases = JSON.parse(readFileSync(new URL('../worker/ranking-contracts/src/published/tests/oracle-cases.json', import.meta.url), 'utf8'))
 
@@ -22,6 +23,7 @@ test('published canonical dates retain the Node 24 format-back and validity dist
 test('shared published reference cases follow Node field roles, order and canonical paths', () => {
   for (const row of cases.references) {
     const content: Record<string, unknown> = JSON.parse(row.content)
+    assert.equal(canonicalJsonFor(content), row.canonical)
     assert.deepEqual(artifactReferences(content), row.paths)
     const edges = new Map([['/data/source.json', artifactReferences(content)]])
     assertReferenceClosure(edges, new Set(row.paths))
