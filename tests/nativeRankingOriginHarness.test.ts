@@ -107,11 +107,12 @@ test('transport observation distinguishes a fresh pre-response reset from a reus
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   assert.ok(address && typeof address !== 'string')
+  const port = address.port
   const agent = new Agent({ keepAlive: true })
   const transport = observeHttpTransport()
   function read() {
     return new Promise<void>((resolve, reject) => {
-      get({ hostname: '127.0.0.1', port: address.port, agent }, response => {
+      get({ hostname: '127.0.0.1', port, agent }, response => {
         response.resume()
         response.once('end', resolve)
         response.once('error', reject)
@@ -131,7 +132,7 @@ test('transport observation distinguishes a fresh pre-response reset from a reus
   }
   const { events } = transport.snapshot()
   assert.deepEqual(events.filter(event => event.event === 'request-socket').map(event => event.reusedSocket), [false, false, true])
-  assert.deepEqual(events.filter(event => event.event === 'request-error').map(event => event.code), ['ECONNRESET', 'ECONNRESET'])
+  assert.deepEqual(events.flatMap(event => event.event === 'request-error' ? [event.code] : []), ['ECONNRESET', 'ECONNRESET'])
   assert.deepEqual(events.filter(event => event.event === 'response').map(event => event.operation), ['good-read'])
 })
 
