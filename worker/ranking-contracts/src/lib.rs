@@ -1,11 +1,14 @@
 //! Byte contracts shared by the refresh worker. Semantic identity never depends on gzip output.
+mod gzip;
 mod json;
+pub mod published;
 pub mod model;
 mod numeric;
 mod time;
 mod utf16_json;
 mod v8_math;
 
+pub use gzip::decode_gzip;
 pub use json::{
     Value, canonical_json, canonical_json_value, config_hash, js_json, js_pretty_json_value,
     stable_digest, stable_json,
