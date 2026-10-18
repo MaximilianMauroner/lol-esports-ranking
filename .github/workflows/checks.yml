@@ -129,6 +129,10 @@ jobs:
           RANKING_NATIVE_HTTP_BINARY: ${{ github.workspace }}/worker/target/debug/platform-api
           RANKING_NATIVE_HTTP_RETAINED_DATA_DIR: ${{ github.workspace }}/data/reference/8adbc0a4239fd0dfba2094b3e70f60b513560de4/public/data
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/nativeRankingHttp.integration.ts
+      - name: Native origin absent-mode baseline
+        env:
+          RANKING_NATIVE_HTTP_BINARY: ${{ github.workspace }}/worker/target/debug/platform-api
+        run: node tools/dev/native-ranking-origin-proof.ts --suite baseline
       - name: Live model config parity
         run: pnpm exec tsx --tsconfig tsconfig.app.json tools/audit/check-rust-parity.ts
       - name: Rust raw seam integration
@@ -170,6 +174,29 @@ jobs:
         if: steps.minio-cache.outputs.cache-hit != 'true'
         # Official RELEASE.2025-04-22T22-12-26Z source. Published images are unavailable.
         run: go install github.com/minio/minio@0d7408fc9969caf07de6a8c3a84f9fbb10a6739e
+      - name: Cache pinned MinIO fixture administrator
+        id: minio-client-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/go/bin/mc
+          key: checks-${{ runner.os }}-${{ runner.arch }}-go-1.24.2-mc-b00526b153a31b36767991a4f5ce2cced435ee8e
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: '2'
+      - name: Build pinned MinIO fixture administrator
+        if: steps.minio-client-cache.outputs.cache-hit != 'true'
+        run: go install github.com/minio/mc@b00526b153a31b36767991a4f5ce2cced435ee8e
+      - name: Native origin retained corpus census
+        env:
+          RANKING_ORIGIN_TEST_RETAINED_DIR: ${{ github.workspace }}/data/reference/8adbc0a4239fd0dfba2094b3e70f60b513560de4/public/data
+        run: node tools/dev/native-ranking-origin-proof.ts --suite corpus
+      - name: Native origin isolated fixture and read-policy proof
+        run: |
+          sudo -n unshare --net -- sh -eu -c '
+            ip link set lo up
+            exec runuser -u "$1" -- env PATH="$2" \
+              RANKING_ORIGIN_TEST_MINIO_BINARY="$3" RANKING_ORIGIN_TEST_MC_BINARY="$4" \
+              "$5" tools/dev/native-ranking-origin-proof.ts --suite fixture
+          ' sh "$(id -un)" "$PATH" "$HOME/go/bin/minio" "$HOME/go/bin/mc" "$(command -v node)"
       - name: Native storage against isolated MinIO
         env:
           RANKING_STORAGE_TEST_ENDPOINT: http://127.0.0.1:9000
