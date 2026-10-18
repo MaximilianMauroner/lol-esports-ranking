@@ -15,7 +15,9 @@ mod publication;
 mod references;
 mod wire;
 
-pub use generation::{GenerationScope, GenerationVerification, ManifestAuthority, SuppliedGeneration};
+pub use generation::{
+    GenerationScope, GenerationVerification, ManifestAuthority, SuppliedGeneration,
+};
 pub use key::validate_storage_key;
 pub use publication::{PublicationMember, PublicationReceipt, PublicationRequest};
 pub use references::ReferenceGraph;

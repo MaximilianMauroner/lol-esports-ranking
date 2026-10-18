@@ -4,11 +4,7 @@ use std::io::Read;
 
 /// Validated transport decoding shared with public archive reads. The consumer
 /// chooses whether semantic bytes need a tree or only an integrity digest.
-pub fn decode_gzip(
-    compressed: &[u8],
-    limit: u64,
-    mut consume: impl FnMut(&[u8]),
-) -> Result<u64> {
+pub fn decode_gzip(compressed: &[u8], limit: u64, mut consume: impl FnMut(&[u8])) -> Result<u64> {
     let mut remaining = compressed;
     let mut bytes = 0;
     let mut buffer = [0; 65_536];
