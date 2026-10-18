@@ -1,3 +1,4 @@
+pub use ranking_contracts::published::validate_storage_key as validate_key;
 use ranking_contracts::{Result, sha256};
 use reqwest::{Method, Url, blocking::Client};
 use ring::hmac;
@@ -175,20 +176,6 @@ impl Bucket {
             body,
         })
     }
-}
-
-pub fn validate_key(key: &str) -> Result<()> {
-    if key.starts_with('/')
-        || key.ends_with('/')
-        || key.contains('\\')
-        || key
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
-        || key.chars().any(char::is_control)
-    {
-        return Err("Invalid relative S3 key".into());
-    }
-    Ok(())
 }
 
 fn sign(key: &[u8], value: &[u8]) -> Vec<u8> {

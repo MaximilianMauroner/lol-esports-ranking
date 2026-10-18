@@ -1,0 +1,185 @@
+{
+  "dates": [
+    {
+      "value": "2026-10-08T09:28:28.547Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "0000-02-29T00:00:00.000Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "1900-02-29T00:00:00.000Z",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "2000-02-29T00:00:00.000Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "9999-12-31T23:59:59.999Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "+010000-01-01T00:00:00.000Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "+009999-01-01T00:00:00.000Z",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "-000001-01-01T00:00:00.000Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "-000000-01-01T00:00:00.000Z",
+      "canonical": false,
+      "nodeValid": false
+    },
+    {
+      "value": "-271821-04-20T00:00:00.000Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "-271821-04-19T23:59:59.999Z",
+      "canonical": false,
+      "nodeValid": false
+    },
+    {
+      "value": "+275760-09-13T00:00:00.000Z",
+      "canonical": true,
+      "nodeValid": true
+    },
+    {
+      "value": "+275760-09-13T00:00:00.001Z",
+      "canonical": false,
+      "nodeValid": false
+    },
+    {
+      "value": "+999999-01-01T00:00:00.000Z",
+      "canonical": false,
+      "nodeValid": false
+    },
+    {
+      "value": "2024-04-31T00:00:00.000Z",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "2024-02-29T24:00:00.000Z",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "2024-02-29T23:59:60.000Z",
+      "canonical": false,
+      "nodeValid": false
+    },
+    {
+      "value": "2024-02-29T00:00:00Z",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "2024-02-29T00:00:00.000+00:00",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "October 11, 2026",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "0",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "2026-10-11",
+      "canonical": false,
+      "nodeValid": true
+    },
+    {
+      "value": "not a date",
+      "canonical": false,
+      "nodeValid": false
+    },
+    {
+      "value": "2026-10-08T09:28:28.547Z\ud800",
+      "canonical": false,
+      "nodeValid": false
+    }
+  ],
+  "references": [
+    {
+      "content": "{\"artifactKind\":\"public-ranking-manifest\",\"fullSnapshotUrl\":\"https://audit.example/retained.json\",\"playerDirectoryUrl\":\"/data/players.json?v=a\",\"teamDirectoryUrl\":\"/data/teams.json#section\",\"teamHistoryIndexUrl\":\"/data/team-index.json\",\"regionHistoryUrl\":\"/data/regions.json\",\"tournamentMovementIndexUrl\":\"/data/movement.json\",\"matchHistoryIndexUrl\":\"/data/matches.json\",\"snapshotIndex\":{\"z\":{\"url\":\"/data/players.json?v=b\",\"pages\":[{\"url\":\"/data/snapshot-page.json\"}]},\"a\":{\"url\":\"/data/%F0%9F%98%80.json\"}},\"ignoredUrl\":\"/data/not-an-edge.json\"}",
+      "paths": [
+        "/data/players.json",
+        "/data/teams.json",
+        "/data/team-index.json",
+        "/data/regions.json",
+        "/data/movement.json",
+        "/data/matches.json",
+        "/data/snapshot-page.json",
+        "/data/\ud83d\ude00.json"
+      ]
+    },
+    {
+      "content": "{\"artifactKind\":\"team-history-index\",\"scopeIndex\":{\"z\":{\"url\":\"/data/z.json\"},\"2\":{\"url\":\"/data/two.json\"},\"1\":{\"url\":\"/data/one.json\",\"pages\":[{\"url\":\"/data/one-page.json\",\"pages\":[{\"url\":\"/data/deep.json\"}]}]}}}",
+      "paths": [
+        "/data/one.json",
+        "/data/one-page.json",
+        "/data/deep.json",
+        "/data/two.json",
+        "/data/z.json"
+      ]
+    },
+    {
+      "content": "{\"artifactKind\":\"match-history-index\",\"scopeIndex\":{\"a\":{\"url\":\"https://example.invalid/data/catalog.json?v=old\"}}}",
+      "paths": [
+        "/data/catalog.json"
+      ]
+    },
+    {
+      "content": "{\"artifactKind\":\"tournament-movement-index\",\"tournaments\":[{\"url\":\"/data/t1.json\"},null,{\"pages\":[{\"url\":\"/data/t2.json\"}]}]}",
+      "paths": [
+        "/data/t1.json",
+        "/data/t2.json"
+      ]
+    },
+    {
+      "content": "{\"artifactKind\":\"match-history-catalog\",\"pages\":[{\"url\":\"/data/match-1.json\"},{\"url\":\"/data/match-2.json\"},{\"url\":\"/data/match-1.json?v=other\"}]}",
+      "paths": [
+        "/data/match-1.json",
+        "/data/match-2.json"
+      ]
+    },
+    {
+      "content": "{\"artifactKind\":\"public-ranking-manifest\",\"fullSnapshotUrl\":\"https://audit.example/data/audit.json?v=g\",\"playerDirectoryUrl\":5,\"snapshotIndex\":{\"x\":1,\"y\":[\"bad\"]}}",
+      "paths": [
+        "/data/audit.json"
+      ]
+    },
+    {
+      "content": "{\"artifactKind\":\"unknown-kind\",\"pages\":[{\"url\":\"/data/no.json\"}]}",
+      "paths": []
+    },
+    {
+      "content": "{\"artifactKind\":\"match-history-catalog\",\"pages\":[{\"url\":\"/data/\\ud800.json\"}]}",
+      "paths": [
+        "/data/\ud800.json"
+      ]
+    }
+  ]
+}
