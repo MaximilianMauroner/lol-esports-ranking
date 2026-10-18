@@ -191,12 +191,15 @@ jobs:
         run: node tools/dev/native-ranking-origin-proof.ts --suite corpus
       - name: Native origin isolated fixture and read-policy proof
         run: |
-          sudo -n unshare --net -- sh -eu -c '
-            ip link set lo up
-            exec runuser -u "$1" -- env PATH="$2" \
-              RANKING_ORIGIN_TEST_MINIO_BINARY="$3" RANKING_ORIGIN_TEST_MC_BINARY="$4" \
-              "$5" tools/dev/native-ranking-origin-proof.ts --suite fixture
-          ' sh "$(id -un)" "$PATH" "$HOME/go/bin/minio" "$HOME/go/bin/mc" "$(command -v node)"
+          for proof_attempt in 1 2; do
+            echo "Native origin isolated fixture and read-policy proof run ${proof_attempt}/2"
+            sudo -n unshare --net -- sh -eu -c '
+              ip link set lo up
+              exec runuser -u "$1" -- env PATH="$2" \
+                RANKING_ORIGIN_TEST_MINIO_BINARY="$3" RANKING_ORIGIN_TEST_MC_BINARY="$4" \
+                "$5" tools/dev/native-ranking-origin-proof.ts --suite fixture
+            ' sh "$(id -un)" "$PATH" "$HOME/go/bin/minio" "$HOME/go/bin/mc" "$(command -v node)"
+          done
       - name: Native storage against isolated MinIO
         env:
           RANKING_STORAGE_TEST_ENDPOINT: http://127.0.0.1:9000
