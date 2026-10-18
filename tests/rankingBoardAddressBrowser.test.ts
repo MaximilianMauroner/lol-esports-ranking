@@ -100,6 +100,7 @@ test('the Rankings board follows its address after load: typed and linked hashes
     const trajectory = page.getByRole('article').filter({ has: page.getByText('E01', { exact: true }) })
     await trajectory.locator('p').waitFor()
     assert.match(await trajectory.locator('p').innerText(), /on Jan 1 to .* on Jun 20\./)
+    await trajectory.getByText('Driven by result signal', { exact: true }).waitFor()
 
     // Returning to Rankings must not insert the manifest shell, even for one commit.
     await page.getByRole('navigation', { name: 'Primary', exact: true }).getByRole('link', { name: 'Tournaments', exact: true }).click()

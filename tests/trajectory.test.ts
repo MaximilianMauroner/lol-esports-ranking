@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { deriveTrajectoryInsight, FACTOR_LABELS } from '../src/views/rankings/trajectory.ts'
+import { deriveTrajectoryInsight } from '../src/views/rankings/trajectory.ts'
 import type { RankingSummaryStanding, TeamHistorySeries } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 function standing(overrides: Partial<RankingSummaryStanding> = {}): RankingSummaryStanding {
@@ -87,7 +87,23 @@ test('summary describes the climb, rank gain, and form; driver is exposed separa
   assert.match(insight.summary, /Up 200 from/)
   assert.match(insight.summary, /Up 7 places/)
   assert.match(insight.summary, /4-1 last 5/)
-  assert.equal(insight.driver?.label, FACTOR_LABELS.opponent)
+  assert.equal(insight.driver?.label, 'strength of schedule')
+})
+
+test('driver labels describe the model evidence', () => {
+  for (const [key, label] of [
+    ['context', 'stage context'],
+    ['recency', 'recent results'],
+    ['execution', 'result signal'],
+    ['opponent', 'strength of schedule'],
+    ['league', 'league strength'],
+  ] as const) {
+    const insight = deriveTrajectoryInsight(
+      standing({ strongestFactor: key }),
+      series([['2026-07-01', 1500, 5], ['2026-07-02', 1520, 3]]),
+    )
+    assert.deepEqual(insight?.driver, { key, label })
+  }
 })
 
 test('leads with the slide when a team has fallen off its peak', () => {

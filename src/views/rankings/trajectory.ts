@@ -1,11 +1,10 @@
 import type { FactorBreakdown } from '../../domains/rankings/types'
 import type { RankingSummaryStanding, TeamHistorySeries } from '../../domains/rankings/types'
 
-/** Plain-language labels for the model factor that most explains a rating. */
 export const FACTOR_LABELS: Record<keyof FactorBreakdown, string> = {
   context: 'stage context',
   recency: 'recent results',
-  execution: 'in-game execution',
+  execution: 'result signal',
   opponent: 'strength of schedule',
   league: 'league strength',
 }
