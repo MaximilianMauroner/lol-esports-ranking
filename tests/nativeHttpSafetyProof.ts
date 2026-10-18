@@ -124,26 +124,54 @@ test('native refuses symlinks, directories and FIFOs and pins the root across re
   }
 })
 
-test('native sockets reject invalid framing and close unread request bodies', async () => {
+test('native sockets reject oversized headers and close unread request bodies', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'native-framing-'))
   const server = await nativeServer(root)
+  const oversizedHeader = `GET /data/file HTTP/1.1\r\nHost: local\r\nX-Large: ${'x'.repeat(40_000)}\r\n\r\n`
   try {
-    for (const wire of [
-      'POST /data/file HTTP/1.1\r\nHost: local\r\nContent-Length: 1000000\r\n\r\n',
-      'POST /data/file HTTP/1.1\r\nHost: local\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n',
-      `GET /data/file HTTP/1.1\r\nHost: local\r\nX-Large: ${'x'.repeat(40_000)}\r\n\r\n`,
+    for (const { name, chunks, status } of [
+      {
+        name: 'POST with an unread fixed-length body',
+        chunks: ['POST /data/file HTTP/1.1\r\nHost: local\r\nContent-Length: 1000000\r\n\r\n'],
+        status: 405,
+      },
+      {
+        name: 'POST with content length and chunked transfer encoding',
+        chunks: ['POST /data/file HTTP/1.1\r\nHost: local\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n'],
+        status: 405,
+      },
+      {
+        name: 'complete oversized request header in one write',
+        chunks: [oversizedHeader],
+        status: 431,
+      },
+      {
+        name: 'oversized request header in separate writes',
+        chunks: [oversizedHeader.slice(0, 20_000), oversizedHeader.slice(20_000)],
+        status: 431,
+      },
     ]) {
-      const socket = await socketTo(server.port)
-      try {
-        const reading = firstBytes(socket)
-        socket.write(wire)
-        const response = (await reading).toString()
-        assert.match(response, /HTTP\/1\.1 (400|405|431)/)
-        assert.match(response.toLowerCase(), /connection: close/)
-        if (!socket.destroyed) await once(socket, 'close')
-      } finally { socket.destroy() }
+      await t.test(name, async () => {
+        const socket = await socketTo(server.port)
+        const ended = once(socket, 'close', { signal: AbortSignal.timeout(5_000) })
+        void ended.catch(() => {})
+        try {
+          const reading = firstBytes(socket)
+          void reading.catch(() => {})
+          for (const [index, chunk] of chunks.entries()) {
+            if (index > 0) await new Promise((accept) => setTimeout(accept, 20))
+            socket.write(chunk)
+          }
+          const response = (await reading).toString()
+          assert.equal(response.match(/^HTTP\/1\.1 (\d{3}) /)?.[1], String(status), response)
+          assert.match(response.toLowerCase(), /connection: close/)
+          await ended
+        } finally { socket.destroy() }
+        const live = await httpRead(server.port, '/api/live')
+        assert.equal(live.status, 200)
+        assert.deepEqual(JSON.parse(live.body.toString()), { ok: true })
+      })
     }
-    assert.equal((await httpRead(server.port, '/api/live')).status, 200)
   } finally {
     await server.close()
     await rm(root, { recursive: true, force: true })

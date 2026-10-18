@@ -68,7 +68,7 @@ impl LocalDataServer {
                         });
                         let mut builder = http1::Builder::new();
                         builder.timer(TokioTimer::new()).header_read_timeout(Duration::from_secs(10))
-                            .max_headers(100).max_buf_size(32 * 1024);
+                            .max_headers(100).max_header_size(32 * 1024).max_buf_size(32 * 1024);
                         let connection = builder.serve_connection(TokioIo::new(socket), service);
                         tokio::pin!(connection);
                         let result = tokio::select! {
