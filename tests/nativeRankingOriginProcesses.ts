@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { channel } from 'node:diagnostics_channel'
+import { errorMonitor, type EventEmitter } from 'node:events'
 import { access } from 'node:fs/promises'
 import { constants, createReadStream } from 'node:fs'
-import { createServer } from 'node:net'
+import type { ClientRequest, IncomingMessage } from 'node:http'
+import { createServer, type Socket } from 'node:net'
 import { isAbsolute } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -33,6 +37,86 @@ export function sdkErrorDiagnostic(error: unknown) {
       totalRetryDelay: number(field(metadata, 'totalRetryDelay')),
     },
     $response: { statusCode: number(field(field(error, '$response'), 'statusCode')) },
+  }
+}
+
+type TransportEvent =
+  | { event: 'request-created' | 'request-finish' | 'request-close' | 'response-end' | 'response-aborted'
+      | 'response-close' | 'socket-end' | 'socket-free' }
+  | { event: 'request-socket'; reusedSocket: boolean; destroyed: boolean; readableEnded: boolean }
+  | { event: 'response'; statusCode: number | null; connection: 'absent' | 'close' | 'keep-alive' | 'other' }
+  | { event: 'request-error' | 'socket-error' | 'response-error'; code: string | null }
+  | { event: 'socket-close'; hadError: boolean }
+type TransportContext = { operation: string; requestId: number; socketId: number | null }
+
+export function observeHttpTransport() {
+  const scope = new AsyncLocalStorage<string>()
+  const started = performance.now()
+  const events: (TransportContext & TransportEvent & { sequence: number; elapsedMs: number })[] = []
+  const sockets = new WeakMap<Socket, { id: number; current: TransportContext }>()
+  const detach: (() => void)[] = []
+  let sequence = 0
+  let requests = 0
+  let socketCount = 0
+  let dropped = 0
+  function record(context: TransportContext, event: TransportEvent) {
+    sequence += 1
+    if (events.length < 512) events.push({ ...context, ...event, sequence, elapsedMs: Math.round(performance.now() - started) })
+    else dropped += 1
+  }
+  function listen(emitter: EventEmitter, event: string | symbol, listener: Parameters<EventEmitter['on']>[1]) {
+    emitter.on(event, listener)
+    detach.push(() => emitter.off(event, listener))
+  }
+  const created = channel('http.client.request.created')
+  function onRequest(message: unknown) {
+    const operation = scope.getStore()
+    if (operation === undefined) return
+    const { request } = message as { request: ClientRequest }
+    const context: TransportContext = { operation, requestId: ++requests, socketId: null }
+    record(context, { event: 'request-created' })
+    listen(request, errorMonitor, (error: unknown) => record(context, { event: 'request-error', code: sdkErrorDiagnostic(error).code }))
+    listen(request, 'finish', () => record(context, { event: 'request-finish' }))
+    listen(request, 'close', () => record(context, { event: 'request-close' }))
+    listen(request, 'socket', (socket: Socket) => {
+      let state = sockets.get(socket)
+      if (!state) {
+        state = { id: ++socketCount, current: context }
+        sockets.set(socket, state)
+        const observed = state
+        listen(socket, 'end', () => record(observed.current, { event: 'socket-end' }))
+        listen(socket, 'free', () => record(observed.current, { event: 'socket-free' }))
+        listen(socket, errorMonitor, (error: unknown) => record(observed.current, { event: 'socket-error', code: sdkErrorDiagnostic(error).code }))
+        listen(socket, 'close', (hadError: boolean) => record(observed.current, { event: 'socket-close', hadError }))
+      }
+      state.current = context
+      context.socketId = state.id
+      record(context, { event: 'request-socket', reusedSocket: request.reusedSocket,
+        destroyed: socket.destroyed, readableEnded: socket.readableEnded })
+    })
+    listen(request, 'response', (response: IncomingMessage) => {
+      const value = response.headers.connection?.toLowerCase().split(',').map((token: string) => token.trim())
+      const connection = value === undefined ? 'absent' : value.includes('close') ? 'close'
+        : value.includes('keep-alive') ? 'keep-alive' : 'other'
+      record(context, { event: 'response', statusCode: response.statusCode ?? null, connection })
+      listen(response, 'end', () => record(context, { event: 'response-end' }))
+      listen(response, 'aborted', () => record(context, { event: 'response-aborted' }))
+      listen(response, 'close', () => record(context, { event: 'response-close' }))
+      listen(response, errorMonitor, (error: unknown) => record(context, { event: 'response-error', code: sdkErrorDiagnostic(error).code }))
+    })
+  }
+  created.subscribe(onRequest)
+  return {
+    run<T>(operation: string, request: () => T): T {
+      assert.match(operation, /^[a-z][a-z0-9-]{0,39}$/)
+      return scope.run(operation, request)
+    },
+    snapshot: () => ({ events: [...events], dropped }),
+    close() {
+      created.unsubscribe(onRequest)
+      for (const remove of detach.splice(0)) remove()
+      scope.disable()
+    },
   }
 }
 

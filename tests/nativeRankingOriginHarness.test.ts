@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Agent, createServer, get } from 'node:http'
+import { once } from 'node:events'
+import { channel } from 'node:diagnostics_channel'
 import { setTimeout as delay } from 'node:timers/promises'
-import { fixtureEnvironment, sdkErrorDiagnostic } from './nativeRankingOriginProcesses.ts'
+import { fixtureEnvironment, observeHttpTransport, sdkErrorDiagnostic } from './nativeRankingOriginProcesses.ts'
 import { maliciousUpstream } from './nativeRankingOriginUpstream.ts'
 
 test('origin process environment contains only explicit fixture configuration', () => {
@@ -45,6 +48,91 @@ test('SDK diagnostics omit unsafe or unbounded scalar values', () => {
     $response: { statusCode: null },
   })
   assert.doesNotThrow(() => sdkErrorDiagnostic(null))
+})
+
+test('transport observation preserves response bytes and records reuse and close without request secrets', { timeout: 5_000 }, async () => {
+  const secret = 'sentinel-secret'
+  const upstream = await maliciousUpstream({ kind: 'bytes', status: 403,
+    headers: { Connection: 'keep-alive', 'x-private': secret }, body: Buffer.from(secret) })
+  const agent = new Agent({ keepAlive: true })
+  const subscription = channel('http.client.request.created').hasSubscribers
+  const transport = observeHttpTransport()
+  function read() {
+    return new Promise<Buffer>((resolve, reject) => {
+      get(`${upstream.endpoint}/${secret}?signature=${secret}`, {
+        agent, headers: { Authorization: secret },
+      }, response => {
+        const chunks: Buffer[] = []
+        response.on('data', chunk => chunks.push(chunk))
+        response.once('end', () => resolve(Buffer.concat(chunks)))
+        response.once('error', reject)
+      }).once('error', reject)
+    })
+  }
+  try {
+    assert.equal((await read()).toString(), secret)
+    for (let i = 0; i < 2; i += 1) {
+      assert.equal((await transport.run('denied-read', read)).toString(), secret)
+    }
+    const sockets = Object.values(agent.freeSockets).flatMap(value => value ?? [])
+    const closed = Promise.all(sockets.map(socket => once(socket, 'close')))
+    agent.destroy()
+    await closed
+  } finally {
+    agent.destroy()
+    await upstream.close()
+    transport.close()
+  }
+  const { events, dropped } = transport.snapshot()
+  const assignments = events.filter(event => event.event === 'request-socket')
+  assert.equal(assignments.length, 2)
+  assert.ok(assignments.every(event => event.reusedSocket))
+  assert.equal(assignments[0].socketId, assignments[1].socketId)
+  assert.deepEqual(events.filter(event => event.event === 'response').map(event => [event.statusCode, event.connection]),
+    [[403, 'keep-alive'], [403, 'keep-alive']])
+  assert.ok(events.some(event => event.event === 'socket-close'))
+  assert.deepEqual(events.map(event => event.sequence), events.map((_, index) => index + 1))
+  assert.ok(events.every(event => event.elapsedMs >= 0))
+  assert.equal(dropped, 0)
+  assert.doesNotMatch(JSON.stringify(events), /sentinel|Authorization|signature|x-private/)
+  assert.equal(channel('http.client.request.created').hasSubscribers, subscription)
+})
+
+test('transport observation distinguishes a fresh pre-response reset from a reused pre-response reset', { timeout: 5_000 }, async () => {
+  let reset = true
+  const server = createServer((request, response) => {
+    if (reset) request.socket.destroy()
+    else response.end('unchanged')
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  assert.ok(address && typeof address !== 'string')
+  const agent = new Agent({ keepAlive: true })
+  const transport = observeHttpTransport()
+  function read() {
+    return new Promise<void>((resolve, reject) => {
+      get({ hostname: '127.0.0.1', port: address.port, agent }, response => {
+        response.resume()
+        response.once('end', resolve)
+        response.once('error', reject)
+      }).once('error', reject)
+    })
+  }
+  try {
+    await assert.rejects(() => transport.run('fresh-reset', read), { code: 'ECONNRESET' })
+    reset = false
+    await transport.run('good-read', read)
+    reset = true
+    await assert.rejects(() => transport.run('reused-reset', read), { code: 'ECONNRESET' })
+  } finally {
+    agent.destroy()
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    transport.close()
+  }
+  const { events } = transport.snapshot()
+  assert.deepEqual(events.filter(event => event.event === 'request-socket').map(event => event.reusedSocket), [false, false, true])
+  assert.deepEqual(events.filter(event => event.event === 'request-error').map(event => event.code), ['ECONNRESET', 'ECONNRESET'])
+  assert.deepEqual(events.filter(event => event.event === 'response').map(event => event.operation), ['good-read'])
 })
 
 test('redirect canary independently detects followed redirects and leaves manual redirects unread', { timeout: 5_000 }, async () => {

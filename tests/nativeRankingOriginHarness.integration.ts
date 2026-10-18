@@ -9,10 +9,11 @@ import {
   UploadPartCommand,
 } from '@aws-sdk/client-s3'
 import { minioFixture } from './nativeRankingOriginFixtures.ts'
-import { sdkErrorDiagnostic } from './nativeRankingOriginProcesses.ts'
+import { observeHttpTransport, sdkErrorDiagnostic } from './nativeRankingOriginProcesses.ts'
 
 test('isolated MinIO proves fixed public reads and denied mutations with the same principal', { timeout: 60_000 }, async t => {
   const fixture = await minioFixture()
+  const transport = observeHttpTransport()
   const { reader, publisher, bucket, key } = fixture
   let uploadId: string | undefined
   const multipartKey = key('objects/sha256/multipart-fixture')
@@ -36,7 +37,9 @@ test('isolated MinIO proves fixed public reads and denied mutations with the sam
       await fixture.put(path, Buffer.from('private synthetic fixture'))
     }
     await publisher.send(new PutObjectCommand({ Bucket: bucket, Key: 'other-prefix/active-generation.json', Body: 'other namespace' }))
-    for (const [path, body] of publicBodies) assert.deepEqual(await fixture.get(path), body)
+    for (const [path, body] of publicBodies) {
+      assert.deepEqual(await transport.run('public-before', () => fixture.get(path)), body)
+    }
     const upload = await publisher.send(new CreateMultipartUploadCommand({ Bucket: bucket, Key: multipartKey }))
     assert.ok(upload.UploadId)
     uploadId = upload.UploadId
@@ -64,7 +67,7 @@ test('isolated MinIO proves fixed public reads and denied mutations with the sam
     let deniedActions = 0
     for (const [name, operation] of denialAttempts) {
       await t.test(name, async denial => {
-        await assert.rejects(operation, (error: unknown) => {
+        await assert.rejects(() => transport.run<Promise<unknown>>(name, operation), (error: unknown) => {
           try {
             assert.ok(error && typeof error === 'object' && '$metadata' in error && 'name' in error)
             assert.equal((error.$metadata as { httpStatusCode?: number }).httpStatusCode, 403)
@@ -79,13 +82,20 @@ test('isolated MinIO proves fixed public reads and denied mutations with the sam
       })
     }
     assert.deepEqual(await fixture.inventory(), before, 'Denied requests must preserve the full bucket byte inventory')
-    for (const [path, body] of publicBodies) assert.deepEqual(await fixture.get(path), body)
+    for (const [path, body] of publicBodies) {
+      assert.deepEqual(await transport.run('public-after', () => fixture.get(path)), body)
+    }
     assert.deepEqual(Object.keys(fixture.originEnvironment).filter(name => /MINIO|MC_|RANKING_BUCKET|AWS_|PROXY/.test(name)), [])
     t.diagnostic(JSON.stringify({ ...fixture.provenance, publicReadClasses: publicBodies.size,
       denialAttempts: denialAttempts.length, deniedActions, inventoryObjects: before.length, byteIdentity: 'passed' }))
   } finally {
     try {
       if (uploadId) await publisher.send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: multipartKey, UploadId: uploadId }))
-    } finally { await fixture.close() }
+    } finally {
+      try { await fixture.close() } finally {
+        transport.close()
+        t.diagnostic(JSON.stringify({ readerTransport: transport.snapshot() }))
+      }
+    }
   }
 })
