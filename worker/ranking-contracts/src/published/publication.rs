@@ -127,7 +127,9 @@ impl PublicationMember<'_> {
     pub fn relative_key(&self) -> &str {
         relative_key(
             self.prefix,
-            self.member["key"].as_str().expect("validated publication key"),
+            self.member["key"]
+                .as_str()
+                .expect("validated publication key"),
         )
         .expect("validated publication prefix")
     }
@@ -484,7 +486,7 @@ fn js_number_string(value: &str) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{js_number};
+    use super::js_number;
     use serde_json::json;
 
     #[test]
@@ -528,5 +530,4 @@ mod tests {
             assert_eq!(js_number(&value), Some(0.0), "{value}");
         }
     }
-
 }

@@ -26,7 +26,9 @@ struct Fields {
 
 fn vocabulary() -> &'static BTreeMap<String, Fields> {
     static FIELDS: OnceLock<BTreeMap<String, Fields>> = OnceLock::new();
-    FIELDS.get_or_init(|| serde_json::from_str(VOCABULARY).expect("valid shared reference vocabulary"))
+    FIELDS.get_or_init(|| {
+        serde_json::from_str(VOCABULARY).expect("valid shared reference vocabulary")
+    })
 }
 
 pub(super) fn artifact_references(content: &Json) -> Result<Vec<Utf16String>> {

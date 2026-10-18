@@ -1,6 +1,7 @@
 use super::{JSON_TYPE, s3};
 use ranking_contracts::{
-    Result, Utf16Json, Utf16String, canonical_json_value, decode_gzip, parse_canonical_utf16_json, sha256,
+    Result, Utf16Json, Utf16String, canonical_json_value, decode_gzip, parse_canonical_utf16_json,
+    sha256,
 };
 use reqwest::Method;
 use serde::{
