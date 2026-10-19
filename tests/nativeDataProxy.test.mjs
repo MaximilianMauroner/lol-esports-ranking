@@ -87,7 +87,7 @@ test('native gateway returns a controlled unavailable response when its sibling 
   }
 })
 
-test('native gateway labels plain data to prevent edge compression of rejected encodings', async () => {
+test('native gateway labels plain successful data with identity encoding', async () => {
   const payload = Buffer.from('published ranking data\n'.repeat(100))
   const origin = createServer((incoming, response) => {
     if (incoming.url === '/data/unchanged.json') {
