@@ -30,7 +30,7 @@ function input(overrides: Partial<SeriesResultInput> = {}): SeriesResultInput {
 }
 function dateBatch(inputs: readonly SeriesResultInput[]): SeriesResultDateBatch[] {
   const series = inputs.map((value, index) => ({
-    seriesId: `synthetic-${index}`, matchIds: [`game-${index}`], input: value, nodeResult: calculateSeriesResultUpdate(value),
+    seriesId: `synthetic\u0000${index}`, matchIds: [`game-${index}`], input: value, nodeResult: calculateSeriesResultUpdate(value),
   }))
   return [{ utcDate: '2026-01-01', authoritativeMatchIds: series.flatMap((s) => s.matchIds).sort(), series }]
 }

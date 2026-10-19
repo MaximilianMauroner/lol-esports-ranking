@@ -111,7 +111,7 @@ struct Response {
 }
 
 fn identity(text: &str) -> Result<()> {
-    if text.is_empty() || text.len() > 4096 || text.chars().any(char::is_control) {
+    if text.is_empty() || text.len() > 4096 {
         return Err("invalid identity string".into());
     }
     Ok(())
