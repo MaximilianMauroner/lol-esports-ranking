@@ -240,7 +240,7 @@ jobs:
         run: |
           docker run -d --name ranking-web-check -e PORT=8080 -p 127.0.0.1:4174:8080 ranking-web
           trap 'docker logs ranking-web-check; docker rm -f ranking-web-check' EXIT
-          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:4174/api/live
+          curl --fail --connect-timeout 2 --max-time 5 --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:4174/api/live
           curl --fail --dump-header "$RUNNER_TEMP/native-headers" --output /dev/null http://127.0.0.1:4174/data/ranking-summary.json
           rg -i '^x-ranking-runtime: rust' "$RUNNER_TEMP/native-headers"
           docker stop --time 15 ranking-web-check

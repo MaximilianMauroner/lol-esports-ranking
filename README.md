@@ -116,10 +116,21 @@ scouting, Riot integration, and a companion without changing the repository root
 
 ## Railway services
 
-The web service builds with `pnpm run railway:build` and starts with
-`node scripts/railway-server.mjs`. It serves the Vite build and prefers bucket
-artifacts for `/data/*`, with the local reference payload as fallback.
-The build works from a source archive without Git metadata.
+The web service builds `worker/Dockerfile.web` and starts with
+`node scripts/start-serving.mjs`. The supervisor starts the Rust data origin and
+the Node website server. Rust serves `/data/*` from verified bucket artifacts,
+with the local reference payload as fallback. Node serves the Vite build and the
+remaining website routes. The image builds from a source archive without Git metadata.
+
+Build and check the same image locally:
+
+```sh
+docker build -f worker/Dockerfile.web -t ranking-web .
+docker run --rm -e PORT=8080 -p 127.0.0.1:4173:8080 ranking-web
+```
+
+After startup, `/api/live` must return 200 and a `/data/ranking-summary.json`
+response must include `X-Ranking-Runtime: rust`.
 
 The refresh service starts with `node scripts/refresh-once.mjs`. The committed
 cron runs every six hours. Node remains the default refresh implementation.
@@ -155,8 +166,9 @@ worker/target/debug/platform-api --data-root public/data --listen 127.0.0.1:4174
 
 The listener accepts loopback addresses only. It serves `/data/`, `/api/live`, and `/api/ready`.
 Readiness checks only local summary access. The root stays pinned until restart. All symlinks are refused.
-Errors use safe fixed text. Conditional dates use standard HTTP forms. This bounded Unix service does not establish production equivalence.
-Node remains the production start command.
+Errors use safe fixed text. Conditional dates use standard HTTP forms.
+This command checks local delivery only. Production uses the supervisor above,
+which starts the native service with `--ranking-origin` for bucket access.
 
 Run the explicit native proof after building the binary. Both paths must exist. The proof does not build or download inputs.
 
