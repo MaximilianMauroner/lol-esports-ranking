@@ -150,6 +150,46 @@ test('native CLI calculates all 24 fields exactly against actual TypeScript synt
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+test('native CLI preserves real replay parity for a series crossing UTC midnight', { skip: !binary }, async () => {
+  const teams: Record<string, TeamProfile> = Object.fromEntries(['Alpha', 'Beta'].map((name) => [name, { name, code: name, league: 'LCK', region: 'LCK' }]))
+  const matches: MatchRecord[] = ['2026-01-01T23:50:00Z', '2026-01-02T00:30:00Z'].map((datetimeUtc, index) => ({
+    id: `series_game_${index + 1}`, sourceGameId: `series_game_${index + 1}`,
+    sourceProvider: 'oracles-elixir', dataCompleteness: 'scoreboard-game-stats',
+    date: datetimeUtc.slice(0, 10), datetimeUtc, season: 2026,
+    event: 'LCK 2026 Spring', phase: 'Regular season', region: 'LCK', league: 'LCK', patch: '26.1', bestOf: 3,
+    tier: 'regional-regular', teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', teamAKills: 20, teamBKills: 12,
+    teamAGold: 65000, teamBGold: 59000,
+  }))
+  const baselineContext = createRatingReplayContext(structuredClone(matches), structuredClone(teams))
+  const baseline = replayRatingDates({ context: baselineContext, replayMatches: baselineContext.authoritativeMatches })
+  const context = createRatingReplayContext(structuredClone(matches), structuredClone(teams))
+  const state = createRatingRunState(context.authoritativeMatches, context.teams, context.eventWeightContext, context.tournamentLifecycles)
+  const captured: SeriesResultDateBatch[] = []
+  replayRatingDates({ context, state, replayMatches: context.authoritativeMatches, onSeriesResultDate: (date) => {
+    assert.equal(state.processedThroughUtcDate, date.utcDate)
+    assert.deepEqual(date.authoritativeMatchIds, state.processedThroughUtcDateMatchIds)
+    captured.push(date)
+  } })
+  const seriesId = 'source-game-series\u0000oracles-elixir\u0000series'
+  assert.deepEqual(captured.map((date) => ({
+    utcDate: date.utcDate, authoritativeMatchIds: date.authoritativeMatchIds,
+    series: date.series.map(({ seriesId, matchIds }) => ({ seriesId, matchIds })),
+  })), [
+    { utcDate: '2026-01-01', authoritativeMatchIds: ['series_game_1'], series: [{ seriesId, matchIds: ['series_game_1'] }] },
+    { utcDate: '2026-01-02', authoritativeMatchIds: ['series_game_2'], series: [{ seriesId, matchIds: ['series_game_2'] }] },
+  ])
+  const root = await temporary()
+  try {
+    const result = await runSeriesResultShadow({ dates: captured, binaryPath: binary!, outputDir: join(root, 'midnight') })
+    assert.equal(result.dates, 2)
+    assert.equal(result.series, 2)
+    assert.equal(result.fieldsCompared, 48)
+    assert.equal(result.mismatches, 0)
+    assert.deepStrictEqual(state, baseline)
+    assert.deepStrictEqual(materializeRankingModel({ context, state }), materializeRankingModel({ context: baselineContext, state: baseline }))
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('real native CLI rejects invalid complete requests and oversized files', { skip: !binary }, async () => {
   const root = await temporary()
   try {

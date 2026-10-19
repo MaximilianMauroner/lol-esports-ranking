@@ -128,7 +128,7 @@ fn validate(request: &Request) -> Result<()> {
         return Err("date count exceeds bounds".into());
     }
     let mut previous = "";
-    let mut series_ids = HashSet::new();
+    let mut series_count = 0;
     let mut match_ids = HashSet::new();
     for date in &request.dates {
         if date.utc_date.len() != 10
@@ -167,9 +167,11 @@ fn validate(request: &Request) -> Result<()> {
             return Err("authoritative match identities are not ordered".into());
         }
         let mut seen = HashSet::new();
+        let mut series_ids = HashSet::new();
         for series in &date.series {
             identity(&series.series_id)?;
-            if !series_ids.insert(series.series_id.as_str()) || series_ids.len() > 100_000 {
+            series_count += 1;
+            if !series_ids.insert(series.series_id.as_str()) || series_count > 100_000 {
                 return Err("duplicate series identity or series limit".into());
             }
             if series.match_ids.is_empty() || series.match_ids.len() > 64 {
