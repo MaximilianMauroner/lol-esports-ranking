@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 test('published names order by UTF-16 code units, not by locale collation', () => {
   // ICU collation ignores case and accents at the first level; code-unit order does not.

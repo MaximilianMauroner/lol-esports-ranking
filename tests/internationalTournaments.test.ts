@@ -10,8 +10,8 @@ import {
   tournamentFilterOptionsForStandings,
   tournamentInstanceForEvent,
   tournamentBoundaryLabel,
-} from '../src/lib/internationalTournaments.ts'
-import type { PublicTeamStanding, PublicTournamentMovementIndexEntry } from '../src/lib/publicArtifacts/schema.ts'
+} from '../src/domains/rankings/internal/evidence/internationalTournaments.ts'
+import type { PublicTeamStanding, PublicTournamentMovementIndexEntry } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('groups international tournament event labels by family', () => {
   assert.equal(tournamentFamilyForEvent('FST 2026'), 'first-stand')

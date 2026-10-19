@@ -1,12 +1,13 @@
+import type { RankingUniverse } from '../src/domains/rankings/internal/queries/rankingBoard.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { WhatChanged } from '../src/components/WhatChanged.tsx'
-import { deriveRankingBoard, deriveRankingUniverse, type RankingBoardSelection, type RankingEvidence } from '../src/lib/rankingBoard.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
-import type { PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam } from '../src/lib/publicArtifacts/schema.ts'
-import type { TournamentInstanceId } from '../src/lib/internationalTournaments.ts'
+import { WhatChanged } from '../src/views/rankings/WhatChanged.tsx'
+import { createRankingBoard, type RankingBoardSelection, type RankingEvidence } from '../src/domains/rankings/internal/queries/rankingBoard.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam } from '../src/domains/rankings/internal/published/schema.ts'
+import type { TournamentInstanceId } from '../src/domains/rankings/internal/evidence/internationalTournaments.ts'
 
 test('What changed names the upset event like the match ledger, not by its source path', () => {
   // Issue #115 F2.
@@ -21,38 +22,38 @@ test('What changed names the upset event like the match ledger, not by its sourc
 
 test('record order breaks equal wins by losses, and the reverse order mirrors it', () => {
   // Issue #115 F5: T1 39-22 sorted above KC 39-18 because only wins counted.
-  const universe = deriveRankingUniverse(evidence([
+  const universe = createRankingBoard(evidence([
     standing('T1', { rank: 1, wins: 39, losses: 22 }),
     standing('G2', { rank: 2, wins: 37, losses: 15 }),
     standing('KC', { rank: 3, wins: 39, losses: 18 }),
   ]))
 
-  assert.deepEqual(teams(deriveRankingBoard(universe, selection({ sortKey: 'wins', sortDirection: 'descending' })).rows), ['KC', 'T1', 'G2'])
-  assert.deepEqual(teams(deriveRankingBoard(universe, selection({ sortKey: 'wins', sortDirection: 'ascending' })).rows), ['G2', 'T1', 'KC'])
+  assert.deepEqual(teams(universe.select(selection({ sortKey: 'wins', sortDirection: 'descending' })).rows), ['KC', 'T1', 'G2'])
+  assert.deepEqual(teams(universe.select(selection({ sortKey: 'wins', sortDirection: 'ascending' })).rows), ['G2', 'T1', 'KC'])
 })
 
 test('a falling participant left alone by the filters is only the faller', () => {
   const scope = [standing('Gen.G', { region: 'LCK', rank: 1 }), standing('KC', { region: 'LEC', rank: 2 })]
-  const falling = deriveRankingUniverse(evidence(scope, msi([movement('Gen.G', 2), movement('KC', -4)])))
-  assert.deepEqual(pickedTeams(deriveRankingBoard(falling, selection({ region: 'LEC' }))), { riser: undefined, faller: 'KC' })
+  const falling = createRankingBoard(evidence(scope, msi([movement('Gen.G', 2), movement('KC', -4)])))
+  assert.deepEqual(pickedTeams(falling.select(selection({ region: 'LEC' }))), { riser: undefined, faller: 'KC' })
 
-  const rising = deriveRankingUniverse(evidence(scope, msi([movement('Gen.G', -2), movement('KC', 4)])))
-  assert.deepEqual(pickedTeams(deriveRankingBoard(rising, selection({ region: 'LEC' }))), { riser: 'KC', faller: undefined })
+  const rising = createRankingBoard(evidence(scope, msi([movement('Gen.G', -2), movement('KC', 4)])))
+  assert.deepEqual(pickedTeams(rising.select(selection({ region: 'LEC' }))), { riser: 'KC', faller: undefined })
 })
 
 test('tiers stay canonical for the scope while counts and disclosures follow the filters', () => {
-  const universe = deriveRankingUniverse(evidence([
+  const universe = createRankingBoard(evidence([
     standing('Leader', { region: 'LCK', rank: 1, rating: 2300 }),
     standing('Middle', { region: 'LEC', rank: 20, rating: 1900 }),
     standing('Last', { region: 'LEC', rank: 56, rating: 1500 }),
     standing('Newcomer', { region: 'LEC', rank: 57, rating: 1450, eligibility: { eligible: false } as RankingSummaryStanding['eligibility'] }),
   ]))
-  const lec = deriveRankingBoard(universe, selection({ region: 'LEC' }))
+  const lec = universe.select(selection({ region: 'LEC' }))
 
   assert.deepEqual(teams(lec.rows), ['Middle', 'Last'])
   assert.deepEqual(lec.rows.map(universe.tierFor), ['B', 'C'])
   assert.deepEqual(lec.tierCounts, [{ tier: 'S', count: 0 }, { tier: 'A', count: 0 }, { tier: 'B', count: 1 }, { tier: 'C', count: 1 }])
-  assert.deepEqual(teams(deriveRankingBoard(universe, selection({ region: 'LEC', tier: 'S' })).rows), [])
+  assert.deepEqual(teams(universe.select(selection({ region: 'LEC', tier: 'S' })).rows), [])
   assert.deepEqual(lec.disclosure, { regionFilter: 'LEC', tournamentFilter: 'All', tableTeamCount: 2, scopeTeamCount: 4, hiddenFromRankedCount: 1 })
   assert.equal(lec.activeFilterCount, 1)
 })
@@ -63,8 +64,8 @@ test('an exact tournament board and its comparisons read one projected universe'
     standing('KC', { region: 'LEC', rank: 2, rating: 2100 }),
     standing('Home only', { region: 'LCK', rank: 3, rating: 2000 }),
   ]
-  const universe = deriveRankingUniverse(evidence(scope, msi([movement('Gen.G', 2), movement('KC', -4)])))
-  const board = deriveRankingBoard(universe, selection({ region: 'LEC', pageSize: 1, requestedPage: 9 }))
+  const universe = createRankingBoard(evidence(scope, msi([movement('Gen.G', 2), movement('KC', -4)])))
+  const board = universe.select(selection({ region: 'LEC', pageSize: 1, requestedPage: 9 }))
 
   assert.deepEqual(teams(universe.standings), ['Gen.G', 'KC'])
   assert.deepEqual(universe.standings.map((team) => team.rating), [2020, 1960])
@@ -76,12 +77,12 @@ test('an exact tournament board and its comparisons read one projected universe'
 
 test('a loaded tournament that the index does not offer projects neither the board nor comparisons', () => {
   const scope = [standing('Gen.G', { rank: 1, rating: 2200 }), standing('Home only', { rank: 2, rating: 2000 })]
-  const universe = deriveRankingUniverse({ ...evidence(scope, msi([movement('Gen.G', 2)])), tournamentEntries: [] })
+  const universe = createRankingBoard({ ...evidence(scope, msi([movement('Gen.G', 2)])), tournamentEntries: [] })
 
   assert.equal(universe.tournamentFilter, 'All')
   assert.equal(universe.tournament, undefined)
   assert.equal(universe.standings, scope)
-  assert.deepEqual(teams(deriveRankingBoard(universe, selection()).rows), ['Gen.G', 'Home only'])
+  assert.deepEqual(teams(universe.select(selection()).rows), ['Gen.G', 'Home only'])
 })
 
 const MSI = 'msi:2026' as TournamentInstanceId
@@ -128,7 +129,7 @@ function teams(rows: readonly RankingSummaryStanding[]) {
   return rows.map((row) => row.team)
 }
 
-function pickedTeams({ movement }: ReturnType<typeof deriveRankingBoard>) {
+function pickedTeams({ movement }: ReturnType<RankingUniverse['select']>) {
   if (movement.kind !== 'tournament') assert.fail('expected tournament movement')
   return { riser: movement.riser?.team, faller: movement.faller?.team }
 }

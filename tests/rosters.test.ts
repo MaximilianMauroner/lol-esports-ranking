@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { latestRosterByTeam, mergeRosterObservation, rosterBasisByTeam, rosterContinuity, rosterKnowledgeByTeam } from '../src/lib/rosters.ts'
-import type { MatchRecord, MatchRosterSnapshot } from '../src/types.ts'
+import { latestRosterByTeam, mergeRosterObservation, rosterBasisByTeam, rosterContinuity, rosterKnowledgeByTeam } from '../src/domains/rankings/internal/players/rosters.ts'
+import type { MatchRecord, MatchRosterSnapshot } from '../src/domains/rankings/types.ts'
 
 test('rosterBasisByTeam returns sourced for latest complete five-role roster', () => {
   const basis = rosterBasisByTeam([

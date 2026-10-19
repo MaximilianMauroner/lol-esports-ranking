@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { importRankingSourceData } from '../scripts/ranking-source-import'
-import { providerFreshness } from '../src/lib/sourceFreshness'
+import { importRankingSourceData } from '../scripts/rankings/source-input'
+import { providerFreshness } from '../src/domains/rankings/internal/evidence/sourceFreshness'
 
 test('source coverage counts retained tournament games after home-league resolution and deduplication', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ranking-source-import-'))

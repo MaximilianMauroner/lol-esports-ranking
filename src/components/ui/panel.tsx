@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import * as React from 'react'
 import { Card } from './card'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 /**
  * The one bordered container in the product.

@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
-import { createPublicArtifactWritePlan, publicMatchHistoryShardPath } from '../src/lib/publicArtifacts/writePlan.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { createPublicArtifactWritePlan, publicMatchHistoryShardPath } from '../src/domains/rankings/internal/published/writePlan.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import type { MatchRecord } from '../src/types.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 
 test('Matches event choices and addressed pages survive catalog loading and real document reloads', { timeout: 90_000 }, async (t) => {
   const matches: MatchRecord[] = Array.from({ length: 66 }, (_, index) => {

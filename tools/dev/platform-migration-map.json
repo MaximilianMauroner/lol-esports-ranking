@@ -1,0 +1,722 @@
+[
+  {
+    "old": "src/lib/seriesResolver.ts",
+    "new": "src/domains/rankings/internal/evidence/seriesResolver.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/matchFormat.ts",
+    "new": "src/domains/rankings/internal/evidence/matchFormat.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/matchContext.ts",
+    "new": "src/domains/rankings/internal/evidence/matchContext.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/teamProfiles.ts",
+    "new": "src/domains/rankings/internal/evidence/teamProfiles.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/ratingUniverse.ts",
+    "new": "src/domains/rankings/internal/evidence/ratingUniverse.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/internationalTournaments.ts",
+    "new": "src/domains/rankings/internal/evidence/internationalTournaments.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/seasonHistory.ts",
+    "new": "src/domains/rankings/internal/evidence/seasonHistory.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/sourceFreshness.ts",
+    "new": "src/domains/rankings/internal/evidence/sourceFreshness.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/lib/importers/communitySources.ts",
+    "new": "src/domains/rankings/internal/evidence/communitySources.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/data/teamIdentity.ts",
+    "new": "src/domains/rankings/internal/evidence/teamIdentity.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/data/competitionTaxonomy.ts",
+    "new": "src/domains/rankings/internal/evidence/competitionTaxonomy.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/data/regionTaxonomy.ts",
+    "new": "src/domains/rankings/internal/evidence/regionTaxonomy.ts",
+    "entry": "src/domains/rankings/evidence.ts"
+  },
+  {
+    "old": "src/data/rankingConfig.ts",
+    "new": "src/domains/rankings/internal/policy/rankingConfig.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/data/leagueTiers.ts",
+    "new": "src/domains/rankings/internal/policy/leagueTiers.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/lib/modelConfig.ts",
+    "new": "src/domains/rankings/internal/policy/modelConfig.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/lib/playerPolicy.ts",
+    "new": "src/domains/rankings/internal/policy/playerPolicy.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/lib/playerPerformancePolicy.ts",
+    "new": "src/domains/rankings/internal/policy/playerPerformancePolicy.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/lib/executionResidual.ts",
+    "new": "src/domains/rankings/internal/policy/executionResidual.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/lib/predictionFeaturePolicy.ts",
+    "new": "src/domains/rankings/internal/policy/predictionFeaturePolicy.ts",
+    "entry": "src/domains/rankings/policy.ts"
+  },
+  {
+    "old": "src/lib/model.ts",
+    "new": "src/domains/rankings/internal/replay/model.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/ratingRunState.ts",
+    "new": "src/domains/rankings/internal/replay/ratingRunState.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/ratingContext.ts",
+    "new": "src/domains/rankings/internal/replay/ratingContext.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/ratingCalculations.ts",
+    "new": "src/domains/rankings/internal/replay/ratingCalculations.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/seriesResultUpdate.ts",
+    "new": "src/domains/rankings/internal/replay/seriesResultUpdate.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/leagueRatings.ts",
+    "new": "src/domains/rankings/internal/replay/leagueRatings.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/eventWeighting.ts",
+    "new": "src/domains/rankings/internal/replay/eventWeighting.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/placementResiduals.ts",
+    "new": "src/domains/rankings/internal/replay/placementResiduals.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/rosterContinuityRating.ts",
+    "new": "src/domains/rankings/internal/replay/rosterContinuityRating.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/sideAdjustments.ts",
+    "new": "src/domains/rankings/internal/replay/sideAdjustments.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/causalRecompute.ts",
+    "new": "src/domains/rankings/internal/replay/causalRecompute.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/ratingCheckpoint.ts",
+    "new": "src/domains/rankings/internal/replay/ratingCheckpoint.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/ratingCheckpointInventory.ts",
+    "new": "src/domains/rankings/internal/replay/ratingCheckpointInventory.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/playerModel.ts",
+    "new": "src/domains/rankings/internal/players/playerModel.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/playerResumeLedger.ts",
+    "new": "src/domains/rankings/internal/players/playerResumeLedger.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/playerPerformance.ts",
+    "new": "src/domains/rankings/internal/players/playerPerformance.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/rosters.ts",
+    "new": "src/domains/rankings/internal/players/rosters.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/rosterEras.ts",
+    "new": "src/domains/rankings/internal/players/rosterEras.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/snapshot.ts",
+    "new": "src/domains/rankings/internal/projections/snapshot.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/publishedRatingArtifacts.ts",
+    "new": "src/domains/rankings/internal/projections/publishedRatingArtifacts.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/modelSummaries.ts",
+    "new": "src/domains/rankings/internal/projections/modelSummaries.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/regionStrength.ts",
+    "new": "src/domains/rankings/internal/projections/regionStrength.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/deservedStanding.ts",
+    "new": "src/domains/rankings/internal/projections/deservedStanding.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/deservedStandingModel.ts",
+    "new": "src/domains/rankings/internal/projections/deservedStandingModel.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/deservedStandingPublicComparison.ts",
+    "new": "src/domains/rankings/internal/projections/deservedStandingPublicComparison.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/deservedStandingRegions.ts",
+    "new": "src/domains/rankings/internal/projections/deservedStandingRegions.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/eligibility.ts",
+    "new": "src/domains/rankings/internal/projections/eligibility.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/predictionContext.ts",
+    "new": "src/domains/rankings/internal/projections/predictionContext.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/predictionModel.ts",
+    "new": "src/domains/rankings/internal/projections/predictionModel.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/predictionVariants.ts",
+    "new": "src/domains/rankings/internal/projections/predictionVariants.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/matchupMath.ts",
+    "new": "src/domains/rankings/internal/projections/matchupMath.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/binaryPredictionMetrics.ts",
+    "new": "src/domains/rankings/internal/projections/binaryPredictionMetrics.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/rankingBoard.ts",
+    "new": "src/domains/rankings/internal/queries/rankingBoard.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/rankingFlair.ts",
+    "new": "src/domains/rankings/internal/queries/rankingFlair.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/matchLedger.ts",
+    "new": "src/domains/rankings/internal/queries/matchLedger.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/matchEventGroups.ts",
+    "new": "src/domains/rankings/internal/queries/matchEventGroups.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/playerScopes.ts",
+    "new": "src/domains/rankings/internal/queries/playerScopes.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/nearTies.ts",
+    "new": "src/domains/rankings/internal/queries/nearTies.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/rankingScopeLabel.ts",
+    "new": "src/domains/rankings/internal/queries/rankingScopeLabel.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/defaultScope.ts",
+    "new": "src/domains/rankings/internal/queries/defaultScope.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/publicMatchup.ts",
+    "new": "src/domains/rankings/internal/queries/publicMatchup.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/winProbability.ts",
+    "new": "src/domains/rankings/internal/queries/winProbability.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/ratingComponentLabels.ts",
+    "new": "src/domains/rankings/internal/queries/ratingComponentLabels.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/receipts.ts",
+    "new": "src/domains/rankings/internal/queries/receipts.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/timelineCompaction.ts",
+    "new": "src/domains/rankings/internal/queries/timelineCompaction.ts",
+    "entry": "src/domains/rankings/read.ts"
+  },
+  {
+    "old": "src/lib/incremental/types.ts",
+    "new": "src/domains/rankings/internal/replay/incremental/types.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/incremental/replayOrchestrator.ts",
+    "new": "src/domains/rankings/internal/replay/incremental/replayOrchestrator.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/incremental/externalCausalState.ts",
+    "new": "src/domains/rankings/internal/replay/incremental/externalCausalState.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/rankingEvaluation.ts",
+    "new": "tools/calibration/lib/rankingEvaluation.ts"
+  },
+  {
+    "old": "src/lib/rankingEvaluationData.ts",
+    "new": "tools/calibration/lib/rankingEvaluationData.ts"
+  },
+  {
+    "old": "src/lib/evaluationBaselines.ts",
+    "new": "tools/calibration/lib/evaluationBaselines.ts"
+  },
+  {
+    "old": "src/lib/offlineForecastMetrics.ts",
+    "new": "tools/calibration/lib/offlineForecastMetrics.ts"
+  },
+  {
+    "old": "src/lib/offlineForecastCohort.ts",
+    "new": "tools/calibration/lib/offlineForecastCohort.ts"
+  },
+  {
+    "old": "src/lib/importers/oraclesElixir.ts",
+    "new": "scripts/rankings/providers/oraclesElixir.ts"
+  },
+  {
+    "old": "src/lib/importers/leaguepedia.ts",
+    "new": "scripts/rankings/providers/leaguepedia.ts"
+  },
+  {
+    "old": "src/lib/importers/lolEsports.ts",
+    "new": "scripts/rankings/providers/lolEsports.ts"
+  },
+  {
+    "old": "src/lib/importers/providerTime.ts",
+    "new": "scripts/rankings/providers/providerTime.ts"
+  },
+  {
+    "old": "src/lib/importers/championPicks.ts",
+    "new": "scripts/rankings/providers/championPicks.ts"
+  },
+  {
+    "old": "scripts/ranking-source-import.ts",
+    "new": "scripts/rankings/source-input.ts"
+  },
+  {
+    "old": "src/lib/conditionalPowerResultReceiptBuilder.ts",
+    "new": "scripts/tournaments/conditionalPowerResultReceiptBuilder.ts"
+  },
+  {
+    "old": "src/lib/conditionalPowerReplay.ts",
+    "new": "src/domains/rankings/internal/scenarios/conditionalPowerReplay.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/conditionalPowerReplayBasis.ts",
+    "new": "src/domains/rankings/internal/scenarios/conditionalPowerReplayBasis.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/conditionalPowerResultComponent.ts",
+    "new": "src/domains/rankings/internal/scenarios/conditionalPowerResultComponent.ts",
+    "entry": "src/domains/rankings/build.ts"
+  },
+  {
+    "old": "src/lib/tournamentFeed.ts",
+    "new": "src/domains/tournaments/internal/tournamentFeed.ts",
+    "entry": "src/domains/tournaments/read.ts"
+  },
+  {
+    "old": "src/lib/tournamentBracket.ts",
+    "new": "src/domains/tournaments/internal/tournamentBracket.ts",
+    "entry": "src/domains/tournaments/read.ts"
+  },
+  {
+    "old": "src/lib/tournamentForecast.ts",
+    "new": "src/domains/tournaments/internal/tournamentForecast.ts",
+    "entry": "src/domains/tournaments/forecast.ts"
+  },
+  {
+    "old": "src/lib/swissScenario.ts",
+    "new": "src/domains/tournaments/internal/swissScenario.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/swissOdds.ts",
+    "new": "src/domains/tournaments/internal/swissOdds.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worldsObservedRules.ts",
+    "new": "src/domains/tournaments/internal/worldsObservedRules.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worldsObservedBracket.ts",
+    "new": "src/domains/tournaments/internal/worldsObservedBracket.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worlds2022ObservedGroups.ts",
+    "new": "src/domains/tournaments/internal/worlds2022ObservedGroups.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worlds2026PlayIn.ts",
+    "new": "src/domains/tournaments/internal/worlds2026PlayIn.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worlds2026Swiss.ts",
+    "new": "src/domains/tournaments/internal/worlds2026Swiss.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worlds2026Knockout.ts",
+    "new": "src/domains/tournaments/internal/worlds2026Knockout.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/worldsSimulation.ts",
+    "new": "src/domains/tournaments/internal/worldsSimulation.ts",
+    "entry": "src/domains/tournaments/simulation.ts"
+  },
+  {
+    "old": "src/lib/conditionalPowerPreview.ts",
+    "new": "src/domains/tournaments/internal/conditionalPowerPreview.ts",
+    "entry": "src/domains/tournaments/forecast.ts"
+  },
+  {
+    "old": "src/lib/conditionalPowerResultReceipts.ts",
+    "new": "src/domains/tournaments/internal/conditionalPowerResultReceipts.ts",
+    "entry": "src/domains/tournaments/forecast.ts"
+  },
+  {
+    "old": "src/lib/publicArtifacts/archive.d.mts",
+    "new": "src/domains/rankings/internal/published/archive.d.mts",
+    "entry": "src/domains/rankings/internal/published/archive.d.mts"
+  },
+  {
+    "old": "src/lib/publicArtifacts/logicalReferences.d.mts",
+    "new": "src/domains/rankings/internal/published/logicalReferences.d.mts",
+    "entry": "src/domains/rankings/internal/published/logicalReferences.d.mts"
+  },
+  {
+    "old": "src/lib/publicArtifacts/logicalPath.mjs",
+    "new": "src/domains/rankings/internal/published/logicalPath.mjs",
+    "entry": "src/domains/rankings/internal/published/logicalPath.mjs"
+  },
+  {
+    "old": "src/lib/publicArtifacts/schema.ts",
+    "new": "src/domains/rankings/internal/published/schema.ts",
+    "entry": "src/domains/rankings/published-read.ts"
+  },
+  {
+    "old": "src/lib/publicArtifacts/logicalPath.d.mts",
+    "new": "src/domains/rankings/internal/published/logicalPath.d.mts",
+    "entry": "src/domains/rankings/internal/published/logicalPath.d.mts"
+  },
+  {
+    "old": "src/lib/publicArtifacts/writePlan.ts",
+    "new": "src/domains/rankings/internal/published/writePlan.ts",
+    "entry": "src/domains/rankings/artifact-write.ts"
+  },
+  {
+    "old": "src/lib/publicArtifacts/archive.mjs",
+    "new": "src/domains/rankings/internal/published/archive.mjs",
+    "entry": "src/domains/rankings/internal/published/archive.mjs"
+  },
+  {
+    "old": "src/lib/publicArtifacts/logicalReferences.mjs",
+    "new": "src/domains/rankings/internal/published/logicalReferences.mjs",
+    "entry": "src/domains/rankings/internal/published/logicalReferences.mjs"
+  },
+  {
+    "old": "src/types.ts",
+    "new": "src/domains/rankings/types.ts"
+  },
+  {
+    "old": "src/browser/publicArtifacts/semanticCache.ts",
+    "new": "src/browser/rankings/published/semanticCache.ts"
+  },
+  {
+    "old": "src/browser/publicArtifacts/manifestLoader.ts",
+    "new": "src/browser/rankings/published/manifestLoader.ts"
+  },
+  {
+    "old": "src/browser/publicArtifacts/resolver.ts",
+    "new": "src/browser/rankings/published/resolver.ts"
+  },
+  {
+    "old": "src/browser/publicArtifacts/urlResolver.ts",
+    "new": "src/browser/rankings/published/urlResolver.ts"
+  },
+  {
+    "old": "src/browser/publicArtifacts/artifactIdentity.ts",
+    "new": "src/browser/rankings/published/artifactIdentity.ts"
+  },
+  {
+    "old": "src/browser/worldsArtifacts.ts",
+    "new": "src/browser/tournaments/worldsArtifacts.ts"
+  },
+  {
+    "old": "src/browser/worldsWorkerClient.ts",
+    "new": "src/browser/tournaments/worldsWorkerClient.ts"
+  },
+  {
+    "old": "src/browser/worldsSimulationWorker.ts",
+    "new": "src/browser/tournaments/worldsSimulationWorker.ts"
+  },
+  {
+    "old": "src/browser/tournamentForecastArtifacts.ts",
+    "new": "src/browser/tournaments/tournamentForecastArtifacts.ts"
+  },
+  {
+    "old": "src/browser/tournamentFeedCache.ts",
+    "new": "src/browser/tournaments/tournamentFeedCache.ts"
+  },
+  {
+    "old": "src/browser/prefetch.ts",
+    "new": "src/browser/rankings/prefetch.ts"
+  },
+  {
+    "old": "src/lib/championIcons.ts",
+    "new": "src/browser/branding/championIcons.ts"
+  },
+  {
+    "old": "src/lib/teamLogo.d.mts",
+    "new": "src/shared/teamLogo.d.mts"
+  },
+  {
+    "old": "src/lib/teamLogo.mjs",
+    "new": "src/shared/teamLogo.mjs"
+  },
+  {
+    "old": "src/lib/display.ts",
+    "new": "src/shared/display.ts"
+  },
+  {
+    "old": "src/lib/utils.ts",
+    "new": "src/shared/utils.ts"
+  },
+  {
+    "old": "src/lib/chartTime.ts",
+    "new": "src/shared/chartTime.ts"
+  },
+  {
+    "old": "src/lib/colorSlots.ts",
+    "new": "src/shared/colorSlots.ts"
+  },
+  {
+    "old": "src/lib/chartPoints.ts",
+    "new": "src/shared/chartPoints.ts"
+  },
+  {
+    "old": "src/lib/codeUnitOrder.mjs",
+    "new": "src/shared/codeUnitOrder.mjs"
+  },
+  {
+    "old": "src/lib/codeUnitOrder.d.mts",
+    "new": "src/shared/codeUnitOrder.d.mts"
+  },
+  {
+    "old": "src/lib/boardHeadline.ts",
+    "new": "src/views/rankings/boardHeadline.ts"
+  },
+  {
+    "old": "src/lib/teamHistoryChart.ts",
+    "new": "src/views/rankings/teamHistoryChart.ts"
+  },
+  {
+    "old": "src/lib/trajectory.ts",
+    "new": "src/views/rankings/trajectory.ts"
+  },
+  {
+    "old": "src/lib/upset.ts",
+    "new": "src/views/rankings/upset.ts"
+  },
+  {
+    "old": "src/lib/legal.ts",
+    "new": "src/data/legal.ts"
+  },
+  {
+    "old": "src/lib/bootstrap.ts",
+    "new": "src/browser/bootstrap.ts"
+  },
+  {
+    "old": "src/hooks/urlState.ts",
+    "new": "src/browser/navigation.ts"
+  },
+  {
+    "old": "src/views/TeamsView.tsx",
+    "new": "src/views/rankings/TeamsView.tsx"
+  },
+  {
+    "old": "src/views/TournamentsView.tsx",
+    "new": "src/views/tournaments/TournamentsView.tsx"
+  },
+  {
+    "old": "src/views/MatchesView.tsx",
+    "new": "src/views/matches/MatchesView.tsx"
+  },
+  {
+    "old": "src/views/RegionsView.tsx",
+    "new": "src/views/regions/RegionsView.tsx"
+  },
+  {
+    "old": "src/components/ConditionalPowerPreview.tsx",
+    "new": "src/views/tournaments/ConditionalPowerPreview.tsx"
+  },
+  {
+    "old": "src/components/SwissPreview.tsx",
+    "new": "src/views/tournaments/SwissPreview.tsx"
+  },
+  {
+    "old": "src/components/SwissRegionOdds.tsx",
+    "new": "src/views/tournaments/SwissRegionOdds.tsx"
+  },
+  {
+    "old": "src/components/WorldsTournamentPanel.tsx",
+    "new": "src/views/tournaments/WorldsTournamentPanel.tsx"
+  },
+  {
+    "old": "src/components/TournamentBracket.tsx",
+    "new": "src/views/tournaments/TournamentBracket.tsx"
+  },
+  {
+    "old": "src/components/CompareAnalysis.tsx",
+    "new": "src/views/rankings/CompareAnalysis.tsx"
+  },
+  {
+    "old": "src/components/CompareDock.tsx",
+    "new": "src/views/rankings/CompareDock.tsx"
+  },
+  {
+    "old": "src/components/CompareDrawer.tsx",
+    "new": "src/views/rankings/CompareDrawer.tsx"
+  },
+  {
+    "old": "src/components/CompareToggle.tsx",
+    "new": "src/views/rankings/CompareToggle.tsx"
+  },
+  {
+    "old": "src/components/HeadToHead.tsx",
+    "new": "src/views/rankings/HeadToHead.tsx"
+  },
+  {
+    "old": "src/components/PlayerPerformancePanel.tsx",
+    "new": "src/views/rankings/PlayerPerformancePanel.tsx"
+  },
+  {
+    "old": "src/components/PowerLadder.tsx",
+    "new": "src/views/rankings/PowerLadder.tsx"
+  },
+  {
+    "old": "src/components/ScopeBar.tsx",
+    "new": "src/views/rankings/ScopeBar.tsx"
+  },
+  {
+    "old": "src/components/TeamHistoryLineChart.tsx",
+    "new": "src/views/rankings/TeamHistoryLineChart.tsx"
+  },
+  {
+    "old": "src/components/WhatChanged.tsx",
+    "new": "src/views/rankings/WhatChanged.tsx"
+  },
+  {
+    "old": "src/components/compareAnalysisData.tsx",
+    "new": "src/views/rankings/compareAnalysisData.tsx"
+  },
+  {
+    "old": "src/components/matches/seriesOutcome.ts",
+    "new": "src/views/matches/seriesOutcome.ts"
+  },
+  {
+    "old": "src/components/matches/SeriesLedger.tsx",
+    "new": "src/views/matches/SeriesLedger.tsx"
+  },
+  {
+    "old": "src/components/matches/ChampionPicks.tsx",
+    "new": "src/views/matches/ChampionPicks.tsx"
+  },
+  {
+    "old": "src/hooks/usePublicArtifacts.ts",
+    "new": "src/browser/rankings/usePublicArtifacts.ts"
+  }
+]

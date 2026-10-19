@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { binaryMetricContract } from '../src/lib/binaryPredictionMetrics.ts'
-import { chronologicalCohorts, compareEvaluationExports, readEvaluationExport, summarizeEvaluation, type EvaluationExport } from '../src/lib/rankingEvaluation.ts'
-import { buildEvaluationData } from '../src/lib/rankingEvaluationData.ts'
-import { createRatingReplayContext, replayRatingDates } from '../src/lib/model.ts'
-import { seriesWinProbability } from '../src/lib/winProbability.ts'
-import type { MatchRecord, PregamePrediction } from '../src/types.ts'
+import { binaryMetricContract } from '../src/domains/rankings/internal/projections/binaryPredictionMetrics.ts'
+import { chronologicalCohorts, compareEvaluationExports, readEvaluationExport, summarizeEvaluation, type EvaluationExport } from '../tools/calibration/lib/rankingEvaluation.ts'
+import { buildEvaluationData } from '../tools/calibration/lib/rankingEvaluationData.ts'
+import { createRatingReplayContext, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
+import { seriesWinProbability } from '../src/domains/rankings/internal/queries/winProbability.ts'
+import type { MatchRecord, PregamePrediction } from '../src/domains/rankings/types.ts'
 import { sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 function fixture(): EvaluationExport {

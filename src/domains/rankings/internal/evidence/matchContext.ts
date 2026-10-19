@@ -1,0 +1,44 @@
+import type { MatchRecord, TeamProfile } from '../../types.ts'
+import type { CanonicalSeries } from './seriesResolver.ts'
+
+export function matchesByDate(matches: MatchRecord[]) {
+  const groups: MatchRecord[][] = []
+  for (const match of matches) {
+    const previousGroup = groups.at(-1)
+    if (previousGroup?.[0]?.date === match.date) {
+      previousGroup.push(match)
+    } else {
+      groups.push([match])
+    }
+  }
+  return groups
+}
+
+export function homeLeagueForMatch(match: MatchRecord, side: 'A' | 'B', teams: Record<string, TeamProfile>) {
+  const teamName = side === 'A' ? match.teamA : match.teamB
+  return (side === 'A' ? match.teamAHomeLeague : match.teamBHomeLeague) ?? teams[teamName]?.league ?? 'Unknown'
+}
+
+export function sourceTraceFor(
+  match: MatchRecord,
+  series?: Pick<CanonicalSeries, 'id' | 'format' | 'formatBasis' | 'formatConfidence' | 'state'>,
+) {
+  return {
+    provider: match.sourceProvider,
+    gameId: match.sourceGameId,
+    matchId: match.sourceMatchId,
+    officialEventId: match.officialEventId,
+    officialMatchId: match.officialMatchId,
+    officialGameId: match.officialGameId,
+    url: match.sourceUrl || undefined,
+    fileName: match.sourceFileName,
+    completeness: match.dataCompleteness,
+    date: match.date,
+    event: match.event,
+    bestOf: series?.format ?? match.bestOf,
+    seriesId: series?.id,
+    formatBasis: series?.formatBasis,
+    formatConfidence: series?.formatConfidence,
+    seriesState: series?.state,
+  }
+}

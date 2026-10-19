@@ -3,12 +3,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { importRankingSourceData } from '../scripts/ranking-source-import.ts'
-import { inferEventTier } from '../src/data/competitionTaxonomy.ts'
-import { knownTeamIdentities } from '../src/data/teamIdentity.ts'
-import { eventKFactorForMatch, eventWeightForMatch } from '../src/lib/eventWeighting.ts'
-import { groupedMatchEvents } from '../src/lib/matchEventGroups.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
+import { importRankingSourceData } from '../scripts/rankings/source-input.ts'
+import { inferEventTier, knownTeamIdentities } from '../src/domains/rankings/evidence.ts'
+import { eventKFactorForMatch, eventWeightForMatch } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { groupedMatchEvents } from '../src/domains/rankings/read.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 for (const cup of [
   { league: 'DCGI', event: '2026 Demacia Cup Global Invitational', homeLeague: 'LCS', opponent: 'Cloud9' },

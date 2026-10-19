@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
-import { displayRegionPowerScore, type RegionStrength } from '../lib/regionStrength'
-import { formatRating } from '../lib/display'
+import { displayRegionPowerScore, type RegionStrength } from '../domains/rankings/read'
+import { formatRating } from '../shared/display'
 import { TeamMark } from './TeamMark'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card'
 

@@ -1,4 +1,4 @@
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 import {
   TOURNAMENT_FEED_VERSION,
   normalizeStatus,
@@ -6,7 +6,7 @@ import {
   type TournamentEvent,
   type TournamentFeed,
   type TournamentSeries,
-} from '../src/lib/tournamentFeed.ts'
+} from '../src/domains/tournaments/read.ts'
 import { fetchWithRetry } from './provider-fetch-retry.mjs'
 
 /** Leaguepedia content is CC BY-SA 3.0; the hub links the source page and licence. */

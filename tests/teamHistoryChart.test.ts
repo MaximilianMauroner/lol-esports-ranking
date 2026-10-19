@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chartPointFromHistoryPoint, dailyChartPointsFromHistoryPoints, deriveDailyRankSeries, tournamentChartPoints } from '../src/lib/teamHistoryChart.ts'
-import { formatChartInfluence, nonMatchDeltaFor } from '../src/lib/chartPoints.ts'
-import type { TeamHistorySeries } from '../src/lib/snapshot.ts'
+import { chartPointFromHistoryPoint, dailyChartPointsFromHistoryPoints, deriveDailyRankSeries, tournamentChartPoints } from '../src/views/rankings/teamHistoryChart.ts'
+import { formatChartInfluence, nonMatchDeltaFor } from '../src/shared/chartPoints.ts'
+import type { TeamHistorySeries } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 type HistoryPoint = TeamHistorySeries['points'][number]
 

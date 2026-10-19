@@ -5,15 +5,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastLedgerOffline, recordForecastDeliveryOffline } from '../scripts/tournament-forecast-receipts'
 import { observeForecastDelivery } from '../scripts/tournament-forecast-delivery'
-import { publishedRatingScale } from '../src/lib/modelConfig'
-import { estimatePublicMatchup } from '../src/lib/publicMatchup'
-import { loadTournamentForecastLedger } from '../src/lib/tournamentForecastArtifacts'
-import type { PublicRankingShard, PublicTeamStanding } from '../src/lib/publicArtifacts/schema'
-import type { TournamentSeries } from '../src/lib/tournamentFeed'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig'
+import { estimatePublicMatchup } from '../src/domains/rankings/internal/queries/publicMatchup'
+import { loadTournamentForecastLedger } from '../src/browser/tournaments/tournamentForecastArtifacts'
+import type { PublicRankingShard, PublicTeamStanding } from '../src/domains/rankings/internal/published/schema'
+import type { TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
 import {
   appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, isForecastLedger,
   pinPreMatchReceipt, pinnedForecast, scoreConditionedSeriesOdds, type ForecastBasis, type ForecastReceipt,
-} from '../src/lib/tournamentForecast'
+} from '../src/domains/tournaments/internal/tournamentForecast'
 
 const start = '2026-09-27T13:00:00.000Z'
 const before = '2026-09-27T12:00:00.000Z'

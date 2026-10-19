@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compatibleMatchEvents, hasConsistentImpactDirection, impactReportUrl, matchEventFilterLabels, matchEventLabel } from '../src/lib/matchLedger.ts'
-import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../src/lib/publicArtifacts/schema.ts'
+import { compatibleMatchEvents, hasConsistentImpactDirection, matchEventFilterLabels, matchEventLabel } from '../src/domains/rankings/internal/queries/matchLedger.ts'
+import { impactReportUrl } from '../src/browser/rankings/impactReport'
+import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('league options exclude incompatible events without changing event identifiers', () => {
   const refs = [

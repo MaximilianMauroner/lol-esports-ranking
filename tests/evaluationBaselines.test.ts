@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { evaluationBaselineProbabilities, glickoRatingAt, updateGlicko } from '../src/lib/evaluationBaselines.ts'
-import { evaluationHomeLeague } from '../src/lib/rankingEvaluationData.ts'
+import { evaluationBaselineProbabilities, glickoRatingAt, updateGlicko } from '../tools/calibration/lib/evaluationBaselines.ts'
+import { evaluationHomeLeague } from '../tools/calibration/lib/rankingEvaluationData.ts'
 import { sampleMatches } from './fixtures/rankingFixtures.ts'
 
 test('offline controls predict before a UTC-date update and ignore later results and metadata', () => {

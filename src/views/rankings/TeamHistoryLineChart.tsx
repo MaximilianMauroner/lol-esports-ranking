@@ -1,0 +1,210 @@
+import { useState } from 'react'
+import { LineChart, type LineChartProps, type LineChartTooltipPayloadItem } from '../../components/LineChart'
+import {
+  formatChartAttribution,
+  formatChartInfluence,
+  formatPreciseSignedDelta,
+  formatProbability,
+  isChartPointDetail,
+  isMatchChartPointDetail,
+  nonMatchDeltaFor,
+  type ChartPointDetail,
+} from '../../shared/chartPoints'
+import { formatChartTooltipTimestamp } from '../../shared/chartTime'
+
+export type TeamHistoryLineChartProps = Omit<LineChartProps, 'tooltipContent'>
+
+const defaultValueFormat = (value: number) => String(Math.round(value))
+const chartDetailDataKey = (key: string) => `${key}Detail`
+
+export function TeamHistoryLineChart({ yFormat, ...props }: TeamHistoryLineChartProps) {
+  const formatValue = yFormat ?? defaultValueFormat
+  const [detailsPortal, setDetailsPortal] = useState<HTMLDivElement | null>(null)
+  return (
+    <div className="min-w-0">
+      <LineChart
+        {...props}
+        yFormat={formatValue}
+        tooltipContent={<TeamHistoryTooltip yFormat={formatValue} />}
+        tooltipPortal={detailsPortal}
+        tooltipWrapperStyle={{ position: 'static', width: '100%' }}
+        persistentTooltip
+      />
+      <div ref={setDetailsPortal} className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details" />
+    </div>
+  )
+}
+
+function TeamHistoryTooltip({
+  active,
+  payload,
+  yFormat,
+}: {
+  active?: boolean
+  payload?: LineChartTooltipPayloadItem[]
+  yFormat: (value: number) => string
+}) {
+  if (!active || !payload?.length) return null
+
+  const rows = payload
+    .map((item) => {
+      const value = Number(item.value)
+      const key = String(item.dataKey ?? '')
+      const detail = item.payload?.[chartDetailDataKey(key)]
+      if (!Number.isFinite(value)) return null
+      const pointDetail = isChartPointDetail(detail) ? detail : undefined
+      return {
+        key,
+        label: String(item.name ?? key),
+        value,
+        color: item.color ?? 'var(--muted)',
+        detail: pointDetail,
+        influence: formatChartInfluence(pointDetail),
+        result: pointDetail ? formatChartInfluence({
+          ...pointDetail,
+          delta: undefined,
+          event: pointDetail.kind && pointDetail.kind !== 'match' ? pointDetail.event : undefined,
+        }) : undefined,
+      }
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+
+  if (rows.length === 0) return null
+  const selectedDate = formatChartTooltipTimestamp(payload)
+  return (
+    <div
+      className="grid min-w-0 gap-2 border-t border-border pt-3 text-sm whitespace-normal"
+      // Portal clicks still bubble through Recharts. Keep disclosures from selecting a point.
+      onClick={(event) => event.stopPropagation()}
+    >
+      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{selectedDate}</b>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
+        {rows.map((row) => (
+            <div className="grid min-w-0 content-start gap-1" key={row.key}>
+              <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-muted-foreground">
+                <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
+                <em className="min-w-0 overflow-hidden text-ellipsis not-italic">{row.label}</em>
+                <div className="grid justify-items-end gap-px">
+                  <strong className="text-foreground tabular-nums">{yFormat(row.value)}</strong>
+                  {typeof row.detail?.visibleDelta === 'number' && Number.isFinite(row.detail.visibleDelta) ? (
+                    <span className="text-xs text-muted-foreground tabular-nums" title="Change since the previous recorded point">{formatPreciseSignedDelta(row.detail.visibleDelta)} {row.detail.visibleDeltaUnit === 'rank' ? 'rank positions' : 'Power'}</span>
+                  ) : null}
+                </div>
+              </div>
+              {row.result ? <small className="ml-5 text-xs text-muted-foreground">{row.result}</small> : null}
+            </div>
+        ))}
+      </div>
+      {rows.some((row) => row.detail) ? (
+        <details className="mt-1 text-xs text-muted-foreground">
+          <summary className="w-fit cursor-pointer rounded-sm py-1 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]">Match and model details</summary>
+          <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
+            {rows.filter((row) => row.detail).map((row) => {
+              const closeNote = dailyCloseNote(row.detail)
+              return (
+                <div className="grid min-w-0 content-start gap-1" key={row.key}>
+                  <b className="text-foreground">{row.label}</b>
+                  {row.influence ? <p className="ml-5">{row.influence}</p> : null}
+                  {closeNote ? <p className="ml-5 leading-[1.35] [overflow-wrap:anywhere]">{closeNote}</p> : null}
+                  <TooltipMatchList detail={row.detail} />
+                  <TooltipModelDetail detail={row.detail} />
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  )
+}
+
+function TooltipMatchList({ detail }: { detail?: ChartPointDetail }) {
+  const matches = detail?.dayMatches
+  if (!matches || matches.length <= 1) return null
+  return (
+    <div className="ml-5 grid gap-1 text-2xs leading-[1.35] text-muted-foreground [&>div]:[overflow-wrap:anywhere]">
+      {matches.map((match, index) => {
+        const label = formatChartInfluence(match)
+        return label ? <div key={`${match.event ?? 'match'}-${match.opponent ?? index}-${index}`}>{label}</div> : null
+      })}
+    </div>
+  )
+}
+
+function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
+  if (!detail?.model && typeof detail?.visibleDelta !== 'number') return null
+  const expected = typeof detail.model?.expectedWinProbability === 'number'
+    ? formatProbability(detail.model.expectedWinProbability)
+    : undefined
+  const residual = typeof detail.model?.residual === 'number' && Number.isFinite(detail.model.residual)
+    ? formatPreciseSignedDelta(detail.model.residual, 2)
+    : undefined
+  const attribution = (detail.model?.componentAttribution ?? detail.model?.attribution ?? [])
+    .toSorted((left, right) => Math.abs(right.value) - Math.abs(left.value))
+  const otherDelta = nonMatchDeltaFor(detail)
+
+  if (!expected && !residual && attribution.length === 0 && typeof otherDelta !== 'number') return null
+
+  return (
+    <div className="ml-5 grid gap-1">
+      {expected || residual ? (
+        <div className="text-2xs leading-[1.35] text-[var(--faint)]">
+          {expected ? `Expected win ${expected}` : null}
+          {expected && residual ? ' / ' : null}
+          {residual ? `Residual ${residual}` : null}
+        </div>
+      ) : null}
+      {attribution.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {attribution.map((entry) => (
+            <span className="inline-flex w-fit items-center rounded-sm border border-[color-mix(in_oklch,var(--line-strong),transparent_20%)] bg-[color-mix(in_oklch,var(--surface),transparent_55%)] px-1 py-0.5 text-2xs text-muted-foreground tabular-nums" key={entry.key}>{formatChartAttribution(entry)} Power points</span>
+          ))}
+        </div>
+      ) : null}
+      {typeof otherDelta === 'number' ? (
+        <div className="text-2xs leading-[1.35] text-[var(--faint)]">Other change {formatPreciseSignedDelta(otherDelta)} Power points</div>
+      ) : null}
+    </div>
+  )
+}
+
+function dailyCloseNote(detail?: ChartPointDetail) {
+  if (detail?.visibleDeltaUnit === 'rank') return undefined
+  const visibleDelta = finiteNumber(detail?.visibleDelta)
+  if (typeof visibleDelta !== 'number' || visibleDelta === 0) return undefined
+
+  const matchDelta = matchLedgerDelta(detail)
+  if (typeof matchDelta !== 'number' || matchDelta === 0 || Math.sign(matchDelta) === Math.sign(visibleDelta)) {
+    return undefined
+  }
+
+  const driver = strongestComponentDriver(detail)
+  const driverText = driver ? ` · ${driver.label} ${formatPreciseSignedDelta(driver.value)}` : ''
+  return `Match ${formatPreciseSignedDelta(matchDelta)} · total ${formatPreciseSignedDelta(visibleDelta)}${driverText}`
+}
+
+function matchLedgerDelta(detail?: ChartPointDetail) {
+  const matches = (detail?.dayMatches ?? (detail ? [detail] : []))
+    .filter(isMatchChartPointDetail)
+  if (matches.length === 0) return undefined
+
+  let total = 0
+  let seen = false
+  for (const match of matches) {
+    const delta = finiteNumber(match.delta)
+    if (typeof delta !== 'number') continue
+    total += delta
+    seen = true
+  }
+  return seen ? Math.round(total * 10) / 10 : undefined
+}
+
+function strongestComponentDriver(detail?: ChartPointDetail) {
+  return detail?.model?.componentAttribution
+    ?.toSorted((left, right) => Math.abs(right.value) - Math.abs(left.value))
+    .at(0)
+}
+
+function finiteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}

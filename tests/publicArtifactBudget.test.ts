@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createStaticRankingData, createStaticRankingSummaryData } from '../src/lib/snapshot.ts'
-import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
-import { assertPublicArtifactBudgets, createPublicArtifactWritePlan, PUBLIC_ARTIFACT_BUDGETS, PUBLIC_ARTIFACT_PATHS, publicScopeArtifactPath, type PublicArtifactWrite } from '../src/lib/publicArtifacts/writePlan.ts'
+import { createStaticRankingData, createStaticRankingSummaryData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { parsePublicRankingManifest } from '../src/domains/rankings/internal/published/schema.ts'
+import { assertPublicArtifactBudgets, createPublicArtifactWritePlan, PUBLIC_ARTIFACT_BUDGETS, PUBLIC_ARTIFACT_PATHS, publicScopeArtifactPath, type PublicArtifactWrite } from '../src/domains/rankings/internal/published/writePlan.ts'
 
 test('publication accepts a valid ranking manifest at the observed refresh failure size', () => {
   const data = dataWithManifestBytes(254_261)

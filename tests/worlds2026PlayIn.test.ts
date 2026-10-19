@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { publishedRatingScale } from '../src/lib/modelConfig'
-import type { PublicTeamStanding } from '../src/lib/publicArtifacts/schema'
-import { forecastTournamentSeries, type ForecastBasis } from '../src/lib/tournamentForecast'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig'
+import type { PublicTeamStanding } from '../src/domains/rankings/internal/published/schema'
+import { forecastTournamentSeries, type ForecastBasis } from '../src/domains/tournaments/internal/tournamentForecast'
 import {
   WORLDS_2026_PLAY_IN_RULES, forecastWorlds2026PlayIn, replayWorlds2026PlayIn,
   type ObservedPlayInResult, type PlayInForecastResult, type Worlds2026PlayInInput,
-} from '../src/lib/worlds2026PlayIn'
+} from '../src/domains/tournaments/internal/worlds2026PlayIn'
 
 const asOf = '2026-10-02T21:00:00Z'
 const evidence = { kind: 'synthetic-fixture', reference: 'tests/worlds2026PlayIn.test.ts' } as const

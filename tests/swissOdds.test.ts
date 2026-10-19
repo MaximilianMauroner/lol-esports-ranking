@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { drawByRulebook, drawProblem, fillDraw, pairReason, resolveScenario, seedBaseline, type DrawnRound } from '../src/lib/swissScenario'
-import { simulateSwissOdds, type SeriesWinChance } from '../src/lib/swissOdds'
-import { WORLDS_2026_SWISS_RULES } from '../src/lib/worlds2026Swiss'
-import { shuffled, worldsRandom } from '../src/lib/worldsSimulation'
+import { drawByRulebook, drawProblem, fillDraw, pairReason, resolveScenario, seedBaseline, type DrawnRound } from '../src/domains/tournaments/internal/swissScenario'
+import { simulateSwissOdds, type SeriesWinChance } from '../src/domains/tournaments/internal/swissOdds'
+import { WORLDS_2026_SWISS_RULES } from '../src/domains/tournaments/internal/worlds2026Swiss'
+import { shuffled, worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
 
 const baseline = seedBaseline('LEC', 'Fnatic')
 const ids = baseline.teams.map((team) => team.id)

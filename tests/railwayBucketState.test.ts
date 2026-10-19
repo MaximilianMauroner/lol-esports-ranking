@@ -38,8 +38,8 @@ import {
   writeIncrementalStateManifest,
   type StateManifestAuthority,
 } from '../scripts/incremental-state-storage.mjs'
-import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
-import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/rankings/published/manifestLoader.ts'
+import { fetchPublicSnapshotShard } from '../src/browser/rankings/published/resolver.ts'
 
 const config = {
   enabled: true,

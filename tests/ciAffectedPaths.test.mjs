@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-const classifier = fileURLToPath(new URL('../scripts/ci-affected-paths.mjs', import.meta.url))
+const classifier = fileURLToPath(new URL('../tools/dev/ci-affected-paths.mjs', import.meta.url))
 const gitAt = (cwd, ...args) => execFileSync('git', args, {
   cwd, encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024,
 }).trim()
@@ -47,17 +47,17 @@ function fixture(t) {
     return checkout
   }
   git('init', '-q', '-b', 'main')
-  write('src/lib/ratingContext.ts', 'runtime')
+  write('src/domains/rankings/internal/replay/ratingContext.ts', 'runtime')
   const base = commit()
   return { cwd, git, identity, write, commit, merge, shallowCheckout, classify, base }
 }
 
 test('presentation and Markdown edits avoid unrelated heavy validation', (t) => {
   const f = fixture(t)
-  f.write('src/views/MatchesView.tsx', 'presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'presentation')
   f.write('src/components/ui/button.tsx', 'button')
   f.write('src/styles/base.css', 'styles')
-  f.write('docs/guide.md', 'prose')
+  f.write('README.md', 'prose')
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=false')
@@ -66,9 +66,9 @@ test('presentation and Markdown edits avoid unrelated heavy validation', (t) => 
 test('shared, model, import, worker, dependency, benchmark, and unknown paths fail open', (t) => {
   const f = fixture(t)
   for (const path of [
-    'src/lib/ratingContext.ts', 'src/data/rankingConfig.ts', 'scripts/download-local-data.mjs',
+    'src/domains/rankings/internal/replay/ratingContext.ts', 'src/domains/rankings/internal/policy/rankingConfig.ts', 'scripts/download-local-data.mjs',
     'worker/ranking-refresh/src/main.rs', 'pnpm-lock.yaml', 'scripts/benchmark-incremental-ranking.ts',
-    'public/data/ranking-summary.json', 'docs/plans/ranking-accuracy/protocol.json',
+    'public/data/ranking-summary.json', 'tools/calibration/ranking-accuracy-protocol.json',
     'src/future/runtime.ts', 'src/components/futureWorker.ts', 'Dockerfile.refresh', '.github/workflows/checks.yml',
   ]) {
     f.write(path, 'changed')
@@ -82,9 +82,9 @@ test('shared, model, import, worker, dependency, benchmark, and unknown paths fa
 
 test('a later UI push cannot hide an earlier runtime edit in the PR', (t) => {
   const f = fixture(t)
-  f.write('src/lib/ratingContext.ts', 'changed runtime')
+  f.write('src/domains/rankings/internal/replay/ratingContext.ts', 'changed runtime')
   f.commit()
-  f.write('src/views/MatchesView.tsx', 'later presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'later presentation')
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=true')
@@ -93,10 +93,10 @@ test('a later UI push cannot hide an earlier runtime edit in the PR', (t) => {
 test('a stale UI branch excludes advanced-base runtime edits at checkout depth two', (t) => {
   const f = fixture(t)
   f.git('checkout', '-qb', 'pull-request', f.base)
-  f.write('src/views/MatchesView.tsx', 'presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'presentation')
   const prHead = f.commit()
   f.git('checkout', '-qb', 'advanced-main', f.base)
-  f.write('src/lib/ratingContext.ts', 'base-only runtime edit')
+  f.write('src/domains/rankings/internal/replay/ratingContext.ts', 'base-only runtime edit')
   f.write('src/lib/mainOnlyRuntime.ts', 'base-only runtime addition')
   f.commit()
   f.write('README.md', 'later base documentation')
@@ -118,7 +118,7 @@ test('a stale UI branch excludes advanced-base runtime edits at checkout depth t
 test('a runtime rename into a presentation path retains the runtime side of the diff', (t) => {
   const f = fixture(t)
   mkdirSync(join(f.cwd, 'src/views'), { recursive: true })
-  renameSync(join(f.cwd, 'src/lib/ratingContext.ts'), join(f.cwd, 'src/views/Runtime.tsx'))
+  renameSync(join(f.cwd, 'src/domains/rankings/internal/replay/ratingContext.ts'), join(f.cwd, 'src/views/Runtime.tsx'))
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=true')
@@ -126,7 +126,7 @@ test('a runtime rename into a presentation path retains the runtime side of the 
 
 test('a runtime deletion requires full validation', (t) => {
   const f = fixture(t)
-  rmSync(join(f.cwd, 'src/lib/ratingContext.ts'))
+  rmSync(join(f.cwd, 'src/domains/rankings/internal/replay/ratingContext.ts'))
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=true')
@@ -134,7 +134,7 @@ test('a runtime deletion requires full validation', (t) => {
 
 test('manual and other non-PR events require full validation', (t) => {
   const f = fixture(t)
-  f.write('src/views/MatchesView.tsx', 'presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'presentation')
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=false')
@@ -145,9 +145,9 @@ test('manual and other non-PR events require full validation', (t) => {
 
 test('missing or mismatched synthetic PR context requires full validation', (t) => {
   const f = fixture(t)
-  f.write('src/lib/ratingContext.ts', 'earlier runtime edit')
+  f.write('src/domains/rankings/internal/replay/ratingContext.ts', 'earlier runtime edit')
   const runtimeHead = f.commit()
-  f.write('src/views/MatchesView.tsx', 'later presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'later presentation')
   f.commit()
   // An ordinary PR head can itself be a merge commit with a UI-only first-parent delta.
   f.merge(runtimeHead)
@@ -163,7 +163,7 @@ test('missing or mismatched synthetic PR context requires full validation', (t) 
 test('root, ordinary, octopus, and depth-one checkouts require full validation', (t) => {
   const f = fixture(t)
   assert.equal(f.classify(), 'full-validation=true')
-  f.write('src/views/MatchesView.tsx', 'presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'presentation')
   const prHead = f.commit()
   assert.equal(f.classify(), 'full-validation=true')
   f.merge(f.base)
@@ -177,7 +177,7 @@ test('root, ordinary, octopus, and depth-one checkouts require full validation',
 for (const parent of [1, 2]) {
   test(`an unavailable synthetic merge parent ${parent} requires full validation`, (t) => {
     const f = fixture(t)
-    f.write('src/views/MatchesView.tsx', 'presentation')
+    f.write('src/views/matches/MatchesView.tsx', 'presentation')
     f.commit()
     f.merge(f.base)
     const sha = f.git('rev-parse', `HEAD^${parent}`)
@@ -191,7 +191,7 @@ test('an unavailable merge diff and an empty PR diff require full validation', (
   f.commit()
   f.merge(f.base)
   assert.equal(f.classify(), 'full-validation=true')
-  f.write('src/views/MatchesView.tsx', 'presentation')
+  f.write('src/views/matches/MatchesView.tsx', 'presentation')
   f.commit()
   f.merge(f.base)
   const tree = f.git('rev-parse', 'HEAD^{tree}')

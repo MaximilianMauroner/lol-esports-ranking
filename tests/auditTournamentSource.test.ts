@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { auditTournamentSource } from '../scripts/audit-tournament-source.ts'
+import { auditTournamentSource } from '../tools/audit/audit-tournament-source.ts'
 
 test('retained captures expose coverage and identity ambiguity without approving a source or mapping', async () => {
   const root = await mkdtemp(join(tmpdir(), 'tournament-source-audit-'))

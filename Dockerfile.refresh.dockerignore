@@ -2,3 +2,14 @@
 !worker/
 !worker/**
 worker/target/
+!src/
+src/*
+!src/domains/
+src/domains/*
+!src/domains/rankings/
+src/domains/rankings/*
+!src/domains/rankings/internal/
+src/domains/rankings/internal/*
+!src/domains/rankings/internal/published/
+src/domains/rankings/internal/published/*
+!src/domains/rankings/internal/published/referenceFields.json

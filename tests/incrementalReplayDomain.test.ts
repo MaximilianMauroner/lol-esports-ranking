@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../src/types.ts'
+import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../src/domains/rankings/types.ts'
 import {
   buildRankingModel,
   createRatingReplayContext,
   materializeRankingModel,
   replayRatingDates,
-} from '../src/lib/model.ts'
-import { createRatingRunState } from '../src/lib/ratingRunState.ts'
-import { replayRankingState } from '../src/lib/incremental/replayOrchestrator.ts'
+} from '../src/domains/rankings/internal/replay/model.ts'
+import { createRatingRunState } from '../src/domains/rankings/internal/replay/ratingRunState.ts'
+import { replayRankingState } from '../src/domains/rankings/internal/replay/incremental/replayOrchestrator.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

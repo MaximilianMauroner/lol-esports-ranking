@@ -1,0 +1,15 @@
+export {
+  apacDomesticFeederLeagues,
+  currentRegionTaxonomyModelParameters,
+  currentTopTierRegionForLeague,
+  currentTopTierRegions,
+  formatCompetitionLeagueLabel,
+  formatCompetitionRegionLabel,
+  isCurrentTopTierRegion,
+  isMajorRegionPowerRegion,
+  isRatedTeamLeague,
+  majorRegionPowerRegions,
+  ratedTeamLeagues,
+  ratedTeamUniverseModelParameters,
+  ratedTeamUniversePolicy,
+} from './competitionTaxonomy.ts'

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deltaBarWidth, seriesRatingChange } from '../src/components/matches/seriesOutcome.ts'
-import type { PublicMatchHistoryEntry } from '../src/lib/publicArtifacts/schema.ts'
+import { deltaBarWidth, seriesRatingChange } from '../src/views/matches/seriesOutcome.ts'
+import type { PublicMatchHistoryEntry } from '../src/domains/rankings/internal/published/schema.ts'
 
 function series(overrides: Partial<PublicMatchHistoryEntry>): PublicMatchHistoryEntry {
   return {

@@ -26,7 +26,7 @@ import { persistIncrementalStateBuild } from '../scripts/incremental-ranking-orc
 import { readActiveRawSourceAuthority, readBucketJson, readPreviousGenerationAuthorities, uploadRankingArtifacts as uploadRankingArtifactsImplementation, writeBucketJson, type BucketClient, type BucketStorageConfig } from '../scripts/railway-bucket.mjs'
 import { canonicalJsonFor } from '../scripts/public-artifact-storage.mjs'
 import { ORACLE_GAME_INVENTORY_DIGEST_SCHEME, oracleGameInventory, prepareOracleBaseline, prepareRawSourceReceipt, rawObjectReferenceFor } from '../scripts/raw-source-storage.mjs'
-import type { CanonicalMatchLedger } from '../src/lib/incremental/types'
+import type { CanonicalMatchLedger } from '../src/domains/rankings/internal/replay/incremental/types'
 
 const config = {
   enabled: true,

@@ -1,5 +1,5 @@
-import { teamBranding } from './teamBranding.generated'
-import type { LogoTreatment } from '../lib/teamLogo.mjs'
+import { teamBranding } from './teamBranding.generated.ts'
+import type { LogoTreatment } from '../shared/teamLogo.mjs'
 
 export type TeamBranding = {
   code: string

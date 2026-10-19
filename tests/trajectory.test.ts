@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deriveTrajectoryInsight, FACTOR_LABELS } from '../src/lib/trajectory.ts'
-import type { RankingSummaryStanding, TeamHistorySeries } from '../src/lib/snapshot.ts'
+import { deriveTrajectoryInsight, FACTOR_LABELS } from '../src/views/rankings/trajectory.ts'
+import type { RankingSummaryStanding, TeamHistorySeries } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 function standing(overrides: Partial<RankingSummaryStanding> = {}): RankingSummaryStanding {
   return {

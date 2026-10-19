@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../src/types.ts'
-import { eventWeightContextForMatches } from '../src/lib/eventWeighting.ts'
-import { ensureLeague } from '../src/lib/leagueRatings.ts'
-import { matchesByDate } from '../src/lib/matchContext.ts'
+import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../src/domains/rankings/types.ts'
+import { eventWeightContextForMatches } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { ensureLeague } from '../src/domains/rankings/internal/replay/leagueRatings.ts'
+import { matchesByDate } from '../src/domains/rankings/internal/evidence/matchContext.ts'
 import {
   createRatingEventContext,
   finalizeRatingRunStateAtUtcBoundary,
   processRatingUtcDateBoundary,
-} from '../src/lib/model.ts'
-import { transparentGprModelMetadata } from '../src/lib/modelConfig.ts'
-import { buildPregamePlayerRatingEdges } from '../src/lib/playerModel.ts'
-import type { PlacementTournamentLifecycle } from '../src/lib/placementResiduals.ts'
+} from '../src/domains/rankings/internal/replay/model.ts'
+import { transparentGprModelMetadata } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import { buildPregamePlayerRatingEdges } from '../src/domains/rankings/internal/players/playerModel.ts'
+import type { PlacementTournamentLifecycle } from '../src/domains/rankings/internal/replay/placementResiduals.ts'
 import {
   decodeRatingCheckpoint,
   decodeRatingCheckpointValue,
@@ -22,14 +22,14 @@ import {
   validateRatingCheckpoint,
   validateRatingCheckpointValue,
   type RatingCheckpointIdentity,
-} from '../src/lib/ratingCheckpoint.ts'
+} from '../src/domains/rankings/internal/replay/ratingCheckpoint.ts'
 import {
   buildRatingCheckpointEventContract,
   ratingCheckpointInventory,
   reconcileRatingCheckpointEvents,
   selectRatingCheckpointReplayBoundary,
-} from '../src/lib/ratingCheckpointInventory.ts'
-import { createRatingRunState, type RatingRunState } from '../src/lib/ratingRunState.ts'
+} from '../src/domains/rankings/internal/replay/ratingCheckpointInventory.ts'
+import { createRatingRunState, type RatingRunState } from '../src/domains/rankings/internal/replay/ratingRunState.ts'
 
 const checkpointIdentity: RatingCheckpointIdentity = {
   importerVersion: 'test-importer-v1',

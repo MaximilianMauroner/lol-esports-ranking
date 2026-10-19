@@ -3,12 +3,12 @@ import test from 'node:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { importRankingSourceData } from '../scripts/ranking-source-import'
-import { providerFreshness } from '../src/lib/sourceFreshness'
+import { importRankingSourceData } from '../scripts/rankings/source-input'
+import { providerFreshness } from '../src/domains/rankings/internal/evidence/sourceFreshness'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { DataSourceInfo } from '../src/lib/snapshot.ts'
-import { DataSourcesDisclosure } from '../src/views/TeamsView.tsx'
+import type { DataSourceInfo } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { DataSourcesDisclosure } from '../src/views/rankings/DataSourcesDisclosure.tsx'
 
 type RefreshStatus = NonNullable<DataSourceInfo['refreshReceipt']>['status']
 

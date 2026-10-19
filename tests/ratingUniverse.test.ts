@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { filterPublishedRatingUniverseInput, matchBelongsToPublishedRatingUniverse } from '../src/lib/ratingUniverse.ts'
-import type { MatchRecord, Region, TeamProfile } from '../src/types.ts'
+import { filterPublishedRatingUniverseInput, matchBelongsToPublishedRatingUniverse } from '../src/domains/rankings/internal/evidence/ratingUniverse.ts'
+import type { MatchRecord, Region, TeamProfile } from '../src/domains/rankings/types.ts'
 
 test('published rating universe keeps only matches between rated domestic leagues', () => {
   const teams: Record<string, TeamProfile> = {

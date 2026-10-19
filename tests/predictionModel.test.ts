@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildCurrentPredictor, buildWalkForwardBacktest, summarizePredictions } from '../src/lib/predictionModel.ts'
-import type { MatchRecord, PregamePrediction, Role, Side, TeamProfile } from '../src/types.ts'
+import { buildCurrentPredictor, buildWalkForwardBacktest, summarizePredictions } from '../src/domains/rankings/internal/projections/predictionModel.ts'
+import type { MatchRecord, PregamePrediction, Role, Side, TeamProfile } from '../src/domains/rankings/types.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

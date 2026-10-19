@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canonicalJsonFor, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { ARCHIVE_PAGE_BYTES, archiveReferences, hydrateArchive, projectArchiveView, type ArchiveReference } from '../src/lib/publicArtifacts/archive.mjs'
+import { ARCHIVE_PAGE_BYTES, archiveReferences, hydrateArchive, projectArchiveView, type ArchiveReference } from '../src/domains/rankings/internal/published/archive.mjs'
 
 function corpus(years: number) {
   return { artifactKind: 'synthetic-history', sample: true, rows: Array.from({ length: years * 600 }, (_, index) => ({

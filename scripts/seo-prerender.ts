@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { preferredPublicSnapshotKey } from '../src/lib/defaultScope.ts'
-import { RIOT_PROJECT_NOTICE } from '../src/lib/legal.ts'
+import { preferredPublicSnapshotKey } from '../src/domains/rankings/read.ts'
+import { RIOT_PROJECT_NOTICE } from '../src/data/legal.ts'
 import { POWER_INDEX_MARK } from '../src/data/brandMark.ts'
 
 export const PUBLIC_SITE_ORIGIN = 'https://lol.lab4code.com'

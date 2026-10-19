@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { canonicalSeriesForMatches, resolveCanonicalSeries } from '../src/lib/seriesResolver.ts'
-import type { MatchRecord } from '../src/types.ts'
+import { canonicalSeriesForMatches, resolveCanonicalSeries } from '../src/domains/rankings/internal/evidence/seriesResolver.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 
 test('canonical resolver represents a trusted Bo2 tie as a completed neutral series', () => {
   const series = resolveCanonicalSeries([

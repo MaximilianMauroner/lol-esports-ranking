@@ -23,7 +23,7 @@ test('the tournament skeleton fits mobile and stays visible between chunk and fe
     const executablePath = chromium.executablePath()
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
     const page = await browser.newPage({ viewport: { width: 320, height: 800 } })
-    await page.route('**/src/views/TournamentsView.tsx*', async (route) => { await chunkReady; await route.continue() })
+    await page.route('**/src/views/tournaments/TournamentsView.tsx*', async (route) => { await chunkReady; await route.continue() })
     await page.goto(`http://127.0.0.1:${address.port}/#tournaments`, { waitUntil: 'domcontentloaded' })
     const initialLoader = page.getByRole('status').filter({ hasText: 'Loading Tournaments' })
     await initialLoader.waitFor()

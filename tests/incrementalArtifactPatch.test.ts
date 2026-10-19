@@ -6,8 +6,8 @@ import { Readable } from 'node:stream'
 import test from 'node:test'
 import { uploadContentAddressedPublicArtifactPatch, uploadContentAddressedPublicArtifacts } from '../scripts/railway-bucket.mjs'
 import { materializePublicArtifactPatch } from '../scripts/public-artifact-materialization.mjs'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
+import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 const config = { enabled: true, bucket: 'test', endpoint: 'https://example.invalid', region: 'auto', accessKeyId: 'x', secretAccessKey: 'y', prefix: 'rankings' }
 

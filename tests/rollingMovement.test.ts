@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { deriveSpicyTakeConfidence } from '../src/lib/rankingFlair.ts'
-import { createStaticRankingData, createStaticRankingSummaryData, snapshotKey } from '../src/lib/snapshot.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { deriveSpicyTakeConfidence } from '../src/domains/rankings/internal/queries/rankingFlair.ts'
+import { createStaticRankingData, createStaticRankingSummaryData, snapshotKey } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

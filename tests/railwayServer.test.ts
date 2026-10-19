@@ -16,9 +16,9 @@ import {
   type PublicationObject,
   type PublicationObjectOutcome,
 } from '../scripts/generation-publication.mjs'
-import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
-import { fetchPublicSnapshotShard } from '../src/lib/publicArtifacts/resolver.ts'
-import { parsePublicRankingManifest } from '../src/lib/publicArtifacts/schema.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/rankings/published/manifestLoader.ts'
+import { fetchPublicSnapshotShard } from '../src/browser/rankings/published/resolver.ts'
+import { parsePublicRankingManifest } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('Railway server serves the live Leaguepedia tournament feed without configuration', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-'))
@@ -557,7 +557,8 @@ test('Railway server and production reader support identity and gzip delivery of
           const shard = await fetchPublicSnapshotShard(expected.url, fixture.snapshotKey, expected, manifest, { fetcher })
 
           assert.equal(shard.matchCount, fixture.expectedMatchCount)
-          assert.deepEqual(objectResponseEncodings, gzipEnabled ? ['gzip', 'gzip'] : [null, null])
+          const identityEncoding = process.env.RANKING_NATIVE_SERVER_TESTS === 'true' ? 'identity' : null
+          assert.deepEqual(objectResponseEncodings, gzipEnabled ? ['gzip', 'gzip'] : [identityEncoding, identityEncoding])
 
           const invalidObject = await httpRequest(server.port, '/data/objects/sha256/not-a-digest')
           assert.equal(invalidObject.statusCode, 404)
@@ -1166,7 +1167,9 @@ async function startRailwayServer(
   env: Record<string, string> = {},
 ): Promise<TestServer> {
   const port = await freePort()
-  const child = spawn(process.execPath, ['scripts/railway-server.mjs'], {
+  const native = process.env.RANKING_NATIVE_SERVER_TESTS === 'true'
+  if (native) assert.ok(process.env.RANKING_NATIVE_HTTP_BINARY, 'Native production contracts require the real platform-api executable')
+  const child = spawn(process.execPath, [native ? 'scripts/start-serving.mjs' : 'scripts/railway-server.mjs'], {
     cwd: process.cwd(),
     env: {
       ...process.env,

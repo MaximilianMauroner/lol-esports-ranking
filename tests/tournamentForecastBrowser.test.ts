@@ -6,9 +6,9 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { chromium } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, pinPreMatchReceipt } from '../src/lib/tournamentForecast'
-import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/lib/publicArtifacts/schema'
-import type { TournamentFeed, TournamentSeries } from '../src/lib/tournamentFeed'
+import { appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, pinPreMatchReceipt } from '../src/domains/tournaments/internal/tournamentForecast'
+import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/domains/rankings/internal/published/schema'
+import type { TournamentFeed, TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
 
 const eventId = 'worlds:2026'
 const identityMap = { version: 1 as const, source: 'lolesports-persisted-site-api' as const, revision: 'reviewed-synthetic-fixture', mappings: [

@@ -1,5 +1,5 @@
-import { replayOfflineSeriesCohort, type SyntheticSeriesOutcome } from '../../src/lib/offlineForecastCohort.ts'
-import type { ForecastReceipt } from '../../src/lib/tournamentForecast.ts'
+import { replayOfflineSeriesCohort, type SyntheticSeriesOutcome } from '../../tools/calibration/lib/offlineForecastCohort.ts'
+import type { ForecastReceipt } from '../../src/domains/tournaments/forecast.ts'
 
 export const before = '2026-09-01T11:00:00Z'
 export const start = '2026-09-01T12:00:00Z'

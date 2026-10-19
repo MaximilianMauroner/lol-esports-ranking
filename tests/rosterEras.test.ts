@@ -13,8 +13,8 @@ import {
   dssRosterEraModelParameters,
   dssSubstituteCreatesRosterEra,
   type RosterContributionShare,
-} from '../src/lib/rosterEras.ts'
-import type { MatchRecord, MatchRosterSnapshot, Role } from '../src/types.ts'
+} from '../src/domains/rankings/internal/players/rosterEras.ts'
+import type { MatchRecord, MatchRosterSnapshot, Role } from '../src/domains/rankings/types.ts'
 
 test('DSS retained player contribution uses prior result shares, not raw player count', () => {
   const priorShares: RosterContributionShare[] = [

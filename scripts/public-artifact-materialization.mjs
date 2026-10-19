@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { canonicalPublicLogicalPath, prepareSemanticArtifact } from './public-artifact-storage.mjs'
-import { artifactReferences, assertReferenceClosure } from '../src/lib/publicArtifacts/logicalReferences.mjs'
+import { artifactReferences, assertReferenceClosure } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
 
 export async function materializePublicArtifactPatch(publicDataDir, patch, {
   move = rename,

@@ -1,4 +1,4 @@
-import type { MatchRecord } from '../../types'
+import type { MatchRecord } from '../../domains/rankings/types.ts'
 import {
   CANONICAL_MATCH_LEDGER_SCHEMA_VERSION,
   assertUtcDate,
@@ -8,8 +8,8 @@ import {
   type CanonicalMatchLedgerRow,
   type RankingChangeClassification,
   type RankingCompatibility,
-} from './types'
-import { compareCodeUnits } from '../codeUnitOrder.mjs'
+} from '../../domains/rankings/internal/replay/incremental/types.ts'
+import { compareCodeUnits } from '../../shared/codeUnitOrder.mjs'
 
 export function canonicalMatchLedgerKey(match: MatchRecord) {
   const identity = match.officialGameId

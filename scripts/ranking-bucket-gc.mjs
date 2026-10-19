@@ -1,4 +1,4 @@
-import { hydrateArchive } from '../src/lib/publicArtifacts/archive.mjs'
+import { hydrateArchive } from '../src/domains/rankings/internal/published/archive.mjs'
 import { createHash } from 'node:crypto'
 import { gunzipSync } from 'node:zlib'
 import { pathToFileURL } from 'node:url'
@@ -23,7 +23,7 @@ import {
   parseGenerationPublicationReceipt,
   readLegacyNativeGenerationPublishReceipt,
 } from './generation-publication.mjs'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000

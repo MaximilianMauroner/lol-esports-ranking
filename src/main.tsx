@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { legalPageFromPath } from './lib/legal'
+import { legalPageFromPath } from './data/legal'
 import './index.css'
 
 const rootElement = document.getElementById('root')

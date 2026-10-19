@@ -3,9 +3,9 @@ import test from 'node:test'
 import {
   PLAY_IN_REGIONS, drawByRulebook, drawPots, fillDraw, pairReason, resolveScenario, seedBaseline,
   type DrawContext, type DrawnRound, type PlayInRegion, type SwissBaseline,
-} from '../src/lib/swissScenario'
-import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/lib/worlds2026Swiss'
-import { worldsRandom } from '../src/lib/worldsSimulation'
+} from '../src/domains/tournaments/internal/swissScenario'
+import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/domains/tournaments/internal/worlds2026Swiss'
+import { worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
 
 const SEEDS = 2_000
 const ROUND_ONE_CLICKS = 5_000

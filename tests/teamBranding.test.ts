@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { teamBranding } from '../src/data/teamBranding.generated.ts'
 import { withAuditedTeamCodes } from '../src/data/teamBranding.ts'
-import { teamCodeFor } from '../src/data/teamIdentity.ts'
+import { teamCodeFor } from '../src/domains/rankings/internal/evidence/teamIdentity.ts'
 
 test('every published team has audited branding metadata', async () => {
   const directory = JSON.parse(await readFile(resolve(join(referencePublicDataDir, 'entities/teams.json')), 'utf8')) as {

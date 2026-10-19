@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { publishedRatingScale } from '../src/lib/modelConfig.ts'
-import { buildTeamReceipt } from '../src/lib/receipts.ts'
-import { PUBLIC_ARTIFACT_SCHEMA_VERSION, type CompactPlayer, type PublicRankingManifest, type PublicRankingShard, type PublicTeamStanding } from '../src/lib/publicArtifacts/schema.ts'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import { buildTeamReceipt } from '../src/domains/rankings/internal/queries/receipts.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION, type CompactPlayer, type PublicRankingManifest, type PublicRankingShard, type PublicTeamStanding } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('builds a typed team receipt with rating, movement, players, source, model, and config', () => {
   const receipt = buildTeamReceipt({

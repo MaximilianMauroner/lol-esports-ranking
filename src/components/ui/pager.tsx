@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { Button } from './button'
 import { Select } from './select'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils'
 
 /**
  * The one pagination control.

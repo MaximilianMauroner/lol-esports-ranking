@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildDeservedStandingModel } from '../src/lib/deservedStandingModel.ts'
-import type { MatchRecord } from '../src/types.ts'
+import { buildDeservedStandingModel } from '../src/domains/rankings/internal/projections/deservedStandingModel.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 
 test('buildDeservedStandingModel ranks teams by Team DSS from series ledgers', () => {
   const model = buildDeservedStandingModel([

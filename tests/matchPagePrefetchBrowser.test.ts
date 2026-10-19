@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
-import { createPublicArtifactWritePlan, publicMatchHistoryShardPath } from '../src/lib/publicArtifacts/writePlan.ts'
-import { parsePublicMatchHistoryCatalog } from '../src/lib/publicArtifacts/schema.ts'
-import type { MatchRecord } from '../src/types.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { createPublicArtifactWritePlan, publicMatchHistoryShardPath } from '../src/domains/rankings/internal/published/writePlan.ts'
+import { parsePublicMatchHistoryCatalog } from '../src/domains/rankings/internal/published/schema.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 
 test('prefetching an older match page retains the loaded page on screen', { timeout: 60_000 }, async () => {
   const matches: MatchRecord[] = Array.from({ length: 450 }, (_, index) => {

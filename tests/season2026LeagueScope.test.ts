@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia.ts'
-import { filterPublishedRatingUniverseInput } from '../src/lib/ratingUniverse.ts'
+import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
+import { filterPublishedRatingUniverseInput } from '../src/domains/rankings/internal/evidence/ratingUniverse.ts'
 
 test('LCP Wildcard playoffs do not enter the flagship LCP rating universe', () => {
   const imported = importLeaguepediaSnapshot({ matches: [{

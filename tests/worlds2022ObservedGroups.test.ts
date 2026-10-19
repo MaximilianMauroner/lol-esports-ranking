@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { replayWorlds2022Group, type ObservedGroupGame, type Worlds2022GroupEntrant } from '../src/lib/worlds2022ObservedGroups.ts'
+import { replayWorlds2022Group, type ObservedGroupGame, type Worlds2022GroupEntrant } from '../src/domains/tournaments/internal/worlds2022ObservedGroups.ts'
 
 // Fictional identities/results. These are not Riot observations.
 const evidence = { kind: 'synthetic-fixture' as const, reference: 'tests/worlds2022ObservedGroups.test.ts' }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatChartTimestamp, formatChartTooltipTimestamp } from '../src/lib/chartTime.ts'
+import { formatChartTimestamp, formatChartTooltipTimestamp } from '../src/shared/chartTime.ts'
 
 test('chart timestamp formatting tolerates non-date labels', () => {
   assert.equal(formatChartTimestamp('Karmine Corp'), 'Unknown date')

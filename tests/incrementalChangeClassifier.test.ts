@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord, MatchRosterSnapshot } from '../src/types.ts'
+import type { MatchRecord, MatchRosterSnapshot } from '../src/domains/rankings/types.ts'
 import { buildCanonicalMatchLedger, classifyRankingChange, parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
-import { stableDigest, type CanonicalMatchLedgerContext } from '../src/lib/incremental/types.ts'
+import { stableDigest, type CanonicalMatchLedgerContext } from '../src/domains/rankings/internal/replay/incremental/types.ts'
 
 const context: CanonicalMatchLedgerContext = {
   modelVersion: 'model-v1',

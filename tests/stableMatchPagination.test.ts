@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/lib/snapshot.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

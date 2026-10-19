@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
-import { buildCausalContextIdentity, causalInputRow } from '../src/lib/causalRecompute.ts'
-import { eventWeightContextForMatches } from '../src/lib/eventWeighting.ts'
-import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTERNAL_CAUSAL_SURFACES } from '../src/lib/incremental/externalCausalState.ts'
-import { createRatingReplayContext, replayRatingDates } from '../src/lib/model.ts'
-import { buildRatingCheckpointEventContract } from '../src/lib/ratingCheckpointInventory.ts'
-import { encodeRatingCheckpoint, selectSafeCheckpoint, type SafeRatingCheckpointCandidate } from '../src/lib/ratingCheckpoint.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
+import { buildCausalContextIdentity, causalInputRow } from '../src/domains/rankings/internal/replay/causalRecompute.ts'
+import { eventWeightContextForMatches } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { buildExternalCausalBundle, reconcileExternalCausalBundle, REQUIRED_EXTERNAL_CAUSAL_SURFACES } from '../src/domains/rankings/internal/replay/incremental/externalCausalState.ts'
+import { createRatingReplayContext, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
+import { buildRatingCheckpointEventContract } from '../src/domains/rankings/internal/replay/ratingCheckpointInventory.ts'
+import { encodeRatingCheckpoint, selectSafeCheckpoint, type SafeRatingCheckpointCandidate } from '../src/domains/rankings/internal/replay/ratingCheckpoint.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

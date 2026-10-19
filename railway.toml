@@ -1,9 +1,9 @@
 [build]
-builder = "RAILPACK"
-buildCommand = "pnpm run railway:build"
+builder = "DOCKERFILE"
+dockerfilePath = "worker/Dockerfile.web"
 
 [deploy]
-startCommand = "node scripts/railway-server.mjs"
+startCommand = "node scripts/start-serving.mjs"
 healthcheckPath = "/api/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

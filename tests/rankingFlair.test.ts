@@ -8,8 +8,8 @@ import {
   deriveTopThreePodium,
   deriveTournamentMovementPicks,
   deriveUpsetHeadline,
-} from '../src/lib/rankingFlair.ts'
-import type { PublicRecentMatch, PublicTeamStanding, PublicTournamentMovementTeam } from '../src/lib/publicArtifacts/schema.ts'
+} from '../src/domains/rankings/internal/queries/rankingFlair.ts'
+import type { PublicRecentMatch, PublicTeamStanding, PublicTournamentMovementTeam } from '../src/domains/rankings/internal/published/schema.ts'
 
 test('derives deterministic S/A/B/C tiers from power-score bands', () => {
   const tiers = deriveTierLabels([

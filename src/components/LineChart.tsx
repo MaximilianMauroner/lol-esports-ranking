@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import { Button } from './ui/button'
 import { ChartContainer, type ChartConfig } from './ui/chart'
-import { formatChartTimestamp, formatChartTooltipTimestamp } from '../lib/chartTime'
+import { formatChartTimestamp, formatChartTooltipTimestamp } from '../shared/chartTime'
 
 export type ChartPoint = {
   t: number

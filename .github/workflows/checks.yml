@@ -20,7 +20,7 @@ jobs:
   checks:
     name: Install, verify, and bundle
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     outputs:
       full-validation: ${{ steps.changes.outputs.full-validation }}
 
@@ -48,7 +48,7 @@ jobs:
 
       - name: Classify affected paths
         id: changes
-        run: node scripts/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
+        run: node tools/dev/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
 
       - name: Verify
         run: pnpm run verify
@@ -100,8 +100,22 @@ jobs:
         run: cargo +1.98.0 test --manifest-path worker/Cargo.toml --workspace --locked
       - name: Build CLI
         run: cargo +1.98.0 build --manifest-path worker/Cargo.toml --package ranking-refresh --locked
+      - name: Build native local HTTP service
+        run: cargo +1.98.0 build --manifest-path worker/Cargo.toml --package league-platform --bin platform-api --locked
+      - name: Prepare frozen native HTTP reference input
+        run: node --input-type=module -e "await (await import('./scripts/reference-public-data.mjs')).ensureReferencePublicData()"
+      - name: Native local HTTP and browser reader proof
+        env:
+          RANKING_NATIVE_HTTP_BINARY: ${{ github.workspace }}/worker/target/debug/platform-api
+          RANKING_NATIVE_HTTP_RETAINED_DATA_DIR: ${{ github.workspace }}/data/reference/8adbc0a4239fd0dfba2094b3e70f60b513560de4/public/data
+        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/nativeRankingHttp.integration.ts
+      - name: Native production HTTP and process lifecycle
+        env:
+          RANKING_NATIVE_HTTP_BINARY: ${{ github.workspace }}/worker/target/debug/platform-api
+          RANKING_NATIVE_SERVER_TESTS: 'true'
+        run: pnpm exec tsx --tsconfig tsconfig.app.json --test --test-concurrency=1 tests/railwayServer.test.ts tests/nativeServingLifecycle.integration.ts
       - name: Live model config parity
-        run: pnpm exec tsx --tsconfig tsconfig.app.json scripts/check-rust-parity.ts
+        run: pnpm exec tsx --tsconfig tsconfig.app.json tools/audit/check-rust-parity.ts
       - name: Rust raw seam integration
         env:
           RANKING_RAW_SOURCE_WORKER: rust
@@ -167,7 +181,7 @@ jobs:
         # Exclude host Cargo products, which would invalidate COPY layers on every run.
         run: |
           mkdir "$RUNNER_TEMP/worker-image"
-          git archive HEAD Dockerfile.refresh worker | tar -x -C "$RUNNER_TEMP/worker-image"
+          git archive HEAD Dockerfile.refresh Dockerfile.refresh.dockerignore worker src/domains/rankings/internal/published/referenceFields.json | tar -x -C "$RUNNER_TEMP/worker-image"
       - name: Build worker image
         uses: docker/build-push-action@v7
         with:
@@ -190,4 +204,44 @@ jobs:
         run: |
           printf '#!/bin/sh\nexec docker run --rm ranking-refresh "$@"\n' > /tmp/ranking-refresh-image
           chmod +x /tmp/ranking-refresh-image
-          pnpm exec tsx --tsconfig tsconfig.app.json scripts/check-rust-parity.ts /tmp/ranking-refresh-image
+          pnpm exec tsx --tsconfig tsconfig.app.json tools/audit/check-rust-parity.ts /tmp/ranking-refresh-image
+
+  web-image:
+    name: Native serving image
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.checks.outputs.full-validation == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Docker builder
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-flags: --oci-worker-gc=true
+      - name: Prepare tracked source
+        run: |
+          mkdir "$RUNNER_TEMP/web-image"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/web-image"
+      - name: Build web image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ runner.temp }}/web-image
+          file: ${{ runner.temp }}/web-image/worker/Dockerfile.web
+          tags: ranking-web
+          load: true
+          push: false
+          cache-from: type=gha,scope=checks-web-${{ runner.os }}-${{ runner.arch }}-node24-rust1.98.0
+          cache-to: type=gha,scope=checks-web-${{ runner.os }}-${{ runner.arch }}-node24-rust1.98.0,mode=max,timeout=5m,ignore-error=true
+        env:
+          DOCKER_BUILD_SUMMARY: 'false'
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      - name: Verify image data delivery and shutdown
+        run: |
+          docker run -d --name ranking-web-check -e PORT=8080 -p 127.0.0.1:4174:8080 ranking-web
+          trap 'docker logs ranking-web-check; docker rm -f ranking-web-check' EXIT
+          curl --fail --connect-timeout 2 --max-time 5 --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:4174/api/live
+          curl --fail --dump-header "$RUNNER_TEMP/native-headers" --output /dev/null http://127.0.0.1:4174/data/ranking-summary.json
+          grep -i '^x-ranking-runtime: rust' "$RUNNER_TEMP/native-headers"
+          docker stop --time 15 ranking-web-check
+          test "$(docker inspect --format '{{.State.ExitCode}}' ranking-web-check)" = 0

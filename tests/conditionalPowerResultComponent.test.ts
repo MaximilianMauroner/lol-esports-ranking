@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { evaluateConditionalPowerResultComponent } from '../src/lib/conditionalPowerResultComponent'
-import { legalConditionalScores } from '../src/lib/conditionalPowerPreview'
-import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model'
-import { playerRatingPredictionWeight } from '../src/lib/modelConfig'
-import { publishedRating } from '../src/lib/publishedRatingArtifacts'
+import { evaluateConditionalPowerResultComponent } from '../src/domains/rankings/internal/scenarios/conditionalPowerResultComponent'
+import { legalConditionalScores } from '../src/domains/tournaments/internal/conditionalPowerPreview'
+import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/domains/rankings/internal/replay/model'
+import { playerRatingPredictionWeight } from '../src/domains/rankings/internal/policy/modelConfig'
+import { publishedRating } from '../src/domains/rankings/internal/projections/publishedRatingArtifacts'
 import { processRatingSeriesForDate } from '../src/lib/ratingSeriesEngine'
-import { eventTrackerKey } from '../src/lib/placementResiduals'
+import { eventTrackerKey } from '../src/domains/rankings/internal/replay/placementResiduals'
 import { conditionalPowerFixture, pinControlledConditionalPowerBasis } from './fixtures/conditionalPowerFixtures'
 
 test('result component matches production stable updates and frozen-state public projection for every legal outcome', () => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { leaguePriorFor } from '../src/data/leagueTiers.ts'
+import { leaguePriorFor } from '../src/domains/rankings/internal/policy/leagueTiers.ts'
 import {
   momentumPatchRetention,
   momentumSplitRetention,
@@ -11,12 +11,12 @@ import {
   splitBreakLeagueRetention,
   splitBreakMinimumGapDays,
   splitBreakTeamRetention,
-} from '../src/lib/modelConfig.ts'
+} from '../src/domains/rankings/internal/policy/modelConfig.ts'
 import {
   applyEntityLocalContextDecayForDate,
   type EntityLocalRatingContext,
-} from '../src/lib/ratingContext.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+} from '../src/domains/rankings/internal/replay/ratingContext.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 const teams: Record<string, TeamProfile> = {
   Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },

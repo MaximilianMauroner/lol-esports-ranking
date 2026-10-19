@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { auditSemanticManifestFreshness } from '../scripts/raw-manifest-freshness.ts'
+import { auditSemanticManifestFreshness } from '../tools/audit/raw-manifest-freshness.ts'
 
 test('semantic manifest freshness rejects unreferenced newer scored coverage', async () => {
   const rawDir = await mkdtemp(join(tmpdir(), 'ranking-freshness-'))

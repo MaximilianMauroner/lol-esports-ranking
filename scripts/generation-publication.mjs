@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 export const GENERATION_PUBLICATION_SCHEMA_VERSION = 1
 export const GENERATION_PUBLICATION_STATUS = 'ready'

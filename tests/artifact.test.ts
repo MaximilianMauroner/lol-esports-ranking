@@ -22,9 +22,9 @@ import {
   snapshotShardUrlPathForKey,
   type SnapshotFilter,
   type SnapshotSourceBreakdown,
-} from '../src/lib/publicArtifacts/schema.ts'
-import { ratedTeamLeagues } from '../src/data/regionTaxonomy.ts'
-import { PUBLIC_ARTIFACT_BUDGETS } from '../src/lib/publicArtifacts/writePlan.ts'
+} from '../src/domains/rankings/internal/published/schema.ts'
+import { ratedTeamLeagues } from '../src/domains/rankings/internal/evidence/regionTaxonomy.ts'
+import { PUBLIC_ARTIFACT_BUDGETS } from '../src/domains/rankings/internal/published/writePlan.ts'
 
 const ratedTeamLeagueSet = new Set<string>(ratedTeamLeagues)
 

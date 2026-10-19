@@ -1,343 +1,179 @@
 # LoL Esports Power Index
 
-## Ranking restart Phase 0 baseline
+An independent team-strength model for LoL esports. The app shows team and league
+rankings, match history, player timelines, and tournament forecasts.
 
-Phase 0 freezes the existing six-hour, gated refresh and proxy delivery behavior. It does not activate a new ranking path, change Railway configuration or cadence, publish artifacts, authorize deletion, or run bucket GC.
+This repository is the starting point for a connected League of Legends platform.
+Read the [product purpose](docs/product.md) and the
+[product specification](docs/product-specification.md) for its shared goals across
+esports, build tools, personal analytics, and a desktop companion. Those documents
+describe the product direction. They do not imply that every capability is available.
 
-The committed baseline is [ops/ranking-restart/baseline-receipt.json](ops/ranking-restart/baseline-receipt.json). It binds the deployed code, Railway project/environment/service/deployment identities, active and previous complete generations, public/state/raw/publish authorities, model/config/schema/coverage, and the latest full-audit authority. At capture time `rankings/audits/days/` was verified empty; absence is represented explicitly and is not treated as a successful audit.
+This is not an official Riot ranking. Keep each ranking claim tied to its source
+manifest, model config hash, schema version, and coverage window. A fixed reference
+snapshot, synthetic fixture, or no-data payload is not current official data.
 
-Verify the committed receipt without network or bucket mutation:
+[Live site](https://lol.lab4code.com/) · [Source](https://github.com/MaximilianMauroner/lol-esports-ranking)
+
+## Run locally
+
+Use Node 24 and pnpm 11.16.0. Native worker work also needs Rust 1.98.0.
 
 ```sh
+pnpm install --frozen-lockfile
+pnpm data:pull
+pnpm dev
+```
+
+`data:pull` restores a fixed Node reference snapshot. It verifies the complete
+path and SHA-256 digest list before replacing `public/data/`. The immutable cache
+is in `data/reference/`. It does not refresh providers or write to the bucket.
+Tests read this cache directly and leave your local `public/data/` tree intact.
+
+```sh
+pnpm verify
+pnpm build
 pnpm ranking:baseline
 ```
 
-Recapture is a read-only operator action. Run the capture command through the production refresh service environment so bucket credentials are injected, provide all non-secret Railway identities explicitly, and write to a reviewed new path before replacing the committed receipt. The command only permits S3 `GetObject`, `HeadObject`, and paginated `ListObjectsV2` operations. In a source archive without `.git`, pass `--commit`; commit resolution is explicit CLI, then `RAILWAY_GIT_COMMIT_SHA`, then `GIT_COMMIT_SHA`, then Git metadata.
+`verify` checks types, source ownership, style, tracked-file hygiene, and tests.
+`build` bundles the local payload. `ranking:baseline` checks the committed safety
+receipt without network access or bucket mutation. On a shared coding VM, run
+heavy checks one at a time through `heavy-check`.
 
-Recovery order is strict:
+To calculate rankings from provider inputs, use the following commands only when
+the provider collection is authorized.
 
-1. Restore the previous complete generation.
-2. If that is unavailable, perform a forced full replay from the active verified raw authority only with separate recovery authorization.
-
-Scheduled freshness remains strict. Production deployment, incremental activation, five-minute cadence, presigned delivery, and delete-mode cleanup remain unauthorized.
-
-An independent team-strength prototype for LoL esports. The app presents a Power Index rather than a static table: ranking controls, tournament weights, selected-team explanations, team timelines, player timelines, season summaries, event summaries, and methodology notes.
-
-Live site: [lol.lab4code.com](https://lol.lab4code.com/) · [Source code](https://github.com/MaximilianMauroner/lol-esports-ranking) · [Report feedback](https://github.com/MaximilianMauroner/lol-esports-ranking/issues/new?title=%5BFeedback%5D%20)
-
-## Status
-
-The generated browser payload in `public/data/` is ignored by Git. Download the pinned reference snapshot or build it from local source inputs before using a static host. Railway serves the current `/data/*` payload from Railway Bucket storage, with local files as a fallback. It is not an official Riot ranking, and each public ranking claim should stay tied to the data source manifest, model version, config hash, and coverage window that produced it. While the model is pre-1.0, `model.version` is intentionally stable; use `model.configHash` and `schemaVersion` for exact iteration provenance.
-
-## Run
-
-```bash
-pnpm install
-pnpm run data:pull
-pnpm run dev
+```sh
+pnpm data:download
+pnpm data:crunch
 ```
 
-`data:pull` downloads a fixed Node reference snapshot for development. It is not a live-data refresh. To calculate current rankings, use `data:download` and `data:crunch` below. See [local data setup](docs/local-data.md).
+Provider downloads stay in ignored `data/raw/`. Review changes to the tracked
+`data/raw/manifest.json` for source provenance. Full calculations stay in
+`data/derived/`. Browser payloads stay in `public/data/`. With no input arguments,
+`pnpm data:build` produces an explicit no-data payload. It does not use samples as
+real rankings. `VITE_RANKING_DATA_URL` selects an external browser manifest.
 
-Useful checks:
+## Source ownership
 
-```bash
-pnpm test
-pnpm run typecheck
-pnpm run lint
-pnpm run build
-pnpm run release:check
+The repository contains one private JavaScript application and a Rust Cargo
+workspace. It has one JavaScript dependency set and no package split.
+
+| Path | Owner |
+| --- | --- |
+| `src/domains/rankings/` | Ranking evidence, policy, queries, replay, and publication codecs. |
+| `src/domains/tournaments/` | Schedule rules, forecasts, and deterministic simulations. |
+| `src/lib/` | Five ranking safety implementations whose paths are bound by stored evidence. |
+| `src/shared/`, `src/data/` | Deterministic ordering, shared presentation helpers, branding facts, and legal text. |
+| `src/browser/`, `src/hooks/`, `src/components/`, `src/views/`, app entries | Browser state, UI, artifact I/O, and simulation worker. |
+| `scripts/` | Production Node server, refresh, publication, storage, and operator commands. |
+| `tools/` | Developer calibration, audits, assets, and test tools. |
+| `tests/` | Tests and focused fixtures. |
+| `worker/` | Native refresh seams and Rust contracts. |
+| `ops/` | Tracked safety receipts. |
+| `docs/` | Product purpose, requirements, principles, and lasting design decisions. |
+| `.agents/artifacts/` | Ignored reports, plans, audit output, and local evidence. |
+
+The receipt-pinned `scripts/benchmark-incremental-ranking.ts` is a developer
+entry with tools ownership. Its path stays fixed for stored safety evidence.
+
+Lint checks resolved import directions and public domain entries. Browser runtime
+code cannot reach replay producers or publication plans. Ranking adapters own
+private publication codecs. Views consume domain queries and types.
+The test runner discovers `*Browser.test.ts` journeys and runs them one at a time.
+
+### Extend the platform within these roots
+
+Add a real business capability under `src/domains/<name>/`. Register its public
+entries and domain dependencies in `tools/dev/ownership-policy.mjs`. The policy
+derives purity and consumer permissions from that record. Unregistered domains
+and undeclared public entries fail the boundary check. Do not add empty feature
+directories before their first working consumer.
+
+Keep web transport, request lifetime, caching, and navigation under `src/browser/`.
+Put workflow screens under `src/views/` and shared controls under `src/components/`.
+Keep domain calculations independent of React, browser state, provider calls,
+storage, and native application effects. Shared definitions do not grant access
+to private account or workspace data.
+
+Add native engines and service binaries as real members of the existing `worker/`
+Cargo workspace. A Rust API and analysis process can build and release separately
+without moving that workspace. Retain the current Node authority until native
+parity, cutover, and rollback requirements pass.
+
+A second web deployment needs its own working entry, build output, route contract,
+and release checks. Keep its browser entry under the existing browser roots.
+Multiple Vercel projects do not require new top-level application folders or
+placeholder package manifests. Create a shared package only when a real consumer
+needs a separate build contract.
+
+Keep contract generation, migration, and verification under `tools/`. Put retained
+inputs and compatibility cases under `tests/`. Public assets stay under `public/`,
+and generated payloads stay ignored. Keep reports and implementation plans under
+ignored `.agents/artifacts/`. These boundaries support builds, personal analytics,
+scouting, Riot integration, and a companion without changing the repository roots.
+
+## Railway services
+
+The web service builds `worker/Dockerfile.web` and starts with
+`node scripts/start-serving.mjs`. The supervisor starts the Rust data origin and
+the Node website server. Rust serves `/data/*` from verified bucket artifacts,
+with the local reference payload as fallback. Node serves the Vite build and the
+remaining website routes. The image builds from a source archive without Git metadata.
+
+Build and check the same image locally:
+
+```sh
+docker build -f worker/Dockerfile.web -t ranking-web .
+docker run --rm -e PORT=8080 -p 127.0.0.1:4173:8080 ranking-web
 ```
 
-## Styling
+After startup, `/api/live` must return 200 and a `/data/ranking-summary.json`
+response must include `X-Ranking-Runtime: rust`.
 
-The UI uses shadcn/ui-style React components in `src/components/ui` where they fit the surface, including controls and Recharts-backed dashboard charts. Product tokens and layout styles live in `src/index.css` and the files it imports.
+The refresh service starts with `node scripts/refresh-once.mjs`. The committed
+cron runs every six hours. Node remains the default refresh implementation.
+The gated worker uses confirmed pending matches to decide when to call providers.
+The web server has no background refresh unless `RANKING_REFRESH_ENABLED=true`.
+Changes to production cadence, activation, deployment, or deletion need separate
+authorization. A merge to `main` can cause Railway to deploy.
 
-## Static Data Strategy
+Bucket access uses `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`, and
+`ENDPOINT`. `RANKING_BUCKET_PREFIX` defaults to `rankings`.
+`RANKING_BUCKET_REQUIRED=true` rejects a refresh without credentials.
+`RANKING_BUCKET_UPLOAD_ENABLED=false` disables uploads for local work.
+`RANKING_REFRESH_MODE` selects `gated` or `shadow`.
+`RANKING_REFRESH_LOOKBACK_DAYS` and `RANKING_REFRESH_BOOTSTRAP_START` select the
+provider collection window. Do not put credentials in source files.
 
-The frontend loads static JSON from:
+## Legal
 
-```text
-/data/ranking-summary.json
+See [LICENSE](LICENSE) and the [third-party notices](worker/THIRD_PARTY_NOTICES.md).
+This project is not endorsed by Riot Games and does not reflect the views or
+opinions of Riot Games or anyone officially involved in producing or managing
+Riot Games properties. Riot Games and all associated properties are trademarks or
+registered trademarks of Riot Games, Inc.
+
+## Run the native local data service
+
+Build and start the Unix service with an existing local data directory.
+
+```sh
+cargo +1.98.0 build --manifest-path worker/Cargo.toml --package league-platform --bin platform-api --locked
+worker/target/debug/platform-api --data-root public/data --listen 127.0.0.1:4174
 ```
 
-Static hosts serve downloaded or generated files in the ignored `public/data/` directory. Set `VITE_RANKING_DATA_URL` only when you intentionally want the browser to load an externally hosted manifest.
+The listener accepts loopback addresses only. It serves `/data/`, `/api/live`, and `/api/ready`.
+Readiness checks only local summary access. The root stays pinned until restart. All symlinks are refused.
+Errors use safe fixed text. Conditional dates use standard HTTP forms.
+This command checks local delivery only. Production uses the supervisor above,
+which starts the native service with `--ranking-origin` for bucket access.
 
-Static data can be generated without source inputs for a no-data smoke fixture:
+Run the explicit native proof after building the binary. Both paths must exist. The proof does not build or download inputs.
 
-```bash
-pnpm run data:build
+```sh
+RANKING_NATIVE_HTTP_BINARY=worker/target/debug/platform-api \
+RANKING_NATIVE_HTTP_RETAINED_DATA_DIR=data/reference/8adbc0a4239fd0dfba2094b3e70f60b513560de4/public/data \
+pnpm exec tsx --tsconfig tsconfig.app.json --test tests/nativeRankingHttp.integration.ts
 ```
-
-With no source arguments, this writes a valid `no-data` summary instead of falling back to seeded samples. The app does not recalculate rankings in React render. It loads a compact default board first, then lazy-loads compact per-filter shards from `public/data/scopes/`. Event and region filters narrow the presented rows while preserving the global rating scale. Season filters publish the chronological model state through the selected season, so older years do not inherit current-year standings.
-
-The normal local refresh workflow is:
-
-```bash
-pnpm run data:download
-pnpm run data:crunch
-pnpm run data:team-branding
-pnpm run release:check
-# Review provenance changes before committing the input manifest.
-git add data/raw/manifest.json
-```
-
-`data:download` stores raw provider files under `data/raw/` and writes `data/raw/manifest.json`. Raw provider downloads are local inputs and are ignored by Git; the manifest is committed for provenance. By default the downloader fetches Oracle's Elixir CSVs and Leaguepedia ScoreboardGames from 2011-01-01 through today. `data:crunch` reads the local manifest and raw files, writes the full local calculation artifact to `data/derived/ranking-snapshot.full.json`, and writes the deployable client payload to `public/data/ranking-summary.json`, `public/data/entities/*.json`, `public/data/history/**/*.json`, and `public/data/scopes/*.json`.
-
-`data:team-branding` audits every team in the public team directory. It prefers shorthand and logos cached from the LoL Esports schedule feed, fills gaps from Leaguepedia team metadata, downloads logos into `public/team-logos/`, and records the source of each result in `src/data/teamBranding.generated.ts`. Teams without published metadata keep a text mark and an explicit `name-derived` source. It needs `ffmpeg` and `ffprobe` on the `PATH`: it reads a 24 x 24 sample of each logo file to decide whether the mark inverts a near-black logo or shows the team code instead of a wide wordmark, and stops before any download when they are missing.
-
-Keep all generated `public/data` files local. A static build includes the payload that you download or generate before `pnpm build`; it does not need a data commit. Railway refreshes publish the payload to the private Railway Bucket. Raw provider downloads, downloaded reference data, full snapshots, and audit artifacts are also ignored. The compact manifest and shards remain the browser contract. Official LoL Esports ranking snapshots are not part of the local data-source manifest.
-
-`data:download` treats Oracle's Elixir as the primary game-level source and Leaguepedia as the backup/gap-fill source. It discovers the public Oracle CSV files from the Oracle Google Drive folder, downloads the CSVs that overlap the requested date range, then downloads Leaguepedia Cargo data for the same range. If Google Drive returns a quota/HTML page instead of a CSV for a file, that file is skipped with a manifest warning instead of being recorded as usable data.
-
-## Railway Server Deployment
-
-`railway.toml` deploys the app as a Railway web service. The production server serves the built Vite app from `dist/`, serves `/data/*` from Railway Bucket storage when configured and falls back to local `public/data/`, and keeps background refresh disabled unless `RANKING_REFRESH_ENABLED=true` is explicitly set. Data companion URLs include a run-version query string so Railway CDN can cache shard/entity/history JSON aggressively without mixing artifacts from different generated runs. The manifest keeps a short edge TTL so new runs are discovered quickly.
-
-```bash
-railway link
-railway up
-```
-
-The Railway `web` service is connected to the `MaximilianMauroner/lol-esports-ranking` GitHub repository on the `main` branch, so Railway's native GitHub autodeploys rebuild and redeploy the service when new commits are pushed to `main`. The Railway build command downloads the pinned reference snapshot for static fallback and prerendering, then runs typecheck, lint, and the production bundle. Current rankings still come from the bucket. CI runs tests and the incremental gate against the separately cached reference corpus.
-
-This repository also includes `.github/workflows/railway-deploy.yml` as a manual fallback. Railway owns verification and bundling for that deployment, so the workflow does not duplicate the build before running:
-
-```bash
-railway up --ci --project 2bf26cbc-4cfa-4114-87c0-83b446f30816 --service d01fe39e-81a4-4230-b997-f13fe8af351b --environment production
-```
-
-To use the manual fallback, create a Railway project token for the `LoL Esports Power Index` project and save it as the GitHub Actions repository secret `RAILWAY_TOKEN`. The normal push-to-deploy path does not depend on that secret.
-
-The local refresh command uses the same pipeline as development:
-
-```bash
-pnpm run data:refresh
-```
-
-On each run, the wrapper downloads provider data into a staging directory, hashes the ranking inputs while ignoring volatile fetch timestamps, and compares the content fingerprint with the last successful refresh. Provider status and warnings have a separate health fingerprint, so a quota/status-only change remains visible in `data/raw/refresh-state.json` without forcing a new ranking run. If the content fingerprint is unchanged, the wrapper records the latest health check and skips the expensive crunch and publish steps. If source content changed, it promotes the staged raw files into `data/raw/`, writes `data/raw/manifest.json` plus `data/raw/refresh-state.json`, runs the same snapshot builder used by `pnpm run data:crunch`, and uploads the compact browser payload plus refresh provenance to the Railway Bucket.
-
-The event-aware one-shot worker is:
-
-```bash
-pnpm run railway:refresh-once
-```
-
-`RANKING_REFRESH_MODE=shadow` probes overlapping LoL Esports schedule pages, records strictly confirmed completed matches, and never calls Oracle or Leaguepedia. `RANKING_REFRESH_MODE=gated` calls scored providers only when a confirmed pending match is due for ingestion or an explicitly enabled correction audit is due. Trigger state and a fencing lease live in the Railway bucket, exact reconciliations acknowledge pending matches, and successful gated publishes use immutable content-addressed objects before promoting `rankings/active-generation.json`. The default is `gated`.
-
-For cost/speed-constrained production refreshes, set `RANKING_REFRESH_LOOKBACK_DAYS=7` and choose a practical `RANKING_REFRESH_BOOTSTRAP_START`, such as `2025-01-01`. With an existing raw baseline, each scheduled run downloads only the rolling 7-day source window and merges those files into `data/raw` before crunching, so the ranking model still sees the restored baseline plus the current lookback window. If a fresh Railway container has no raw baseline, the refresh first restores `rankings/raw/files/**` from the Bucket; if no bucket baseline exists yet, it bootstraps once from `RANKING_REFRESH_BOOTSTRAP_START` through today and then subsequent scheduled runs use the lookback window. Earlier bootstrap dates improve historical coverage at the cost of slower first runs and larger raw storage; later dates are faster and cheaper but intentionally narrow the ranking context.
-
-Use a Railway Storage Bucket for generated artifacts that should not live in Git. Railway Buckets are private S3-compatible storage. The default delivery mode proxies `/data/*` through the Railway server. An opt-in hybrid mode redirects only large immutable `objects/sha256/<digest>` JSON/gzip objects to method-specific presigned bucket URLs that expire after exactly one hour; ranking summaries, generation manifests, non-content-addressed files, and objects below the configured compressed-size threshold remain proxied. `?delivery=proxy` explicitly bypasses direct delivery, and the browser retries the original same-origin immutable URL once with that parameter when a followed redirect fails or the cross-origin fetch is rejected.
-
-Before enabling hybrid delivery, configure and verify bucket CORS for browser `GET` and `HEAD`, including access to the response headers used by the artifact contract (`Content-Type`, `Content-Encoding`, `Cache-Control`, and `ETag`). This repository change does not modify bucket CORS, Railway variables, or deployment state.
-
-The refresh job uploads:
-
-- `rankings/generations/<run-id>/manifest.json`, `rankings/objects/sha256/**`, and `rankings/active-generation.json`: immutable browser generations and their active pointer.
-- `rankings/raw/manifest.json`: the data-source manifest for provenance.
-- `rankings/raw/files/**`: the raw source baseline used to restore a fresh Railway container before lookback-only refreshes.
-- `rankings/raw/refresh-state.json` and `rankings/latest-publish.json`: refresh/publish audit metadata.
-- `rankings/artifacts/latest-full.json`: optional full audit/calculation artifact, uploaded only when `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT=true`.
-- `rankings/audits/objects/sha256/*` and `rankings/audits/days/YYYY-MM-DD.json`: immutable compressed full-ranking audit objects and their canonical daily authorities.
-
-The active pointer may also carry a `previousGeneration` authority. On a generation change it captures only a prior native schema-v2 public manifest and, when present as complete pairs, its state-manifest and raw-receipt authorities. Re-publishing the same native v2 generation preserves the existing rollback target.
-
-Deployment cutover is deliberately narrow: while the active pointer still names a pre-change schema-v1 content-addressed manifest and omits `publicManifestSchemaVersion`, the server and incremental restore path may normalize that manifest to schema v2 in memory only when every current object mapping and storage/transport encoding field is already exact. Native schema-v2 manifests require `publicManifestSchemaVersion: 2`; a missing, crossed, or unknown marker/manifest schema pair fails closed. The stored manifest is never rewritten, GC and rollback do not accept it, and the compatibility ends automatically when the first native v2 generation is promoted. That first promotion intentionally omits `previousGeneration`, because the pre-change authority is not a usable v2 rollback target.
-
-A daily audit receipt is created only for a successfully promoted, fenced `daily-audit` or `manual-force` full build with matching public, incremental-state, and raw-source authorities. Pending-match fallback full builds, incremental and metadata-only publishes, and unchanged or failed runs do not create one. This does not change the `artifacts/latest-full.json` opt-in.
-
-Bucket retention is the union of all public generations from the last 14 days, the newest 50 public generations, the active and explicit previous generations, one audit receipt for each of the last 14 UTC dates, and the complete shared public/state/raw/audit reference closure reached from those roots. Unreferenced immutable objects must be at least 48 whole hours old before they can become deletion candidates. Operational, unknown, control, lease, refresh, trigger, reconciliation, GC-receipt, and audit-control objects remain protected.
-
-The GC command is inventory-only and prints one canonical JSON document:
-
-```bash
-pnpm run bucket:gc
-```
-
-Delete and approval arguments are rejected. The command has no bucket deletion API, does not acquire a mutation lease, and never writes a deletion receipt. Any malformed, missing, corrupt, or unreadable retained authority/reference makes the inventory invalid and suppresses all candidates. Strict GC requires a canonical receipt for every retained generation and re-reads the complete immutable public/state/raw closure before protecting it. Running the inventory does not deploy code, change cron, modify bucket CORS, or alter Railway variables.
-
-Raw source uploads are content-addressed. Before uploading a file under `rankings/raw/files/**`, the publisher computes its SHA-256 digest, compares it with the object's stored `sha256` metadata and content length, and skips the PUT when both match. Existing objects without digest metadata are uploaded once to establish metadata. Publish logs and `latest-publish.json` report uploaded and unchanged counts/bytes separately, so an operator can verify that an hourly refresh did not resend an unchanged historical baseline. A missing object, missing metadata, or failed comparison falls back to uploading the file so recovery correctness takes priority over egress savings.
-
-Content-addressed public object uploads use `application/json; charset=utf-8`, gzip content encoding, `public, max-age=31536000, immutable`, and SHA-256, semantic-byte-length, and encoding metadata. Generation manifests and raw-source uploads keep their existing semantics.
-
-Recommended Railway variables:
-
-- `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`, `ENDPOINT`: Railway Bucket S3 credentials. Use the Bucket service's variable-reference preset for the AWS SDK, or map these values manually.
-- `RANKING_BUCKET_PREFIX`: object prefix for ranking artifacts. Defaults to `rankings`.
-- `RANKING_BUCKET_UPLOAD_ENABLED`: set to `false` to crunch locally without uploading to the bucket. Defaults to enabled when bucket credentials exist.
-- `RANKING_BUCKET_UPLOAD_FULL_SNAPSHOT`: set to `true` only when you need the full audit snapshot in the Bucket. Defaults to disabled because this artifact is large and the browser does not use it.
-- `RANKING_BUCKET_REQUIRED`: set to `true` in production if refreshes should fail when bucket credentials are missing.
-- `RANKING_BUCKET_FORCE_PATH_STYLE`: set to `true` only if the Bucket credentials tab says this bucket needs path-style S3 URLs.
-- `RANKING_PRESIGNED_DELIVERY_ENABLED`: set to `true` only after bucket CORS is ready to enable hybrid delivery for eligible immutable objects. Defaults to `false`.
-- `RANKING_PRESIGNED_DELIVERY_THRESHOLD_BYTES`: minimum compressed bucket `ContentLength` for presigned delivery. Defaults to `65536`; smaller objects remain proxied.
-- `RANKING_REFRESH_ENABLED`: set to `true` to enable refresh work in the dedicated cron service.
-- `RANKING_REFRESH_MODE`: `gated` (default) or `shadow`.
-- `RANKING_TRIGGER_STATE_KEY` and `RANKING_REFRESH_LEASE_KEY`: optional bucket keys for durable detector state and the fencing lease.
-- `RANKING_SCHEDULE_RECOVERY_HOURS`, `RANKING_SCHEDULE_MAX_OLDER_PAGES`, and `RANKING_SCHEDULE_REQUEST_TIMEOUT_MS`: bounded probe coverage and request deadline controls.
-- `RANKING_INCREMENTAL_SHADOW_ENABLED`: defaults off; an authorized `true` shadow run performs one scored-provider ingestion for the candidate/full comparison.
-- `RANKING_DAILY_AUDIT_ENABLED`: defaults on in gated mode and off in shadow mode; set `false` to disable. Runs an overdue full comparison to discover results absent from the official schedule and advances `lastSuccessfulDailyAuditAt` only after clean parity, promotion, and an audit receipt.
-- `RANKING_DAILY_AUDIT_INTERVAL_MS`: defaults to `86400000` (24 hours).
-- `RANKING_ROLLOUT_GATE_RECEIPT`: JSON bucket reference containing only the immutable gate-receipt `key` and expected `sha256`; inline receipts and local paths are rejected. The loaded receipt must be exact-commit, deployment-bound, and unexpired. Its nested run, audit, full-audit, coordination, and rollback proofs must also be storage-resolvable `{key, sha256}` references; each is re-read and digest-checked before cadence at or below five minutes is allowed.
-- `RANKING_ROLLOUT_EVIDENCE_ENABLED`: set to `true` in an authorized evidence deployment to publish every gated/shadow refresh outcome, including failures, under an immutable run key.
-- `RANKING_ALERT_WEBHOOK_URL`: optional operational alert destination for probe failures, ingestion failures, and overdue pending matches.
-- `RANKING_REFRESH_INTERVAL_MINUTES`: one-shot refresh cadence. Defaults to `360` (six hours), matching `railway.refresh.toml`.
-- `RANKING_REFRESH_LOOKBACK_DAYS`: optional rolling source-download window for scheduled refreshes. Production uses `7`.
-- `RANKING_REFRESH_BOOTSTRAP_START`: source coverage start date to use when no raw baseline exists locally or in the bucket. A `2025-01-01` start is a cost/speed-oriented production setting, not a neutral accuracy default.
-- `RANKING_REFRESH_START`: source coverage start date when no lookback window is configured. Defaults to `2011-01-01` for full-history ranking context.
-- `RANKING_REFRESH_END`: optional fixed coverage end date. Defaults to the current UTC date.
-- `RANKING_REFRESH_DOWNLOAD_ARGS`: optional extra downloader flags, such as `--oracle-required true`.
-- `RANKING_BUCKET_RESTORE_RAW`: set to `false` to prevent restoring `rankings/raw/files/**` into `data/raw` before a refresh. Defaults to enabled when bucket credentials exist.
-- `RANKING_DATA_MANIFEST_CACHE_CONTROL`: cache policy for `/data/ranking-summary.json`. Defaults to `public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400`.
-- `RANKING_DATA_CACHE_CONTROL`: cache policy for versioned `/data/*` companion artifacts. Defaults to `public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800`.
-- `RANKING_GZIP_ENABLED`: set to `false` to disable gzip for JSON/text/SVG responses. Defaults to enabled.
-- `ORACLES_ELIXIR_CSV_URL`: optional direct Oracle CSV URL override.
-- `RANKING_RAW_DIR` and `RANKING_PUBLIC_DATA_DIR`: optional paths if you also mount a Railway volume for raw state or generated public data. Bucket storage is the durable default for deployable artifacts.
-
-`GET /api/live` reports process liveness, `GET /api/ready` verifies app and ranking data availability, and `GET /api/scheduler` exposes non-sensitive detector counts and timing.
-
-Railway's dedicated cron service should run `pnpm run railway:refresh-once` every 6 hours. The bucket is the shared durable state and publish target, so the cron container can exit after each invocation and the web service can serve the promoted generation independently.
-
-To override Oracle discovery with direct CSV URLs, include them in the download step:
-
-```bash
-pnpm run data:download -- --oracle-csv-url "https://example.com/path/to/oracle.csv"
-pnpm run data:crunch
-```
-
-Useful download flags:
-
-```bash
-pnpm run data:download -- --start 2024-01-01 --end 2026-06-26
-pnpm run data:download -- --oracle-required true
-pnpm run data:download -- --leaguepedia-required true
-pnpm run data:download -- --lolesports-required true
-pnpm run data:download -- --lolesports false
-pnpm run data:download -- --oracle false
-pnpm run data:download -- --leaguepedia false
-```
-
-To build from Oracle's Elixir CSVs:
-
-```bash
-pnpm run data:build:oracle -- data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv
-```
-
-Oracle rows are normalized into match records using `gameid`, side, team, result, kills, gold, objectives, game length, league, year, split, playoffs, patch, and data-completeness fields when present.
-
-To build from a fetched Leaguepedia Cargo snapshot:
-
-```bash
-pnpm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
-pnpm run data:build:leaguepedia -- data/raw/leaguepedia/leaguepedia-2026.json
-```
-
-To combine both community sources for the algorithm:
-
-```bash
-pnpm run data:build -- --oracle-csv data/raw/oracles-elixir/2026_LoL_esports_match_data_from_OraclesElixir.csv --leaguepedia-json data/raw/leaguepedia/leaguepedia-2026.json --lolesports-json data/raw/lolesports/schedule-2026-01-01_to_2026-06-26.json
-```
-
-Oracle's Elixir has precedence for duplicate games because it carries richer game-stat fields. Leaguepedia Cargo fills gaps and supplies broad match/event coverage. LoL Esports schedule caches are treated as unsupported official-reference metadata: they can attach official event/match/game IDs and audit schedule/result state, but they are not standalone scored model inputs. Overlapping scored rows are merged only when canonical team/winner identity plus source IDs or team stat lines identify the same game; broad date/team/winner matching is reserved for result-only gap-fill rows so separate same-winner games in a series are preserved. Sponsor-era aliases such as DRX/Kiwoom DRX, OKSavingsBank BRION/HANJIN BRION, and DN Freecs/DN SOOPers are normalized before dedupe. Seeded data is explicitly marked as `sourceProvider: "seed"` and should be used only for local demo snapshots.
-
-## Source Strategy
-
-The intended free-data pipeline is layered:
-
-- LoL Esports persisted site APIs: cached unsupported reference layer for schedule windows, event states, series results, match IDs, game IDs, side assignments, and VOD references.
-- Oracle's Elixir CSVs: primary rich game-level and player-level stats source for scheduled snapshots and model inputs.
-- Leaguepedia Cargo API: throttled backup/audit layer for broad historical events, aliases, result gap-fill, and match metadata.
-- Data Dragon and CommunityDragon: static metadata/assets only, pinned where possible; never schedule/result inputs.
-- PandaScore and Cito: explicit free-tier experiments only, behind manual keys/flags if added later; not default ranking provenance.
-- Official LoL Esports ranking snapshots: optional manual benchmark exports extracted from the public LoL Esports rankings page. They are not used as local model inputs and are not written into `data/raw/manifest.json`.
-
-Fetch examples:
-
-```bash
-pnpm run fetch:lolesports -- --start 2026-01-01 --end 2026-06-26 --output data/raw/lolesports/lolesports-2026.json
-pnpm run fetch:leaguepedia -- --start 2026-01-01 --end 2026-06-26 --output data/raw/leaguepedia/leaguepedia-2026.json
-pnpm run fetch:riot-gpr -- --year 2026 --milestone current --output data/raw/riot-gpr/riot-gpr-2026-current.json
-```
-
-LoL Esports persisted APIs are public site endpoints, not a supported official data API. Keep those responses cached, label them unsupported, and use them as reference metadata rather than as proof that a scored game row has rich stats.
-
-### Tournament hub
-
-The `#tournaments` route is on by default and needs no configuration. The Railway server and the Vite dev server read the Leaguepedia Cargo export (`MatchSchedule` joined with `Tournaments`) and serve the result as `/tournament-data/feed.json` with a separate `feed.json.health.json`. The code is in `scripts/leaguepedia-tournament-feed.ts`. The feed is schedule reference data only; it does not modify ranking manifests, Oracle/Leaguepedia ranking imports, or model inputs.
-
-- Coverage: a 14-day lookback and 45-day lookahead. It includes Primary tournaments (tier-1 leagues, their playoffs and promotion events, Worlds, MSI, First Stand) and Secondary international events such as the Demacia Cup. Showmatches are excluded. One event is one Leaguepedia tournament page, so Worlds Play-In and Main Event are separate events.
-- Request budget: one request for about 100 series, with up to four 500-row pages. The server keeps the feed in memory and rechecks Leaguepedia when a read arrives and the copy is older than five minutes, so it polls only while someone views the hub. Each replica keeps its own copy.
-- Failures: a failed or incomplete check keeps the last complete feed and reports the failure in the health file. The page shows a stale warning when the last check is incomplete or more than 15 minutes old.
-- Status: Leaguepedia records results, not live state. A series counts as live from its scheduled start until a result is entered, for at most best-of + 2 hours. After that, it shows under unresolved results.
-- Licence: Leaguepedia content is CC BY-SA 3.0. The page links the Leaguepedia event page and the licence. rft.gg is not a source: its terms prohibit automated access.
-- Override and rollback: a `feed.json` in `TOURNAMENT_PUBLIC_DATA_DIR` (default `public/tournament-data`) takes precedence over the live feed. `LEAGUEPEDIA_CARGO_EXPORT_URL` replaces the export URL for tests.
-
-`TOURNAMENT_COLLECTOR_ENABLED=1 pnpm exec tsx scripts/tournament-feed-collector.ts [output-path]` still runs one bounded collection from the unsupported LoL Esports site API and writes a local override file. It is not used in production. Its request bounds: 14-day lookback, 45-day lookahead, eight schedule pages per direction and at most 120 event-detail calls. It publishes a complete changed feed atomically, retains the last complete feed on partial reads and uses a lock directory against concurrent local runs. The 2026-09-26 probe of that API established field shape only, not coverage, access permission or rate limits.
-
-`pnpm run test:browser` starts a local Vite server with an in-memory synthetic tournament feed and runs a Chromium journey for deep links, event selection/history, automatic score refresh, stale state, recovery, empty state, keyboard skip focus, and 320/390/768/1024/1280 px layouts. It blocks other `/data/` artifacts and asserts that the page makes no external requests. The test is also included in `pnpm test`. It uses Playwright's installed Chromium when available and otherwise the runner's Chrome; it never calls the schedule provider.
-
-### Match forecast foundation (opt-in, offline)
-
-`VITE_TOURNAMENT_FORECASTS_ENABLED=1` enables the match forecast cards within the hub. It is off by default. The published crosswalk format uses LoL Esports team IDs, so it does not map Leaguepedia feed teams yet. The client requires an explicit `/tournament-data/forecasts/team-ids.json` crosswalk from source team IDs to ranking `teamId` values, then reads the ranking manifest's current default snapshot independently of the viewer's historical Rankings filter. No crosswalk or receipt artifact is published by this repository. Unmapped IDs, missing model data, and formats outside decisive Bo1/3/5 show an unavailability reason; names and codes never join teams. The optional `/tournament-data/forecasts/ledger.json` is read only. These files live outside ranking builds' replaced `public/data` directory. Missing receipts leave live and completed series without historical pre-match odds.
-
-The offline `scripts/tournament-forecast-receipts.ts` module writes receipts and first-start pins as write-once files in a separate directory; it has no scheduled or production entry point. A receipt records the selected snapshot, model/config, source and ranking team IDs, rating/uncertainty and roster bases, neutral or sourced Bo1 side assumption, timestamps, and game/series outputs. Only a source-upcoming observation published before scheduled start can create one. Score-conditioned live odds use that frozen game probability and a validated completed-game score. Receipts are marked ineligible for out-of-sample evaluation until actual pre-play timing can be established independently; a later reconstruction is not a pre-match receipt. The synthetic Chromium forecast journey exercises upcoming, live, completed and unsupported-format cards without provider calls. Collector, production publication, representative source coverage, and activation remain separate owner gates.
-
-Before staging activation, verify usage rights and representative full-window coverage for LCS, LEC, LPL, LCK, Worlds, MSI and First Stand; inspect corrections, 429/Retry-After behavior, and actual request counts. No live polling cadence, production enablement, or ranking/data publication is implied by this code. Current gaps are stream/watch URL coverage, source-side update timestamps, durable multi-host publication fencing, and measured 120-second score latency; the synthetic browser test does not establish real provider behavior. A feed outage retains last-good data but health must be monitored externally before unattended operation.
-
-Leaguepedia rate-limits aggressively. The fetcher uses pagination and a delay, but repeated ad hoc queries can still be throttled.
-
-Official LoL Esports ranking snapshots can be compared against the generated browser standings as a local benchmark artifact:
-
-```bash
-pnpm run benchmark:riot-gpr -- --gpr data/raw/riot-gpr/riot-gpr-2026-current.json
-```
-
-The comparison reads `public/data/ranking-summary.json` plus the default generated shard and writes `data/derived/riot-gpr-benchmark-report.json`. It is a sanity benchmark, not a formula-clone gate: broad top-board disagreements are reported, while the command exits nonzero only when elite teams are implausibly displaced, too many top-band outliers accumulate, or too few teams match. Use `--top`, `--max-rank-delta`, `--max-large-deltas`, `--elite-top`, `--max-elite-rank-delta`, and `--min-matched` to tune the check for a calibration pass. Official LoL Esports ranking exports remain outside `data/raw/manifest.json` and are not a model input.
-
-## Model
-
-The transparent local model is Elo-like and intentionally explainable. The public team table is a context-neutral latent-strength estimate: it answers how strong a team is against a representative field under average draft, side, matchup, patch, and current-roster conditions. Match probabilities are a forecast and validation layer, not the ranking target itself.
-
-- Seasonal hierarchy: published power is `LeagueAnchor + TeamStableOffset + RosterPriorOffset + Momentum + ContextAdjustment`, with uncertainty shown beside the score.
-- Tournament context: EventK values put Worlds/MSI knockouts above international early stages, regional playoffs, and regular season.
-- Recency: newer matches carry more weight.
-- Latent result budget: resolved series results, or true Bo1 games, create a neutral result residual, then split that evidence into durable stable team offset and capped fast-decaying form. Kills, gold, and objectives are tracked in a separate shadow execution-residual ledger and are not allowed to affect their own pre-game prediction.
-- Opponent strength: beating stronger teams moves rating more through the Elo expectation.
-- League strength: eligible international cross-league results update league Elo against the participating teams' pregame power, so beating a higher-rated representative carries more signal than beating a lower-rated one. Region strength is derived from league posteriors, not direct game updates. Completed international tournaments also add a capped placement residual from actual stage advancement versus pre-event expectation. Same-region international games do not directly move league game Elo, so same-region finals are credited through the path and placement residual rather than double-counting the final itself.
-- Series-atomic updates: grouped Bo3/Bo5 source rows freeze the pre-series expectation and move team and league strength once on the final row. Sweeps get a small decisiveness bonus, but repeated source rows are not treated as independent full wins.
-- Uncertainty: standings expose a rating band so low-connectivity or low-volume teams are not ranked with false precision.
-- Eligibility: ranked rows carry total-volume, current-volume, staleness, uncertainty, and league-anchor gates. First-division minor regions can become eligible with enough scoped volume and current international signal; ERLs, NACL, EMEA Masters, academy, national, low-volume, and unknown-league rows remain visible as provisional ecosystem teams rather than being promoted as official top-board claims.
-- Roster continuity: Oracle player rows are attached as observed game rosters. Complete lineup changes regress stable team offset toward the league anchor and widen uncertainty using role-value weights rather than raw returning-player counts.
-- Momentum: recent overperformance is a capped, fast-decaying overlay; it affects current prediction without becoming permanent stable strength.
-- Dynamic player shares: player timelines start from role priors, then apply impact multipliers for objective impact, award residual, recent form, availability, and role certainty. Public-data outputs include post-game sourced player ratings from Oracle player rows. Sourced player updates compare each player with the opposing same-role player in that game, so jungle/bot/support box-score baselines cannot inject rating mass by themselves, and final player ratings use league-aware baselines so domestic farming in lower-connectivity leagues is not presented on the same starting scale as LCK/LPL. Public ranked player rows require at least 20 sourced role games, at least 20 games for the displayed team in the active scope, and a team that is not `unanchored-league`; thinner, reserve, transfer-fragment, or unanchored player samples remain auditable through rating-proof and full-artifact rows with appearance flags instead of being promoted as top-board claims. Published walk-forward probabilities use prior-only player-rating residuals above each team's league baseline plus side-context adjustments after same-day prediction batches are frozen; metrics keep neutral team-only and player-adjusted deltas for auditability.
-- Award residuals: current local sources do not contain dated MVP/POG/POTM/All-Pro records, so award residuals stay unapplied instead of being inferred from visible stats.
-- Baseline comparisons: schema `13` walk-forward metrics compare the side-aware published model with coin-flip, pre-game win-rate, and neutral team-only baselines, including segment rows for contexts such as international, cross-region, side-known, patch-transition, and roster-change games. Region rows publish flagship-region strength separately from broad ecosystem team counts, so lower-tier ERL/academy/cup volume does not dilute the main LEC/LCK/LPL regional signal. Current Region Power rows are limited to regions that participate at international events: LCS, CBLOL, LEC, LCK, LPL, and LCP. PCS, VCS, LJL, and other domestic feeder or lower-tier ecosystems remain legitimate team data, but they are ignored as separate Region Power inputs unless they are part of the region power league layer. The v0.26 model changes sourced player-rating scale semantics: previous v0.25 player ratings over-rewarded roles whose raw Oracle box-score baselines injected rating mass above `0.5 + 0.5` per same-role matchup and let lower-tier domestic ladders compound from the same `100` starting point as major leagues. v0.26 uses same-role matchup-relative sourced player performance and anchors final player baselines to league strength. v0.27 changes season snapshot semantics: a season shard publishes standings from the chronological model through that selected season instead of filtering today's global standings. v0.28 shrinks the published sourced-player edge by home-league tier, so ERL/academy/emerging domestic dominance is regressed toward its league baseline before appearing on the global player board or feeding pre-game player adjustments. v0.29 adds season-scoped player directory rows. v0.30 keeps low-sample sourced players out of ranked public player rows until they reach 20 sourced games, while preserving them in audit/proof outputs. v0.31 builds season-ranking models with season-scoped team profiles instead of only relabeling the row after ranking, and keeps developmental teams unanchored even when their parent league is certified. v0.32 caps emerging and unknown league published anchors before team/player baselines and removes players from unanchored-league teams from the public ranked player directory, preventing EMEA Masters-style ecosystem volume from making ERL or academy leagues appear stronger than first-division minor regions. v0.33 credits season-scoped player rows to the player's primary team in that scope and requires displayed-team sample volume, so transfer fragments and reserve appearances do not crowd public leaderboards. v0.34 recomputes eligibility after every season/event/region filter, adds a 30-game total-volume gate, and defaults the team table to ranked rows while keeping provisional teams in audit mode. v0.35 updates the current top-tier region taxonomy to exactly LCS, CBLOL, LEC, LCK, LPL, and LCP for both scope filtering and Region Power. Schema 13 adds player appearance provenance to `players.json` and rating-proof rows: each sourced player exposes total rated games, shown-team games, role games, team/role histories, and flags for multi-team or thin latest-team samples. The source pipeline `canonical-identity-stat-dedupe-v10` distinguishes Worlds, First Stand/FST MSI-level bracket games, EWC-style events, EWC qualifiers, Demacia Cup, EMEA Masters, generic LTA championship rows, and academic/world-name events, derives current team profiles from latest explicit home-league observations, preserves Team Secret Whales as distinct from Team Secret, and maps lower-division codes such as LFL2, PRMP, NL, and CT as LEC ecosystem leagues instead of relying on broad substring matches. The public artifact can show where the Power Index adds predictive signal beyond a domestic record table and where calibration still lags.
-
-Migration note: pre-1.0 model artifacts publish a stable canonical model version; exact experimental changes are identified by `model.configHash`. Schema `16` introduced the context-neutral latent team-strength target, series-atomic team and league-strength updates, and scoped team-history shards plus first-class region history.
-
-Pre-1.0 breaking changes are encouraged when they improve accuracy, fairness, provenance, model clarity, or long-term maintainability. Before 1.0, keep the public model version stable, rely on `model.configHash` for exact model-parameter provenance, bump schema versions for public artifact shape changes, regenerate affected snapshots, and document migration impact.
-
-Riot's official model should be used as a benchmark layer, not as a formula clone.
-
-Every generated snapshot includes `model.version`, `model.configHash`, active model parameters, source provider breakdowns, match coverage dates, source/data quality counts, and whether seeded sample data is present. Current schema version `18` standing rows include rating components and latest latent-strength rating-update ledger fields; league rows include expected wins, wins over expected, opponent-adjusted win rate, and average international opponent rating; region rows include flagship team/league counts and separate ecosystem counts. Walk-forward metrics also include aggregate and segment-level baseline comparisons against coin-flip, pre-game win-rate, and neutral team-only predictors, while full prediction rows expose the prior-only blue/red side adjustment used by the published probability. Compact sourced-player outputs carry latest Oracle observation provenance plus appearance provenance and recent match context, and browser history is split into scoped team-history shards plus first-class region-history artifacts, so player/team/role/region claims can be traced back to the source game, file, date, event, shown-team games, role games, last played opponents, and model provenance. Ranking claims should always be cited with the data source, canonical pre-1.0 model version, config hash, and schema version that produced them.
-
-## Key Files
-
-Player-stat additions and their independent review are documented in [research/player-performance-stats.md](research/player-performance-stats.md). Public schema 24 adds observed player statistics with per-metric coverage to team details; these descriptive metrics have no rating effect. Run `pnpm performance:audit <oracle.csv> [oracle.csv ...]` to audit normalized source coverage before proposing scoring changes.
-
-- `src/App.tsx`: main ranking workbench UI.
-- `src/lib/model.ts`: transparent team and league rating calculations.
-- `src/lib/playerModel.ts`: seeded player-share model plus sourced Oracle player-game rating updates.
-- `src/lib/rosters.ts`: latest observed game-roster provenance and standings roster-basis derivation.
-- `src/lib/rankingExplanations.ts`: static UI copy for public model-component explanations.
-- `src/lib/snapshot.ts`: full snapshot builder, compact browser-summary builder, and filter-key logic.
-- `src/data/teamIdentity.ts`: known team home league/region identities used when match rows lack explicit identity metadata.
-- `src/lib/importers/oraclesElixir.ts`: Oracle's Elixir CSV parser and normalizer.
-- `src/data/rankingConfig.ts`: event-tier K values and factor labels.
-- `scripts/build-static-snapshot.ts`: writes the full derived artifact plus compact browser summary/shards.
-- `scripts/refresh-data-if-changed.mjs`: Railway/local wrapper that downloads staged raw data on each scheduled run and crunches only when source content changed.
-- `scripts/railway-bucket.mjs`: Railway Bucket S3 helper for publishing generated artifacts and proxying `/data/*`.
-- `scripts/railway-server.mjs`: Railway production server for `dist/`, live `/data` artifacts, and health checks.
-- `scripts/fetch-leaguepedia.mjs`: Leaguepedia Cargo match fetcher.
-- `scripts/fetch-riot-gpr-snapshot.mjs`: manual official-ranking benchmark extractor. Its output must stay outside the local model input manifest.
-- `tests/`: provenance, importer, merge, and refresh safety tests.
-- `railway.toml`: Railway web-service build, start, health check, and restart config.

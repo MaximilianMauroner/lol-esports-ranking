@@ -1,6 +1,6 @@
-import { artifactReferences } from '../src/lib/publicArtifacts/logicalReferences.mjs'
+import { artifactReferences } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
 import { prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/lib/publicArtifacts/schema.ts'
+import { PUBLIC_ARTIFACT_SCHEMA_VERSION } from '../src/domains/rankings/internal/published/schema.ts'
 import { referencePublicDir } from '../scripts/reference-public-data.mjs'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
@@ -18,9 +18,9 @@ import {
   type PublicArtifactEncoding,
   type PublicGenerationArtifactEntry,
   type PublicSemanticArtifact,
-} from '../src/lib/publicArtifacts/artifactIdentity.ts'
-import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
-import { fetchPublicSnapshotShard, validatePublicTeamHistoryShard, validatePublicTournamentMovementIndex, validatePublicTournamentMovementShard } from '../src/lib/publicArtifacts/resolver.ts'
+} from '../src/browser/rankings/published/artifactIdentity.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/rankings/published/manifestLoader.ts'
+import { fetchPublicSnapshotShard, validatePublicTeamHistoryShard, validatePublicTournamentMovementIndex, validatePublicTournamentMovementShard } from '../src/browser/rankings/published/resolver.ts'
 import {
   parsePublicMatchHistoryCatalog,
   parsePublicMatchHistoryIndex,
@@ -34,11 +34,11 @@ import {
   parsePublicTournamentMovementIndex,
   parsePublicTournamentMovementShard,
   type PublicRankingManifest,
-} from '../src/lib/publicArtifacts/schema.ts'
+} from '../src/domains/rankings/internal/published/schema.ts'
 import {
   publicArtifactProxyFallbackUrl,
   resolvePublicArtifactUrl,
-} from '../src/lib/publicArtifacts/urlResolver.ts'
+} from '../src/browser/rankings/published/urlResolver.ts'
 
 test('one URL resolver preserves delivery forms and proxy query semantics', () => {
   const digest = 'a'.repeat(64)

@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { rankingScopePeriod } from '../src/lib/rankingScopeLabel.ts'
-import { gameWinChanceForGap, estimatePublicMatchup } from '../src/lib/publicMatchup.ts'
-import { publishedRatingScale } from '../src/lib/modelConfig.ts'
-import type { RankingSummaryStanding } from '../src/lib/snapshot.ts'
+import { rankingScopePeriod } from '../src/domains/rankings/internal/queries/rankingScopeLabel.ts'
+import { gameWinChanceForGap, estimatePublicMatchup } from '../src/domains/rankings/internal/queries/publicMatchup.ts'
+import { publishedRatingScale } from '../src/domains/rankings/internal/policy/modelConfig.ts'
+import type { RankingSummaryStanding } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 test('full-season selection does not end at the last split checkpoint', () => {
   assert.match(rankingScopePeriod('2026'), /Dec 31, 2026/)
@@ -25,8 +25,8 @@ test('probability copy reconciles with comparisons for the same scale and assump
 test('calendar scope boundaries do not roll into the previous date west of UTC', () => {
   // Set TZ before importing module-level Intl formatters, as a browser would.
   const output = execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
-    import { rankingScopePeriod } from './src/lib/rankingScopeLabel.ts'
-    import { formatDate } from './src/lib/display.ts'
+    import { rankingScopePeriod } from './src/domains/rankings/internal/queries/rankingScopeLabel.ts'
+    import { formatDate } from './src/shared/display.ts'
     console.log(JSON.stringify([rankingScopePeriod('2026'), formatDate('2026-07-26'), formatDate('2026-07-12')]))
   `], { cwd: new URL('..', import.meta.url), env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' })
   assert.deepEqual(JSON.parse(output), ['Season window: Jan 1, 2026 to Dec 31, 2026', 'Jul 26, 2026', 'Jul 12, 2026'])

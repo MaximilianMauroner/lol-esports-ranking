@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { createProviderFetchTelemetry, fetchWithRetry } from './provider-fetch-retry.mjs'
-import { competitionForLeague, conflictingLeagueIdentity, isTournamentFeed, normalizeTournamentFeed } from '../src/lib/tournamentFeed'
+import { competitionForLeague, conflictingLeagueIdentity, isTournamentFeed, normalizeTournamentFeed } from '../src/domains/tournaments/read.ts'
 
 const BASE_URL = 'https://esports-api.lolesports.com/persisted/gw'
 const PUBLIC_SITE_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'

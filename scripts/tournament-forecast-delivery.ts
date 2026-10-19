@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { canonicalJsonFor } from './public-artifact-storage.mjs'
-import { isForecastLedger, type ForecastReceipt } from '../src/lib/tournamentForecast'
+import { isForecastLedger, type ForecastReceipt } from '../src/domains/tournaments/forecast.ts'
 
 /** Read-only delivery observation. It cannot certify actual play time or enable evaluation. */
 export async function observeForecastDelivery(input: {

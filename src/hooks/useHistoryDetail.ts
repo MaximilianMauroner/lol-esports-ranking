@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { currentHashQuery, hashParam } from '../lib/urlState'
+import { hashParam, hashWithParam, writeNavigationHash } from '../browser/navigation'
 
 /**
  * An open detail view (team drawer, region sheet) kept as a hash query param.
@@ -24,7 +24,7 @@ export function useHistoryDetail(key: string) {
   }, [key])
 
   const open = useCallback((nextValue: string) => {
-    window.history.pushState(null, '', hashWithParam(key, nextValue))
+    writeNavigationHash(hashWithParam(key, nextValue), 'push')
     pushedRef.current = true
     setValue(nextValue)
   }, [key])
@@ -35,18 +35,9 @@ export function useHistoryDetail(key: string) {
       window.history.back()
       return
     }
-    window.history.replaceState(null, '', hashWithParam(key, null))
+    writeNavigationHash(hashWithParam(key, null), 'replace')
     setValue(null)
   }, [key, value])
 
   return { value, open, close }
-}
-
-function hashWithParam(key: string, value: string | null) {
-  const [route] = window.location.hash.slice(1).split('?', 2)
-  const query = currentHashQuery()
-  if (value === null) query.delete(key)
-  else query.set(key, value)
-  const queryString = query.toString()
-  return `#${route}${queryString ? `?${queryString}` : ''}`
 }

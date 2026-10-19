@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Button } from './ui/button'
-import { cn } from '../lib/utils'
+import { cn } from '../shared/utils'
 import { Badge } from './ui/badge'
 import { tableHeadClassName } from './ui/table'
-import { heatBin } from '../lib/display'
+import { heatBin } from '../shared/display'
 
 export function HeatChip({ value, min, max, label }: { value: number; min: number; max: number; label: string }) {
   return (

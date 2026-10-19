@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
-import { compareCodeUnits } from '../src/lib/codeUnitOrder.mjs'
+import { compareCodeUnits } from '../src/shared/codeUnitOrder.mjs'
 
 /**
  * Fixed CPU workload that measures how fast the current runner executes the

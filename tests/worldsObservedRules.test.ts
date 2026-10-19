@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { replayWorldsSwiss, type ObservedSwissMatch, type SwissEntrant } from '../src/lib/worldsObservedRules.ts'
+import { replayWorldsSwiss, type ObservedSwissMatch, type SwissEntrant } from '../src/domains/tournaments/internal/worldsObservedRules.ts'
 
 const regions = ['LCK', 'LPL', 'LEC', 'LTA', 'LCP']
 const fixtureEvidence = { kind: 'synthetic-fixture' as const, reference: 'tests/worldsObservedRules.test.ts' }

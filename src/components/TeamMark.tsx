@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { teamBrandingFor } from '../data/teamBranding'
-import { cn } from '../lib/utils'
+import { cn } from '../shared/utils'
 
 export function TeamMark({
   team,

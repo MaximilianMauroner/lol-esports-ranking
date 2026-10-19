@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createStaticRankingData, createStaticRankingSummaryData, snapshotKey } from '../src/lib/snapshot.ts'
-import type { PublicDeservedStandingComparison } from '../src/lib/publicArtifacts/schema.ts'
-import type { MatchRecord, Role, Side, TeamProfile } from '../src/types.ts'
+import { createStaticRankingData, createStaticRankingSummaryData, snapshotKey } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import type { PublicDeservedStandingComparison } from '../src/domains/rankings/internal/published/schema.ts'
+import type { MatchRecord, Role, Side, TeamProfile } from '../src/domains/rankings/types.ts'
 import { teams } from './fixtures/rankingFixtures.ts'
 
 function assertDeservedStandingScoreBase(comparison: PublicDeservedStandingComparison, expectedBaseScore: number) {

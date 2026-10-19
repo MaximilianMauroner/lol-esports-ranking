@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { applySearchValues, readSearchValues, searchParameters, searchTrials, seriesPathLikelihood, seriesScoreLikelihood } from '../scripts/lib/ranking-experiments.ts'
-import { boundedStageExpectations } from '../src/lib/placementResiduals.ts'
-import { simulatedLeagueRows } from '../scripts/lib/ranking-simulations.ts'
-import { fitHierarchicalLeagues } from '../scripts/lib/hierarchical-leagues.ts'
-import { ablatedBoardRating } from '../scripts/lib/public-board-ablation.ts'
-import { effectiveLeagueRating, leaguePriorFor } from '../src/data/leagueTiers.ts'
-import { buildEvaluationData } from '../src/lib/rankingEvaluationData.ts'
-import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/lib/model.ts'
+import { applySearchValues, readSearchValues, searchParameters, searchTrials, seriesPathLikelihood, seriesScoreLikelihood } from '../tools/calibration/lib/ranking-experiments.ts'
+import { boundedStageExpectations } from '../src/domains/rankings/internal/replay/placementResiduals.ts'
+import { simulatedLeagueRows } from '../tools/calibration/lib/ranking-simulations.ts'
+import { fitHierarchicalLeagues } from '../tools/calibration/lib/hierarchical-leagues.ts'
+import { ablatedBoardRating } from '../tools/calibration/lib/public-board-ablation.ts'
+import { effectiveLeagueRating, leaguePriorFor } from '../src/domains/rankings/internal/policy/leagueTiers.ts'
+import { buildEvaluationData } from '../tools/calibration/lib/rankingEvaluationData.ts'
+import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
 import { sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
 test('seeded bounded search reproduces each trial and fails closed on edited definitions', async () => {
@@ -21,7 +21,7 @@ test('seeded bounded search reproduces each trial and fails closed on edited def
   for (const trial of trials) assert.deepEqual(readSearchValues(applySearchValues(files, trial.parameters)), trial.parameters)
   assert.throws(() => applySearchValues(files, { ...baseline, momentumCap: Infinity }))
   const duplicate = new Map(files)
-  duplicate.set('src/lib/modelConfig.ts', `${duplicate.get('src/lib/modelConfig.ts')}\nconst momentumCap = 40`)
+  duplicate.set('src/domains/rankings/internal/policy/modelConfig.ts', `${duplicate.get('src/domains/rankings/internal/policy/modelConfig.ts')}\nconst momentumCap = 40`)
   assert.throws(() => applySearchValues(duplicate, baseline))
 })
 

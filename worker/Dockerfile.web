@@ -1,0 +1,27 @@
+FROM node:24-bookworm-slim AS web-build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@11.16.0 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm run railway:build
+
+FROM rust:1.98-slim-bookworm AS native-build
+WORKDIR /app
+COPY worker ./worker
+COPY src/domains/rankings/internal/published/referenceFields.json ./src/domains/rankings/internal/published/referenceFields.json
+RUN cargo +1.98.0 build --manifest-path worker/Cargo.toml --release --locked --package league-platform --bin platform-api --jobs 2
+
+FROM node:24-bookworm-slim
+WORKDIR /app
+RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=web-build /app/node_modules ./node_modules
+COPY --from=web-build /app/dist ./dist
+COPY --from=web-build /app/public/data ./public/data
+COPY --from=web-build /app/scripts ./scripts
+COPY --from=web-build /app/src ./src
+COPY --from=web-build /app/package.json ./package.json
+COPY --from=native-build /app/worker/target/release/platform-api /usr/local/bin/platform-api
+COPY worker/THIRD_PARTY_NOTICES.md /usr/local/share/platform-api/THIRD_PARTY_NOTICES.md
+USER node
+CMD ["node", "scripts/start-serving.mjs"]

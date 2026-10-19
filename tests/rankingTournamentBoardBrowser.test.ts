@@ -3,11 +3,11 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
-import { createStaticRankingData } from '../src/lib/snapshot.ts'
-import { createPublicArtifactWritePlan } from '../src/lib/publicArtifacts/writePlan.ts'
+import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
-import { tournamentMovementShardUrlPathForId } from '../src/lib/publicArtifacts/schema.ts'
-import type { MatchRecord, TeamProfile } from '../src/types.ts'
+import { tournamentMovementShardUrlPathForId } from '../src/domains/rankings/internal/published/schema.ts'
+import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types.ts'
 
 // Four LCK teams with a full season, and Rookie, which plays only MSI 2026 and so stays unranked.
 const strength: Record<string, number> = { Alpha: 4, Beta: 3, Gamma: 2, Delta: 1, Rookie: 0 }
