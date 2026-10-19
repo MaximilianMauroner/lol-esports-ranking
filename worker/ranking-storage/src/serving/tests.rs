@@ -312,6 +312,31 @@ async fn pointer_is_reread_and_only_valid_immutable_roots_are_cached() {
             .count(),
         1
     );
+    let failed_object = format!("objects/sha256/{}", "a".repeat(64));
+    fixture.put(&failed_object, Response::json(&json!({"corrupt": true})));
+    assert!(
+        fixture
+            .origin
+            .read(&failed_object, None, false, false)
+            .await
+            .is_err()
+    );
+    let served = fixture
+        .origin
+        .read(ROOT, None, false, false)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(&*served.body, first.body);
+    drop(served);
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|(_, path)| path.ends_with("/manifest.json"))
+            .count(),
+        1
+    );
     let (second, _) = fixture.generation("two", 2, true);
     let served = fixture
         .origin

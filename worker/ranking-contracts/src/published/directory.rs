@@ -4,8 +4,6 @@ use super::{
 };
 use crate::{Result, Utf16String};
 
-/// Share the parsed tree with generation validation. Directory hydration must
-/// not round-trip Infinity or own Undefined properties through JSON text.
 pub(super) fn expand(reader: &mut Reader<'_>, manifest: &mut Json) -> Result<()> {
     if matches!(manifest, Json::Null) {
         return Err("Invalid public directory manifest".into());
@@ -85,7 +83,6 @@ pub(super) fn expand(reader: &mut Reader<'_>, manifest: &mut Json) -> Result<()>
     Ok(())
 }
 
-/// Own enumerable JSON properties, matching Object.entries and {...value}.
 fn own_entries(mut value: Json) -> Vec<(Utf16String, Json)> {
     match &mut value {
         Json::Object(entries) => std::mem::take(entries),

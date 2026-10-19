@@ -223,8 +223,6 @@ impl GenerationVerification {
     }
 }
 
-/// Match the active Node reader's canonical identity selection, including its
-/// second path normalization and last mapping for aliases of the same path.
 fn read_artifacts(reader: &mut Reader<'_>, manifest: &Json) -> Result<Json> {
     let Some(Json::Object(entries)) = field(manifest, "artifacts") else {
         return Err("Invalid public generation artifact mappings".into());
@@ -247,9 +245,6 @@ fn read_artifacts(reader: &mut Reader<'_>, manifest: &Json) -> Result<Json> {
         let Some(identity) = identities.get(&canonical) else {
             continue;
         };
-        // The structural validator accepts Node's coercible digest spelling.
-        // The artifact GET additionally requires the stored scalar metadata to
-        // equal the digest field, so a non-string digest cannot pass that read.
         if !matches!(field(identity, "sha256"), Some(Json::String(_))) {
             return Err("Invalid public generation artifact digest".into());
         }
@@ -339,8 +334,6 @@ fn same_string(value: Option<&Json>, expected: &Json) -> bool {
     matches!((value, expected), (Some(Json::String(left)), Json::String(right)) if left == right)
 }
 
-/// Node's safeObjectPath normalizes separators and dot segments, then removes
-/// leading parent and root segments. It is used twice by the manifest key seam.
 fn safe_path(value: &str) -> String {
     let text = value.replace('\\', "/");
     let absolute = text.starts_with('/');

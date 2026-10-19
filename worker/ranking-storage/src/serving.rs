@@ -418,8 +418,6 @@ impl PublishedOrigin {
             if actual != reference {
                 return Err("Public root identity metadata mismatch".into());
             }
-            // The async pass bounds CPU work and checks transport integrity.
-            // The pure reader additionally validates and hydrates the envelope.
             let _ = decode(&object.body, Some(&reference), DOCUMENT_LIMIT).await?;
             let checked = PublicObject::check(&reference, &object.headers, &object.body)?;
             objects.insert(reference.digest().to_owned(), checked);

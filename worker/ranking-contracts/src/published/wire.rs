@@ -4,11 +4,6 @@ use std::collections::BTreeMap;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
-/// A public value as JSON.parse produces it: binary64 numbers, including
-/// overflow to infinity, and duplicate keys keep their first position with the
-/// last value. Only hydrated record values can be Undefined. Parsing, output,
-/// coercion and drop use explicit stacks, so nesting is limited by the stored
-/// object's size, not the call stack.
 pub(super) enum Json {
     Undefined,
     Null,
@@ -77,7 +72,6 @@ fn take_children(value: &mut Json, pending: &mut Vec<Json>) {
     }
 }
 
-/// Parsed and hydrated objects have unique keys.
 pub(super) fn field<'a>(value: &'a Json, key: &str) -> Option<&'a Json> {
     let Json::Object(entries) = value else {
         return None;
@@ -251,12 +245,9 @@ pub(super) fn write_json(value: &Json, output: &mut String) {
     }
 }
 
-/// JSON.parse grammar with an explicit container stack. The canonical raw and
-/// state parser keeps its own 128-level input bound.
 pub(super) fn parse_json(bytes: &[u8]) -> Result<Json> {
     enum Open {
         Array(Vec<Json>),
-        // The last entry holds the key whose value is being parsed.
         Object(Vec<(Utf16String, Json)>),
     }
     let mut parser = Parser { bytes, offset: 0 };

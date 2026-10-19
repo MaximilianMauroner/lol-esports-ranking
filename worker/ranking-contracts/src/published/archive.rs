@@ -146,7 +146,6 @@ impl Reader<'_> {
             });
         }
         if string_is(field(&tree, "kind"), "record") {
-            // Node checks every record entry before it visits the first child.
             let invalid = || "Invalid public archive record".to_string();
             let entries = take(&mut tree, "entries")
                 .and_then(into_array)
@@ -171,8 +170,6 @@ impl Reader<'_> {
             }
             let count = children.len() as u64;
             let mut result = Vec::with_capacity(children.len());
-            // A missing inline value stays an own Undefined property, as in
-            // Node, until the final JSON output omits it.
             for (key, child) in children {
                 result.push((key, self.visit(child, ancestors, depth + 1)?.value));
             }
@@ -189,7 +186,6 @@ impl Reader<'_> {
             .and_then(into_array)
             .filter(|parts| !parts.is_empty())
             .ok_or("Invalid public archive parts")?;
-        // Node validates every reference before starting the first child request.
         let references = parts.iter().map(reference).collect::<Result<Vec<_>>>()?;
         if self.budget.is_some() {
             let expected_total = references.iter().try_fold(0usize, |total, (_, _, count)| {
@@ -230,8 +226,6 @@ impl Reader<'_> {
                 let Json::Object(child_entries) = &mut hydrated.value else {
                     return Err("Public archive map child must be an object".into());
                 };
-                // Keep part/property order for downstream alias selection.
-                // Undefined record properties are own keys in Node's hasOwn check.
                 for (key, value) in child_entries.drain(..) {
                     self.checkpoint()?;
                     if !keys.insert(key.clone()) {
@@ -254,8 +248,6 @@ impl Reader<'_> {
 
 fn reference(value: &Json) -> Result<(String, u64, u64)> {
     if !matches!(field(value, "sha256"), Some(Json::String(_))) {
-        // Node's strict metadata comparison rejects coercible nonstring digests
-        // when the child is read, even if its reference regex accepts them.
         return Err("Invalid public archive reference digest".into());
     }
     let digest = js_text(field(value, "sha256"));
