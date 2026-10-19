@@ -79,10 +79,57 @@ test('native gateway returns a controlled unavailable response when its sibling 
       const actual = await read(port, '/data/ranking-summary.json?v=pinned', { method })
       assert.equal(actual.status, 502)
       assert.equal(actual.headers['cache-control'], 'no-store')
+      assert.equal(actual.headers['content-encoding'], undefined)
       assert.equal(actual.body.toString(), method === 'HEAD' ? '' : '{"ok":false,"error":"Data service unavailable"}\n')
     }
   } finally {
     await close(gateway)
+  }
+})
+
+test('native gateway labels plain data to prevent edge compression of rejected encodings', async () => {
+  const payload = Buffer.from('published ranking data\n'.repeat(100))
+  const origin = createServer((incoming, response) => {
+    if (incoming.url === '/data/unchanged.json') {
+      response.writeHead(304, { ETag: '"current"' })
+      response.end()
+    } else if (incoming.url === '/data/redirect.json') {
+      response.writeHead(307, { Location: '/data/target.json', 'Content-Length': 0 })
+      response.end()
+    } else if (incoming.url === '/data/unavailable.json') {
+      response.writeHead(502, { 'Content-Length': 0 })
+      response.end()
+    } else {
+      response.writeHead(200, {
+        'Content-Type': 'application/json', 'Content-Length': payload.length, Vary: 'Accept-Encoding',
+        ETag: '"current"', 'Cache-Control': 'public, max-age=31536000, immutable',
+      })
+      response.end(incoming.method === 'HEAD' ? undefined : payload)
+    }
+  })
+  const originPort = await listen(origin)
+  const gateway = createServer((incoming, response) => { void proxyNativeData(incoming, response, originPort) })
+  const port = await listen(gateway)
+  try {
+    for (const method of ['GET', 'HEAD']) {
+      const actual = await read(port, '/data/plain.json', { method, headers: { 'Accept-Encoding': 'gzip;q=0' } })
+      assert.equal(actual.status, 200)
+      assert.equal(actual.headers['content-encoding'], 'identity')
+      assert.equal(actual.headers['content-length'], String(payload.length))
+      assert.equal(actual.headers.vary, 'Accept-Encoding')
+      assert.equal(actual.headers.etag, '"current"')
+      assert.equal(actual.headers['cache-control'], 'public, max-age=31536000, immutable')
+      assert.deepEqual(actual.body, method === 'HEAD' ? Buffer.alloc(0) : payload)
+    }
+    for (const [path, status] of [['/data/unchanged.json', 304], ['/data/redirect.json', 307], ['/data/unavailable.json', 502]]) {
+      const actual = await read(port, path, { headers: { 'Accept-Encoding': 'gzip;q=0' } })
+      assert.equal(actual.status, status)
+      assert.equal(actual.headers['content-encoding'], undefined)
+      assert.equal(actual.body.length, 0)
+    }
+  } finally {
+    await close(gateway)
+    await close(origin)
   }
 })
 

@@ -34,7 +34,10 @@ export async function proxyNativeData(request, response, port) {
       request.once('aborted', abort)
       request.pipe(upstream)
     })
-    response.writeHead(incoming.statusCode, endToEndHeaders(incoming.headers))
+    const headers = endToEndHeaders(incoming.headers)
+    // Railway otherwise compresses plain responses even when gzip has quality zero.
+    if (incoming.statusCode === 200 && headers['content-encoding'] === undefined) headers['content-encoding'] = 'identity'
+    response.writeHead(incoming.statusCode, headers)
     await pipeline(incoming, response)
   } catch {
     if (response.headersSent) {
