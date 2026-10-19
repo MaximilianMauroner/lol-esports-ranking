@@ -17,35 +17,18 @@ env:
   PNPM_VERSION: "11.16.0"
 
 jobs:
-  affected:
-    name: Classify affected paths
+  checks:
+    name: Install, verify, and bundle
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 40
     outputs:
       full-validation: ${{ steps.changes.outputs.full-validation }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           # Compare the synthetic PR merge to its first parent. Missing parents fail open.
-          fetch-depth: 2
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Classify affected paths
-        id: changes
-        run: node tools/dev/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
-
-  checks:
-    name: Install, verify, and bundle
-    needs: affected
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
           fetch-depth: 2
 
       - name: Set up pnpm
@@ -63,6 +46,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Classify affected paths
+        id: changes
+        run: node tools/dev/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
+
       - name: Verify
         run: pnpm run verify
 
@@ -70,13 +57,13 @@ jobs:
         run: pnpm run bundle
 
       - name: Incremental production-shaped gate
-        if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.affected.outputs.full-validation == 'true')
+        if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && steps.changes.outputs.full-validation == 'true')
         run: pnpm run benchmark:incremental:gate
 
   rust-contracts:
     name: Rust contracts and model config parity
-    needs: affected
-    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.affected.outputs.full-validation == 'true')
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.checks.outputs.full-validation == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -221,8 +208,8 @@ jobs:
 
   web-image:
     name: Native serving image
-    needs: affected
-    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.affected.outputs.full-validation == 'true')
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.checks.outputs.full-validation == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
