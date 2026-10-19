@@ -1,4 +1,5 @@
 mod delivery;
+mod target;
 
 use std::convert::Infallible;
 use std::future::Future;
@@ -98,10 +99,14 @@ impl LocalDataServer {
                     let state = self.state.clone();
                     let mut stopping = drain.subscribe();
                     tasks.spawn(async move {
-                        let service = service_fn(move |request| dispatch(state.clone(), request));
+                        let (socket, targets) = target::TargetIo::new(socket);
+                        let service = service_fn(move |request| {
+                            let raw = targets.lock().unwrap().take();
+                            dispatch(state.clone(), request, raw)
+                        });
                         let mut builder = http1::Builder::new();
                         builder.timer(TokioTimer::new()).header_read_timeout(Duration::from_secs(10))
-                            .max_headers(100).max_buf_size(32 * 1024);
+                            .max_headers(100).max_header_size(32 * 1024).max_buf_size(32 * 1024);
                         let connection = builder.serve_connection(TokioIo::new(socket), service);
                         tokio::pin!(connection);
                         let result = tokio::select! {
@@ -147,15 +152,24 @@ type Body = UnsyncBoxBody<Bytes, io::Error>;
 async fn dispatch(
     state: Arc<ServiceState>,
     request: Request<Incoming>,
+    raw: Option<target::RawTarget>,
 ) -> Result<Response<Body>, Infallible> {
     let head = request.method() == hyper::Method::HEAD;
-    let close = !request.body().is_end_stream();
-    let target = delivery::RequestTarget::parse(request.uri());
+    let close = raw.as_ref().is_none_or(|raw| raw.has_body) || !request.body().is_end_stream();
+    let target = raw
+        .as_ref()
+        .and_then(|raw| delivery::RequestTarget::parse_raw(&raw.text));
     let path = target
         .as_ref()
         .map(|target| target.path.as_str())
         .unwrap_or("");
-    let mut response = if path == "/api/live" {
+    let mut response = if raw.is_none() {
+        json_response(
+            StatusCode::BAD_REQUEST,
+            json!({"ok": false, "error": "Invalid request target"}),
+            head,
+        )
+    } else if path == "/api/live" {
         json_response(
             StatusCode::OK,
             json!({"ok": true, "commit": state.commit}),

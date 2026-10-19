@@ -50,7 +50,7 @@ fn intermediate_symlinks_and_nonregular_leaves_are_refused() {
     symlink("inside", fixture.path().join("link")).unwrap();
     let root = LocalRoot::open(fixture.path()).unwrap();
     for request in ["/data/link/file.json", "/data/inside"] {
-        let target = RequestTarget::parse(&request.parse().unwrap()).unwrap();
+        let target = RequestTarget::parse_raw(request).unwrap();
         assert!(root.open_file(&DataPath::parse(&target).unwrap()).is_err());
     }
 }

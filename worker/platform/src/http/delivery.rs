@@ -14,7 +14,7 @@ use futures_util::TryStreamExt;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::Frame;
 use hyper::header::HeaderValue;
-use hyper::{HeaderMap, Response, StatusCode, Uri};
+use hyper::{HeaderMap, Response, StatusCode};
 use regex::Regex;
 use rustix::fs::{Mode, OFlags, open, openat};
 use serde_json::json;
@@ -66,13 +66,12 @@ pub(super) struct RequestTarget {
 }
 
 impl RequestTarget {
-    pub(super) fn parse(uri: &Uri) -> Option<Self> {
-        let raw = uri.to_string();
-        if !raw.starts_with('/') && uri.scheme().is_none() {
+    pub(super) fn parse_raw(raw: &str) -> Option<Self> {
+        if !raw.starts_with('/') && !raw.contains("://") {
             return None;
         }
         let base = url::Url::parse("http://local.invalid/").unwrap();
-        let normalized = base.join(&raw).ok()?;
+        let normalized = base.join(raw).ok()?;
         Some(Self {
             raw_path: raw.split('?').next().unwrap().to_owned(),
             path: normalized.path().to_owned(),
