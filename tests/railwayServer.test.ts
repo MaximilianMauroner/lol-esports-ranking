@@ -557,7 +557,8 @@ test('Railway server and production reader support identity and gzip delivery of
           const shard = await fetchPublicSnapshotShard(expected.url, fixture.snapshotKey, expected, manifest, { fetcher })
 
           assert.equal(shard.matchCount, fixture.expectedMatchCount)
-          assert.deepEqual(objectResponseEncodings, gzipEnabled ? ['gzip', 'gzip'] : [null, null])
+          const identityEncoding = process.env.RANKING_NATIVE_SERVER_TESTS === 'true' ? 'identity' : null
+          assert.deepEqual(objectResponseEncodings, gzipEnabled ? ['gzip', 'gzip'] : [identityEncoding, identityEncoding])
 
           const invalidObject = await httpRequest(server.port, '/data/objects/sha256/not-a-digest')
           assert.equal(invalidObject.statusCode, 404)
