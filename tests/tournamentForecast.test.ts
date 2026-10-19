@@ -7,7 +7,7 @@ import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastL
 import { observeForecastDelivery } from '../scripts/tournament-forecast-delivery'
 import { publishedRatingScale } from '../src/lib/modelConfig'
 import { estimatePublicMatchup } from '../src/lib/publicMatchup'
-import { loadTournamentForecastLedger } from '../src/lib/tournamentForecastArtifacts'
+import { loadTournamentForecastLedger } from '../src/browser/tournamentForecastArtifacts'
 import type { PublicRankingShard, PublicTeamStanding } from '../src/lib/publicArtifacts/schema'
 import type { TournamentSeries } from '../src/lib/tournamentFeed'
 import {

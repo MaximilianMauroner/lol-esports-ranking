@@ -1,11 +1,11 @@
-import { normalizeStatus, type TournamentEvent, type TournamentSeries } from './tournamentFeed'
-import type { Worlds2026EventInput } from './worldsSimulation'
-import type { Worlds2026PlayInInput, PlayInEntrant } from './worlds2026PlayIn'
-import type { Worlds2026KnockoutInput } from './worlds2026Knockout'
-import type { Worlds2026SwissInput, Worlds2026SwissEntrant } from './worlds2026Swiss'
-import { WORLDS_2026_SWISS_RULES, validWorldsTime } from './worlds2026Swiss'
-import type { ObservationEvidence } from './worldsObservedRules'
-import type { replayWorlds2022Group } from './worlds2022ObservedGroups'
+import { normalizeStatus, type TournamentEvent, type TournamentSeries } from '../lib/tournamentFeed'
+import type { Worlds2026EventInput } from '../lib/worldsSimulation'
+import type { Worlds2026PlayInInput, PlayInEntrant } from '../lib/worlds2026PlayIn'
+import type { Worlds2026KnockoutInput } from '../lib/worlds2026Knockout'
+import type { Worlds2026SwissInput, Worlds2026SwissEntrant } from '../lib/worlds2026Swiss'
+import { WORLDS_2026_SWISS_RULES, validWorldsTime } from '../lib/worlds2026Swiss'
+import type { ObservationEvidence } from '../lib/worldsObservedRules'
+import type { replayWorlds2022Group } from '../lib/worlds2022ObservedGroups'
 
 export type HistoricalWorldsInput = {
   format: 'worlds-2022-group'; eventId: string; stateVersion: string; asOf: string

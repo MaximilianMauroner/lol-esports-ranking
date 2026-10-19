@@ -1,15 +1,15 @@
 import {
   PUBLIC_ARTIFACT_SCHEMA_VERSION,
   type PublicRankingManifest,
-} from './schema'
-import { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from './logicalPath.mjs'
-import { artifactReferences, mapArtifactReferences, normalizeLogicalArtifactUrl } from './logicalReferences.mjs'
+} from '../../lib/publicArtifacts/schema'
+import { assertCanonicalPublicLogicalPath, canonicalPublicLogicalPath } from '../../lib/publicArtifacts/logicalPath.mjs'
+import { artifactReferences, mapArtifactReferences, normalizeLogicalArtifactUrl } from '../../lib/publicArtifacts/logicalReferences.mjs'
 import {
   publicArtifactProxyFallbackUrl,
   publicArtifactResponseFollowedRedirect,
   resolvePublicArtifactUrl,
 } from './urlResolver'
-import { hydrateArchive, projectArchiveView, type ArchiveSelection } from './archive.mjs'
+import { hydrateArchive, projectArchiveView, type ArchiveSelection } from '../../lib/publicArtifacts/archive.mjs'
 import { withAuditedTeamCodes } from '../../data/teamBranding'
 import { SemanticArtifactCache } from './semanticCache'
 

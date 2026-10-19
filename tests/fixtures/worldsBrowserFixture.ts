@@ -6,7 +6,7 @@ import { emptyForecastLedger, type ForecastBasis } from '../../src/lib/tournamen
 import type { MatchRecord, TeamProfile } from '../../src/types'
 import type { TournamentEvent } from '../../src/lib/tournamentFeed'
 import { worldsFixture, worldsEvent, worldsFeed, worldsArtifact, historicalWorldsFixture } from './worldsFixtures'
-import { worldsFeedEventKey, type WorldsArtifact } from '../../src/lib/worldsArtifacts'
+import { worldsFeedEventKey, type WorldsArtifact } from '../../src/browser/worldsArtifacts'
 
 export type WorldsFixtureControls = { stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number; companionDelayMs: number; holdWorker: boolean; fictionalSourceAssertions: boolean; historicalConflict: boolean }
 
@@ -98,7 +98,7 @@ export async function createWorldsFixtureServer(port = 0) {
       if (!source.includes(anchor)) throw new Error('Worlds fixture first-trial yield anchor changed.')
       return source.replace(anchor, 'if (trial === 0 || performance.now() - yieldedAt > 16 || trial === options.trials - 1) {')
     }
-    if (!path.endsWith('/src/lib/worldsSimulationWorker.ts')) return
+    if (!path.endsWith('/src/browser/worldsSimulationWorker.ts')) return
     const anchor = "const result = await runWorldsSimulation(input, basis, options, { onProgress: (completed, total) => send({ type: 'progress', completed, total }) })"
     if (!source.includes(anchor)) throw new Error('Worlds fixture worker yield anchor changed.')
     return source.replace(anchor, `const holdAtYield = await (await fetch('/__worlds-worker-mode')).json()

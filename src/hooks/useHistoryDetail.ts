@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { currentHashQuery, hashParam } from '../lib/urlState'
+import { currentHashQuery, hashParam } from './urlState'
 
 /**
  * An open detail view (team drawer, region sheet) kept as a hash query param.

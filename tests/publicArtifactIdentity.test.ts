@@ -18,9 +18,9 @@ import {
   type PublicArtifactEncoding,
   type PublicGenerationArtifactEntry,
   type PublicSemanticArtifact,
-} from '../src/lib/publicArtifacts/artifactIdentity.ts'
-import { createPublicRankingManifestLoader } from '../src/lib/publicArtifacts/manifestLoader.ts'
-import { fetchPublicSnapshotShard, validatePublicTeamHistoryShard, validatePublicTournamentMovementIndex, validatePublicTournamentMovementShard } from '../src/lib/publicArtifacts/resolver.ts'
+} from '../src/browser/publicArtifacts/artifactIdentity.ts'
+import { createPublicRankingManifestLoader } from '../src/browser/publicArtifacts/manifestLoader.ts'
+import { fetchPublicSnapshotShard, validatePublicTeamHistoryShard, validatePublicTournamentMovementIndex, validatePublicTournamentMovementShard } from '../src/browser/publicArtifacts/resolver.ts'
 import {
   parsePublicMatchHistoryCatalog,
   parsePublicMatchHistoryIndex,
@@ -38,7 +38,7 @@ import {
 import {
   publicArtifactProxyFallbackUrl,
   resolvePublicArtifactUrl,
-} from '../src/lib/publicArtifacts/urlResolver.ts'
+} from '../src/browser/publicArtifacts/urlResolver.ts'
 
 test('one URL resolver preserves delivery forms and proxy query semantics', () => {
   const digest = 'a'.repeat(64)

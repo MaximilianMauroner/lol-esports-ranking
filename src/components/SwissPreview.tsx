@@ -10,7 +10,7 @@ import { TeamMark } from './TeamMark'
 import { teamBrandingFor } from '../data/teamBranding'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../data/teamIdentity'
 import { cn } from '../lib/utils'
-import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
+import { hashEnum, hashParam, useHashSync } from '../hooks/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
 import {
   PLAY_IN_REGIONS, SWISS_BRACKET, SWISS_ROUND_SIZES, SWISS_TEAM_SOURCES, decodeChoices, drawExists, encodeChoices, fillDraw, knockoutEntry,
