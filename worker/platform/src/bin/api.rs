@@ -1,7 +1,5 @@
 #![forbid(unsafe_code)]
 
-// TODO(review): Have Opus review this native HTTP slice before production activation.
-
 use std::io::{self, Write};
 
 use league_platform::{LocalDataOptions, LocalDataServer};
@@ -20,7 +18,7 @@ async fn main() -> io::Result<()> {
         writeln!(
             output,
             "{}",
-            serde_json::json!({"event": "listening", "address": server.local_addr().to_string()})
+            serde_json::json!({"event": "listening", "address": server.local_addr().to_string(), "pid": std::process::id()})
         )?;
         output.flush()?;
     }
@@ -47,10 +45,16 @@ fn parse_options() -> io::Result<Option<LocalDataOptions>> {
     let mut arguments = std::env::args_os().skip(1);
     let mut root_seen = false;
     let mut listen_seen = false;
+    let mut origin_seen = false;
     while let Some(flag) = arguments.next() {
+        if flag == "--ranking-origin" && !origin_seen {
+            options.ranking_origin = true;
+            origin_seen = true;
+            continue;
+        }
         if flag == "--help" {
             println!(
-                "platform-api [--data-root PATH] [--listen LOOPBACK:PORT]\nDefaults: public/data, 127.0.0.1:4174\nUnix local read-only HTTP service. Readiness checks only local summary access."
+                "platform-api [--data-root PATH] [--listen LOOPBACK:PORT] [--ranking-origin]\nDefaults: public/data, 127.0.0.1:4174\nRead-only HTTP data service. --ranking-origin enables verified bucket reads with local fallback. Readiness checks local summary access."
             );
             return Ok(None);
         }

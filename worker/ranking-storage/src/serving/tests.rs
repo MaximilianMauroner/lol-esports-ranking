@@ -2,7 +2,11 @@ use super::*;
 use ranking_contracts::{canonical_json_value, gzip};
 use serde_json::{Value, json};
 use std::time::Duration;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpListener, task::JoinHandle};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    task::JoinHandle,
+};
 
 #[derive(Clone)]
 struct Response {
@@ -16,21 +20,37 @@ impl Response {
         Self::document(body)
     }
     fn document(body: Vec<u8>) -> Self {
-        Self { status: 200, headers: BTreeMap::from([
-            ("content-length".into(), body.len().to_string()),
-            ("content-type".into(), JSON_TYPE.into()),
-            ("etag".into(), format!("\"{}\"", sha256(&body))),
-            ("x-amz-meta-sha256".into(), sha256(&body)),
-            ("x-amz-meta-semantic-bytes".into(), body.len().to_string()),
-        ]), body }
+        Self {
+            status: 200,
+            headers: BTreeMap::from([
+                ("content-length".into(), body.len().to_string()),
+                ("content-type".into(), JSON_TYPE.into()),
+                ("etag".into(), format!("\"{}\"", sha256(&body))),
+                ("x-amz-meta-sha256".into(), sha256(&body)),
+                ("x-amz-meta-semantic-bytes".into(), body.len().to_string()),
+            ]),
+            body,
+        }
     }
     fn immutable(semantic: &[u8]) -> Self {
         let mut response = Self::document(gzip(semantic).unwrap());
-        response.headers.insert("content-encoding".into(), "gzip".into());
-        response.headers.insert("cache-control".into(), "public, max-age=31536000, immutable".into());
-        response.headers.insert("x-amz-meta-sha256".into(), sha256(semantic));
-        response.headers.insert("x-amz-meta-semantic-bytes".into(), semantic.len().to_string());
-        response.headers.insert("x-amz-meta-encoding".into(), "gzip".into());
+        response
+            .headers
+            .insert("content-encoding".into(), "gzip".into());
+        response.headers.insert(
+            "cache-control".into(),
+            "public, max-age=31536000, immutable".into(),
+        );
+        response
+            .headers
+            .insert("x-amz-meta-sha256".into(), sha256(semantic));
+        response.headers.insert(
+            "x-amz-meta-semantic-bytes".into(),
+            semantic.len().to_string(),
+        );
+        response
+            .headers
+            .insert("x-amz-meta-encoding".into(), "gzip".into());
         response
     }
 }
@@ -45,7 +65,11 @@ struct Fixture {
     task: JoinHandle<()>,
     origin: PublishedOrigin,
 }
-impl Drop for Fixture { fn drop(&mut self) { self.task.abort(); } }
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
 impl Fixture {
     async fn new(redirect: bool) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -61,7 +85,11 @@ impl Fixture {
                     assert!(headers.len() < 16_384);
                 }
                 let request = String::from_utf8(headers).unwrap();
-                assert!(request.to_ascii_lowercase().contains("authorization: aws4-hmac-sha256"));
+                assert!(
+                    request
+                        .to_ascii_lowercase()
+                        .contains("authorization: aws4-hmac-sha256")
+                );
                 let mut line = request.lines().next().unwrap().split_whitespace();
                 let method = line.next().unwrap();
                 let path = line.next().unwrap();
@@ -69,31 +97,56 @@ impl Fixture {
                 let response = {
                     let mut state = server_state.lock().unwrap();
                     state.requests.push((method.into(), path.into()));
-                    state.objects.get(path).cloned().unwrap_or_else(|| Response {
-                        status: 404, body: Vec::new(), headers: BTreeMap::from([("content-length".into(), "0".into())]),
-                    })
+                    state
+                        .objects
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_else(|| Response {
+                            status: 404,
+                            body: Vec::new(),
+                            headers: BTreeMap::from([("content-length".into(), "0".into())]),
+                        })
                 };
                 let mut wire = format!("HTTP/1.1 {} OK\r\nConnection: close\r\n", response.status);
-                for (name, value) in response.headers { wire.push_str(&format!("{name}: {value}\r\n")); }
+                for (name, value) in response.headers {
+                    wire.push_str(&format!("{name}: {value}\r\n"));
+                }
                 wire.push_str("\r\n");
-                if stream.write_all(wire.as_bytes()).await.is_err() { continue; }
-                if method != "HEAD" { let _ = stream.write_all(&response.body).await; }
+                if stream.write_all(wire.as_bytes()).await.is_err() {
+                    continue;
+                }
+                if method != "HEAD" {
+                    let _ = stream.write_all(&response.body).await;
+                }
             }
         });
-        Self { state, task, origin: PublishedOrigin {
-            transport: Transport::fixture(&endpoint, redirect), admission: Arc::new(Semaphore::new(2)), root_cache: Mutex::new(None),
-        } }
+        Self {
+            state,
+            task,
+            origin: PublishedOrigin {
+                transport: Transport::fixture(&endpoint, redirect),
+                admission: Arc::new(Semaphore::new(2)),
+                root_cache: Mutex::new(None),
+            },
+        }
     }
     fn put(&self, key: &str, object: Response) {
-        self.state.lock().unwrap().objects.insert(format!("/fixture/rankings/{key}"), object);
+        self.state
+            .lock()
+            .unwrap()
+            .objects
+            .insert(format!("/fixture/rankings/{key}"), object);
     }
-    fn requests(&self) -> Vec<(String, String)> { self.state.lock().unwrap().requests.clone() }
+    fn requests(&self) -> Vec<(String, String)> {
+        self.state.lock().unwrap().requests.clone()
+    }
 
     fn generation(&self, id: &str, version: u64, bound: bool) -> (Response, Value) {
         let semantic = canonical_json_value(&json!({
             "artifactKind":"public-semantic-artifact", "schemaVersion":1,
             "content":{"artifactKind":"public-ranking-manifest", "generation":id}
-        })).into_bytes();
+        }))
+        .into_bytes();
         let hash = sha256(&semantic);
         let root = Response::immutable(&semantic);
         self.put(&format!("objects/sha256/{hash}"), root.clone());
@@ -136,7 +189,8 @@ impl Fixture {
             self.put(&format!("generations/{id}/publish.json"), receipt.clone());
             pointer["publicManifestSchemaVersion"] = json!(2);
             pointer["publicationSchemaVersion"] = json!(1);
-            pointer["publicationReceiptKey"] = json!(format!("rankings/generations/{id}/publish.json"));
+            pointer["publicationReceiptKey"] =
+                json!(format!("rankings/generations/{id}/publish.json"));
             pointer["publicationReceiptDigest"] = json!(sha256(&receipt.body));
             pointer["publicationReceiptBytes"] = json!(receipt.body.len());
             pointer["publicationReceiptEtag"] = json!(receipt.headers["etag"]);
@@ -154,7 +208,12 @@ async fn direct_objects_verify_transport_without_requiring_a_semantic_envelope()
     let path = format!("objects/sha256/{hash}");
     let object = Response::immutable(semantic);
     fixture.put(&path, object.clone());
-    let served = fixture.origin.read(&path, Some("missing-generation"), false, false).await.unwrap().unwrap();
+    let served = fixture
+        .origin
+        .read(&path, Some("missing-generation"), false, false)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(&*served.body, object.body);
     assert_eq!(served.semantic_body.as_ref().unwrap().as_ref(), semantic);
     assert_eq!(served.semantic_length, Some(semantic.len() as u64));
@@ -167,14 +226,35 @@ async fn immutable_head_and_presigning_do_not_download_object_bodies() {
     let semantic = b"real body";
     let path = format!("objects/sha256/{}", sha256(semantic));
     fixture.put(&path, Response::immutable(semantic));
-    let metadata = fixture.origin.read(&path, None, true, false).await.unwrap().unwrap();
+    let metadata = fixture
+        .origin
+        .read(&path, None, true, false)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(metadata.body.is_empty());
     assert_eq!(metadata.semantic_length, Some(9));
     drop(metadata);
-    let redirect = fixture.origin.read(&path, None, false, true).await.unwrap().unwrap();
+    let redirect = fixture
+        .origin
+        .read(&path, None, false, true)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(redirect.status, 307);
-    assert!(redirect.redirect.as_ref().unwrap().contains("X-Amz-Expires=3600"));
-    assert!(fixture.requests().iter().all(|(method, _)| method == "HEAD"));
+    assert!(
+        redirect
+            .redirect
+            .as_ref()
+            .unwrap()
+            .contains("X-Amz-Expires=3600")
+    );
+    assert!(
+        fixture
+            .requests()
+            .iter()
+            .all(|(method, _)| method == "HEAD")
+    );
 }
 
 #[tokio::test]
@@ -185,10 +265,22 @@ async fn failed_presign_metadata_uses_the_verified_get_proxy() {
     let mut object = Response::immutable(semantic);
     object.headers.remove("cache-control");
     fixture.put(&path, object);
-    let served = fixture.origin.read(&path, None, false, true).await.unwrap().unwrap();
+    let served = fixture
+        .origin
+        .read(&path, None, false, true)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(served.status, 200);
     assert_eq!(served.semantic_body.unwrap().as_ref(), semantic);
-    assert_eq!(fixture.requests().iter().map(|(method, _)| method.as_str()).collect::<Vec<_>>(), ["HEAD", "GET"]);
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .map(|(method, _)| method.as_str())
+            .collect::<Vec<_>>(),
+        ["HEAD", "GET"]
+    );
 }
 
 #[tokio::test]
@@ -196,13 +288,37 @@ async fn pointer_is_reread_and_only_valid_immutable_roots_are_cached() {
     let fixture = Fixture::new(false).await;
     let (first, _) = fixture.generation("one", 2, true);
     for _ in 0..2 {
-        let served = fixture.origin.read(ROOT, None, false, false).await.unwrap().unwrap();
+        let served = fixture
+            .origin
+            .read(ROOT, None, false, false)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(&*served.body, first.body);
     }
-    assert_eq!(fixture.requests().iter().filter(|(_, path)| path.ends_with("active-generation.json")).count(), 2);
-    assert_eq!(fixture.requests().iter().filter(|(_, path)| path.ends_with("/manifest.json")).count(), 1);
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|(_, path)| path.ends_with("active-generation.json"))
+            .count(),
+        2
+    );
+    assert_eq!(
+        fixture
+            .requests()
+            .iter()
+            .filter(|(_, path)| path.ends_with("/manifest.json"))
+            .count(),
+        1
+    );
     let (second, _) = fixture.generation("two", 2, true);
-    let served = fixture.origin.read(ROOT, None, false, false).await.unwrap().unwrap();
+    let served = fixture
+        .origin
+        .read(ROOT, None, false, false)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(&*served.body, second.body);
     drop(served);
     let (_, mut pointer) = fixture.generation("three", 2, true);
@@ -216,16 +332,36 @@ async fn pointer_is_reread_and_only_valid_immutable_roots_are_cached() {
 async fn legacy_cutover_preserves_wire_contract_and_pinned_reads_preserve_original_bytes() {
     let fixture = Fixture::new(false).await;
     let (manifest, _) = fixture.generation("legacy", 1, false);
-    let served = fixture.origin.read(ROOT, None, false, false).await.unwrap().unwrap();
+    let served = fixture
+        .origin
+        .read(ROOT, None, false, false)
+        .await
+        .unwrap()
+        .unwrap();
     let converted: Value = serde_json::from_slice(&served.body).unwrap();
     assert_eq!(converted["schemaVersion"], 2);
     assert!(served.etag.as_ref().unwrap().starts_with("\"cutover-v2-"));
     drop(served);
-    let pinned = fixture.origin.read(ROOT, Some("legacy"), false, false).await.unwrap().unwrap();
+    let pinned = fixture
+        .origin
+        .read(ROOT, Some("legacy"), false, false)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(&*pinned.body, manifest.body);
     drop(pinned);
-    fixture.put("data/missing.json", Response::json(&json!({"fallback":true})));
-    assert!(fixture.origin.read("missing.json", Some("absent"), false, false).await.unwrap().is_none());
+    fixture.put(
+        "data/missing.json",
+        Response::json(&json!({"fallback":true})),
+    );
+    assert!(
+        fixture
+            .origin
+            .read("missing.json", Some("absent"), false, false)
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(!fixture.requests().iter().any(|(_, path)| path.ends_with("data/missing.json") && !path.contains("/generations/")));
 }
 
@@ -237,13 +373,35 @@ async fn corruption_metadata_and_declared_semantic_limit_fail_before_delivery() 
     for change in 0..4 {
         let mut object = Response::immutable(semantic);
         match change {
-            0 => { object.headers.insert("x-amz-meta-sha256".into(), "0".repeat(64)); },
-            1 => { let end = object.body.len() - 8; object.body[end] ^= 1; },
-            2 => { object.headers.insert("x-amz-meta-semantic-bytes".into(), (SEMANTIC_LIMIT + 1).to_string()); },
-            _ => { object.headers.insert("x-amz-meta-semantic-bytes".into(), "1".into()); },
+            0 => {
+                object
+                    .headers
+                    .insert("x-amz-meta-sha256".into(), "0".repeat(64));
+            }
+            1 => {
+                let end = object.body.len() - 8;
+                object.body[end] ^= 1;
+            }
+            2 => {
+                object.headers.insert(
+                    "x-amz-meta-semantic-bytes".into(),
+                    (SEMANTIC_LIMIT + 1).to_string(),
+                );
+            }
+            _ => {
+                object
+                    .headers
+                    .insert("x-amz-meta-semantic-bytes".into(), "1".into());
+            }
         }
         fixture.put(&path, object);
-        assert!(fixture.origin.read(&path, None, false, false).await.is_err());
+        assert!(
+            fixture
+                .origin
+                .read(&path, None, false, false)
+                .await
+                .is_err()
+        );
     }
 }
 
@@ -251,15 +409,33 @@ async fn corruption_metadata_and_declared_semantic_limit_fail_before_delivery() 
 async fn body_owners_retain_admission_and_the_next_read_waits() {
     let fixture = Fixture::new(false).await;
     fixture.put("data/a.json", Response::json(&json!({"ok":true})));
-    let first = fixture.origin.read("a.json", Some(""), false, false).await.unwrap().unwrap();
-    let second = fixture.origin.read("a.json", Some(""), false, false).await.unwrap().unwrap();
+    let first = fixture
+        .origin
+        .read("a.json", Some(""), false, false)
+        .await
+        .unwrap()
+        .unwrap();
+    let second = fixture
+        .origin
+        .read("a.json", Some(""), false, false)
+        .await
+        .unwrap()
+        .unwrap();
     let body_owner = first.body.clone();
     drop(first);
     let next = fixture.origin.read("a.json", None, false, false);
     tokio::pin!(next);
-    assert!(tokio::time::timeout(Duration::from_millis(20), &mut next).await.is_err());
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), &mut next)
+            .await
+            .is_err()
+    );
     drop(body_owner);
-    let third = tokio::time::timeout(Duration::from_secs(1), next).await.unwrap().unwrap().unwrap();
+    let third = tokio::time::timeout(Duration::from_secs(1), next)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
     assert!(!third.body.is_empty());
     drop(second);
 }
@@ -270,7 +446,11 @@ async fn gzip_members_padding_checksums_and_limits_match_retained_transport() {
     assert_eq!(decode(&joined, None, 6).await.unwrap(), b"onetwo");
     assert!(decode(&joined, None, 5).await.is_err());
     for size in 0..gzip(b"one").unwrap().len() {
-        assert!(decode(&gzip(b"one").unwrap()[..size], None, 3).await.is_err());
+        assert!(
+            decode(&gzip(b"one").unwrap()[..size], None, 3)
+                .await
+                .is_err()
+        );
     }
     let mut long_header = gzip(b"body").unwrap();
     long_header[3] |= 8;
@@ -280,7 +460,17 @@ async fn gzip_members_padding_checksums_and_limits_match_retained_transport() {
 
 #[test]
 fn unsafe_requested_paths_fail_before_storage_and_signing() {
-    for path in ["", "../a", "a//b", "a\\b", "a/%2e%2e/b", "a/%2f", "a/%5c", "a/%", "a/%ff"] {
+    for path in [
+        "",
+        "../a",
+        "a//b",
+        "a\\b",
+        "a/%2e%2e/b",
+        "a/%2f",
+        "a/%5c",
+        "a/%",
+        "a/%ff",
+    ] {
         assert!(validate_path(path).is_err(), "{path}");
     }
     assert!(validate_path("objects/sha256/abc").is_ok());
@@ -293,15 +483,21 @@ async fn publication_provenance_and_stored_membership_are_required() {
         let fixture = Fixture::new(false).await;
         let (_, mut pointer) = fixture.generation("bound", 2, true);
         let mut receipt: Value = serde_json::from_slice(&fixture.state.lock().unwrap().objects["/fixture/rankings/generations/bound/publish.json"].body).unwrap();
-        if mismatch == "provenance" { receipt["provenance"]["modelVersion"] = json!("other-model"); }
-        else { receipt["objects"][2]["bytes"] = json!(1); }
+        if mismatch == "provenance" {
+            receipt["provenance"]["modelVersion"] = json!("other-model");
+        } else {
+            receipt["objects"][2]["bytes"] = json!(1);
+        }
         let receipt = Response::json(&receipt);
         pointer["publicationReceiptDigest"] = json!(sha256(&receipt.body));
         pointer["publicationReceiptBytes"] = json!(receipt.body.len());
         pointer["publicationReceiptEtag"] = json!(receipt.headers["etag"]);
         fixture.put("generations/bound/publish.json", receipt);
         fixture.put("active-generation.json", Response::json(&pointer));
-        assert!(fixture.origin.read(ROOT, None, false, false).await.is_err(), "{mismatch}");
+        assert!(
+            fixture.origin.read(ROOT, None, false, false).await.is_err(),
+            "{mismatch}"
+        );
     }
 }
 
@@ -329,7 +525,12 @@ async fn retained_native_schema_requires_its_canonical_publish_receipt() {
     fixture.put("generations/native/publish.json", Response::json(&corrupt));
     assert!(fixture.origin.read(ROOT, None, false, false).await.is_err());
     fixture.put("generations/native/publish.json", Response::json(&receipt));
-    let served = fixture.origin.read(ROOT, None, false, false).await.unwrap().unwrap();
+    let served = fixture
+        .origin
+        .read(ROOT, None, false, false)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(&*served.body, manifest.body);
 }
 
@@ -337,8 +538,16 @@ async fn retained_native_schema_requires_its_canonical_publish_receipt() {
 async fn oversized_stored_length_is_rejected_before_body_materialization() {
     let fixture = Fixture::new(false).await;
     let mut response = Response::json(&json!({"bounded":true}));
-    response.headers.insert("content-length".into(), (STORED_LIMIT+1).to_string());
+    response
+        .headers
+        .insert("content-length".into(), (STORED_LIMIT + 1).to_string());
     fixture.put("data/large.json", response);
-    assert!(fixture.origin.read("large.json", None, false, false).await.is_err());
+    assert!(
+        fixture
+            .origin
+            .read("large.json", None, false, false)
+            .await
+            .is_err()
+    );
     assert_eq!(fixture.origin.admission.available_permits(), 2);
 }

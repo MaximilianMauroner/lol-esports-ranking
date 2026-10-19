@@ -1,4 +1,5 @@
 mod delivery;
+mod origin;
 mod target;
 
 use std::convert::Infallible;
@@ -28,6 +29,7 @@ pub struct LocalDataOptions {
     pub data_cache_control: String,
     pub manifest_cache_control: String,
     pub commit: Option<String>,
+    pub ranking_origin: bool,
 }
 
 impl Default for LocalDataOptions {
@@ -39,6 +41,7 @@ impl Default for LocalDataOptions {
             data_cache_control: "public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800, stale-if-error=604800".into(),
             manifest_cache_control: "public, max-age=0, s-maxage=300, stale-while-revalidate=3600, stale-if-error=86400".into(),
             commit: None,
+            ranking_origin: false,
         }
     }
 }
@@ -109,7 +112,13 @@ impl LocalDataServer {
                             .max_headers(100).max_header_size(32 * 1024).max_buf_size(32 * 1024);
                         let connection = builder.serve_connection(TokioIo::new(socket), service);
                         tokio::pin!(connection);
+                        let deadline = tokio::time::sleep(Duration::from_secs(60));
+                        tokio::pin!(deadline);
                         let result = tokio::select! {
+                            _ = &mut deadline => {
+                                eprintln!("HTTP connection delivery deadline exceeded");
+                                return;
+                            }
                             result = &mut connection => result,
                             _ = stopping.changed() => {
                                 connection.as_mut().graceful_shutdown();
@@ -209,6 +218,11 @@ async fn dispatch(
         response
             .headers_mut()
             .insert(hyper::header::CONNECTION, "close".parse().unwrap());
+    }
+    if path.starts_with("/data/") {
+        response
+            .headers_mut()
+            .insert("X-Ranking-Runtime", "rust".parse().unwrap());
     }
     Ok(response)
 }

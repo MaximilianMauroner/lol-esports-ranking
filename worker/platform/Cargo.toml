@@ -25,6 +25,8 @@ rustix = { version = "1", features = ["fs"] }
 regex = "1"
 serde_json.workspace = true
 chrono.workspace = true
+ranking-storage = { path = "../ranking-storage" }
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["test-util"] }

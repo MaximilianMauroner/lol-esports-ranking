@@ -7,6 +7,13 @@ const MAX_DEPTH: usize = 24;
 pub(super) struct Reader<'a> {
     load: &'a mut dyn FnMut(&PublicIdentity) -> Result<PublicObject>,
     pub(super) proofs: Vec<ObjectProof>,
+    budget: Option<ServingBudget<'a>>,
+}
+
+struct ServingBudget<'a> {
+    bytes: u64,
+    nodes: usize,
+    checkpoint: &'a mut dyn FnMut() -> Result<()>,
 }
 
 struct Hydrated {
@@ -19,7 +26,68 @@ impl Reader<'_> {
         Reader {
             load,
             proofs: vec![],
+            budget: None,
         }
+    }
+
+    pub(super) fn bounded<'a>(
+        load: &'a mut dyn FnMut(&PublicIdentity) -> Result<PublicObject>,
+        checkpoint: &'a mut dyn FnMut() -> Result<()>,
+    ) -> Reader<'a> {
+        Reader {
+            load,
+            proofs: vec![],
+            budget: Some(ServingBudget {
+                bytes: 64 * 1024 * 1024,
+                nodes: 1_000_000,
+                checkpoint,
+            }),
+        }
+    }
+
+    fn checkpoint(&mut self) -> Result<()> {
+        if let Some(budget) = &mut self.budget {
+            (budget.checkpoint)()?;
+        }
+        Ok(())
+    }
+
+    fn require_nodes(&self, count: usize) -> Result<()> {
+        if self
+            .budget
+            .as_ref()
+            .is_some_and(|budget| count > budget.nodes)
+        {
+            return Err("Public archive exceeds serving traversal limit".into());
+        }
+        Ok(())
+    }
+
+    fn charge_value(&mut self, value: &Json) -> Result<()> {
+        if self.budget.is_none() {
+            return Ok(());
+        }
+        let mut pending = vec![value];
+        while let Some(value) = pending.pop() {
+            self.checkpoint()?;
+            let budget = self.budget.as_mut().unwrap();
+            budget.nodes = budget
+                .nodes
+                .checked_sub(1)
+                .ok_or("Public archive exceeds serving traversal limit")?;
+            match value {
+                Json::Array(values) => {
+                    self.require_nodes(pending.len().saturating_add(values.len()))?;
+                    pending.extend(values);
+                }
+                Json::Object(values) => {
+                    self.require_nodes(pending.len().saturating_add(values.len()))?;
+                    pending.extend(values.iter().map(|(_, value)| value));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn read_artifact(&mut self, digest: &str, bytes: u64) -> Result<Json> {
@@ -42,11 +110,19 @@ impl Reader<'_> {
     }
 
     pub(super) fn read(&mut self, digest: &str, bytes: u64) -> Result<Json> {
+        self.checkpoint()?;
+        if let Some(budget) = &mut self.budget {
+            budget.bytes = budget
+                .bytes
+                .checked_sub(bytes)
+                .ok_or("Public archive exceeds serving byte limit")?;
+        }
         let identity = PublicIdentity::new(digest, bytes)?;
         let object = (self.load)(&identity)?;
         if object.identity != identity {
             return Err("Public object semantic identity mismatch".into());
         }
+        self.charge_value(&object.content)?;
         self.proofs.push(object.proof);
         Ok(object.content)
     }
@@ -57,11 +133,13 @@ impl Reader<'_> {
         ancestors: &BTreeSet<String>,
         depth: usize,
     ) -> Result<Hydrated> {
+        self.checkpoint()?;
         if depth > MAX_DEPTH || !matches!(tree, Json::Object(_) | Json::Array(_)) {
             return Err("Invalid public archive tree".into());
         }
         if string_is(field(&tree, "kind"), "inline") {
             let value = take(&mut tree, "value").unwrap_or(Json::Undefined);
+            self.charge_value(&value)?;
             return Ok(Hydrated {
                 count: own_key_count(&value),
                 value,
@@ -73,9 +151,11 @@ impl Reader<'_> {
             let entries = take(&mut tree, "entries")
                 .and_then(into_array)
                 .ok_or_else(invalid)?;
+            self.require_nodes(entries.len())?;
             let mut keys = BTreeSet::new();
             let mut children = Vec::with_capacity(entries.len());
             for entry in entries {
+                self.checkpoint()?;
                 let mut pair = into_array(entry).ok_or_else(invalid)?;
                 if pair.len() != 2 {
                     return Err(invalid());
@@ -111,6 +191,15 @@ impl Reader<'_> {
             .ok_or("Invalid public archive parts")?;
         // Node validates every reference before starting the first child request.
         let references = parts.iter().map(reference).collect::<Result<Vec<_>>>()?;
+        if self.budget.is_some() {
+            let expected_total = references.iter().try_fold(0usize, |total, (_, _, count)| {
+                usize::try_from(*count)
+                    .ok()
+                    .and_then(|count| total.checked_add(count))
+                    .ok_or("Public archive exceeds serving traversal limit")
+            })?;
+            self.require_nodes(expected_total)?;
+        }
         let mut values = vec![];
         let mut entries = vec![];
         let mut keys = BTreeSet::new();
@@ -144,6 +233,7 @@ impl Reader<'_> {
                 // Keep part/property order for downstream alias selection.
                 // Undefined record properties are own keys in Node's hasOwn check.
                 for (key, value) in child_entries.drain(..) {
+                    self.checkpoint()?;
                     if !keys.insert(key.clone()) {
                         return Err("Public archive duplicate record key".into());
                     }

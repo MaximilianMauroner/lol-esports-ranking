@@ -1166,7 +1166,9 @@ async function startRailwayServer(
   env: Record<string, string> = {},
 ): Promise<TestServer> {
   const port = await freePort()
-  const child = spawn(process.execPath, ['scripts/railway-server.mjs'], {
+  const native = process.env.RANKING_NATIVE_SERVER_TESTS === 'true'
+  if (native) assert.ok(process.env.RANKING_NATIVE_HTTP_BINARY, 'Native production contracts require the real platform-api executable')
+  const child = spawn(process.execPath, [native ? 'scripts/start-serving.mjs' : 'scripts/railway-server.mjs'], {
     cwd: process.cwd(),
     env: {
       ...process.env,

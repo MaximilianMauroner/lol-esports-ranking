@@ -25,6 +25,69 @@ fn cases() -> Cases {
     serde_json::from_str(include_str!("tests/oracle-cases.json")).unwrap()
 }
 
+#[test]
+fn served_archives_bound_repeated_references_before_hydrating_their_expansion() {
+    let mut objects = BTreeMap::new();
+    let leaf = Stored::content(
+        &json!({
+            "artifactKind":"public-archive-node", "formatVersion":1,
+            "tree":{"kind":"inline","value":[0]}
+        })
+        .to_string(),
+    );
+    let mut previous = leaf.identity.clone();
+    objects.insert(previous.digest().to_owned(), leaf);
+    let mut count = 1u64;
+    for _ in 0..20 {
+        let reference = json!({"sha256":previous.digest(),"bytes":previous.bytes(),"count":count,"encoding":"gzip"});
+        let node = Stored::content(
+            &json!({
+                "artifactKind":"public-archive-node", "formatVersion":1,
+                "tree":{"kind":"list","parts":[reference.clone(),reference.clone(),reference]}
+            })
+            .to_string(),
+        );
+        previous = node.identity.clone();
+        objects.insert(previous.digest().to_owned(), node);
+        count *= 3;
+    }
+    assert!(count > 3_000_000_000);
+    assert_eq!(objects.len(), 21);
+    let mut reads = 0;
+    let result = verify_served_artifact(
+        previous.digest(),
+        previous.bytes(),
+        &mut |identity| {
+            reads += 1;
+            objects[identity.digest()].checked()
+        },
+        &mut || Ok(()),
+    );
+    assert!(result.err().unwrap().contains("serving traversal limit"));
+    assert_eq!(reads, 1);
+}
+
+#[test]
+fn served_document_traversal_stops_at_a_cancellation_checkpoint() {
+    let stored =
+        Stored::content(&json!({"artifactKind":"fixture","values":vec![0;1024]}).to_string());
+    let mut checks = 0;
+    let result = verify_served_artifact(
+        stored.identity.digest(),
+        stored.identity.bytes(),
+        &mut |_| stored.checked(),
+        &mut || {
+            checks += 1;
+            if checks == 10 {
+                return Err("cancelled traversal".into());
+            }
+            Ok(())
+        },
+    );
+    assert_eq!(result.err().unwrap(), "cancelled traversal");
+    assert_eq!(checks, 10);
+}
+
 struct Stored {
     identity: PublicIdentity,
     headers: BTreeMap<String, String>,
@@ -453,7 +516,9 @@ fn checked_receipt_preserves_declared_members_pointer_coercion_and_date_binding(
 fn serving_dates_match_the_retained_node_oracle() {
     for row in cases().dates {
         let text = String::from_utf16(&row.value.code_units().collect::<Vec<_>>());
-        let actual = text.as_ref().is_ok_and(|text| super::date::serving_date(text));
+        let actual = text
+            .as_ref()
+            .is_ok_and(|text| super::date::serving_date(text));
         assert_eq!(actual, row.node_valid, "{:?}", row.value);
     }
 }

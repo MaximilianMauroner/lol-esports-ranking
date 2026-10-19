@@ -167,6 +167,20 @@ pub fn verify_artifact(
     })
 }
 
+pub fn verify_served_artifact(
+    digest: &str,
+    bytes: u64,
+    load: &mut dyn FnMut(&PublicIdentity) -> Result<PublicObject>,
+    checkpoint: &mut dyn FnMut() -> Result<()>,
+) -> Result<ArtifactVerification> {
+    let mut reader = Reader::bounded(load, checkpoint);
+    let value = reader.read_artifact(digest, bytes)?;
+    Ok(ArtifactVerification {
+        document: PublicDocument { value },
+        proofs: reader.proofs,
+    })
+}
+
 pub struct DirectoryVerification {
     manifest: Json,
     proofs: Vec<ObjectProof>,

@@ -15,6 +15,7 @@ use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::Frame;
 use hyper::header::HeaderValue;
 use hyper::{HeaderMap, Response, StatusCode};
+use ranking_storage::serving::PublishedOrigin;
 use regex::Regex;
 use rustix::fs::{Mode, OFlags, open, openat};
 use serde_json::json;
@@ -22,7 +23,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, BufReader, ReadBuf};
 use tokio::sync::Semaphore;
 use tokio_util::io::ReaderStream;
 
-use super::{Body, LocalDataOptions, json_response};
+use super::{Body, LocalDataOptions, json_response, origin};
 
 pub(super) struct LocalData {
     root: Arc<LocalRoot>,
@@ -30,6 +31,7 @@ pub(super) struct LocalData {
     data_cache: HeaderValue,
     manifest_cache: HeaderValue,
     gzip_enabled: bool,
+    origin: Option<PublishedOrigin>,
 }
 
 struct LocalRoot {
@@ -63,6 +65,8 @@ pub(super) enum LocalReadiness {
 pub(super) struct RequestTarget {
     raw_path: String,
     pub(super) path: String,
+    pub(super) generation: Option<String>,
+    pub(super) force_proxy: bool,
 }
 
 impl RequestTarget {
@@ -75,6 +79,13 @@ impl RequestTarget {
         Some(Self {
             raw_path: raw.split('?').next().unwrap().to_owned(),
             path: normalized.path().to_owned(),
+            generation: normalized
+                .query_pairs()
+                .find(|(key, value)| key == "v" && !value.is_empty())
+                .map(|(_, value)| value.into_owned()),
+            force_proxy: normalized
+                .query_pairs()
+                .any(|(key, value)| key == "delivery" && value == "proxy"),
         })
     }
 }
@@ -101,6 +112,11 @@ impl LocalData {
             data_cache: header(&options.data_cache_control)?,
             manifest_cache: header(&options.manifest_cache_control)?,
             gzip_enabled: options.gzip_enabled,
+            origin: if options.ranking_origin {
+                PublishedOrigin::from_env().map_err(io::Error::other)?
+            } else {
+                None
+            },
         })
     }
 
@@ -137,6 +153,19 @@ impl LocalData {
                 head,
             );
         };
+        let cache = match path.cache {
+            CacheClass::Summary => self.manifest_cache.clone(),
+            CacheClass::ImmutableObject => {
+                HeaderValue::from_static("public, max-age=31536000, immutable")
+            }
+            CacheClass::Data => self.data_cache.clone(),
+        };
+        if let Some(origin) = &self.origin
+            && let Some(response) =
+                origin::respond(origin, target, head, headers, &cache, self.gzip_enabled).await
+        {
+            return response;
+        }
         let (path, opened) = match self.open_file(path).await {
             Ok(opened) => opened,
             Err(error) => {
@@ -152,17 +181,10 @@ impl LocalData {
                 return json_response(status, json!({"ok": false, "error": message}), head);
             }
         };
-        let cache = match path.cache {
-            CacheClass::Summary => self.manifest_cache.clone(),
-            CacheClass::ImmutableObject => {
-                HeaderValue::from_static("public, max-age=31536000, immutable")
-            }
-            CacheClass::Data => self.data_cache.clone(),
-        };
         let length = opened.metadata.len();
         let etag = local_etag(&opened.metadata);
         let modified = opened.metadata.modified().unwrap_or(UNIX_EPOCH);
-        let fresh = is_fresh(headers, &etag, modified);
+        let fresh = is_fresh(headers, &etag, Some(modified));
         let compressible = compressible(path.media_type);
         let gzip = !fresh
             && !head
@@ -274,6 +296,8 @@ impl DataPath {
         Self::parse(&RequestTarget {
             raw_path: "/data/ranking-summary.json".into(),
             path: "/data/ranking-summary.json".into(),
+            generation: None,
+            force_proxy: false,
         })
         .unwrap()
     }
@@ -341,7 +365,7 @@ fn decode_segment(value: &str) -> Option<String> {
         .map(|value| value.into_owned())
 }
 
-fn immutable_path(path: &str) -> bool {
+pub(super) fn immutable_path(path: &str) -> bool {
     path.strip_prefix("/data/objects/sha256/")
         .is_some_and(|digest| {
             digest.len() == 64
@@ -378,7 +402,7 @@ fn local_etag(metadata: &Metadata) -> String {
     format!("W/\"{:x}-{timestamp}\"", metadata.len())
 }
 
-fn is_fresh(headers: &HeaderMap, etag: &str, modified: SystemTime) -> bool {
+pub(super) fn is_fresh(headers: &HeaderMap, etag: &str, modified: Option<SystemTime>) -> bool {
     let value = headers
         .get_all("if-none-match")
         .iter()
@@ -416,6 +440,9 @@ fn is_fresh(headers: &HeaderMap, etag: &str, modified: SystemTime) -> bool {
             })
         })
         .is_some_and(|since| {
+            let Some(modified) = modified else {
+                return false;
+            };
             let whole_seconds = match modified.duration_since(UNIX_EPOCH) {
                 Ok(duration) => UNIX_EPOCH + std::time::Duration::from_secs(duration.as_secs()),
                 Err(error) => {
@@ -430,7 +457,7 @@ fn is_fresh(headers: &HeaderMap, etag: &str, modified: SystemTime) -> bool {
         })
 }
 
-fn accepts_gzip(headers: &HeaderMap) -> bool {
+pub(super) fn accepts_gzip(headers: &HeaderMap) -> bool {
     static GZIP: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?i)(?-u:\b)gzip(?-u:\b)").unwrap());
     static ZERO: LazyLock<Regex> =
@@ -474,13 +501,13 @@ impl AsyncRead for ExactFile {
     }
 }
 
-fn empty_body() -> Body {
+pub(super) fn empty_body() -> Body {
     Full::new(Bytes::new())
         .map_err(|never| match never {})
         .boxed_unsync()
 }
 
-fn compressible(media_type: &str) -> bool {
+pub(super) fn compressible(media_type: &str) -> bool {
     media_type.starts_with("application/json")
         || media_type.starts_with("text/")
         || media_type.starts_with("image/svg+xml")

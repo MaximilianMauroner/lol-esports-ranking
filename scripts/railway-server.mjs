@@ -24,6 +24,7 @@ import {
   renderSitemapFromManifest,
 } from './seo-prerender.ts'
 import { collectLeaguepediaTournamentFeed, createTournamentFeedService } from './leaguepedia-tournament-feed.ts'
+import { proxyNativeData } from './native-data-proxy.mjs'
 
 const port = Number(process.env.PORT ?? 4173)
 const host = process.env.HOST ?? '0.0.0.0'
@@ -93,6 +94,10 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.pathname.startsWith('/data/')) {
+      if (process.env.RANKING_NATIVE_DATA_PORT) {
+        await proxyNativeData(request, response, Number(process.env.RANKING_NATIVE_DATA_PORT))
+        return
+      }
       if (encodedPresignedPath || (isImmutableDataObjectPath(url.pathname) && !canonicalPresignedPath)) {
         sendJson(response, 400, { ok: false, error: 'Invalid data path' })
         return
