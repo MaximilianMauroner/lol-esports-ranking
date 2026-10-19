@@ -30,6 +30,23 @@ function poolOf(seed: string) {
   return WORLDS_2026_SWISS_RULES.pools.findIndex((pool) => (pool as readonly string[]).includes(seed))
 }
 
+test('qualified names replace seed labels without changing saved scenario identities or draw rules', () => {
+  const baseline = seedBaseline(null)
+  assert.equal(baseline.teams.find((team) => team.id === 'LCK1')?.label, 'Gen.G')
+  assert.equal(baseline.teams.find((team) => team.id === 'CBLOL1')?.label, 'LOS')
+  assert.equal(baseline.teams.filter((team) => team.label === 'Play-In winner').length, 1)
+  assert.equal(new Set(baseline.teams.map((team) => team.label)).size, 16)
+  assert.deepEqual(baseline.teams.map((team) => team.id), WORLDS_2026_SWISS_RULES.pools.flat())
+  assert.ok(baseline.teams.every((team) => team.id === 'PLAYIN' || !/^(LCK|LPL|LCS|LEC|LCP|CBLOL) \d$/.test(team.label)))
+  const next = resolveScenario(baseline, []).next
+  assert.equal(next.kind, 'draw')
+  if (next.kind !== 'draw') return
+  const pairs = fillDraw(next.context)!
+  const choices = [{ pairs, winners: pairs.map((pair) => pair[0]) }]
+  const shared = encodeChoices(baseline, choices)
+  assert.deepEqual(decodeChoices(seedBaseline('LCS'), shared), choices)
+})
+
 test('round one pairs matched pools across regions, including the chosen Play-In region', () => {
   const baseline = seedBaseline('LCS')
   const context = resolveScenario(baseline, []).next
