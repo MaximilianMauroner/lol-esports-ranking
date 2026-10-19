@@ -36,14 +36,20 @@ test('crawler entry files advertise the custom canonical host', async () => {
 
 test('web app manifest includes installable icon sizes', async () => {
   const manifest = JSON.parse(await readFile('public/site.webmanifest', 'utf8')) as {
-    icons?: Array<{ src?: string; sizes?: string; type?: string }>
+    background_color?: string
+    theme_color?: string
+    icons?: Array<{ src?: string; sizes?: string; type?: string; purpose?: string }>
   }
   const icons = manifest.icons ?? []
   assert.ok(icons.some((icon) => icon.src === '/icon-192.png' && icon.sizes === '192x192' && icon.type === 'image/png'))
   assert.ok(icons.some((icon) => icon.src === '/logo.png' && icon.sizes === '512x512' && icon.type === 'image/png'))
+  assert.ok(icons.some((icon) => icon.src === '/icon-512-maskable.png' && icon.sizes === '512x512' && icon.purpose === 'maskable'))
+  assert.equal(manifest.background_color, '#060708')
+  assert.equal(manifest.theme_color, manifest.background_color)
 
   assert.deepEqual(await pngDimensions('public/icon-192.png'), { width: 192, height: 192 })
   assert.deepEqual(await pngDimensions('public/logo.png'), { width: 512, height: 512 })
+  assert.deepEqual(await pngDimensions('public/icon-512-maskable.png'), { width: 512, height: 512 })
 })
 
 test('app shell includes the Riot project disclaimer footer', async () => {
@@ -64,6 +70,25 @@ test('visible SVG logo is optimized separately from the install icon', async () 
   assert.match(logo, /^<svg\b/)
   assert.doesNotMatch(logo, /data:image\/png;base64/)
   assert.ok(Buffer.byteLength(logo) < 4_000)
+})
+
+test('favicon is a vector from the header mark with an ICO fallback at tab sizes', async () => {
+  const [html, logo, favicon, ico] = await Promise.all([
+    readFile('index.html', 'utf8'), readFile('public/logo.svg', 'utf8'),
+    readFile('public/favicon.svg', 'utf8'), readFile('public/favicon.ico'),
+  ])
+  assert.match(html, /rel="icon" type="image\/svg\+xml" href="\/favicon\.svg"/)
+  assert.match(logo, /viewBox="0 0 36 36"/)
+  assert.match(favicon, /viewBox="0 0 16 16"/)
+  assert.doesNotMatch(favicon, /data:image\/png;base64/)
+  assert.equal(ico.readUInt16LE(2), 1)
+  const sizes = Array.from({ length: ico.readUInt16LE(4) }, (_, index) => {
+    const entry = 6 + 16 * index
+    const offset = ico.readUInt32LE(entry + 12)
+    assert.equal(ico.subarray(offset + 1, offset + 4).toString('ascii'), 'PNG')
+    return ico[entry]
+  })
+  assert.deepEqual(sizes, [16, 32, 48])
 })
 
 async function pngDimensions(path: string) {
