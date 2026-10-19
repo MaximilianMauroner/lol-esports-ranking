@@ -226,6 +226,97 @@ test('native fetch preserves malformed compressed body failures without retries 
   }
 })
 
+test('native fetch classifies Oracle and LoL failure headers without waiting for a body', {
+  skip: !binary || process.platform === 'win32',
+}, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rust-fetch-failure-headers-parity-'))
+  let failureStatus = 404
+  let provider = 'oracle'
+  let requestStatuses: number[] = []
+  const oracleCsv = 'gameid,date,league,side\nheader-retry,2026-01-02,LCK,Blue\nheader-retry,2026-01-02,LCK,Red\n'
+  const server = createServer((_request, response) => {
+    if (requestStatuses.length === 0) {
+      requestStatuses.push(failureStatus)
+      response.writeHead(failureStatus, { 'content-length': '100' })
+      response.flushHeaders() // Leave the promised failure body pending.
+      return
+    }
+    requestStatuses.push(200)
+    response.writeHead(200, { 'content-type': provider === 'oracle' ? 'text/csv' : 'application/json' })
+    response.end(provider === 'oracle' ? oracleCsv : JSON.stringify({
+      data: { schedule: { updated: '2026-01-03T00:00:00Z', pages: { older: null, newer: null }, events: [] } },
+    }))
+  })
+  try {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    assert.ok(address && typeof address === 'object')
+    const base = `http://127.0.0.1:${address.port}`
+    for (const currentProvider of ['oracle', 'lolesports'] as const) {
+      provider = currentProvider
+      for (const status of [404, 429, 503]) {
+        failureStatus = status
+        const manifests: unknown[] = []
+        for (const worker of ['node', 'rust'] as const) {
+          requestStatuses = []
+          const directory = join(root, `${provider}-${status}-${worker}`)
+          const flags = ['--start', '2026-01-01', '--end', '2026-01-03', '--out-dir', directory,
+            '--oracle', String(provider === 'oracle'), '--oracle-drive', 'false', '--leaguepedia', 'false',
+            '--lolesports', String(provider === 'lolesports'), '--oracle-csv-url', `${base}/oracle.csv`,
+            '--lolesports-base-url', base, '--lolesports-older-pages', '0', '--lolesports-newer-pages', '0',
+            '--lolesports-detail-limit', '0']
+          let finished = false
+          const completion = invoke(worker, flags, 8000).finally(() => { finished = true })
+          const releasePendingBodiesAfterOutput = async () => {
+            const paths = [join(directory, 'manifest.json'), join(directory, 'lolesports', 'schedule-2026-01-01_to_2026-01-03.json')]
+            while (!finished) {
+              const written = await Promise.all(paths.map((path) => readFile(path).then(() => true, () => false)))
+              if (written.some(Boolean)) {
+                // Node can keep an unread response alive after it persisted its result.
+                // Release sockets only after the worker has classified the headers.
+                server.closeAllConnections()
+                return
+              }
+              await new Promise((resolve) => setTimeout(resolve, 25))
+            }
+          }
+          const [result] = await Promise.all([completion, releasePendingBodiesAfterOutput()])
+          assert.equal(result.code, 0, result.stderr)
+          assert.deepEqual(requestStatuses, status === 404 ? [404] : [status, 200])
+          const manifestText = await readFile(join(directory, 'manifest.json'), 'utf8')
+          const manifest: {
+            files: { oracleCsv: string[]; lolEsportsJson: string[] };
+            sources: Record<string, { status: string }>;
+            fetchTelemetry: { requests: number; retryCount: number };
+          } = JSON.parse(manifestText)
+          assert.equal(manifest.sources[provider].status, status === 404 ? 'failed' : 'downloaded')
+          assert.deepEqual(manifest.fetchTelemetry, { requests: status === 404 ? 1 : 2, retryCount: status === 404 ? 0 : 1 })
+          if (status !== 404) {
+            if (provider === 'oracle') assert.equal(await readFile(manifest.files.oracleCsv[0], 'utf8'), oracleCsv)
+            else {
+              const payload: { events: unknown[]; fetchTelemetry: {
+                attempts: Array<{ status: number; retryable: boolean; reason?: string }>;
+                retries: Array<{ reason: string; delayMs: number }>;
+              } } = JSON.parse(await readFile(manifest.files.lolEsportsJson[0], 'utf8'))
+              assert.deepEqual(payload.events, [])
+              assert.deepEqual(payload.fetchTelemetry.attempts.map(({ status, retryable, reason }) =>
+                ({ status, retryable, reason })), [{ status, retryable: true, reason: `http-${status}` }, { status: 200, retryable: false, reason: undefined }])
+              assert.equal(payload.fetchTelemetry.retries[0].reason, `http-${status}`)
+              assert.ok(payload.fetchTelemetry.retries[0].delayMs >= 250 && payload.fetchTelemetry.retries[0].delayMs <= 750)
+            }
+          }
+          manifests.push(normalize(JSON.parse(manifestText.replaceAll(directory, '<output>'))))
+        }
+        assert.deepEqual(manifests[1], manifests[0])
+      }
+    }
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize)
   if (!value || typeof value !== 'object') return value
@@ -233,14 +324,33 @@ function normalize(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['generatedAt', 'fetchedAt', 'startedAtMs', 'finishedAtMs', 'elapsedMs'].includes(key)).map(([key, item]) => [key, normalize(item)]))
 }
 
-async function invoke(worker: 'node' | 'rust', flags: string[]) {
+async function invoke(worker: 'node' | 'rust', flags: string[], timeoutMs?: number) {
+  const processGroup = timeoutMs !== undefined && process.platform !== 'win32'
   const child = spawn(worker === 'rust' ? binary! : process.execPath,
-    worker === 'rust' ? ['fetch', ...flags] : ['scripts/download-local-data.mjs', ...flags], { stdio: ['ignore', 'ignore', 'pipe'] })
+    worker === 'rust' ? ['fetch', ...flags] : ['scripts/download-local-data.mjs', ...flags], {
+      stdio: ['ignore', 'ignore', 'pipe'], detached: processGroup,
+    })
   const errors: Buffer[] = []
   child.stderr.on('data', (value: Buffer) => errors.push(value))
-  const code = await new Promise<number | null>((resolve, reject) => {
-    child.once('error', reject)
-    child.once('exit', resolve)
-  })
-  return { code, stderr: Buffer.concat(errors).toString('utf8') }
+  let timedOut = false
+  const deadline = timeoutMs === undefined ? undefined : setTimeout(() => {
+    timedOut = true
+    try {
+      if (processGroup && child.pid) process.kill(-child.pid, 'SIGKILL')
+      else child.kill('SIGKILL')
+    } catch {
+      child.kill('SIGKILL')
+    }
+  }, timeoutMs)
+  try {
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', resolve)
+    })
+    const stderr = Buffer.concat(errors).toString('utf8')
+    assert.equal(timedOut, false, `${worker} provider command exceeded ${timeoutMs}ms: ${stderr}`)
+    return { code, stderr }
+  } finally {
+    clearTimeout(deadline)
+  }
 }
