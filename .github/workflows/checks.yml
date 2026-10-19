@@ -17,18 +17,35 @@ env:
   PNPM_VERSION: "11.16.0"
 
 jobs:
-  checks:
-    name: Install, verify, and bundle
+  affected:
+    name: Classify affected paths
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 3
     outputs:
       full-validation: ${{ steps.changes.outputs.full-validation }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           # Compare the synthetic PR merge to its first parent. Missing parents fail open.
+          fetch-depth: 2
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Classify affected paths
+        id: changes
+        run: node tools/dev/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Install, verify, and bundle
+    needs: affected
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
           fetch-depth: 2
 
       - name: Set up pnpm
@@ -46,10 +63,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Classify affected paths
-        id: changes
-        run: node tools/dev/ci-affected-paths.mjs >> "$GITHUB_OUTPUT"
-
       - name: Verify
         run: pnpm run verify
 
@@ -57,13 +70,13 @@ jobs:
         run: pnpm run bundle
 
       - name: Incremental production-shaped gate
-        if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && steps.changes.outputs.full-validation == 'true')
+        if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.affected.outputs.full-validation == 'true')
         run: pnpm run benchmark:incremental:gate
 
   rust-contracts:
     name: Rust contracts and model config parity
-    needs: checks
-    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.checks.outputs.full-validation == 'true')
+    needs: affected
+    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.affected.outputs.full-validation == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -208,8 +221,8 @@ jobs:
 
   web-image:
     name: Native serving image
-    needs: checks
-    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.checks.outputs.full-validation == 'true')
+    needs: affected
+    if: github.event_name == 'workflow_dispatch' || (!github.event.pull_request.draft && needs.affected.outputs.full-validation == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -242,6 +255,6 @@ jobs:
           trap 'docker logs ranking-web-check; docker rm -f ranking-web-check' EXIT
           curl --fail --connect-timeout 2 --max-time 5 --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:4174/api/live
           curl --fail --dump-header "$RUNNER_TEMP/native-headers" --output /dev/null http://127.0.0.1:4174/data/ranking-summary.json
-          rg -i '^x-ranking-runtime: rust' "$RUNNER_TEMP/native-headers"
+          grep -i '^x-ranking-runtime: rust' "$RUNNER_TEMP/native-headers"
           docker stop --time 15 ranking-web-check
           test "$(docker inspect --format '{{.State.ExitCode}}' ranking-web-check)" = 0
