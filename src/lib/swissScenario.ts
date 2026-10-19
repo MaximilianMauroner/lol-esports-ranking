@@ -20,6 +20,22 @@ export const SWISS_ROUND_SIZES = [8, 8, 8, 6, 3] as const
 export const PLAY_IN_REGIONS = ['CBLOL', 'LCS', 'LEC', 'LCP'] as const
 export type PlayInRegion = typeof PLAY_IN_REGIONS[number]
 
+/** Confirmed 2026 field, separate from the Power ranking and any preview picks. */
+export const SWISS_TEAM_SOURCES = {
+  checkedAt: '2026-10-12',
+  primer: 'https://lolesports.com/en-SG/news/worlds-2026-primer',
+  cblolFinal: 'https://ge.globo.com/google/amp/esports/blogs/por-dentro-dos-esports/post/2026/10/10/final-do-cblol-2026-los-e-campea-contra-a-furia.ghtml',
+} as const
+
+// Riot's named draw tiers match the seed pools in WORLDS_2026_SWISS_RULES.
+// LOS took CBLOL1 in the October 10 final; the Play-In winner is not known yet.
+const QUALIFIED_TEAMS: Record<Exclude<SwissSeed, 'PLAYIN'>, string> = {
+  LCK1: 'Gen.G', LCK2: 'Hanwha Life Esports', LCK3: 'T1', LCK4: 'Dplus Kia',
+  LPL1: "Anyone's Legend", LPL2: 'Bilibili Gaming', LPL3: 'Top Esports', LPL4: 'Invictus Gaming',
+  LCS1: 'Team Liquid', LCS2: 'LYON', LEC1: 'G2 Esports', LEC2: 'Movistar KOI',
+  LCP1: 'Team Secret Whales', LCP2: 'CTBC Flying Oyster', CBLOL1: 'LOS',
+}
+
 export type PreviewTeam = { id: string; label: string; seed: SwissSeed | null; region: string | null }
 /** One drawn round. `winners[i]` belongs to `pairs[i]`; null means not decided. */
 export type DrawnRound = { pairs: [string, string][]; winners: Array<string | null> }
@@ -69,7 +85,7 @@ export type TeamOutcome =
 export function seedBaseline(playInRegion: PlayInRegion | null): SwissBaseline {
   const teams = WORLDS_2026_SWISS_RULES.pools.flat().map((seed): PreviewTeam => seed === 'PLAYIN'
     ? { id: seed, label: 'Play-In winner', seed, region: playInRegion }
-    : { id: seed, label: seed.replace(/(\d+)$/, ' $1'), seed, region: seed.replace(/\d+$/, '') })
+    : { id: seed, label: QUALIFIED_TEAMS[seed], seed, region: seed.replace(/\d+$/, '') })
   return { kind: 'seeds', teams, rounds: [] }
 }
 

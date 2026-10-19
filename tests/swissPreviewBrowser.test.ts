@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium, type Locator, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
+import { seedBaseline } from '../src/lib/swissScenario'
 
 const at = '2026-10-20T12:00:00.000Z'
 const mainId = '2026 Season World Championship/Main Event'
@@ -89,7 +90,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await roundOne.evaluate((element) => element === document.activeElement), true, 'focus moves to the drawn round')
     assert.equal(await roundOne.getByRole('group').count(), 8)
     assert.deepEqual((await stepStatus(page)).slice(0, 2), ['8 to pick', 'Upcoming'])
-    assert.equal(await roundOne.getByRole('group', { name: 'Round 1: LCS 1 against Play-In winner' }).count(), 0, 'no same-region pairing')
+    assert.equal(await roundOne.getByRole('group', { name: 'Round 1: Team Liquid against Play-In winner' }).count(), 0, 'no same-region pairing')
 
     const firstPick = roundOne.getByRole('group').first().getByRole('button').first()
     for (let presses = 0; presses < 6 && !await firstPick.evaluate((element) => element === document.activeElement); presses++) await page.keyboard.press('Tab')
@@ -102,7 +103,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     await roundOne.getByRole('button', { name: 'Open Round 2' }).click()
     await page.getByRole('region', { name: 'Round 2' }).getByText('Not drawn yet.').waitFor()
     assert.equal(await isFocused(page.getByRole('region', { name: 'Round 2' })), true, 'focus moves to the opened round')
-    assert.match(await page.getByRole('region', { name: 'Round 2' }).innerText(), /1–0\s+LCK 1, /)
+    assert.match(await page.getByRole('region', { name: 'Round 2' }).innerText(), /1–0\s+Gen.G, /)
 
     // A round that cannot be drawn yet explains why and leads back to the open round.
     await stripButton(page, 3).click()
@@ -119,13 +120,13 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await isFocused(scenarioA), true, 'switching scenarios leaves focus on the scenario button')
 
     await roundTwo.getByRole('button', { name: 'Change pairings' }).click()
-    const swap = roundTwo.getByLabel('Opponent for LCK 1')
+    const swap = roundTwo.getByLabel('Opponent for Gen.G')
     const before = await swap.inputValue()
     await swap.focus()
     await page.keyboard.press('ArrowDown')
     const choice = await swap.inputValue()
     assert.notEqual(choice, before, 'the arrow key chooses another valid opponent')
-    await roundTwo.getByRole('group', { name: `Round 2: LCK 1 against ${seedLabel(choice)}`, exact: true }).waitFor()
+    await roundTwo.getByRole('group', { name: `Round 2: Gen.G against ${seedLabel(choice)}`, exact: true }).waitFor()
     assert.equal(await isFocused(swap), true, 'focus stays on the opponent select after a swap')
     await pickAll(page, 2, 0)
     const standings = page.getByRole('region', { name: 'Standings' })
@@ -194,7 +195,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     await page.getByRole('button', { name: 'Refresh' }).click()
     await page.locator('#swiss-start option[value="live"]:not([disabled])').waitFor({ state: 'attached' })
     assert.equal(await page.locator('#swiss-start').inputValue(), 'seeds', 'new live draws never re-read a seed scenario')
-    assert.match(await page.getByRole('region', { name: 'Standings' }).innerText(), /LCK 1/)
+    assert.match(await page.getByRole('region', { name: 'Standings' }).innerText(), /Gen.G/)
     await page.locator('#swiss-start').selectOption('live')
     await page.getByText('Both scenarios were reset for the new starting point.').waitFor()
     const liveRound = page.getByRole('region', { name: 'Round 1' })
@@ -242,7 +243,8 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
       await page.getByRole('button', { name: 'Fill a valid draw' }).click()
       const playInMatch = (await page.getByRole('group', { name: /Play-In winner/ }).getAttribute('aria-label'))!
       const opponent = playInMatch.replace(/^Round 1: /, '').split(' against ').find((entry) => entry !== 'Play-In winner')!
-      await page.locator('#swiss-playin').selectOption(opponent.replace(/ \d$/, ''))
+      const opponentRegion = seedBaseline(null).teams.find((team) => team.label === opponent)!.region!
+      await page.locator('#swiss-playin').selectOption(opponentRegion)
       await page.getByRole('region', { name: 'Round 1' }).getByText('Not drawn yet.').waitFor()
       await page.getByRole('button', { name: action }).click()
       await page.locator('#swiss-playin').selectOption('LCS')
@@ -289,7 +291,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
 })
 
 function seedLabel(seed: string) {
-  return seed === 'PLAYIN' ? 'Play-In winner' : seed.replace(/(\d+)$/, ' $1')
+  return seedBaseline(null).teams.find((team) => team.id === seed)!.label
 }
 async function body(page: Page) {
   return page.locator('body').innerText()

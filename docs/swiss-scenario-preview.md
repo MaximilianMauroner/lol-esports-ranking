@@ -22,12 +22,20 @@ the rules that the ruleset defines.
   the live starting point is unavailable and the page says why. A partly
   published draw, or a round with fewer published matches than its size, is
   ignored with a note. The earlier rounds stay in use.
-- **Seed slots before the draw.** The sixteen Swiss seeds (§4.3.2.1 pools), shown
-  as slots such as "LCK 1", not as team names. The user chooses the Play-In
+- **Qualified teams before the draw.** The fifteen direct entrants use real team
+  names from [Riot's Worlds 2026 primer](https://lolesports.com/en-SG/news/worlds-2026-primer)
+  and the [October 10 CBLOL final](https://ge.globo.com/google/amp/esports/blogs/por-dentro-dos-esports/post/2026/10/10/final-do-cblol-2026-los-e-campea-contra-a-furia.ghtml),
+  checked October 12. These event-specific names do not come from Power rankings.
+  The sixteenth place remains "Play-In winner" until the live draw names it.
+  The user chooses the Play-In
   winner's region (§4.2.1: CBLOL, LCS, LEC or LCP) so that the Round 1 region rule
   applies to that slot. Until a region is chosen, the slot meets only a Pool 1
-  team from outside those regions (LCK 1 or LPL 1), so the draw stays valid for
+  team from outside those regions (Gen.G or Anyone's Legend), so the draw stays valid for
   any Play-In winner.
+
+The seed IDs and their order remain stable for saved scenarios and draw rules.
+Changing the display names does not change existing shared choices. The seed
+IDs are the permanent tournament slots, not a temporary compatibility layer.
 
 Live draws and results are never editable. When a live result arrives for a
 match the user had picked, the live result replaces the pick and the page says

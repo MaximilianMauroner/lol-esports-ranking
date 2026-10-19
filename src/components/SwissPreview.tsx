@@ -9,7 +9,7 @@ import { cn } from '../lib/utils'
 import { hashEnum, hashParam, useHashSync } from '../lib/urlState'
 import { formatTournamentTime, type TournamentEvent } from '../lib/tournamentFeed'
 import {
-  PLAY_IN_REGIONS, SWISS_ROUND_SIZES, decodeChoices, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
+  PLAY_IN_REGIONS, SWISS_ROUND_SIZES, SWISS_TEAM_SOURCES, decodeChoices, encodeChoices, fillDraw, knockoutEntry, liveSwissBaseline, opponentOptions,
   resolveScenario, seedBaseline, swapOpponent, teamOutcome, type DrawContext, type DrawnRound, type ResolvedMatch,
   type ResolvedRound, type ResolvedScenario, type SwissBaseline,
 } from '../lib/swissScenario'
@@ -145,7 +145,7 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       onClear={() => update(shown.round, (choices) => choices.slice(0, shownIndex), true)} />
   } else if (current.next.kind === 'draw' && current.next.round === shownRound) {
     const pools = shownRound === 1 && baseline.kind === 'seeds'
-      ? WORLDS_2026_SWISS_RULES.pools.map((pool) => pool.map((id) => ({ id, note: id === 'PLAYIN' ? playIn ?? 'Region not chosen, meets LCK 1 or LPL 1 only' : null })))
+      ? WORLDS_2026_SWISS_RULES.pools.map((pool) => pool.map((id) => ({ id, note: id === 'PLAYIN' ? playIn ?? `Region not chosen, meets ${label('LCK1')} or ${label('LPL1')} only` : id.replace(/(\d+)$/, ' $1') })))
       : null
     board = <DrawPanel key={`draw-${shownRound}`} round={shownRound} context={current.next.context} pools={pools} label={label} focus={focusRound === shownRound} onFocused={focusDone}
       onFill={(pairs) => update(shownRound, (choices) => [...choices, { pairs, winners: pairs.map(() => null) }], true)} />
@@ -158,7 +158,7 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       <label htmlFor="swiss-start" className="text-sm font-semibold">Start from</label>
       <Select id="swiss-start" className="w-full" value={start} onChange={(event) => changeStart(event.target.value)}>
         <option value="live" disabled={live.status !== 'ready'}>Live draws and results</option>
-        <option value="seeds">Seed slots before the draw</option>
+        <option value="seeds">Qualified teams before the draw</option>
       </Select>
     </div>
   )
@@ -167,7 +167,7 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
       <div className="grid min-w-0 justify-items-start gap-4">
         {startControl}
         <Alert variant="warning" role="status">
-          Live draws are not available: {live.detail} Your live scenarios stay in the page address and come back when live draws return. Choosing seed slots replaces them with two new scenarios.
+          Live draws are not available: {live.detail} Your live scenarios stay in the page address and come back when live draws return. Choosing qualified teams replaces them with two new scenarios.
         </Alert>
       </div>
     )
@@ -215,7 +215,7 @@ export function SwissPreview({ event, checkedAt, timezone }: { event: Tournament
         <p className="text-muted-foreground">
           {baseline.kind === 'live'
             ? <>Starts from the draws and results on Leaguepedia, checked {formatTournamentTime(checkedAt, timezone)}. {live.status === 'ready' && live.note ? live.note : ''}</>
-            : <>Starts from the sixteen Swiss seed slots before the Round 1 draw. Slots stand for the qualified teams, for example LCK 1 is the first LCK seed. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}</>}
+            : <>Starts from the qualified teams before the Round 1 draw. Team names follow <a className="underline" href={SWISS_TEAM_SOURCES.primer} target="_blank" rel="noreferrer">Riot’s Worlds primer</a> and the <a className="underline" href={SWISS_TEAM_SOURCES.cblolFinal} target="_blank" rel="noreferrer">CBLOL final</a>, checked {SWISS_TEAM_SOURCES.checkedAt}. The Play-In winner stays open until confirmed. {live.status === 'unavailable' ? `Live draws are not available: ${live.detail}` : ''}</>}
         </p>
       </div>
       <div role="status" className="empty:hidden grid gap-1 text-sm">
