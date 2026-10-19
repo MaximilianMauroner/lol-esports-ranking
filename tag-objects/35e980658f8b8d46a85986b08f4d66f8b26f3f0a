@@ -1,0 +1,11 @@
+object 1b4bab710b4ef5f97121f27876350bce744dbe4f
+type commit
+tag archive/20261019/storage/feat/incremental-ranking-pipeline
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/incremental-ranking-pipeline
+
+Feature group: storage
+Original remote branch: refs/heads/feat/incremental-ranking-pipeline
+Original commit: 1b4bab710b4ef5f97121f27876350bce744dbe4f
+Source tree and history are retained unchanged.

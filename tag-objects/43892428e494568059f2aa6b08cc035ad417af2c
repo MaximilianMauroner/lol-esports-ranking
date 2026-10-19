@@ -1,0 +1,11 @@
+object 5a781feff40871f27fe53326edfc1245f2d660c9
+type commit
+tag archive/20261019/main/t3code/lol-rankings-pipeline-restart
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch t3code/lol-rankings-pipeline-restart
+
+Feature group: main
+Original remote branch: refs/heads/t3code/lol-rankings-pipeline-restart
+Original commit: 5a781feff40871f27fe53326edfc1245f2d660c9
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5
+type commit
+tag archive/20261019/engine/backup/lol-icons-demacia-20261019
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch backup/lol-icons-demacia-20261019
+
+Feature group: engine
+Original remote branch: refs/heads/backup/lol-icons-demacia-20261019
+Original commit: 490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5
+Source tree and history are retained unchanged.

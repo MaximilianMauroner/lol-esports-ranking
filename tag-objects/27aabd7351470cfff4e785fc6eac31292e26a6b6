@@ -1,0 +1,11 @@
+object c746278d788ad2a44cd8f408f4b670bb51441e36
+type commit
+tag archive/20261019/main/test/verify-movement-shard-url
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch test/verify-movement-shard-url
+
+Feature group: main
+Original remote branch: refs/heads/test/verify-movement-shard-url
+Original commit: c746278d788ad2a44cd8f408f4b670bb51441e36
+Source tree and history are retained unchanged.

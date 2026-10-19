@@ -1,0 +1,11 @@
+object ab374af042d9b5c82788d69f56af762fec7c3419
+type commit
+tag archive/20261019/tournaments/babysit/lol-pr70
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch babysit/lol-pr70
+
+Feature group: tournaments
+Original remote branch: refs/heads/babysit/lol-pr70
+Original commit: ab374af042d9b5c82788d69f56af762fec7c3419
+Source tree and history are retained unchanged.

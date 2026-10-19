@@ -1,0 +1,11 @@
+object e0ba950629bddb8645a4abf6a0a02ea2c3f1ca01
+type commit
+tag archive/20261019/main/chore/remove-worlds-prototype-47
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch chore/remove-worlds-prototype-47
+
+Feature group: main
+Original remote branch: refs/heads/chore/remove-worlds-prototype-47
+Original commit: e0ba950629bddb8645a4abf6a0a02ea2c3f1ca01
+Source tree and history are retained unchanged.

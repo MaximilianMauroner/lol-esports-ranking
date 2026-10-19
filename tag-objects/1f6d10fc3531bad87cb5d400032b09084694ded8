@@ -1,0 +1,11 @@
+object 7ef89fe5401c648ac0207b5d9c3325606ed265d8
+type commit
+tag archive/20261019/main/perf/snappy-navigation-20261013
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch perf/snappy-navigation-20261013
+
+Feature group: main
+Original remote branch: refs/heads/perf/snappy-navigation-20261013
+Original commit: 7ef89fe5401c648ac0207b5d9c3325606ed265d8
+Source tree and history are retained unchanged.

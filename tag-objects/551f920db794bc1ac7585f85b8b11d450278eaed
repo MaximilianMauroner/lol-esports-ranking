@@ -1,0 +1,11 @@
+object f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6
+type commit
+tag archive/20261019/storage/refactor/public-output-closure
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch refactor/public-output-closure
+
+Feature group: storage
+Original remote branch: refs/heads/refactor/public-output-closure
+Original commit: f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6
+Source tree and history are retained unchanged.

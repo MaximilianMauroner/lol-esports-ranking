@@ -1,0 +1,11 @@
+object d355941a5017fcbc698ad10251b316b116bdcd20
+type commit
+tag archive/20261019/storage/feat/ranking-storage-checkpoint-foundations
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-storage-checkpoint-foundations
+
+Feature group: storage
+Original remote branch: refs/heads/feat/ranking-storage-checkpoint-foundations
+Original commit: d355941a5017fcbc698ad10251b316b116bdcd20
+Source tree and history are retained unchanged.

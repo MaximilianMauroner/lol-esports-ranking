@@ -1,0 +1,11 @@
+object 1d11ac1c85499a38f2d13f83f62467ce2f86299f
+type commit
+tag archive/20261019/runtime/fix/native-header-limit
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/native-header-limit
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/native-header-limit
+Original commit: 1d11ac1c85499a38f2d13f83f62467ce2f86299f
+Source tree and history are retained unchanged.

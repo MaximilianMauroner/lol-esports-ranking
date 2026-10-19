@@ -1,0 +1,11 @@
+object 340bcdfcb3bd1026aadab65957aef888c639445a
+type commit
+tag archive/20261019/runtime/fix/pi-index-branding
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/pi-index-branding
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/pi-index-branding
+Original commit: 340bcdfcb3bd1026aadab65957aef888c639445a
+Source tree and history are retained unchanged.

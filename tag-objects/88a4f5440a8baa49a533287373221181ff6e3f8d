@@ -1,0 +1,11 @@
+object e8bca4bc433711b449a4eeb8d5a5f605d3c21bd9
+type commit
+tag archive/20261019/runtime/fix/native-contract-ci-types
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/native-contract-ci-types
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/native-contract-ci-types
+Original commit: e8bca4bc433711b449a4eeb8d5a5f605d3c21bd9
+Source tree and history are retained unchanged.

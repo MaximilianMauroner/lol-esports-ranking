@@ -1,0 +1,11 @@
+object 9390d4cecb53c71383e3be1905ff38dacd363861
+type commit
+tag archive/20261019/main/fix/incremental-refresh-memory-peak
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/incremental-refresh-memory-peak
+
+Feature group: main
+Original remote branch: refs/heads/fix/incremental-refresh-memory-peak
+Original commit: 9390d4cecb53c71383e3be1905ff38dacd363861
+Source tree and history are retained unchanged.

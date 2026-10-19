@@ -1,0 +1,11 @@
+object 354dfd5fe4a108bf366f74e9a577b7678f2d20de
+type commit
+tag archive/20261019/storage/chore/local-public-data
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch chore/local-public-data
+
+Feature group: storage
+Original remote branch: refs/heads/chore/local-public-data
+Original commit: 354dfd5fe4a108bf366f74e9a577b7678f2d20de
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 512c9547809b22c4fac893bd8382c9a048044b89
+type commit
+tag archive/20261019/runtime/test/native-http-target-regressions
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch test/native-http-target-regressions
+
+Feature group: runtime
+Original remote branch: refs/heads/test/native-http-target-regressions
+Original commit: 512c9547809b22c4fac893bd8382c9a048044b89
+Source tree and history are retained unchanged.

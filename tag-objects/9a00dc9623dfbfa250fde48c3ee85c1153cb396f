@@ -1,0 +1,11 @@
+object 059215ced57ba3eb4d73773dce3fb4aa11484d08
+type commit
+tag archive/20261019/engine/fix/incremental-gate-stability
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/incremental-gate-stability
+
+Feature group: engine
+Original remote branch: refs/heads/fix/incremental-gate-stability
+Original commit: 059215ced57ba3eb4d73773dce3fb4aa11484d08
+Source tree and history are retained unchanged.

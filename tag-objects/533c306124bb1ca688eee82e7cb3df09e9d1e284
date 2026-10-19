@@ -1,0 +1,11 @@
+object 1f07b21f0de905ed00a9dd08a254e43b8a3e139c
+type commit
+tag archive/20261019/site/t3code/fix-team-shorthands-and-logos
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch t3code/fix-team-shorthands-and-logos
+
+Feature group: site
+Original remote branch: refs/heads/t3code/fix-team-shorthands-and-logos
+Original commit: 1f07b21f0de905ed00a9dd08a254e43b8a3e139c
+Source tree and history are retained unchanged.

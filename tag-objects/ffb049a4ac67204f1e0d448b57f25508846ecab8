@@ -1,0 +1,11 @@
+object fb7ed307ff2e00a74d29531ac2be98bdfc0a78c8
+type commit
+tag archive/20261019/storage/fix/checkpoint-semantic-parity-80
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/checkpoint-semantic-parity-80
+
+Feature group: storage
+Original remote branch: refs/heads/fix/checkpoint-semantic-parity-80
+Original commit: fb7ed307ff2e00a74d29531ac2be98bdfc0a78c8
+Source tree and history are retained unchanged.

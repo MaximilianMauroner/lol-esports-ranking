@@ -1,0 +1,11 @@
+object c746278d788ad2a44cd8f408f4b670bb51441e36
+type commit
+tag archive/20261019/main/fix/r3-verification-driver
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/r3-verification-driver
+
+Feature group: main
+Original remote branch: refs/heads/fix/r3-verification-driver
+Original commit: c746278d788ad2a44cd8f408f4b670bb51441e36
+Source tree and history are retained unchanged.

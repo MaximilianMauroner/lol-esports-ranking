@@ -1,0 +1,11 @@
+object fe8a8bc3f8b1554fd489d31c681b2255e3c092b6
+type commit
+tag archive/20261019/tournaments/fix/auto-select-team
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/auto-select-team
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/auto-select-team
+Original commit: fe8a8bc3f8b1554fd489d31c681b2255e3c092b6
+Source tree and history are retained unchanged.

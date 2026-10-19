@@ -1,0 +1,11 @@
+object d400043aeb0f8fc8d69c461ad39996b4d376828c
+type commit
+tag archive/20261019/storage/feat/ranking-rollout-evidence
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-rollout-evidence
+
+Feature group: storage
+Original remote branch: refs/heads/feat/ranking-rollout-evidence
+Original commit: d400043aeb0f8fc8d69c461ad39996b4d376828c
+Source tree and history are retained unchanged.

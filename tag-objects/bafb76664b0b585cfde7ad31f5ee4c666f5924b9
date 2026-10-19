@@ -1,0 +1,11 @@
+object 65749ff73a401959d9bdc5b1e8e4001ce4464e0e
+type commit
+tag archive/20261019/main/fix/ci-affected-test-contention
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/ci-affected-test-contention
+
+Feature group: main
+Original remote branch: refs/heads/fix/ci-affected-test-contention
+Original commit: 65749ff73a401959d9bdc5b1e8e4001ce4464e0e
+Source tree and history are retained unchanged.

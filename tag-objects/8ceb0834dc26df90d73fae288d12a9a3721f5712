@@ -1,0 +1,11 @@
+object 41b09fd9a88554e85a4dc0e1e69422a78d447b1c
+type commit
+tag archive/20261019/storage/fix/ledger-recovery-budget
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/ledger-recovery-budget
+
+Feature group: storage
+Original remote branch: refs/heads/fix/ledger-recovery-budget
+Original commit: 41b09fd9a88554e85a4dc0e1e69422a78d447b1c
+Source tree and history are retained unchanged.

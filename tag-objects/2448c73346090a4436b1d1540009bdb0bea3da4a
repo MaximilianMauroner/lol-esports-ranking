@@ -1,0 +1,11 @@
+object 806a4ee2f9411bb57b397112dd3fcff5e77edc85
+type commit
+tag archive/20261019/board/fix/refresh-docker-context
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/refresh-docker-context
+
+Feature group: board
+Original remote branch: refs/heads/fix/refresh-docker-context
+Original commit: 806a4ee2f9411bb57b397112dd3fcff5e77edc85
+Source tree and history are retained unchanged.

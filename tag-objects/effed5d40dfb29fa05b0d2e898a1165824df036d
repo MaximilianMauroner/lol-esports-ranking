@@ -1,0 +1,11 @@
+object e9f0249439921a1a2416536e5a03e54d460a4d04
+type commit
+tag archive/20261019/engine/feat/ranking-source-authority
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-source-authority
+
+Feature group: engine
+Original remote branch: refs/heads/feat/ranking-source-authority
+Original commit: e9f0249439921a1a2416536e5a03e54d460a4d04
+Source tree and history are retained unchanged.

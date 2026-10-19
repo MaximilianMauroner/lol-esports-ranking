@@ -1,0 +1,11 @@
+object 79559dd5f8de7512065d6b3b5193baee6b600d40
+type commit
+tag archive/20261019/storage/feat/year-partitioned-artifacts
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/year-partitioned-artifacts
+
+Feature group: storage
+Original remote branch: refs/heads/feat/year-partitioned-artifacts
+Original commit: 79559dd5f8de7512065d6b3b5193baee6b600d40
+Source tree and history are retained unchanged.

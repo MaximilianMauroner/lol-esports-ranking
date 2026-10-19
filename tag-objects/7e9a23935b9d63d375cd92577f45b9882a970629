@@ -1,0 +1,11 @@
+object 0651be97b02118a2754b3984e2dfa120b2d771e7
+type commit
+tag archive/20261019/runtime/fix/repeat-native-policy-proof
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/repeat-native-policy-proof
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/repeat-native-policy-proof
+Original commit: 0651be97b02118a2754b3984e2dfa120b2d771e7
+Source tree and history are retained unchanged.

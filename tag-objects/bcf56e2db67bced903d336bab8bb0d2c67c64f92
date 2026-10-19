@@ -1,0 +1,11 @@
+object 1d11ac1c85499a38f2d13f83f62467ce2f86299f
+type commit
+tag archive/20261019/runtime/verify/native-artifact-contract-20261018
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch verify/native-artifact-contract-20261018
+
+Feature group: runtime
+Original remote branch: refs/heads/verify/native-artifact-contract-20261018
+Original commit: 1d11ac1c85499a38f2d13f83f62467ce2f86299f
+Source tree and history are retained unchanged.

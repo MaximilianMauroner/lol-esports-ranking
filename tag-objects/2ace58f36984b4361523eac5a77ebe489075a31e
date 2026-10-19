@@ -1,0 +1,11 @@
+object 3bdcbc1c2da3253bb3ab3cbd2ca1bb5149df04fc
+type commit
+tag archive/20261019/main/fix/ongoing-split-checkpoint
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/ongoing-split-checkpoint
+
+Feature group: main
+Original remote branch: refs/heads/fix/ongoing-split-checkpoint
+Original commit: 3bdcbc1c2da3253bb3ab3cbd2ca1bb5149df04fc
+Source tree and history are retained unchanged.

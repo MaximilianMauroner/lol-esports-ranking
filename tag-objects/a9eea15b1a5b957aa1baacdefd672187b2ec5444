@@ -1,0 +1,11 @@
+object 3ef4f14d3a09d852a1905bdccecaafbad1d98fd1
+type commit
+tag archive/20261019/tooling/wip/preserve-before-doc-fix-20260814
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch wip/preserve-before-doc-fix-20260814
+
+Feature group: tooling
+Original remote branch: refs/heads/wip/preserve-before-doc-fix-20260814
+Original commit: 3ef4f14d3a09d852a1905bdccecaafbad1d98fd1
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object c746278d788ad2a44cd8f408f4b670bb51441e36
+type commit
+tag archive/20261019/main/review/r3-evidence-instrument
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch review/r3-evidence-instrument
+
+Feature group: main
+Original remote branch: refs/heads/review/r3-evidence-instrument
+Original commit: c746278d788ad2a44cd8f408f4b670bb51441e36
+Source tree and history are retained unchanged.

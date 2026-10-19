@@ -1,0 +1,11 @@
+object 16f0aeeb1a853beb38e6a58f9931de675475d382
+type commit
+tag archive/20261019/tooling/refactor/remove-proven-dead-code
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch refactor/remove-proven-dead-code
+
+Feature group: tooling
+Original remote branch: refs/heads/refactor/remove-proven-dead-code
+Original commit: 16f0aeeb1a853beb38e6a58f9931de675475d382
+Source tree and history are retained unchanged.

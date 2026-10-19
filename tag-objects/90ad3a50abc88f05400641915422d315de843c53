@@ -1,0 +1,11 @@
+object ae7eb28ad7b0330756d496cd01f932ceefc2235f
+type commit
+tag archive/20261019/main/feat/ranking-restart-baseline
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-restart-baseline
+
+Feature group: main
+Original remote branch: refs/heads/feat/ranking-restart-baseline
+Original commit: ae7eb28ad7b0330756d496cd01f932ceefc2235f
+Source tree and history are retained unchanged.

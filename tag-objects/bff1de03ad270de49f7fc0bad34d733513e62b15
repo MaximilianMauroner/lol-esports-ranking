@@ -1,0 +1,11 @@
+object 04fa794fd7b5cb4f4e7fa39913b0f283599e9c66
+type commit
+tag archive/20261019/storage/fix/refresh-manifest-budget
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/refresh-manifest-budget
+
+Feature group: storage
+Original remote branch: refs/heads/fix/refresh-manifest-budget
+Original commit: 04fa794fd7b5cb4f4e7fa39913b0f283599e9c66
+Source tree and history are retained unchanged.

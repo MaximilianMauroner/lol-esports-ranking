@@ -1,0 +1,11 @@
+object e44513d17d4339d717bb02f6fc02a381cddba864
+type commit
+tag archive/20261019/main/chore/remove-stale-audit-notes
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch chore/remove-stale-audit-notes
+
+Feature group: main
+Original remote branch: refs/heads/chore/remove-stale-audit-notes
+Original commit: e44513d17d4339d717bb02f6fc02a381cddba864
+Source tree and history are retained unchanged.

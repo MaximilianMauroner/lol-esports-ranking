@@ -1,0 +1,11 @@
+object 589334722a4c304aa9551732ef1808db56bafe24
+type commit
+tag archive/20261019/board/refactor/repository-overhaul-20261017
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch refactor/repository-overhaul-20261017
+
+Feature group: board
+Original remote branch: refs/heads/refactor/repository-overhaul-20261017
+Original commit: 589334722a4c304aa9551732ef1808db56bafe24
+Source tree and history are retained unchanged.

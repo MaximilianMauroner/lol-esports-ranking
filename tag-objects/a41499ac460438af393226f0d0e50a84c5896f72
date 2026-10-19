@@ -1,0 +1,11 @@
+object 219a0992232eedea490f28696c1d1d4a334e8dc0
+type commit
+tag archive/20261019/runtime/fix/fixture-reset-diagnosis
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/fixture-reset-diagnosis
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/fixture-reset-diagnosis
+Original commit: 219a0992232eedea490f28696c1d1d4a334e8dc0
+Source tree and history are retained unchanged.

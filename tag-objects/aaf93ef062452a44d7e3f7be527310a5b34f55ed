@@ -1,0 +1,11 @@
+object 50f840966572b3fdf5b7180a32c2baedea86fe72
+type commit
+tag archive/20261019/storage/verify/r2-exact-source-v4-1166bb3e
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch verify/r2-exact-source-v4-1166bb3e
+
+Feature group: storage
+Original remote branch: refs/heads/verify/r2-exact-source-v4-1166bb3e
+Original commit: 50f840966572b3fdf5b7180a32c2baedea86fe72
+Source tree and history are retained unchanged.

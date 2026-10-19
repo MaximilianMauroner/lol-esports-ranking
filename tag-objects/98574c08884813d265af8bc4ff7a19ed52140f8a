@@ -1,0 +1,11 @@
+object efda690036522f97a2b6e5f1da12f21783bd4057
+type commit
+tag archive/20261019/storage/feat/content-addressed-ranking-state
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/content-addressed-ranking-state
+
+Feature group: storage
+Original remote branch: refs/heads/feat/content-addressed-ranking-state
+Original commit: efda690036522f97a2b6e5f1da12f21783bd4057
+Source tree and history are retained unchanged.

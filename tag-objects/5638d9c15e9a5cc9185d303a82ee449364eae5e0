@@ -1,0 +1,11 @@
+object 6f838f053ed09a56bcb77dd06f49d6c969a80682
+type commit
+tag archive/20261019/tournaments/feat/swiss-bracket-preview
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/swiss-bracket-preview
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/swiss-bracket-preview
+Original commit: 6f838f053ed09a56bcb77dd06f49d6c969a80682
+Source tree and history are retained unchanged.

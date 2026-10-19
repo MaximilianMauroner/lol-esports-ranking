@@ -1,0 +1,11 @@
+object 059215ced57ba3eb4d73773dce3fb4aa11484d08
+type commit
+tag archive/20261019/engine/deliver/pr83-calibration-20261007
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch deliver/pr83-calibration-20261007
+
+Feature group: engine
+Original remote branch: refs/heads/deliver/pr83-calibration-20261007
+Original commit: 059215ced57ba3eb4d73773dce3fb4aa11484d08
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 9417f5fed12fb48a834662d2a6864a2cc0b6f8c8
+type commit
+tag archive/20261019/tooling/verification/coverage-20261004
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch verification/coverage-20261004
+
+Feature group: tooling
+Original remote branch: refs/heads/verification/coverage-20261004
+Original commit: 9417f5fed12fb48a834662d2a6864a2cc0b6f8c8
+Source tree and history are retained unchanged.

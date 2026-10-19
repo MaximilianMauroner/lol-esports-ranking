@@ -1,0 +1,11 @@
+object 03ab9c6682a206c43cc76d4b7be7832544aa662b
+type commit
+tag archive/20261019/main/feat/tournament-hub-foundation
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/tournament-hub-foundation
+
+Feature group: main
+Original remote branch: refs/heads/feat/tournament-hub-foundation
+Original commit: 03ab9c6682a206c43cc76d4b7be7832544aa662b
+Source tree and history are retained unchanged.

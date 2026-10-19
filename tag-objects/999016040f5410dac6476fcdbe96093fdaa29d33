@@ -1,0 +1,11 @@
+object 7b3cc0ff75fa5f98279bde09822a8661ed426b56
+type commit
+tag archive/20261019/main/feat/unify-loading-states
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/unify-loading-states
+
+Feature group: main
+Original remote branch: refs/heads/feat/unify-loading-states
+Original commit: 7b3cc0ff75fa5f98279bde09822a8661ed426b56
+Source tree and history are retained unchanged.

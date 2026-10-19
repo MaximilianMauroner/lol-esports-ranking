@@ -1,0 +1,11 @@
+object 6b99704f9afc0e5685062fe41654ed5b5732cc17
+type commit
+tag archive/20261019/storage/cleanup/remove-archive-v0-writer
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch cleanup/remove-archive-v0-writer
+
+Feature group: storage
+Original remote branch: refs/heads/cleanup/remove-archive-v0-writer
+Original commit: 6b99704f9afc0e5685062fe41654ed5b5732cc17
+Source tree and history are retained unchanged.

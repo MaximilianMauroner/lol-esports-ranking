@@ -1,0 +1,11 @@
+object 96b5a6fc662956417744062934c4cb44ac752741
+type commit
+tag archive/20261019/main/fix/overlapping-schedule-ledger
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/overlapping-schedule-ledger
+
+Feature group: main
+Original remote branch: refs/heads/fix/overlapping-schedule-ledger
+Original commit: 96b5a6fc662956417744062934c4cb44ac752741
+Source tree and history are retained unchanged.

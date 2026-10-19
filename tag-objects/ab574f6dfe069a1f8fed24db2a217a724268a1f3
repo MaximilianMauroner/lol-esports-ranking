@@ -1,0 +1,11 @@
+object 42bf586c4ea5b69be10faf0b6085c9fd4240cf61
+type commit
+tag archive/20261019/tooling/fix/ci-affected-paths-fixture
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/ci-affected-paths-fixture
+
+Feature group: tooling
+Original remote branch: refs/heads/fix/ci-affected-paths-fixture
+Original commit: 42bf586c4ea5b69be10faf0b6085c9fd4240cf61
+Source tree and history are retained unchanged.

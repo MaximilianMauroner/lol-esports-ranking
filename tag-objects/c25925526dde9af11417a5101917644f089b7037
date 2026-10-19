@@ -1,0 +1,11 @@
+object e5f85be8a8b72c99193c28362cc656cbdaf374d7
+type commit
+tag archive/20261019/main/fix/report-scope-and-metric-bases
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/report-scope-and-metric-bases
+
+Feature group: main
+Original remote branch: refs/heads/fix/report-scope-and-metric-bases
+Original commit: e5f85be8a8b72c99193c28362cc656cbdaf374d7
+Source tree and history are retained unchanged.

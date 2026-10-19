@@ -1,0 +1,11 @@
+object f74e0f4ecab5d8e50b1017709341924c0b606f29
+type commit
+tag archive/20261019/tournaments/feat/match-champions
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/match-champions
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/match-champions
+Original commit: f74e0f4ecab5d8e50b1017709341924c0b606f29
+Source tree and history are retained unchanged.

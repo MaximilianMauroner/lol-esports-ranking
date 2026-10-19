@@ -1,0 +1,11 @@
+object d38add5f228e67022a3001e27a820ad76657f37f
+type commit
+tag archive/20261019/tooling/verify/r3-exact-source-v1-14557610
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch verify/r3-exact-source-v1-14557610
+
+Feature group: tooling
+Original remote branch: refs/heads/verify/r3-exact-source-v1-14557610
+Original commit: d38add5f228e67022a3001e27a820ad76657f37f
+Source tree and history are retained unchanged.

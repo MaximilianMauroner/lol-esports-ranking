@@ -1,0 +1,11 @@
+object 886c366011df714ce0adbc0ef98702faad1ac7fc
+type commit
+tag archive/20261019/runtime/fix/oracle-unpaired-unicode
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/oracle-unpaired-unicode
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/oracle-unpaired-unicode
+Original commit: 886c366011df714ce0adbc0ef98702faad1ac7fc
+Source tree and history are retained unchanged.

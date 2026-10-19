@@ -1,0 +1,11 @@
+object a2444693d15f67d3357f911e6d08df420a0bd999
+type commit
+tag archive/20261019/runtime/verify/native-pure-contracts-20261018
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch verify/native-pure-contracts-20261018
+
+Feature group: runtime
+Original remote branch: refs/heads/verify/native-pure-contracts-20261018
+Original commit: a2444693d15f67d3357f911e6d08df420a0bd999
+Source tree and history are retained unchanged.

@@ -1,0 +1,4264 @@
+{
+  "format": "git-reference-archive-v1",
+  "createdAt": "2026-10-19T21:18:17.440419+00:00",
+  "repository": "MaximilianMauroner/lol-esports-ranking",
+  "archiveRef": "refs/tags/archive/reference-snapshot-20261019",
+  "meaning": "Saved histories only. Parent links preserve commits; they do not represent code integration.",
+  "refs": [
+    {
+      "ref": "refs/heads/babysit/lol-pr70",
+      "oid": "ab374af042d9b5c82788d69f56af762fec7c3419",
+      "type": "commit",
+      "commit": "ab374af042d9b5c82788d69f56af762fec7c3419",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Review checkpoint for Play-In probability validation."
+    },
+    {
+      "ref": "refs/heads/babysit/preserved-rust-stack-20261008",
+      "oid": "cf6f548bbde46045bce2e3a13d4f6027c95ab9ee",
+      "type": "commit",
+      "commit": "cf6f548bbde46045bce2e3a13d4f6027c95ab9ee",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "preserve provider response and failure parity"
+    },
+    {
+      "ref": "refs/heads/babysit/ranking-rust-stack-20261008",
+      "oid": "686b019a015b62135eaa9662bff3d4b2c8108f06",
+      "type": "commit",
+      "commit": "686b019a015b62135eaa9662bff3d4b2c8108f06",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Ranking rust stack."
+    },
+    {
+      "ref": "refs/heads/babysit/refreshed-pr86-20261008",
+      "oid": "732ec891bdee7ef0309e08fe127365b26ad35372",
+      "type": "commit",
+      "commit": "732ec891bdee7ef0309e08fe127365b26ad35372",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Rust parity-fixture and CI configuration checkpoint."
+    },
+    {
+      "ref": "refs/heads/babysit/rust-contracts-current-main-20261008",
+      "oid": "7ddda31a69320358c168d4a96b557698ec4e56bd",
+      "type": "commit",
+      "commit": "7ddda31a69320358c168d4a96b557698ec4e56bd",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "align Rust log bits and Unicode date fallback"
+    },
+    {
+      "ref": "refs/heads/babysit/rust-fetch-after89-20261008",
+      "oid": "8eaf7e6dfce326af7478985ed15f539fd2847117",
+      "type": "commit",
+      "commit": "8eaf7e6dfce326af7478985ed15f539fd2847117",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Rust fetch after89."
+    },
+    {
+      "ref": "refs/heads/babysit/rust-fetch-after91-20261008",
+      "oid": "02a18e6c5adc5df91c4c773e86cf73a103f9761c",
+      "type": "commit",
+      "commit": "02a18e6c5adc5df91c4c773e86cf73a103f9761c",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Rust fetch after91."
+    },
+    {
+      "ref": "refs/heads/babysit/rust-fetch-current-main-20261008",
+      "oid": "9131f7b7b813f3d562daa9d795fd9555877aa443",
+      "type": "commit",
+      "commit": "9131f7b7b813f3d562daa9d795fd9555877aa443",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Rust fetch current main."
+    },
+    {
+      "ref": "refs/heads/babysit/rust-raw-after89-20261008",
+      "oid": "860336aaade31bd33a0b43157ad9629dd5dc436c",
+      "type": "commit",
+      "commit": "860336aaade31bd33a0b43157ad9629dd5dc436c",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "preserve manifest order and compare objects by digest"
+    },
+    {
+      "ref": "refs/heads/babysit/rust-raw-current-main-20261008",
+      "oid": "cbff0d044be728b607313734fa4a7c9e1127918e",
+      "type": "commit",
+      "commit": "cbff0d044be728b607313734fa4a7c9e1127918e",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "preserve manifest order and compare objects by digest"
+    },
+    {
+      "ref": "refs/heads/backup/lol-icons-demacia-20261019",
+      "oid": "490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5",
+      "type": "commit",
+      "commit": "490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "Saved match-import, source-freshness, and team-logo changes."
+    },
+    {
+      "ref": "refs/heads/backup/lol-startup-screen-20261019",
+      "oid": "e94e1827885ea83acae3e2245be0cc586a306671",
+      "type": "commit",
+      "commit": "e94e1827885ea83acae3e2245be0cc586a306671",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "Saved startup-screen and branding changes."
+    },
+    {
+      "ref": "refs/heads/backup/lol-swiss-team-names-20261019",
+      "oid": "edcc6a58a9068e2ae8de21577d2c8bf42c197484",
+      "type": "commit",
+      "commit": "edcc6a58a9068e2ae8de21577d2c8bf42c197484",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Saved Swiss scenario and team-name changes."
+    },
+    {
+      "ref": "refs/heads/backup/macbook-main-2026-10-03",
+      "oid": "f87b688e35bdc54ceb4ffde0b657bb82ec76e8a4",
+      "type": "commit",
+      "commit": "f87b688e35bdc54ceb4ffde0b657bb82ec76e8a4",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Earlier ranking documentation and agent-guidance edits."
+    },
+    {
+      "ref": "refs/heads/chore/ignore-local-t3-json-20261014",
+      "oid": "eb8672953129ccdcaafb108a8e00320c638db502",
+      "type": "commit",
+      "commit": "eb8672953129ccdcaafb108a8e00320c638db502",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "chore: ignore local T3 Code configuration"
+    },
+    {
+      "ref": "refs/heads/chore/implement-r2-check-publication",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/integrate-ranking-board",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "board",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/local-public-data",
+      "oid": "354dfd5fe4a108bf366f74e9a577b7678f2d20de",
+      "type": "commit",
+      "commit": "354dfd5fe4a108bf366f74e9a577b7678f2d20de",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "chore(data): download generated browser payload instead of tracking it"
+    },
+    {
+      "ref": "refs/heads/chore/merge-pr-137",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/pr137-readiness",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/pr137-readiness-1",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/pr137-readiness-audit",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/prepare-native-sources",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "runtime",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/prepare-r3-browser-proof",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/prepare-r3-drivers",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/prepare-r3-v4-sources",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/r2-draft-publication",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/r3-source-checks-push",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/remove-stale-audit-notes",
+      "oid": "e44513d17d4339d717bb02f6fc02a381cddba864",
+      "type": "commit",
+      "commit": "e44513d17d4339d717bb02f6fc02a381cddba864",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/remove-worlds-prototype-47",
+      "oid": "e0ba950629bddb8645a4abf6a0a02ea2c3f1ca01",
+      "type": "commit",
+      "commit": "e0ba950629bddb8645a4abf6a0a02ea2c3f1ca01",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/review-artifact-repair",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/review-cumulative-verification",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/review-instrument-fix",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/chore/review-proof-fix",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/ci/coalesce-superseded-pr-checks",
+      "oid": "c3a51f0a01427f2d214de6e6546cf0ee179a2b74",
+      "type": "commit",
+      "commit": "c3a51f0a01427f2d214de6e6546cf0ee179a2b74",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/ci/fix-pr-change-classification-20261014",
+      "oid": "95bf522081d67841cb9df2b1d124392a63c47045",
+      "type": "commit",
+      "commit": "95bf522081d67841cb9df2b1d124392a63c47045",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "ci: classify the verified PR merge delta"
+    },
+    {
+      "ref": "refs/heads/ci/reduce-actions-usage-20261014",
+      "oid": "aad9891b3669d8f5c3c229ea15bafc57e0e95a71",
+      "type": "commit",
+      "commit": "aad9891b3669d8f5c3c229ea15bafc57e0e95a71",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "ci: defer heavy draft checks and cache worker builds"
+    },
+    {
+      "ref": "refs/heads/ci/split-incremental-gate",
+      "oid": "c9a1c05221ebc6ea98de209228bf6cc32d83a6df",
+      "type": "commit",
+      "commit": "c9a1c05221ebc6ea98de209228bf6cc32d83a6df",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Split incremental gate into its own CI job"
+    },
+    {
+      "ref": "refs/heads/cleanup/remove-archive-v0-writer",
+      "oid": "6b99704f9afc0e5685062fe41654ed5b5732cc17",
+      "type": "commit",
+      "commit": "6b99704f9afc0e5685062fe41654ed5b5732cc17",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "refactor: remove temporary archive version-0 writer"
+    },
+    {
+      "ref": "refs/heads/cost/power-index-recovery-20261014",
+      "oid": "1e9a2a8619c8b04bb9c74d2ccf2a8e0b04496d0e",
+      "type": "commit",
+      "commit": "1e9a2a8619c8b04bb9c74d2ccf2a8e0b04496d0e",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "fix: reject invalid explicit benchmark limits"
+    },
+    {
+      "ref": "refs/heads/deliver/pr83-calibration-20261007",
+      "oid": "059215ced57ba3eb4d73773dce3fb4aa11484d08",
+      "type": "commit",
+      "commit": "059215ced57ba3eb4d73773dce3fb4aa11484d08",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "state the CI-observed calibration budget"
+    },
+    {
+      "ref": "refs/heads/design/board-scope-and-compare-ui",
+      "oid": "18e16048b8d9f2f73eeeb7f0ac4c0f362cd6e0e3",
+      "type": "commit",
+      "commit": "18e16048b8d9f2f73eeeb7f0ac4c0f362cd6e0e3",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "feat(web): score-led board, season timeline, and compare dock"
+    },
+    {
+      "ref": "refs/heads/docs/design-system-audit",
+      "oid": "95cc30e564e162f3c2636124cab7d4249cd2a18c",
+      "type": "commit",
+      "commit": "95cc30e564e162f3c2636124cab7d4249cd2a18c",
+      "inMain": true,
+      "featureGroup": "site",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/docs/product-foundation-spec",
+      "oid": "0a6bde8b323c2be01f42ceeeaab5723f385161de",
+      "type": "commit",
+      "commit": "0a6bde8b323c2be01f42ceeeaab5723f385161de",
+      "inMain": false,
+      "featureGroup": "product",
+      "goal": "Written product goal and full requirements; preserved external HTML reference."
+    },
+    {
+      "ref": "refs/heads/feat/30-day-power-movement",
+      "oid": "f962c2c30e9d6aa4121277cef84d588904634519",
+      "type": "commit",
+      "commit": "f962c2c30e9d6aa4121277cef84d588904634519",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/content-addressed-ranking-state",
+      "oid": "efda690036522f97a2b6e5f1da12f21783bd4057",
+      "type": "commit",
+      "commit": "efda690036522f97a2b6e5f1da12f21783bd4057",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Add content-addressed publishing and external state causality"
+    },
+    {
+      "ref": "refs/heads/feat/group-event-dropdown-by-tier",
+      "oid": "7f46f1a9b9a48b102cdc3481ef689d610ea856f9",
+      "type": "commit",
+      "commit": "7f46f1a9b9a48b102cdc3481ef689d610ea856f9",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: group Matches events by tournament and league tier"
+    },
+    {
+      "ref": "refs/heads/feat/incremental-ranking-crunch",
+      "oid": "7dc40a8d2202ecd2111eb70f2c66d9ed6da79d6c",
+      "type": "commit",
+      "commit": "7dc40a8d2202ecd2111eb70f2c66d9ed6da79d6c",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "feat: incremental ranking crunch"
+    },
+    {
+      "ref": "refs/heads/feat/incremental-ranking-pipeline",
+      "oid": "1b4bab710b4ef5f97121f27876350bce744dbe4f",
+      "type": "commit",
+      "commit": "1b4bab710b4ef5f97121f27876350bce744dbe4f",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Implement incremental ranking generation and cheaper Railway publishing"
+    },
+    {
+      "ref": "refs/heads/feat/incremental-ranking-replay",
+      "oid": "46e48baa6eb44f6acee91cce3f25bca3aa090980",
+      "type": "commit",
+      "commit": "46e48baa6eb44f6acee91cce3f25bca3aa090980",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Implement incremental ranking replay and shadow parity"
+    },
+    {
+      "ref": "refs/heads/feat/issue-56-power-previews-20261008",
+      "oid": "1933bd8ba21e9319e7c846dda24ba317866ecb5a",
+      "type": "commit",
+      "commit": "1933bd8ba21e9319e7c846dda24ba317866ecb5a",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: preview conditional stable-team Power changes"
+    },
+    {
+      "ref": "refs/heads/feat/leaguepedia-tournament-hub",
+      "oid": "716534538ea2408225a8dcda3a3a026e441f7993",
+      "type": "commit",
+      "commit": "716534538ea2408225a8dcda3a3a026e441f7993",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: enable the tournament hub by default with a live Leaguepedia feed"
+    },
+    {
+      "ref": "refs/heads/feat/match-champions",
+      "oid": "f74e0f4ecab5d8e50b1017709341924c0b606f29",
+      "type": "commit",
+      "commit": "f74e0f4ecab5d8e50b1017709341924c0b606f29",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Show each game's champion picks in expanded series"
+    },
+    {
+      "ref": "refs/heads/feat/native-http-service",
+      "oid": "ef4d82a2ba3ec24095f3e004545f314c1fec9e4a",
+      "type": "commit",
+      "commit": "ef4d82a2ba3ec24095f3e004545f314c1fec9e4a",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Add native cache delivery and socket proof pending resource verification"
+    },
+    {
+      "ref": "refs/heads/feat/native-ranking-origin",
+      "oid": "201e9c8d4ecf43237f9999d14744609ccb06377d",
+      "type": "commit",
+      "commit": "201e9c8d4ecf43237f9999d14744609ccb06377d",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Isolate origin fixture reader connections"
+    },
+    {
+      "ref": "refs/heads/feat/offline-forecast-cohort-55",
+      "oid": "e131be6d7b1124b92a6deb825f1ee25d7ca74cfc",
+      "type": "commit",
+      "commit": "e131be6d7b1124b92a6deb825f1ee25d7ca74cfc",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/presigned-ranking-delivery",
+      "oid": "324171f582fc9172aa2252ac5e9661c5355237c5",
+      "type": "commit",
+      "commit": "324171f582fc9172aa2252ac5e9661c5355237c5",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Add presigned ranking artifact delivery"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-accuracy",
+      "oid": "f721aa2530ea9640ad24af230f9f82be3eff8379",
+      "type": "commit",
+      "commit": "f721aa2530ea9640ad24af230f9f82be3eff8379",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "feat(ranking): add accuracy benchmarks and fix invalid series evidence"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-board-universe",
+      "oid": "bcf123c0dde5b34ed37b8e29d02404d1d9ae4c16",
+      "type": "commit",
+      "commit": "bcf123c0dde5b34ed37b8e29d02404d1d9ae4c16",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "fix(rankings): share deriveRankingUniverse between the board and the comparison dock"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-publication-transaction",
+      "oid": "9bfc89e7f0d2453181ac2c6c0b9fd0b6f779895a",
+      "type": "commit",
+      "commit": "9bfc89e7f0d2453181ac2c6c0b9fd0b6f779895a",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Enforce atomic ranking publication transactions"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-restart-baseline",
+      "oid": "ae7eb28ad7b0330756d496cd01f932ceefc2235f",
+      "type": "commit",
+      "commit": "ae7eb28ad7b0330756d496cd01f932ceefc2235f",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/ranking-retention-audits",
+      "oid": "d0e83c12a1aea72cef0f194729b4d976af260eaa",
+      "type": "commit",
+      "commit": "d0e83c12a1aea72cef0f194729b4d976af260eaa",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Add ranking retention, GC, and audit snapshots"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-rollout-evidence",
+      "oid": "d400043aeb0f8fc8d69c461ad39996b4d376828c",
+      "type": "commit",
+      "commit": "d400043aeb0f8fc8d69c461ad39996b4d376828c",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Modernize ranking pipeline and remove legacy deployment baggage"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-source-authority",
+      "oid": "e9f0249439921a1a2416536e5a03e54d460a4d04",
+      "type": "commit",
+      "commit": "e9f0249439921a1a2416536e5a03e54d460a4d04",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "Harden ranking source authority and recovery"
+    },
+    {
+      "ref": "refs/heads/feat/ranking-storage-checkpoint-foundations",
+      "oid": "d355941a5017fcbc698ad10251b316b116bdcd20",
+      "type": "commit",
+      "commit": "d355941a5017fcbc698ad10251b316b116bdcd20",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Add artifact identity and rating checkpoint foundations"
+    },
+    {
+      "ref": "refs/heads/feat/refresh-and-live-tournaments-20261009",
+      "oid": "a8be13c932e38927b6b264a49581469ede30e6a3",
+      "type": "commit",
+      "commit": "a8be13c932e38927b6b264a49581469ede30e6a3",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "fix: bound refresh state and raw preparation memory"
+    },
+    {
+      "ref": "refs/heads/feat/rust-contracts",
+      "oid": "dae06dc3cee02624bc2d61fb52bce86b89831fb8",
+      "type": "commit",
+      "commit": "dae06dc3cee02624bc2d61fb52bce86b89831fb8",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: add Rust worker contracts and parity CI"
+    },
+    {
+      "ref": "refs/heads/feat/rust-m0-code-unit-order",
+      "oid": "9a17a89926169958eb44c6f4b09df807c50469a0",
+      "type": "commit",
+      "commit": "9a17a89926169958eb44c6f4b09df807c50469a0",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "refactor(data): order published data by code units, not locale"
+    },
+    {
+      "ref": "refs/heads/feat/rust-m0-parity-fixtures",
+      "oid": "55113b66a6c8e08c9dcc6e7e06a24b7f59bfe005",
+      "type": "commit",
+      "commit": "55113b66a6c8e08c9dcc6e7e06a24b7f59bfe005",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "test(parity): export Node byte contracts; parse provider time as UTC"
+    },
+    {
+      "ref": "refs/heads/feat/rust-provider-fetch",
+      "oid": "962a06c133eb75ddda6c238716ce6a69642d54fc",
+      "type": "commit",
+      "commit": "962a06c133eb75ddda6c238716ce6a69642d54fc",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Rust provider collection plus saved test and parity repairs."
+    },
+    {
+      "ref": "refs/heads/feat/rust-public-archive-84",
+      "oid": "d0551193fbcfd9cd9a5367942c6712e9428974fa",
+      "type": "commit",
+      "commit": "d0551193fbcfd9cd9a5367942c6712e9428974fa",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: add native public archive verification"
+    },
+    {
+      "ref": "refs/heads/feat/rust-public-directory-84",
+      "oid": "187ab06940e8c92c0d1217c4eba94f22cb0c9712",
+      "type": "commit",
+      "commit": "187ab06940e8c92c0d1217c4eba94f22cb0c9712",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: expand native public artifact directories"
+    },
+    {
+      "ref": "refs/heads/feat/rust-public-generation-artifacts-84",
+      "oid": "083a0fb9dc15833e8f65ac82a8d52927a69af6ca",
+      "type": "commit",
+      "commit": "083a0fb9dc15833e8f65ac82a8d52927a69af6ca",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: verify native public generation artifacts"
+    },
+    {
+      "ref": "refs/heads/feat/rust-public-manifest-84",
+      "oid": "5e727cc70308dddf3539fa804461ce2ef6659d4a",
+      "type": "commit",
+      "commit": "5e727cc70308dddf3539fa804461ce2ef6659d4a",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: verify native public generation structure"
+    },
+    {
+      "ref": "refs/heads/feat/rust-publication-verification-84",
+      "oid": "f955eea1f000f17e151b8cf5736ffd1bf2b87866",
+      "type": "commit",
+      "commit": "f955eea1f000f17e151b8cf5736ffd1bf2b87866",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: verify native publication receipt closures"
+    },
+    {
+      "ref": "refs/heads/feat/rust-raw-generation-verification-84",
+      "oid": "562347d88e8997591a8b6459e3f39dd95ea8e5af",
+      "type": "commit",
+      "commit": "562347d88e8997591a8b6459e3f39dd95ea8e5af",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: verify native raw generation object graphs"
+    },
+    {
+      "ref": "refs/heads/feat/rust-raw-source",
+      "oid": "b0d35b6000ccaa4e8035e7e187221dda6b33be58",
+      "type": "commit",
+      "commit": "b0d35b6000ccaa4e8035e7e187221dda6b33be58",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: prepare and restore raw sources in Rust"
+    },
+    {
+      "ref": "refs/heads/feat/rust-state-authority-84",
+      "oid": "5205f2721805d8e20d4248977cc270477728ac45",
+      "type": "commit",
+      "commit": "5205f2721805d8e20d4248977cc270477728ac45",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: verify native state generation authorities"
+    },
+    {
+      "ref": "refs/heads/feat/rust-storage-primitives-84",
+      "oid": "f0cf0d8bf23a909e279a67ea0b5b7b66b7151286",
+      "type": "commit",
+      "commit": "f0cf0d8bf23a909e279a67ea0b5b7b66b7151286",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "feat: add native storage and lease primitives for Rust refresh"
+    },
+    {
+      "ref": "refs/heads/feat/shared-ranking-board",
+      "oid": "0ce9712ee1a43639c0cca0fdc310261be480beee",
+      "type": "commit",
+      "commit": "0ce9712ee1a43639c0cca0fdc310261be480beee",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "derive the ranking board and comparisons from one result"
+    },
+    {
+      "ref": "refs/heads/feat/site-cleanup",
+      "oid": "d701fc929563ffb82aefbf161472f6c755386387",
+      "type": "commit",
+      "commit": "d701fc929563ffb82aefbf161472f6c755386387",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "Cut stray helper text and tidy headings across the site"
+    },
+    {
+      "ref": "refs/heads/feat/site-polish",
+      "oid": "0385312758d2d7dbd1bb154180038e8658d741e3",
+      "type": "commit",
+      "commit": "0385312758d2d7dbd1bb154180038e8658d741e3",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Show layout-matching loading skeletons and the cached tournament schedule"
+    },
+    {
+      "ref": "refs/heads/feat/swiss-bracket-preview",
+      "oid": "6f838f053ed09a56bcb77dd06f49d6c969a80682",
+      "type": "commit",
+      "commit": "6f838f053ed09a56bcb77dd06f49d6c969a80682",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: show qualified teams and a Swiss bracket in the Worlds 2026 preview"
+    },
+    {
+      "ref": "refs/heads/feat/swiss-scenario-preview",
+      "oid": "b96c07c3f08c6c299557e62e2920a48f6f95c743",
+      "type": "commit",
+      "commit": "b96c07c3f08c6c299557e62e2920a48f6f95c743",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Swiss scenario preview plus saved local UI changes."
+    },
+    {
+      "ref": "refs/heads/feat/tournament-brackets",
+      "oid": "1634a7ccb98af16dbc81ddecf848856487092c25",
+      "type": "commit",
+      "commit": "1634a7ccb98af16dbc81ddecf848856487092c25",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: show tournaments as brackets with upper and lower lanes"
+    },
+    {
+      "ref": "refs/heads/feat/tournament-hub-foundation",
+      "oid": "03ab9c6682a206c43cc76d4b7be7832544aa662b",
+      "type": "commit",
+      "commit": "03ab9c6682a206c43cc76d4b7be7832544aa662b",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/tournament-match-forecasts",
+      "oid": "e5d57ca5f9e106431862dab6e76ec8c916786210",
+      "type": "commit",
+      "commit": "e5d57ca5f9e106431862dab6e76ec8c916786210",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/tournament-source-delivery-acceptance",
+      "oid": "a8be13c932e38927b6b264a49581469ede30e6a3",
+      "type": "commit",
+      "commit": "a8be13c932e38927b6b264a49581469ede30e6a3",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: add tournament publication fencing and delivery evidence"
+    },
+    {
+      "ref": "refs/heads/feat/unify-loading-states",
+      "oid": "7b3cc0ff75fa5f98279bde09822a8661ed426b56",
+      "type": "commit",
+      "commit": "7b3cc0ff75fa5f98279bde09822a8661ed426b56",
+      "inMain": true,
+      "featureGroup": "site",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/worlds-2022-observed-groups-47",
+      "oid": "3d7be102168831f60ee69aa20631112c3562bf16",
+      "type": "commit",
+      "commit": "3d7be102168831f60ee69aa20631112c3562bf16",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/worlds-2026-knockout-47",
+      "oid": "6e8830e8c4f4766390f8bdf6925c802b063c9de1",
+      "type": "commit",
+      "commit": "6e8830e8c4f4766390f8bdf6925c802b063c9de1",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: enumerate observed 2026 Worlds knockout outcomes"
+    },
+    {
+      "ref": "refs/heads/feat/worlds-observed-bracket-47",
+      "oid": "345648c7e35706c8b60a325b41d3681327c6a395",
+      "type": "commit",
+      "commit": "345648c7e35706c8b60a325b41d3681327c6a395",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/worlds-observed-rules-47",
+      "oid": "e07cc1a3be21a061dbf8f0c0086d4490aeca0d8b",
+      "type": "commit",
+      "commit": "e07cc1a3be21a061dbf8f0c0086d4490aeca0d8b",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/feat/worlds-simulation-47",
+      "oid": "31876f0f1147a34c59d3dc1a74a58f5c97bdb47d",
+      "type": "commit",
+      "commit": "31876f0f1147a34c59d3dc1a74a58f5c97bdb47d",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: add conditional Worlds forecasts and tournament journey"
+    },
+    {
+      "ref": "refs/heads/feat/year-partitioned-artifacts",
+      "oid": "79559dd5f8de7512065d6b3b5193baee6b600d40",
+      "type": "commit",
+      "commit": "79559dd5f8de7512065d6b3b5193baee6b600d40",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "feat: partition public ranking archives by year and bounded nodes"
+    },
+    {
+      "ref": "refs/heads/feature/product-direction",
+      "oid": "0a6bde8b323c2be01f42ceeeaab5723f385161de",
+      "type": "commit",
+      "commit": "0a6bde8b323c2be01f42ceeeaab5723f385161de",
+      "inMain": false,
+      "featureGroup": "product",
+      "goal": "Selected product-purpose and requirements documents."
+    },
+    {
+      "ref": "refs/heads/feature/ranking-engine",
+      "oid": "490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5",
+      "type": "commit",
+      "commit": "490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "Selected source-import and team-logo draft."
+    },
+    {
+      "ref": "refs/heads/feature/ranking-storage",
+      "oid": "f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6",
+      "type": "commit",
+      "commit": "f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Selected ranking publication and reference-closure draft."
+    },
+    {
+      "ref": "refs/heads/feature/rankings-interface",
+      "oid": "c12a5162ae850191c0817c7cc678691c48243633",
+      "type": "commit",
+      "commit": "c12a5162ae850191c0817c7cc678691c48243633",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "Selected chart and form-clarity draft."
+    },
+    {
+      "ref": "refs/heads/feature/repository-tooling",
+      "oid": "6973fc995a599e8b4f5e09592fe65740ded8c391",
+      "type": "commit",
+      "commit": "6973fc995a599e8b4f5e09592fe65740ded8c391",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Selected code-ownership registry draft."
+    },
+    {
+      "ref": "refs/heads/feature/rust-runtime",
+      "oid": "1cd0bffbebf398f7f8761d1de25087eec9515620",
+      "type": "commit",
+      "commit": "1cd0bffbebf398f7f8761d1de25087eec9515620",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Selected native HTTP draft, including request-target regression tests."
+    },
+    {
+      "ref": "refs/heads/feature/site-experience",
+      "oid": "e94e1827885ea83acae3e2245be0cc586a306671",
+      "type": "commit",
+      "commit": "e94e1827885ea83acae3e2245be0cc586a306671",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "Selected startup-screen and branding draft."
+    },
+    {
+      "ref": "refs/heads/feature/tournament-forecasts",
+      "oid": "b96c07c3f08c6c299557e62e2920a48f6f95c743",
+      "type": "commit",
+      "commit": "b96c07c3f08c6c299557e62e2920a48f6f95c743",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Selected Swiss scenario preview draft."
+    },
+    {
+      "ref": "refs/heads/fix/auto-select-team",
+      "oid": "fe8a8bc3f8b1554fd489d31c681b2255e3c092b6",
+      "type": "commit",
+      "commit": "fe8a8bc3f8b1554fd489d31c681b2255e3c092b6",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Add regional odds to the Worlds Swiss preview"
+    },
+    {
+      "ref": "refs/heads/fix/automatic-tournament-ingestion",
+      "oid": "01ad9031641df1416d397b3a47658507fbe6b99c",
+      "type": "commit",
+      "commit": "01ad9031641df1416d397b3a47658507fbe6b99c",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "fix(ingestion): discover and retain tournament results automatically"
+    },
+    {
+      "ref": "refs/heads/fix/benchmark-diagnostic-lifecycle-20261008",
+      "oid": "975ac6146ab72dc89d6efa2530f95a8f229e240c",
+      "type": "commit",
+      "commit": "975ac6146ab72dc89d6efa2530f95a8f229e240c",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "fix(benchmark): preserve bounded diagnostic worker failure evidence"
+    },
+    {
+      "ref": "refs/heads/fix/board-address-render-wait",
+      "oid": "b04e2b9e84ae26e863ad0e4a7fcc82e230b53ae1",
+      "type": "commit",
+      "commit": "b04e2b9e84ae26e863ad0e4a7fcc82e230b53ae1",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "test: wait for Rankings home region to render"
+    },
+    {
+      "ref": "refs/heads/fix/checkpoint-semantic-parity-80",
+      "oid": "fb7ed307ff2e00a74d29531ac2be98bdfc0a78c8",
+      "type": "commit",
+      "commit": "fb7ed307ff2e00a74d29531ac2be98bdfc0a78c8",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "fix: compare checkpoint semantic storage identities"
+    },
+    {
+      "ref": "refs/heads/fix/ci-affected-paths-fixture",
+      "oid": "42bf586c4ea5b69be10faf0b6085c9fd4240cf61",
+      "type": "commit",
+      "commit": "42bf586c4ea5b69be10faf0b6085c9fd4240cf61",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "isolate Git history fixture [skip ci]"
+    },
+    {
+      "ref": "refs/heads/fix/ci-affected-paths-timeouts",
+      "oid": "42bf586c4ea5b69be10faf0b6085c9fd4240cf61",
+      "type": "commit",
+      "commit": "42bf586c4ea5b69be10faf0b6085c9fd4240cf61",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "test: isolate Git history fixture"
+    },
+    {
+      "ref": "refs/heads/fix/ci-affected-test-contention",
+      "oid": "65749ff73a401959d9bdc5b1e8e4001ce4464e0e",
+      "type": "commit",
+      "commit": "65749ff73a401959d9bdc5b1e8e4001ce4464e0e",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/ci-focused-test-scripts",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/cup-source-reconciliation",
+      "oid": "31bb67ed22a31505b2f95c7afcc14107c5a87895",
+      "type": "commit",
+      "commit": "31bb67ed22a31505b2f95c7afcc14107c5a87895",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "fix: retain Oracle cup games in ranked match history"
+    },
+    {
+      "ref": "refs/heads/fix/design-system-consistency",
+      "oid": "de03ff3d10fd1a4f106006998461ac091fb4f831",
+      "type": "commit",
+      "commit": "de03ff3d10fd1a4f106006998461ac091fb4f831",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "fix(ui): apply the design system consistently"
+    },
+    {
+      "ref": "refs/heads/fix/durable-r3-launch",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/fixture-reset-diagnosis",
+      "oid": "219a0992232eedea490f28696c1d1d4a334e8dc0",
+      "type": "commit",
+      "commit": "219a0992232eedea490f28696c1d1d4a334e8dc0",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Observe origin fixture request and socket lifecycle"
+    },
+    {
+      "ref": "refs/heads/fix/incremental-gate-stability",
+      "oid": "059215ced57ba3eb4d73773dce3fb4aa11484d08",
+      "type": "commit",
+      "commit": "059215ced57ba3eb4d73773dce3fb4aa11484d08",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "fix(benchmark): gate incremental compute in runner-calibration units"
+    },
+    {
+      "ref": "refs/heads/fix/incremental-ledger-digest-reuse",
+      "oid": "dc4b9d1fbbc710b9fc7fd54666b3c71a4823c30e",
+      "type": "commit",
+      "commit": "dc4b9d1fbbc710b9fc7fd54666b3c71a4823c30e",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "perf: avoid redundant incremental ledger and checkpoint work"
+    },
+    {
+      "ref": "refs/heads/fix/incremental-refresh-memory-peak",
+      "oid": "9390d4cecb53c71383e3be1905ff38dacd363861",
+      "type": "commit",
+      "commit": "9390d4cecb53c71383e3be1905ff38dacd363861",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/labels-accessibility-116",
+      "oid": "4ec8913227e91bba1bd5bf684af6e3ca38ce7f33",
+      "type": "commit",
+      "commit": "4ec8913227e91bba1bd5bf684af6e3ca38ce7f33",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "fix: clarify ranking labels and improve drawer accessibility (#116)"
+    },
+    {
+      "ref": "refs/heads/fix/layout-111",
+      "oid": "d8d085b4c7ebe90133aef9f4569cb21b53a2a238",
+      "type": "commit",
+      "commit": "d8d085b4c7ebe90133aef9f4569cb21b53a2a238",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "fix: keep header search off the nav and team names readable"
+    },
+    {
+      "ref": "refs/heads/fix/layout-narrative-paths",
+      "oid": "c2a87aebf3cb8fb8e09c82cdc79f64c14613ccd3",
+      "type": "commit",
+      "commit": "c2a87aebf3cb8fb8e09c82cdc79f64c14613ccd3",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "reject narrative audit and review directories"
+    },
+    {
+      "ref": "refs/heads/fix/ledger-recovery-budget",
+      "oid": "41b09fd9a88554e85a4dc0e1e69422a78d447b1c",
+      "type": "commit",
+      "commit": "41b09fd9a88554e85a4dc0e1e69422a78d447b1c",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "fix: unblock schedule ledger recovery at production artifact sizes"
+    },
+    {
+      "ref": "refs/heads/fix/matches-address-and-labels-124-125-20261013",
+      "oid": "69d5db0b72d3d70b3e2f81e7fd755e4347678df7",
+      "type": "commit",
+      "commit": "69d5db0b72d3d70b3e2f81e7fd755e4347678df7",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "fix: preserve Matches page addresses and distinguish event choices"
+    },
+    {
+      "ref": "refs/heads/fix/minio-svcacct-admin-account",
+      "oid": "4483456ac7eeb17f98b64c00b58c5e3a3e1b6ec4",
+      "type": "commit",
+      "commit": "4483456ac7eeb17f98b64c00b58c5e3a3e1b6ec4",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix MinIO fixture service account parent argument"
+    },
+    {
+      "ref": "refs/heads/fix/native-contract-ci-types",
+      "oid": "e8bca4bc433711b449a4eeb8d5a5f605d3c21bd9",
+      "type": "commit",
+      "commit": "e8bca4bc433711b449a4eeb8d5a5f605d3c21bd9",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Saved TypeScript type repairs for native HTTP tests."
+    },
+    {
+      "ref": "refs/heads/fix/native-header-limit",
+      "oid": "1d11ac1c85499a38f2d13f83f62467ce2f86299f",
+      "type": "commit",
+      "commit": "1d11ac1c85499a38f2d13f83f62467ce2f86299f",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix native HTTP request header size limit"
+    },
+    {
+      "ref": "refs/heads/fix/native-origin-fixture-types",
+      "oid": "069022e54b5ca76e4537b3da36eafeb8f3548226",
+      "type": "commit",
+      "commit": "069022e54b5ca76e4537b3da36eafeb8f3548226",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix SDK command inference in origin denial fixture"
+    },
+    {
+      "ref": "refs/heads/fix/native-origin-typecheck",
+      "oid": "3e11e28099ff452f0375bc12f17a55b36e4d6bf4",
+      "type": "commit",
+      "commit": "3e11e28099ff452f0375bc12f17a55b36e4d6bf4",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix type narrowing in origin transport observer test"
+    },
+    {
+      "ref": "refs/heads/fix/ongoing-split-checkpoint",
+      "oid": "3bdcbc1c2da3253bb3ab3cbd2ca1bb5149df04fc",
+      "type": "commit",
+      "commit": "3bdcbc1c2da3253bb3ab3cbd2ca1bb5149df04fc",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/oracle-unpaired-unicode",
+      "oid": "886c366011df714ce0adbc0ef98702faad1ac7fc",
+      "type": "commit",
+      "commit": "886c366011df714ce0adbc0ef98702faad1ac7fc",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix published contract oracle decoding with Node semantics"
+    },
+    {
+      "ref": "refs/heads/fix/overlapping-schedule-ledger",
+      "oid": "96b5a6fc662956417744062934c4cb44ac752741",
+      "type": "commit",
+      "commit": "96b5a6fc662956417744062934c4cb44ac752741",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/panels-115",
+      "oid": "f5e1d9a6da02bf11b80a8bc10413cf3e212bcd4d",
+      "type": "commit",
+      "commit": "f5e1d9a6da02bf11b80a8bc10413cf3e212bcd4d",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "fix: correct Rankings What changed, Record sort and tournament filter (#115)"
+    },
+    {
+      "ref": "refs/heads/fix/pi-index-branding",
+      "oid": "340bcdfcb3bd1026aadab65957aef888c639445a",
+      "type": "commit",
+      "commit": "340bcdfcb3bd1026aadab65957aef888c639445a",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "Use approved pi branding and remove obsolete alternatives"
+    },
+    {
+      "ref": "refs/heads/fix/public-artifact-url-validation",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/published-oracle-golden",
+      "oid": "cd15d42a5fa684c0e42edba2ee920a2205728b7a",
+      "type": "commit",
+      "commit": "cd15d42a5fa684c0e42edba2ee920a2205728b7a",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix published contract oracle with shared canonical text"
+    },
+    {
+      "ref": "refs/heads/fix/r3-browser-evidence",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/r3-ci-focused-test-scripts-v1",
+      "oid": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "type": "commit",
+      "commit": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Move focused contract checks into package scripts [skip ci]"
+    },
+    {
+      "ref": "refs/heads/fix/r3-verification-driver",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/ranking-artifact-url-validation",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/ranking-chart-and-form-clarity",
+      "oid": "c12a5162ae850191c0817c7cc678691c48243633",
+      "type": "commit",
+      "commit": "c12a5162ae850191c0817c7cc678691c48243633",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "Saved ranking/history chart and form-clarity changes."
+    },
+    {
+      "ref": "refs/heads/fix/raw-http-target-capture",
+      "oid": "6f6517a5aee70553c911d8e5f967dd6c14c40ff4",
+      "type": "commit",
+      "commit": "6f6517a5aee70553c911d8e5f967dd6c14c40ff4",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "fix tests: end first-byte observation timers and listeners"
+    },
+    {
+      "ref": "refs/heads/fix/reader-connection-isolation",
+      "oid": "221389e4d15e95a5a0857c73baed6534d4a00fcf",
+      "type": "commit",
+      "commit": "221389e4d15e95a5a0857c73baed6534d4a00fcf",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Isolate origin fixture reader connections"
+    },
+    {
+      "ref": "refs/heads/fix/refresh-docker-context",
+      "oid": "806a4ee2f9411bb57b397112dd3fcff5e77edc85",
+      "type": "commit",
+      "commit": "806a4ee2f9411bb57b397112dd3fcff5e77edc85",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Remove retired ranking code and correct trajectory evidence text"
+    },
+    {
+      "ref": "refs/heads/fix/refresh-manifest-budget",
+      "oid": "04fa794fd7b5cb4f4e7fa39913b0f283599e9c66",
+      "type": "commit",
+      "commit": "04fa794fd7b5cb4f4e7fa39913b0f283599e9c66",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "fix: unblock refreshes with larger ranking manifests"
+    },
+    {
+      "ref": "refs/heads/fix/repeat-native-policy-proof",
+      "oid": "0651be97b02118a2754b3984e2dfa120b2d771e7",
+      "type": "commit",
+      "commit": "0651be97b02118a2754b3984e2dfa120b2d771e7",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Run isolated native origin policy proof twice"
+    },
+    {
+      "ref": "refs/heads/fix/report-comparison-clarity",
+      "oid": "b5eaa9b29598e39484a2f4e09a026eb28983d9fa",
+      "type": "commit",
+      "commit": "b5eaa9b29598e39484a2f4e09a026eb28983d9fa",
+      "inMain": true,
+      "featureGroup": "board",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/report-match-context",
+      "oid": "8586c0816f986d0eb95b02213137a2499d62694a",
+      "type": "commit",
+      "commit": "8586c0816f986d0eb95b02213137a2499d62694a",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/report-scope-and-metric-bases",
+      "oid": "e5f85be8a8b72c99193c28362cc656cbdaf374d7",
+      "type": "commit",
+      "commit": "e5f85be8a8b72c99193c28362cc656cbdaf374d7",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/season-2026-match-audit",
+      "oid": "48ad111e9c2df2b665c3897e9f2c37aff894a07e",
+      "type": "commit",
+      "commit": "48ad111e9c2df2b665c3897e9f2c37aff894a07e",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "fix: audit 2026 match sources and correct ingest identities"
+    },
+    {
+      "ref": "refs/heads/fix/season-2026-patch-import",
+      "oid": "2adb9df00ad17b227919d69ce2e798a4ec66f34c",
+      "type": "commit",
+      "commit": "2adb9df00ad17b227919d69ce2e798a4ec66f34c",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "restore trailing zeros only for calendar Leaguepedia patches [skip ci]"
+    },
+    {
+      "ref": "refs/heads/fix/season-2026-series-slots",
+      "oid": "dcf70f3ca2fa68d5c7e8ac738c5e6e434ad14c0f",
+      "type": "commit",
+      "commit": "dcf70f3ca2fa68d5c7e8ac738c5e6e434ad14c0f",
+      "inMain": false,
+      "featureGroup": "engine",
+      "goal": "inherit unique official identity within explicit source series [skip ci]"
+    },
+    {
+      "ref": "refs/heads/fix/sources-panel-119",
+      "oid": "4e5b01183467e1b2e61d0c51e8579b75866fc1b4",
+      "type": "commit",
+      "commit": "4e5b01183467e1b2e61d0c51e8579b75866fc1b4",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "fix: show data freshness, not provider errors, in Data and sources (#119)"
+    },
+    {
+      "ref": "refs/heads/fix/swiss-draw-and-cls",
+      "oid": "a992829625bb20ecb80b06c557e4f47f60afb024",
+      "type": "commit",
+      "commit": "a992829625bb20ecb80b06c557e4f47f60afb024",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Randomize Swiss draws and stabilize match history layout"
+    },
+    {
+      "ref": "refs/heads/fix/swiss-draw-buttons",
+      "oid": "547198fcd91001540326da5884738c304e2d223e",
+      "type": "commit",
+      "commit": "547198fcd91001540326da5884738c304e2d223e",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "Make Swiss draw controls look like buttons"
+    },
+    {
+      "ref": "refs/heads/fix/team-previews-demacia-cup",
+      "oid": "610f30e47fafa8e6f7c082a3f153974a4378242c",
+      "type": "commit",
+      "commit": "610f30e47fafa8e6f7c082a3f153974a4378242c",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "fix: align team marks, add previews, and restore October coverage"
+    },
+    {
+      "ref": "refs/heads/fix/trajectory-date-labels",
+      "oid": "6aa62c82c855be2f04309a1bc6efda0e97014fba",
+      "type": "commit",
+      "commit": "6aa62c82c855be2f04309a1bc6efda0e97014fba",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "cover stable same-day roster selection"
+    },
+    {
+      "ref": "refs/heads/fix/url-state-114",
+      "oid": "e91fd466b2bf438c86a8426730028a284cf99871",
+      "type": "commit",
+      "commit": "e91fd466b2bf438c86a8426730028a284cf99871",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "fix: keep the Rankings board in sync with the URL hash (#114)"
+    },
+    {
+      "ref": "refs/heads/fix/v4-classifier-failopen",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/verification-driver-guards",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/fix/worlds-knockout-probabilities-75",
+      "oid": "b45b14455b981c35cc5ecaa947d1e0c89549845c",
+      "type": "commit",
+      "commit": "b45b14455b981c35cc5ecaa947d1e0c89549845c",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "fix: reject invalid knockout forecast probabilities"
+    },
+    {
+      "ref": "refs/heads/integrate/r3-r1-347fdb8b",
+      "oid": "5aea5041e3366ade61deb29bd18c369a957406f7",
+      "type": "commit",
+      "commit": "5aea5041e3366ade61deb29bd18c369a957406f7",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "derive the ranking board and comparisons from one result"
+    },
+    {
+      "ref": "refs/heads/main",
+      "oid": "4575556e0456b188c497b0f8ca33409c9c78a513",
+      "type": "commit",
+      "commit": "4575556e0456b188c497b0f8ca33409c9c78a513",
+      "inMain": true,
+      "featureGroup": "main",
+      "goal": "Current main line."
+    },
+    {
+      "ref": "refs/heads/merge/qa-docs-108-20261013",
+      "oid": "eabead64770142f0a2bfb97848e5d947a4a00156",
+      "type": "commit",
+      "commit": "eabead64770142f0a2bfb97848e5d947a4a00156",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "Align verification guides with merged Rankings URL fix"
+    },
+    {
+      "ref": "refs/heads/merge/qa-integration-20261013",
+      "oid": "8a3f326d1bf60882fe5e3c3245f7528409efecff",
+      "type": "commit",
+      "commit": "8a3f326d1bf60882fe5e3c3245f7528409efecff",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "Qa integration."
+    },
+    {
+      "ref": "refs/heads/perf/smooth-navigation-20261015",
+      "oid": "15b07e158948d4bd67d76a688dd79299f5aee66c",
+      "type": "commit",
+      "commit": "15b07e158948d4bd67d76a688dd79299f5aee66c",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "perf: make loading and navigation faster and steadier"
+    },
+    {
+      "ref": "refs/heads/perf/snappy-navigation-20261013",
+      "oid": "7ef89fe5401c648ac0207b5d9c3325606ed265d8",
+      "type": "commit",
+      "commit": "7ef89fe5401c648ac0207b5d9c3325606ed265d8",
+      "inMain": true,
+      "featureGroup": "site",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/redesign/clear-board",
+      "oid": "7ec98ef7a0693d4cadbd29f8edc207c7855653cc",
+      "type": "commit",
+      "commit": "7ec98ef7a0693d4cadbd29f8edc207c7855653cc",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "fix: finish ranking redesign follow-ups"
+    },
+    {
+      "ref": "refs/heads/refactor/digest-object-identity",
+      "oid": "42ca87688851d1afbb01298fd17b64b428ac791c",
+      "type": "commit",
+      "commit": "42ca87688851d1afbb01298fd17b64b428ac791c",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "fix(storage): separate object identity from gzip transport"
+    },
+    {
+      "ref": "refs/heads/refactor/domain-ownership-registry",
+      "oid": "6973fc995a599e8b4f5e09592fe65740ded8c391",
+      "type": "commit",
+      "commit": "6973fc995a599e8b4f5e09592fe65740ded8c391",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Saved code-ownership rules and registry changes."
+    },
+    {
+      "ref": "refs/heads/refactor/league-platform-overhaul",
+      "oid": "a078d5e4a794e6e7ae8c0c834975ecc9ded40562",
+      "type": "commit",
+      "commit": "a078d5e4a794e6e7ae8c0c834975ecc9ded40562",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Preserve runtime graph edges and expose complete scenario operations"
+    },
+    {
+      "ref": "refs/heads/refactor/mistake-prevention-coordinator-20261015",
+      "oid": "09872909af4a8e158b10668fee1ec5d232d3605f",
+      "type": "commit",
+      "commit": "09872909af4a8e158b10668fee1ec5d232d3605f",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Mistake prevention coordinator."
+    },
+    {
+      "ref": "refs/heads/refactor/native-http-contract",
+      "oid": "5e7626db585362347daeeb4bb1f3ae55bcc3aa4e",
+      "type": "commit",
+      "commit": "5e7626db585362347daeeb4bb1f3ae55bcc3aa4e",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Saved native HTTP contract refactor and request tests."
+    },
+    {
+      "ref": "refs/heads/refactor/public-artifact-references",
+      "oid": "9c3733a5f409a380db50bc618f67bd2f564e57c0",
+      "type": "commit",
+      "commit": "9c3733a5f409a380db50bc618f67bd2f564e57c0",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "refactor(artifacts): share logical reference traversal"
+    },
+    {
+      "ref": "refs/heads/refactor/public-output-closure",
+      "oid": "f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6",
+      "type": "commit",
+      "commit": "f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Saved ranking publication and reference-closure changes."
+    },
+    {
+      "ref": "refs/heads/refactor/public-output-closure-1",
+      "oid": "893deaea9ee06ff5d8fb8898f149b8f35aa72fbc",
+      "type": "commit",
+      "commit": "893deaea9ee06ff5d8fb8898f149b8f35aa72fbc",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "refactor(public-artifacts): enforce public reference closure"
+    },
+    {
+      "ref": "refs/heads/refactor/pure-contracts",
+      "oid": "a2444693d15f67d3357f911e6d08df420a0bd999",
+      "type": "commit",
+      "commit": "a2444693d15f67d3357f911e6d08df420a0bd999",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix published contract oracle with shared canonical text"
+    },
+    {
+      "ref": "refs/heads/refactor/ranking-board-review",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "board",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/refactor/remove-proven-dead-code",
+      "oid": "16f0aeeb1a853beb38e6a58f9931de675475d382",
+      "type": "commit",
+      "commit": "16f0aeeb1a853beb38e6a58f9931de675475d382",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Remove unused display helpers"
+    },
+    {
+      "ref": "refs/heads/refactor/repository-overhaul",
+      "oid": "46d3992e61a3456db6f85c1923e1182666bdf70b",
+      "type": "commit",
+      "commit": "46d3992e61a3456db6f85c1923e1182666bdf70b",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Complete tool caller updates and identify the pinned developer entry"
+    },
+    {
+      "ref": "refs/heads/refactor/repository-overhaul-1",
+      "oid": "dbc88d481ac85ea6c2f3dfa9697f280ee63a2e05",
+      "type": "commit",
+      "commit": "dbc88d481ac85ea6c2f3dfa9697f280ee63a2e05",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Remove approved comment narration"
+    },
+    {
+      "ref": "refs/heads/refactor/repository-overhaul-2",
+      "oid": "2bb0dd60f4ac1001bcae8c8262684311d9b5b8fb",
+      "type": "commit",
+      "commit": "2bb0dd60f4ac1001bcae8c8262684311d9b5b8fb",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Saved repository reorganization and verification changes."
+    },
+    {
+      "ref": "refs/heads/refactor/repository-overhaul-20261017",
+      "oid": "589334722a4c304aa9551732ef1808db56bafe24",
+      "type": "commit",
+      "commit": "589334722a4c304aa9551732ef1808db56bafe24",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Repository overhaul with later native backend and test work."
+    },
+    {
+      "ref": "refs/heads/refactor/repository-structure",
+      "oid": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "type": "commit",
+      "commit": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/refactor/repository-structure-1",
+      "oid": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "type": "commit",
+      "commit": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/repair/r1-b1-831776fb-v2",
+      "oid": "9c3733a5f409a380db50bc618f67bd2f564e57c0",
+      "type": "commit",
+      "commit": "9c3733a5f409a380db50bc618f67bd2f564e57c0",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "validate required manifest references at load"
+    },
+    {
+      "ref": "refs/heads/repair/r1-b1-9e9bf89c",
+      "oid": "38eb662aad0dfdcae22cc233e613b36d650e2a70",
+      "type": "commit",
+      "commit": "38eb662aad0dfdcae22cc233e613b36d650e2a70",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "Saved artifact-reference and validation repairs."
+    },
+    {
+      "ref": "refs/heads/review/ci-script-extraction",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/external-generation-urls",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/local-babysit-20261013",
+      "oid": "9c685d9d5e5714150429412625bda62d525bd123",
+      "type": "commit",
+      "commit": "9c685d9d5e5714150429412625bda62d525bd123",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/oracle-cup-consumers",
+      "oid": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "type": "commit",
+      "commit": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/pr138",
+      "oid": "0b908468cb56c79dff9a78b54207fc9e192def46",
+      "type": "commit",
+      "commit": "0b908468cb56c79dff9a78b54207fc9e192def46",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "run focused contract tests only through verify [skip ci]"
+    },
+    {
+      "ref": "refs/heads/review/pr141",
+      "oid": "893deaea9ee06ff5d8fb8898f149b8f35aa72fbc",
+      "type": "commit",
+      "commit": "893deaea9ee06ff5d8fb8898f149b8f35aa72fbc",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "drop the duplicate reference closure step [skip ci]"
+    },
+    {
+      "ref": "refs/heads/review/r1-decision-trail",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/r1-repair-proof",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/r3-board-semantics",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/r3-evidence-instrument",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/r3-receipt-recovery",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/r3-verification-drivers",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/r3-workflow-integration",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/required-artifact-closure",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/review/required-closure",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/feat/ranking-outcome-contract-matrix",
+      "oid": "068e2ff65ca214c1f38e8d0eb1778a23b47f6ee3",
+      "type": "commit",
+      "commit": "068e2ff65ca214c1f38e8d0eb1778a23b47f6ee3",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/fix-team-shorthands-and-logos",
+      "oid": "1f07b21f0de905ed00a9dd08a254e43b8a3e139c",
+      "type": "commit",
+      "commit": "1f07b21f0de905ed00a9dd08a254e43b8a3e139c",
+      "inMain": false,
+      "featureGroup": "site",
+      "goal": "Add team branding sync and logo assets"
+    },
+    {
+      "ref": "refs/heads/t3code/lol-rankings-pipeline-restart",
+      "oid": "5a781feff40871f27fe53326edfc1245f2d660c9",
+      "type": "commit",
+      "commit": "5a781feff40871f27fe53326edfc1245f2d660c9",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-0642bafa4a094c70",
+      "oid": "ab374af042d9b5c82788d69f56af762fec7c3419",
+      "type": "commit",
+      "commit": "ab374af042d9b5c82788d69f56af762fec7c3419",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: enumerate offline 2026 Worlds Play-In outcomes"
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-53291fc90d864130",
+      "oid": "ad046c2b55bfc76485142cd7ad7ae293769551f6",
+      "type": "commit",
+      "commit": "ad046c2b55bfc76485142cd7ad7ae293769551f6",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-6856957b40d84189",
+      "oid": "d266f73e81fe71b5fb1f2b7c61f8386aee15aea2",
+      "type": "commit",
+      "commit": "d266f73e81fe71b5fb1f2b7c61f8386aee15aea2",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-7109ebdc5c7d402d",
+      "oid": "6f5d50aa21b4afeaa96628813202cb4c5a2f7f43",
+      "type": "commit",
+      "commit": "6f5d50aa21b4afeaa96628813202cb4c5a2f7f43",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-7a8c36e18c744bf4",
+      "oid": "40cc29fb30e7e91c87428a24d0cd5655f6e09ef4",
+      "type": "commit",
+      "commit": "40cc29fb30e7e91c87428a24d0cd5655f6e09ef4",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-815f68d2621943ed",
+      "oid": "133393e4b8d811b79689afc76cf43376f4e9652f",
+      "type": "commit",
+      "commit": "133393e4b8d811b79689afc76cf43376f4e9652f",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-975e72a88d20480d",
+      "oid": "d266f73e81fe71b5fb1f2b7c61f8386aee15aea2",
+      "type": "commit",
+      "commit": "d266f73e81fe71b5fb1f2b7c61f8386aee15aea2",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-ad954e918ec94270",
+      "oid": "cc70fe02616b6f1624fee2e960b94e7e40b5c97f",
+      "type": "commit",
+      "commit": "cc70fe02616b6f1624fee2e960b94e7e40b5c97f",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-b3825a8064164db0",
+      "oid": "6d261c1b12032e83db02dd39e6144dc43f1d41c2",
+      "type": "commit",
+      "commit": "6d261c1b12032e83db02dd39e6144dc43f1d41c2",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-c67c85ce695f4573",
+      "oid": "21dd8c7f0a873508a06896e03201ec580c52ff41",
+      "type": "commit",
+      "commit": "21dd8c7f0a873508a06896e03201ec580c52ff41",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-d94d8845a7c94eeb",
+      "oid": "9354c42dee231ba9880118823dc33d5461690b28",
+      "type": "commit",
+      "commit": "9354c42dee231ba9880118823dc33d5461690b28",
+      "inMain": false,
+      "featureGroup": "tournaments",
+      "goal": "feat: add offline forecast metric and paired-baseline fixtures"
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-de0fa39f087f47b6",
+      "oid": "6f5d50aa21b4afeaa96628813202cb4c5a2f7f43",
+      "type": "commit",
+      "commit": "6f5d50aa21b4afeaa96628813202cb4c5a2f7f43",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/t3code/mcp-f8ea25caedef40fa",
+      "oid": "7ec98ef7a0693d4cadbd29f8edc207c7855653cc",
+      "type": "commit",
+      "commit": "7ec98ef7a0693d4cadbd29f8edc207c7855653cc",
+      "inMain": false,
+      "featureGroup": "board",
+      "goal": "Follow-up fixes for the ranking redesign."
+    },
+    {
+      "ref": "refs/heads/test/bounded-archive-2025",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/diagnose-origin-iam-fixtures",
+      "oid": "455b2eb7f6667ec9befcb66695e7552ebb819c20",
+      "type": "commit",
+      "commit": "455b2eb7f6667ec9befcb66695e7552ebb819c20",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Expose bounded SDK diagnostics for failed origin IAM assertions"
+    },
+    {
+      "ref": "refs/heads/test/gzip-consumer-byte-limits",
+      "oid": "a7e42f77247e418175dc3f1a61ab9bedb8aa334b",
+      "type": "commit",
+      "commit": "a7e42f77247e418175dc3f1a61ab9bedb8aa334b",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "test: cover gzip consumer byte limits"
+    },
+    {
+      "ref": "refs/heads/test/journey-trunk-control",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/legacy-history-hydration",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/live-reader-lane10",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/live-reader-r1-lane10",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/live-reference-reader",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/native-http-target-regressions",
+      "oid": "512c9547809b22c4fac893bd8382c9a048044b89",
+      "type": "commit",
+      "commit": "512c9547809b22c4fac893bd8382c9a048044b89",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Saved native HTTP request-target regression tests."
+    },
+    {
+      "ref": "refs/heads/test/prepare-source-verification",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/preserve-citation-provenance",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/r1-lane8-snapshots",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/r1-live-verification",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/rankings-history-parity",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/trunk-baseline-receipts",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/verify-artifact-resolution",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "storage",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/verify-movement-shard-url",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/verify-player-directory",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/verify-r1-live-reader",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/verify-scope-probe",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/verify-tournament-movement",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tournaments",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/test/warmup-trunk-verification",
+      "oid": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "type": "commit",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/heads/verification/alignment-20261011",
+      "oid": "eabead64770142f0a2bfb97848e5d947a4a00156",
+      "type": "commit",
+      "commit": "eabead64770142f0a2bfb97848e5d947a4a00156",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "docs: split LoL Esports verification by feature"
+    },
+    {
+      "ref": "refs/heads/verification/coverage-20261004",
+      "oid": "9417f5fed12fb48a834662d2a6864a2cc0b6f8c8",
+      "type": "commit",
+      "commit": "9417f5fed12fb48a834662d2a6864a2cc0b6f8c8",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "docs: add LoL Esports verification procedure"
+    },
+    {
+      "ref": "refs/heads/verify/deep-test-audit-20261018",
+      "oid": "806a4ee2f9411bb57b397112dd3fcff5e77edc85",
+      "type": "commit",
+      "commit": "806a4ee2f9411bb57b397112dd3fcff5e77edc85",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Remove retired ranking code and correct trajectory evidence text"
+    },
+    {
+      "ref": "refs/heads/verify/native-artifact-contract-20261018",
+      "oid": "1d11ac1c85499a38f2d13f83f62467ce2f86299f",
+      "type": "commit",
+      "commit": "1d11ac1c85499a38f2d13f83f62467ce2f86299f",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix native HTTP request header size limit"
+    },
+    {
+      "ref": "refs/heads/verify/native-origin-fixture-20261018",
+      "oid": "e5a3216abaf2fbcc641e743c7fc340d23fc416a4",
+      "type": "commit",
+      "commit": "e5a3216abaf2fbcc641e743c7fc340d23fc416a4",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix type narrowing in origin transport observer test"
+    },
+    {
+      "ref": "refs/heads/verify/native-pure-contracts-20261018",
+      "oid": "a2444693d15f67d3357f911e6d08df420a0bd999",
+      "type": "commit",
+      "commit": "a2444693d15f67d3357f911e6d08df420a0bd999",
+      "inMain": false,
+      "featureGroup": "runtime",
+      "goal": "Fix published contract oracle with shared canonical text"
+    },
+    {
+      "ref": "refs/heads/verify/r2-exact-source-v4-1166bb3e",
+      "oid": "50f840966572b3fdf5b7180a32c2baedea86fe72",
+      "type": "commit",
+      "commit": "50f840966572b3fdf5b7180a32c2baedea86fe72",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "publish R2 draft [skip ci]"
+    },
+    {
+      "ref": "refs/heads/verify/r3-exact-source-v1-14557610",
+      "oid": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "type": "commit",
+      "commit": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Move focused contract checks into package scripts [skip ci]"
+    },
+    {
+      "ref": "refs/heads/wip/preserve-before-doc-fix-20260814",
+      "oid": "3ef4f14d3a09d852a1905bdccecaafbad1d98fd1",
+      "type": "commit",
+      "commit": "3ef4f14d3a09d852a1905bdccecaafbad1d98fd1",
+      "inMain": false,
+      "featureGroup": "tooling",
+      "goal": "Earlier ignore-rule cleanup checkpoint."
+    },
+    {
+      "ref": "refs/heads/work/ranking-rollout-evidence",
+      "oid": "942a596fabbb06fc08e4dde2a25f9caaa41c3526",
+      "type": "commit",
+      "commit": "942a596fabbb06fc08e4dde2a25f9caaa41c3526",
+      "inMain": false,
+      "featureGroup": "storage",
+      "goal": "add ranking rollout evidence gates"
+    },
+    {
+      "ref": "refs/heads/worktree-agent-aae481aa8c13d8501",
+      "oid": "4c3d4dd4f15d8e9995a3593cb3650985924b6005",
+      "type": "commit",
+      "commit": "4c3d4dd4f15d8e9995a3593cb3650985924b6005",
+      "inMain": true,
+      "featureGroup": "tooling",
+      "goal": "Completed checkpoint; its complete commit history is already in main."
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/design/board-scope-and-compare-ui",
+      "oid": "f6b1ec7f45bbcea9a5470303abc0e4a65b43f144",
+      "type": "tag",
+      "commit": "18e16048b8d9f2f73eeeb7f0ac4c0f362cd6e0e3",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/feat/ranking-board-universe",
+      "oid": "74cd2f9dd1289828b222725cfc30341496cd271d",
+      "type": "tag",
+      "commit": "bcf123c0dde5b34ed37b8e29d02404d1d9ae4c16",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/feat/shared-ranking-board",
+      "oid": "134f0bab0d04401685873f5793fad3d8a068ef92",
+      "type": "tag",
+      "commit": "0ce9712ee1a43639c0cca0fdc310261be480beee",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/fix/board-address-render-wait",
+      "oid": "4f7382f351cfdc3b0eb3e25414a07209f7716381",
+      "type": "tag",
+      "commit": "b04e2b9e84ae26e863ad0e4a7fcc82e230b53ae1",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/fix/ranking-chart-and-form-clarity",
+      "oid": "bc568d59d3590fd5943a1b5b42cb7f1f584a01e0",
+      "type": "tag",
+      "commit": "c12a5162ae850191c0817c7cc678691c48243633",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/fix/refresh-docker-context",
+      "oid": "2448c73346090a4436b1d1540009bdb0bea3da4a",
+      "type": "tag",
+      "commit": "806a4ee2f9411bb57b397112dd3fcff5e77edc85",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/fix/trajectory-date-labels",
+      "oid": "d3eb29c43c45192903aafceece8e02bd700baf36",
+      "type": "tag",
+      "commit": "6aa62c82c855be2f04309a1bc6efda0e97014fba",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/fix/url-state-114",
+      "oid": "ae6a8bf796d01ee675ecffb1d260e3facb2215c3",
+      "type": "tag",
+      "commit": "e91fd466b2bf438c86a8426730028a284cf99871",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/integrate/r3-r1-347fdb8b",
+      "oid": "8423ae95fd2fc9943af6ce77419d96824f4843a4",
+      "type": "tag",
+      "commit": "5aea5041e3366ade61deb29bd18c369a957406f7",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/merge/qa-docs-108-20261013",
+      "oid": "6e5762f76a1324de5fcdcdde548ad33149b4f34c",
+      "type": "tag",
+      "commit": "eabead64770142f0a2bfb97848e5d947a4a00156",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/merge/qa-integration-20261013",
+      "oid": "56f09089345e09ee615e4ac65dc9112bdfbdf02a",
+      "type": "tag",
+      "commit": "8a3f326d1bf60882fe5e3c3245f7528409efecff",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/redesign/clear-board",
+      "oid": "b143f81bbab56ac99d6f6048c5d644dbd149ba4e",
+      "type": "tag",
+      "commit": "7ec98ef7a0693d4cadbd29f8edc207c7855653cc",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/refactor/repository-overhaul-20261017",
+      "oid": "75d7f030fa76cefb211235ae903e06e4082cf502",
+      "type": "tag",
+      "commit": "589334722a4c304aa9551732ef1808db56bafe24",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/review/pr138",
+      "oid": "7da3b2a1f898ae32a35ff74b389234273c03666b",
+      "type": "tag",
+      "commit": "0b908468cb56c79dff9a78b54207fc9e192def46",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/t3code/mcp-f8ea25caedef40fa",
+      "oid": "99c892dd84e6325d6c96c325774723e43f2e7f97",
+      "type": "tag",
+      "commit": "7ec98ef7a0693d4cadbd29f8edc207c7855653cc",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/board/verify/deep-test-audit-20261018",
+      "oid": "55696ffb28f443ac51738d90097ec8c973cf11f2",
+      "type": "tag",
+      "commit": "806a4ee2f9411bb57b397112dd3fcff5e77edc85",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/backup/lol-icons-demacia-20261019",
+      "oid": "4084a7fb492457f8e31577b16cf4d6bdaf188263",
+      "type": "tag",
+      "commit": "490f0ac16a7df2b41f7a8500ca9ea5ed1967d7f5",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/deliver/pr83-calibration-20261007",
+      "oid": "296446753820743300a209eb908d12a8c42ed341",
+      "type": "tag",
+      "commit": "059215ced57ba3eb4d73773dce3fb4aa11484d08",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/feat/ranking-accuracy",
+      "oid": "69a3494bb6d80969e52c847c7b59710e38afa265",
+      "type": "tag",
+      "commit": "f721aa2530ea9640ad24af230f9f82be3eff8379",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/feat/ranking-source-authority",
+      "oid": "effed5d40dfb29fa05b0d2e898a1165824df036d",
+      "type": "tag",
+      "commit": "e9f0249439921a1a2416536e5a03e54d460a4d04",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/fix/cup-source-reconciliation",
+      "oid": "1ce37c01ff33b3823d4ae82287dbd850766b77e0",
+      "type": "tag",
+      "commit": "31bb67ed22a31505b2f95c7afcc14107c5a87895",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/fix/incremental-gate-stability",
+      "oid": "9a00dc9623dfbfa250fde48c3ee85c1153cb396f",
+      "type": "tag",
+      "commit": "059215ced57ba3eb4d73773dce3fb4aa11484d08",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/fix/season-2026-match-audit",
+      "oid": "67fc063233a22b742e2fc16650306af4bbe5a9a8",
+      "type": "tag",
+      "commit": "48ad111e9c2df2b665c3897e9f2c37aff894a07e",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/fix/season-2026-patch-import",
+      "oid": "505e79c6eedffbb36c14fae90c625b4285bd81a3",
+      "type": "tag",
+      "commit": "2adb9df00ad17b227919d69ce2e798a4ec66f34c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/engine/fix/season-2026-series-slots",
+      "oid": "f19eb8ee75cd4abb81bed35a9f3989a7a9b013f7",
+      "type": "tag",
+      "commit": "dcf70f3ca2fa68d5c7e8ac738c5e6e434ad14c0f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/implement-r2-check-publication",
+      "oid": "bf72c5674a30534ab523a73f9d7d037689e6dc14",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/integrate-ranking-board",
+      "oid": "809401df899bd6acd495554016f29efbc291517c",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/merge-pr-137",
+      "oid": "e9d11e6b6498598da2dd4f8b97d2e2610091a0fe",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/pr137-readiness",
+      "oid": "ceb351b8850bd62f435c3b51bddde53cc2c403ec",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/pr137-readiness-1",
+      "oid": "c03c2495073d401ff4381840d375cf5d5dfa54d2",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/pr137-readiness-audit",
+      "oid": "1867d543232645a56652966fc3e09e21d552783d",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/prepare-native-sources",
+      "oid": "f2aee6983a19368e6a88162442daac9f5799156e",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/prepare-r3-browser-proof",
+      "oid": "8300806b088a80e61e8eb2058d087cd346972e52",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/prepare-r3-drivers",
+      "oid": "af8b12ad16798a67078fe33d691eac6b1c4af306",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/prepare-r3-v4-sources",
+      "oid": "f80a66c37f6334a5b9445db9c159631e973e4c66",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/r2-draft-publication",
+      "oid": "0ac8b4fcda11bda4401f3b654fe506b983169238",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/r3-source-checks-push",
+      "oid": "9c67a0614739dd8793083eb894c4394e2c4df5b4",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/remove-stale-audit-notes",
+      "oid": "ef675054e80b0b965f1e9e2493a8164b2eae808e",
+      "type": "tag",
+      "commit": "e44513d17d4339d717bb02f6fc02a381cddba864",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/remove-worlds-prototype-47",
+      "oid": "e5a0bd48579215119ce1b3104e8e77d66130e928",
+      "type": "tag",
+      "commit": "e0ba950629bddb8645a4abf6a0a02ea2c3f1ca01",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/review-artifact-repair",
+      "oid": "9fe2d2a24ceb6add289838e9230c2da3cd7a6af1",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/review-cumulative-verification",
+      "oid": "685f3caf9954d4407c8e3cb4169b8b81b027ad08",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/review-instrument-fix",
+      "oid": "05aaf5857999306f908a2fce8674d11761965c35",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/chore/review-proof-fix",
+      "oid": "06b30ec1ee327c287529e9a941f228ac188c5bf1",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/ci/coalesce-superseded-pr-checks",
+      "oid": "8b36787235b4b230ca9f11a094c0bfbface85d8c",
+      "type": "tag",
+      "commit": "c3a51f0a01427f2d214de6e6546cf0ee179a2b74",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/docs/design-system-audit",
+      "oid": "571b3353d145881a3e417c3f7ce2c926ab78992e",
+      "type": "tag",
+      "commit": "95cc30e564e162f3c2636124cab7d4249cd2a18c",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/30-day-power-movement",
+      "oid": "82d984091b13921db980ec18b06e563ab2f45d99",
+      "type": "tag",
+      "commit": "f962c2c30e9d6aa4121277cef84d588904634519",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/offline-forecast-cohort-55",
+      "oid": "c1de20b1f3c3f62ecaa3d870f52a37912f15de0b",
+      "type": "tag",
+      "commit": "e131be6d7b1124b92a6deb825f1ee25d7ca74cfc",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/ranking-restart-baseline",
+      "oid": "90ad3a50abc88f05400641915422d315de843c53",
+      "type": "tag",
+      "commit": "ae7eb28ad7b0330756d496cd01f932ceefc2235f",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/tournament-hub-foundation",
+      "oid": "f3a8debffa5e48bc4a6975e44f681c19fe9e4986",
+      "type": "tag",
+      "commit": "03ab9c6682a206c43cc76d4b7be7832544aa662b",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/tournament-match-forecasts",
+      "oid": "228854cf8e0e16b8097de8a07a60581d7c5c0b05",
+      "type": "tag",
+      "commit": "e5d57ca5f9e106431862dab6e76ec8c916786210",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/unify-loading-states",
+      "oid": "999016040f5410dac6476fcdbe96093fdaa29d33",
+      "type": "tag",
+      "commit": "7b3cc0ff75fa5f98279bde09822a8661ed426b56",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/worlds-2022-observed-groups-47",
+      "oid": "41335a6b8a062ed9c7623e53e7b1b217d2b86d13",
+      "type": "tag",
+      "commit": "3d7be102168831f60ee69aa20631112c3562bf16",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/worlds-observed-bracket-47",
+      "oid": "1b9a0cc123f94b3b55c7ece98a4396941d80dae8",
+      "type": "tag",
+      "commit": "345648c7e35706c8b60a325b41d3681327c6a395",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/feat/worlds-observed-rules-47",
+      "oid": "606d49f62d5f3dec54d9dd327e3c174f623f727a",
+      "type": "tag",
+      "commit": "e07cc1a3be21a061dbf8f0c0086d4490aeca0d8b",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/ci-affected-test-contention",
+      "oid": "bafb76664b0b585cfde7ad31f5ee4c666f5924b9",
+      "type": "tag",
+      "commit": "65749ff73a401959d9bdc5b1e8e4001ce4464e0e",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/ci-focused-test-scripts",
+      "oid": "17d7886b662d3c213b6e717ee8c7481abf72e3ec",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/durable-r3-launch",
+      "oid": "d0d284b6ef6bc4b5bb05523a422ae7e6a165a94b",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/incremental-refresh-memory-peak",
+      "oid": "083a4f98ab621e02dd02bf43cf854034a9048166",
+      "type": "tag",
+      "commit": "9390d4cecb53c71383e3be1905ff38dacd363861",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/ongoing-split-checkpoint",
+      "oid": "2ace58f36984b4361523eac5a77ebe489075a31e",
+      "type": "tag",
+      "commit": "3bdcbc1c2da3253bb3ab3cbd2ca1bb5149df04fc",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/overlapping-schedule-ledger",
+      "oid": "740e4a794357c8e5038396fbe8d94bd74efda44c",
+      "type": "tag",
+      "commit": "96b5a6fc662956417744062934c4cb44ac752741",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/public-artifact-url-validation",
+      "oid": "5a7a6b40afb8a36a789e15b22b90954fcd84549e",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/r3-browser-evidence",
+      "oid": "c288e1c6616a0546d485883af0411afb6cbf4d84",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/r3-verification-driver",
+      "oid": "fe9c58487f33133b188b121d0864fd17cf959a51",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/ranking-artifact-url-validation",
+      "oid": "f9709dd5a730356952cbc6d9280d62a1ae8fcaaf",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/report-comparison-clarity",
+      "oid": "0534e4500eb20c813f37b92b944b03fb869319ae",
+      "type": "tag",
+      "commit": "b5eaa9b29598e39484a2f4e09a026eb28983d9fa",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/report-match-context",
+      "oid": "32d62c80ec5b7bc35c6a983ec25e44e9837877c3",
+      "type": "tag",
+      "commit": "8586c0816f986d0eb95b02213137a2499d62694a",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/report-scope-and-metric-bases",
+      "oid": "c25925526dde9af11417a5101917644f089b7037",
+      "type": "tag",
+      "commit": "e5f85be8a8b72c99193c28362cc656cbdaf374d7",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/v4-classifier-failopen",
+      "oid": "2fdf36d4e2644af4ebd4f5ea9c3f464805861e0e",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/fix/verification-driver-guards",
+      "oid": "695d1156ab4825f2ae9077a95c8ffb500cad7568",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/main",
+      "oid": "78684fb38a63b56e4c49fa2860e2d20ac6671b71",
+      "type": "tag",
+      "commit": "55da1197a9e9e7b858c8583c81e960f7711c5ef9",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/perf/snappy-navigation-20261013",
+      "oid": "1f6d10fc3531bad87cb5d400032b09084694ded8",
+      "type": "tag",
+      "commit": "7ef89fe5401c648ac0207b5d9c3325606ed265d8",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/refactor/ranking-board-review",
+      "oid": "13f2c1e8ab1478fc4eaa93b0d530f4bca6d561c0",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/refactor/repository-structure",
+      "oid": "1250dc75fc80361696f2ca57bc4128926206741d",
+      "type": "tag",
+      "commit": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/refactor/repository-structure-1",
+      "oid": "f734d682e28fb2eb606264a2c68e3915943bc7e4",
+      "type": "tag",
+      "commit": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/ci-script-extraction",
+      "oid": "4e3ab446a13e63a0ac9a6dc4ea700413de8d6d39",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/external-generation-urls",
+      "oid": "48e1b830cb89c728694d5fd627be0af69098da0e",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/local-babysit-20261013",
+      "oid": "285fe472b0f00a290b57acb42dcc1f2c9e77e0f9",
+      "type": "tag",
+      "commit": "9c685d9d5e5714150429412625bda62d525bd123",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/oracle-cup-consumers",
+      "oid": "5a211e1fde5058bd4d902378895f374c9f38bac2",
+      "type": "tag",
+      "commit": "6ea53d1415ab0b484e2ec3db1fc52f56802d9a68",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r1-decision-trail",
+      "oid": "78d0e99e18da7d9116b6d309ed774359c2d2586b",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r1-repair-proof",
+      "oid": "560ba7edcd9e9ef75b20425c12c758f19d19c574",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r3-board-semantics",
+      "oid": "cfafb9ffd253e48397132c4e5c2348e079b1b268",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r3-evidence-instrument",
+      "oid": "bed56a6e709c8f502cb812e0a664777fc9b69543",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r3-receipt-recovery",
+      "oid": "c3e4e0d2e9043ac014d6c0ea7bdd6554d58d1c5d",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r3-verification-drivers",
+      "oid": "b78c7dadc91e33ff791b26fbc7ac5b43affcb299",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/r3-workflow-integration",
+      "oid": "5f960449b0e12e555930ff705ad77106cb50d574",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/required-artifact-closure",
+      "oid": "43adb834691228337332a9d242f8f8c7a16097e8",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/review/required-closure",
+      "oid": "289ec001802d07f17987050a6ae88ddf28d588d5",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/feat/ranking-outcome-contract-matrix",
+      "oid": "329d13aa8c3d1cd5470727301201b567e2e953ed",
+      "type": "tag",
+      "commit": "068e2ff65ca214c1f38e8d0eb1778a23b47f6ee3",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/lol-rankings-pipeline-restart",
+      "oid": "43892428e494568059f2aa6b08cc035ad417af2c",
+      "type": "tag",
+      "commit": "5a781feff40871f27fe53326edfc1245f2d660c9",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-53291fc90d864130",
+      "oid": "950beea66714bca5d4c7f608775ff31fa9856943",
+      "type": "tag",
+      "commit": "ad046c2b55bfc76485142cd7ad7ae293769551f6",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-6856957b40d84189",
+      "oid": "4be3803506f687ca2b03d319f543c4d720dd5d22",
+      "type": "tag",
+      "commit": "d266f73e81fe71b5fb1f2b7c61f8386aee15aea2",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-7109ebdc5c7d402d",
+      "oid": "3a602f8526ff178776616c48ff4c416277ee072b",
+      "type": "tag",
+      "commit": "6f5d50aa21b4afeaa96628813202cb4c5a2f7f43",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-7a8c36e18c744bf4",
+      "oid": "8c1fda652a30f2d3f8aeb4c90587a658c4363c22",
+      "type": "tag",
+      "commit": "40cc29fb30e7e91c87428a24d0cd5655f6e09ef4",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-815f68d2621943ed",
+      "oid": "0bf27133f824a31aa28b7f0b0cd0ee30f37e489b",
+      "type": "tag",
+      "commit": "133393e4b8d811b79689afc76cf43376f4e9652f",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-975e72a88d20480d",
+      "oid": "6afd7d390c64b9cdddd4c330912fa307fedd70e8",
+      "type": "tag",
+      "commit": "d266f73e81fe71b5fb1f2b7c61f8386aee15aea2",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-ad954e918ec94270",
+      "oid": "affc4ad6c19b04544c516608753ad6dc39f66ae9",
+      "type": "tag",
+      "commit": "cc70fe02616b6f1624fee2e960b94e7e40b5c97f",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-b3825a8064164db0",
+      "oid": "34b42b841dba0f52ad43ab464fc2a6de3cb00054",
+      "type": "tag",
+      "commit": "6d261c1b12032e83db02dd39e6144dc43f1d41c2",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-c67c85ce695f4573",
+      "oid": "929848b6e9b8486a7590c8e51a17c05fb8dfcfa2",
+      "type": "tag",
+      "commit": "21dd8c7f0a873508a06896e03201ec580c52ff41",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/t3code/mcp-de0fa39f087f47b6",
+      "oid": "88d5707d8d2bbec00c0dd65a178530e048d29e49",
+      "type": "tag",
+      "commit": "6f5d50aa21b4afeaa96628813202cb4c5a2f7f43",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/bounded-archive-2025",
+      "oid": "bc8b62ac85752795ef1c0cebf3d6d8b7ed46861e",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/journey-trunk-control",
+      "oid": "6961a08bf98667959477ca47c470cd03fd7deffa",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/legacy-history-hydration",
+      "oid": "8e20bfdfb0a9576ed902ba7bb17e2bdda1a4c72f",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/live-reader-lane10",
+      "oid": "0fa76c348454f4fcf283bcee0c0a71172de19298",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/live-reader-r1-lane10",
+      "oid": "615dee8a9aa0f97f93476db36aa502e095e00465",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/live-reference-reader",
+      "oid": "f1edd33b0e1790a1be7dca3845870ea153d43566",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/prepare-source-verification",
+      "oid": "40035afc15cdf3537f886d411c59b7d272ece612",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/preserve-citation-provenance",
+      "oid": "fd955809764291892bffe76dfcaf9b4f0772f3e3",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/r1-lane8-snapshots",
+      "oid": "f3264dc3c191af633f67c49e5106d3c172ded5d6",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/r1-live-verification",
+      "oid": "8d65f0b918233c28a660083c40990f3090b8e3a5",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/rankings-history-parity",
+      "oid": "7844894cec5de4448d3fbb785cb67cba1016403e",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/trunk-baseline-receipts",
+      "oid": "267bb9fae12441d713b2eac7c5800cdbb406c95d",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/verify-artifact-resolution",
+      "oid": "a2eaf6cd35f1a463d79e3ac1eb96efbedef67655",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/verify-movement-shard-url",
+      "oid": "27aabd7351470cfff4e785fc6eac31292e26a6b6",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/verify-player-directory",
+      "oid": "8ddec2409bd774822849fa024ecfada6b45bbe79",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/verify-r1-live-reader",
+      "oid": "45a87dfd53cb3b6c1ed217a83dcabacd96d37fa3",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/verify-scope-probe",
+      "oid": "37fdce3f06fe3b13d05f76ab8f26a1d5a76e4c2a",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/verify-tournament-movement",
+      "oid": "8c067174848a71ca833641853190599fe98df162",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/test/warmup-trunk-verification",
+      "oid": "1acfdebceef1199c3efe5258ab70fe2bd1dc8df3",
+      "type": "tag",
+      "commit": "c746278d788ad2a44cd8f408f4b670bb51441e36",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/main/worktree-agent-aae481aa8c13d8501",
+      "oid": "0e3c5b19a5be8f06e879fa50c158a6e1f2e0ab87",
+      "type": "tag",
+      "commit": "4c3d4dd4f15d8e9995a3593cb3650985924b6005",
+      "inMain": true
+    },
+    {
+      "ref": "refs/tags/archive/20261019/product/docs/product-foundation-spec",
+      "oid": "1995b5d6a80d31bc3a6c1975148b4ff6a88c9f48",
+      "type": "tag",
+      "commit": "0a6bde8b323c2be01f42ceeeaab5723f385161de",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/preserved-rust-stack-20261008",
+      "oid": "2fabb4b6fc8147fe2ccf3cbf14f069c61e1c762a",
+      "type": "tag",
+      "commit": "cf6f548bbde46045bce2e3a13d4f6027c95ab9ee",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/ranking-rust-stack-20261008",
+      "oid": "cdde3ccd01489d58ca14c5e68f49e6f7b7590486",
+      "type": "tag",
+      "commit": "686b019a015b62135eaa9662bff3d4b2c8108f06",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/rust-contracts-current-main-20261008",
+      "oid": "e5e5da29be0ded310d8fdc980cb1197407500a93",
+      "type": "tag",
+      "commit": "7ddda31a69320358c168d4a96b557698ec4e56bd",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/rust-fetch-after89-20261008",
+      "oid": "dbb863bf4caae060687391fdcef8e37700012c96",
+      "type": "tag",
+      "commit": "8eaf7e6dfce326af7478985ed15f539fd2847117",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/rust-fetch-after91-20261008",
+      "oid": "2c14f5870cfa0a853983f5502eb3b2735bf7a28d",
+      "type": "tag",
+      "commit": "02a18e6c5adc5df91c4c773e86cf73a103f9761c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/rust-fetch-current-main-20261008",
+      "oid": "f5f9f8685e5e383844c244a248d186d08fb1c250",
+      "type": "tag",
+      "commit": "9131f7b7b813f3d562daa9d795fd9555877aa443",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/rust-raw-after89-20261008",
+      "oid": "d7fb38774ac6b6f463238fa8aab8a73de9c37c9c",
+      "type": "tag",
+      "commit": "860336aaade31bd33a0b43157ad9629dd5dc436c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/babysit/rust-raw-current-main-20261008",
+      "oid": "247e67f9b1cddec1d33d34b2b244ece8ebd5a20d",
+      "type": "tag",
+      "commit": "cbff0d044be728b607313734fa4a7c9e1127918e",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/native-http-service",
+      "oid": "e575da4a270139b18d72bed5bc9fed2326f457f9",
+      "type": "tag",
+      "commit": "ef4d82a2ba3ec24095f3e004545f314c1fec9e4a",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/native-ranking-origin",
+      "oid": "53f2f856b6249bffd2847dbaf75b9504d034db96",
+      "type": "tag",
+      "commit": "201e9c8d4ecf43237f9999d14744609ccb06377d",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-contracts",
+      "oid": "ab14d040254d6487cc2361184f350b5bf313b16d",
+      "type": "tag",
+      "commit": "dae06dc3cee02624bc2d61fb52bce86b89831fb8",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-m0-code-unit-order",
+      "oid": "e736ae8de5bb488e9de9182fae0b6654a04c54a2",
+      "type": "tag",
+      "commit": "9a17a89926169958eb44c6f4b09df807c50469a0",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-m0-parity-fixtures",
+      "oid": "76b0c602b5db6f588aef0d7c1ef171bae9e606fe",
+      "type": "tag",
+      "commit": "55113b66a6c8e08c9dcc6e7e06a24b7f59bfe005",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-provider-fetch",
+      "oid": "9d47ccb338552679ae0e66da6a0c810dd5c701f4",
+      "type": "tag",
+      "commit": "962a06c133eb75ddda6c238716ce6a69642d54fc",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-public-archive-84",
+      "oid": "84caae2d962139c986a767f499a8c848832f56f0",
+      "type": "tag",
+      "commit": "d0551193fbcfd9cd9a5367942c6712e9428974fa",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-public-directory-84",
+      "oid": "72fcf1496da5d3e6f0997134fcc711b8176f0b78",
+      "type": "tag",
+      "commit": "187ab06940e8c92c0d1217c4eba94f22cb0c9712",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-public-generation-artifacts-84",
+      "oid": "f6c2102850af6dbe65ce10efe2edbd424135adce",
+      "type": "tag",
+      "commit": "083a0fb9dc15833e8f65ac82a8d52927a69af6ca",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-public-manifest-84",
+      "oid": "90a5978f8ba2fcbca3ca4e089573f7383d20ebcd",
+      "type": "tag",
+      "commit": "5e727cc70308dddf3539fa804461ce2ef6659d4a",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-publication-verification-84",
+      "oid": "91b57b172fbf1566e3ac5fe347385e4f177a5db6",
+      "type": "tag",
+      "commit": "f955eea1f000f17e151b8cf5736ffd1bf2b87866",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-raw-generation-verification-84",
+      "oid": "9ef545b006d3a4562b030044311aba9e11bcd35b",
+      "type": "tag",
+      "commit": "562347d88e8997591a8b6459e3f39dd95ea8e5af",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-raw-source",
+      "oid": "50d4e2f1abb94fe467cb4605affb0c648fc8cff6",
+      "type": "tag",
+      "commit": "b0d35b6000ccaa4e8035e7e187221dda6b33be58",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-state-authority-84",
+      "oid": "04da3c81c9271219f7278934a4db3c62d37cde40",
+      "type": "tag",
+      "commit": "5205f2721805d8e20d4248977cc270477728ac45",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/feat/rust-storage-primitives-84",
+      "oid": "5b4a3a1661edc20cc4864ece09341527491236c2",
+      "type": "tag",
+      "commit": "f0cf0d8bf23a909e279a67ea0b5b7b66b7151286",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/fixture-reset-diagnosis",
+      "oid": "a41499ac460438af393226f0d0e50a84c5896f72",
+      "type": "tag",
+      "commit": "219a0992232eedea490f28696c1d1d4a334e8dc0",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/minio-svcacct-admin-account",
+      "oid": "8b1491bd35ef50388551a481a42afc172763f276",
+      "type": "tag",
+      "commit": "4483456ac7eeb17f98b64c00b58c5e3a3e1b6ec4",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/native-contract-ci-types",
+      "oid": "88a4f5440a8baa49a533287373221181ff6e3f8d",
+      "type": "tag",
+      "commit": "e8bca4bc433711b449a4eeb8d5a5f605d3c21bd9",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/native-header-limit",
+      "oid": "a5e59cee44e303135b581d1aea46d8845ad09bf2",
+      "type": "tag",
+      "commit": "1d11ac1c85499a38f2d13f83f62467ce2f86299f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/native-origin-fixture-types",
+      "oid": "e9a40f2ea34a571f543bdf7e80731ebbe6eb1eb9",
+      "type": "tag",
+      "commit": "069022e54b5ca76e4537b3da36eafeb8f3548226",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/native-origin-typecheck",
+      "oid": "74e82b9b1344f234725293d901f849577f38c9a1",
+      "type": "tag",
+      "commit": "3e11e28099ff452f0375bc12f17a55b36e4d6bf4",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/oracle-unpaired-unicode",
+      "oid": "5a366c25d266eaa2e7015be7656e6086e259a789",
+      "type": "tag",
+      "commit": "886c366011df714ce0adbc0ef98702faad1ac7fc",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/pi-index-branding",
+      "oid": "9c2c5902cd6f429fa1e42710405eb821cfa6a39a",
+      "type": "tag",
+      "commit": "340bcdfcb3bd1026aadab65957aef888c639445a",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/published-oracle-golden",
+      "oid": "d82b241445172f2ddc7f146d22555d46284d7e98",
+      "type": "tag",
+      "commit": "cd15d42a5fa684c0e42edba2ee920a2205728b7a",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/raw-http-target-capture",
+      "oid": "31eb2c9ed7df9c1c373ab6f545c614f4bc084906",
+      "type": "tag",
+      "commit": "6f6517a5aee70553c911d8e5f967dd6c14c40ff4",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/reader-connection-isolation",
+      "oid": "8e5def6e2730c14c546197c8f562d8c7e18d3f28",
+      "type": "tag",
+      "commit": "221389e4d15e95a5a0857c73baed6534d4a00fcf",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/fix/repeat-native-policy-proof",
+      "oid": "7e9a23935b9d63d375cd92577f45b9882a970629",
+      "type": "tag",
+      "commit": "0651be97b02118a2754b3984e2dfa120b2d771e7",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/refactor/native-http-contract",
+      "oid": "bfdc139c90b3b06a218501a0b6a986eed7a63385",
+      "type": "tag",
+      "commit": "5e7626db585362347daeeb4bb1f3ae55bcc3aa4e",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/refactor/pure-contracts",
+      "oid": "ca81aed13df22d47a22fecd3fb041c83528a23e4",
+      "type": "tag",
+      "commit": "a2444693d15f67d3357f911e6d08df420a0bd999",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/test/diagnose-origin-iam-fixtures",
+      "oid": "326f0e649ba21eeff09716f7c85e0383bdd69608",
+      "type": "tag",
+      "commit": "455b2eb7f6667ec9befcb66695e7552ebb819c20",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/test/native-http-target-regressions",
+      "oid": "3050e4aee25fd0cb034c9836b7c8a2f0ddf14584",
+      "type": "tag",
+      "commit": "512c9547809b22c4fac893bd8382c9a048044b89",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/verify/native-artifact-contract-20261018",
+      "oid": "bcf56e2db67bced903d336bab8bb0d2c67c64f92",
+      "type": "tag",
+      "commit": "1d11ac1c85499a38f2d13f83f62467ce2f86299f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/verify/native-origin-fixture-20261018",
+      "oid": "079946f0f942204265dd4fd76f8364c4e9f4bb38",
+      "type": "tag",
+      "commit": "e5a3216abaf2fbcc641e743c7fc340d23fc416a4",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/runtime/verify/native-pure-contracts-20261018",
+      "oid": "49de2e20f0b5b5a41444163734b7843fbada0013",
+      "type": "tag",
+      "commit": "a2444693d15f67d3357f911e6d08df420a0bd999",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/backup/lol-startup-screen-20261019",
+      "oid": "dd5c8103f38557b8c6dde5ac9e7c283322b112b7",
+      "type": "tag",
+      "commit": "e94e1827885ea83acae3e2245be0cc586a306671",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/feat/site-cleanup",
+      "oid": "0da3a4534e5b4d08e1ae38550021e366306ddc95",
+      "type": "tag",
+      "commit": "d701fc929563ffb82aefbf161472f6c755386387",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/fix/design-system-consistency",
+      "oid": "f608f0e1ac268be55175c81737cb4e619c7c6550",
+      "type": "tag",
+      "commit": "de03ff3d10fd1a4f106006998461ac091fb4f831",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/fix/labels-accessibility-116",
+      "oid": "ef38925076d597067ff234a4e8d17261fc55a0c2",
+      "type": "tag",
+      "commit": "4ec8913227e91bba1bd5bf684af6e3ca38ce7f33",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/fix/layout-111",
+      "oid": "cb428c4e29117dd0594aea8145fc983b909c923e",
+      "type": "tag",
+      "commit": "d8d085b4c7ebe90133aef9f4569cb21b53a2a238",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/fix/layout-narrative-paths",
+      "oid": "310c8699f2eec9f8e449fa8bcf6506de4a67696f",
+      "type": "tag",
+      "commit": "c2a87aebf3cb8fb8e09c82cdc79f64c14613ccd3",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/fix/matches-address-and-labels-124-125-20261013",
+      "oid": "7648583f00601728d92f12c101b55d6897225a7a",
+      "type": "tag",
+      "commit": "69d5db0b72d3d70b3e2f81e7fd755e4347678df7",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/fix/sources-panel-119",
+      "oid": "ee464953bbdb7ba2a48ba760fe86855f44c036bf",
+      "type": "tag",
+      "commit": "4e5b01183467e1b2e61d0c51e8579b75866fc1b4",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/perf/smooth-navigation-20261015",
+      "oid": "2cb42b654bb1b79cff245976cc4983f012d13ca2",
+      "type": "tag",
+      "commit": "15b07e158948d4bd67d76a688dd79299f5aee66c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/site/t3code/fix-team-shorthands-and-logos",
+      "oid": "533c306124bb1ca688eee82e7cb3df09e9d1e284",
+      "type": "tag",
+      "commit": "1f07b21f0de905ed00a9dd08a254e43b8a3e139c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/babysit/refreshed-pr86-20261008",
+      "oid": "1da7f133be5882cd3339ca589073eb627b6989c2",
+      "type": "tag",
+      "commit": "732ec891bdee7ef0309e08fe127365b26ad35372",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/chore/local-public-data",
+      "oid": "184617367724cac9bf4a2994fa897735ec5ac1aa",
+      "type": "tag",
+      "commit": "354dfd5fe4a108bf366f74e9a577b7678f2d20de",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/ci/split-incremental-gate",
+      "oid": "1ead11949608e23713f2c37d6848716c881c8f94",
+      "type": "tag",
+      "commit": "c9a1c05221ebc6ea98de209228bf6cc32d83a6df",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/cleanup/remove-archive-v0-writer",
+      "oid": "5556b7b21c163bd1d8a05e5dc21604ad238f88bf",
+      "type": "tag",
+      "commit": "6b99704f9afc0e5685062fe41654ed5b5732cc17",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/content-addressed-ranking-state",
+      "oid": "98574c08884813d265af8bc4ff7a19ed52140f8a",
+      "type": "tag",
+      "commit": "efda690036522f97a2b6e5f1da12f21783bd4057",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/incremental-ranking-crunch",
+      "oid": "8f547e9bcfc2e5857f4ee7a5e7f69e74db60da2a",
+      "type": "tag",
+      "commit": "7dc40a8d2202ecd2111eb70f2c66d9ed6da79d6c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/incremental-ranking-pipeline",
+      "oid": "35e980658f8b8d46a85986b08f4d66f8b26f3f0a",
+      "type": "tag",
+      "commit": "1b4bab710b4ef5f97121f27876350bce744dbe4f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/incremental-ranking-replay",
+      "oid": "0bfaf17c2d12deedd2aa71ceaab1c6a7749e0d3c",
+      "type": "tag",
+      "commit": "46e48baa6eb44f6acee91cce3f25bca3aa090980",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/presigned-ranking-delivery",
+      "oid": "45ef0741bcb604d2d3fe6061f4b0c54c99e9d11a",
+      "type": "tag",
+      "commit": "324171f582fc9172aa2252ac5e9661c5355237c5",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/ranking-publication-transaction",
+      "oid": "560474e4624cd866ef7e2c6db67863086e33745d",
+      "type": "tag",
+      "commit": "9bfc89e7f0d2453181ac2c6c0b9fd0b6f779895a",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/ranking-retention-audits",
+      "oid": "6034491c1f484ffad4a9e6d596bc90fca3de8742",
+      "type": "tag",
+      "commit": "d0e83c12a1aea72cef0f194729b4d976af260eaa",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/ranking-rollout-evidence",
+      "oid": "4a7c1e364f8779521e758dcff880f8beb0eb0fe2",
+      "type": "tag",
+      "commit": "d400043aeb0f8fc8d69c461ad39996b4d376828c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/ranking-storage-checkpoint-foundations",
+      "oid": "693541f2e3b65d4f1d3238454821392a621e8cfb",
+      "type": "tag",
+      "commit": "d355941a5017fcbc698ad10251b316b116bdcd20",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/feat/year-partitioned-artifacts",
+      "oid": "b57dd7587a5f4bef8d35b46ba67399fcf70ce42f",
+      "type": "tag",
+      "commit": "79559dd5f8de7512065d6b3b5193baee6b600d40",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/fix/checkpoint-semantic-parity-80",
+      "oid": "ffb049a4ac67204f1e0d448b57f25508846ecab8",
+      "type": "tag",
+      "commit": "fb7ed307ff2e00a74d29531ac2be98bdfc0a78c8",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/fix/incremental-ledger-digest-reuse",
+      "oid": "82f009bb5fef885ec780a42c8f0ba930f3910acf",
+      "type": "tag",
+      "commit": "dc4b9d1fbbc710b9fc7fd54666b3c71a4823c30e",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/fix/ledger-recovery-budget",
+      "oid": "8ceb0834dc26df90d73fae288d12a9a3721f5712",
+      "type": "tag",
+      "commit": "41b09fd9a88554e85a4dc0e1e69422a78d447b1c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/fix/refresh-manifest-budget",
+      "oid": "bff1de03ad270de49f7fc0bad34d733513e62b15",
+      "type": "tag",
+      "commit": "04fa794fd7b5cb4f4e7fa39913b0f283599e9c66",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/refactor/digest-object-identity",
+      "oid": "d35f5f42ffbd7f784cd25c6a942f52bbfec957ab",
+      "type": "tag",
+      "commit": "42ca87688851d1afbb01298fd17b64b428ac791c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/refactor/public-artifact-references",
+      "oid": "e5da1ed5fb8eff46538938ebbfa70ba8a0545789",
+      "type": "tag",
+      "commit": "9c3733a5f409a380db50bc618f67bd2f564e57c0",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/refactor/public-output-closure",
+      "oid": "551f920db794bc1ac7585f85b8b11d450278eaed",
+      "type": "tag",
+      "commit": "f13f1ef7dd8ae26d871ade941fa8aa27f13ce8b6",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/refactor/public-output-closure-1",
+      "oid": "092b0558916761c3f6ae15a09193d942a4d4f6ff",
+      "type": "tag",
+      "commit": "893deaea9ee06ff5d8fb8898f149b8f35aa72fbc",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/repair/r1-b1-831776fb-v2",
+      "oid": "d6521361ed0f3c1c551ac3def8f9abbb3d88317b",
+      "type": "tag",
+      "commit": "9c3733a5f409a380db50bc618f67bd2f564e57c0",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/review/pr141",
+      "oid": "422da1b3f6e62e9f801f302f5f9b6104f2a99063",
+      "type": "tag",
+      "commit": "893deaea9ee06ff5d8fb8898f149b8f35aa72fbc",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/test/gzip-consumer-byte-limits",
+      "oid": "ba6362fe5d366a45831c1d8f149fbdfe3a691d33",
+      "type": "tag",
+      "commit": "a7e42f77247e418175dc3f1a61ab9bedb8aa334b",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/verify/r2-exact-source-v4-1166bb3e",
+      "oid": "aaf93ef062452a44d7e3f7be527310a5b34f55ed",
+      "type": "tag",
+      "commit": "50f840966572b3fdf5b7180a32c2baedea86fe72",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/storage/work/ranking-rollout-evidence",
+      "oid": "e77f030c4da5c7989fa5859f8b6297cd506ee89b",
+      "type": "tag",
+      "commit": "942a596fabbb06fc08e4dde2a25f9caaa41c3526",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/backup/macbook-main-2026-10-03",
+      "oid": "94731f0f838e72c55c18c328ce2739ed8e26f50c",
+      "type": "tag",
+      "commit": "f87b688e35bdc54ceb4ffde0b657bb82ec76e8a4",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/chore/ignore-local-t3-json-20261014",
+      "oid": "2fbabb6f8ee4d9009d5194319f6fee77802f3ecc",
+      "type": "tag",
+      "commit": "eb8672953129ccdcaafb108a8e00320c638db502",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/ci/fix-pr-change-classification-20261014",
+      "oid": "aaf38d06afa2f041b1f32b35f95bfa2e786d86d0",
+      "type": "tag",
+      "commit": "95bf522081d67841cb9df2b1d124392a63c47045",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/ci/reduce-actions-usage-20261014",
+      "oid": "08532e1eb1dfd256179b4843c821e1167448577b",
+      "type": "tag",
+      "commit": "aad9891b3669d8f5c3c229ea15bafc57e0e95a71",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/cost/power-index-recovery-20261014",
+      "oid": "1d147d66bb6798a9d4736ea4d8f539cbf730a3bf",
+      "type": "tag",
+      "commit": "1e9a2a8619c8b04bb9c74d2ccf2a8e0b04496d0e",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/fix/benchmark-diagnostic-lifecycle-20261008",
+      "oid": "7d949708856d038185dd8dcf3f0903b6d0d811da",
+      "type": "tag",
+      "commit": "975ac6146ab72dc89d6efa2530f95a8f229e240c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/fix/ci-affected-paths-fixture",
+      "oid": "ab574f6dfe069a1f8fed24db2a217a724268a1f3",
+      "type": "tag",
+      "commit": "42bf586c4ea5b69be10faf0b6085c9fd4240cf61",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/fix/ci-affected-paths-timeouts",
+      "oid": "b72991c82d75a2df4efe7bc73ac54f57f1d5a177",
+      "type": "tag",
+      "commit": "42bf586c4ea5b69be10faf0b6085c9fd4240cf61",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/fix/r3-ci-focused-test-scripts-v1",
+      "oid": "50efe902675ab7919a166307e35434e2d5258ced",
+      "type": "tag",
+      "commit": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/domain-ownership-registry",
+      "oid": "26f1716c4b3a7d0c4dbe22237409c56eae1b44c1",
+      "type": "tag",
+      "commit": "6973fc995a599e8b4f5e09592fe65740ded8c391",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/league-platform-overhaul",
+      "oid": "4342dd17280acac4e38011c9f6966b35026d26f2",
+      "type": "tag",
+      "commit": "a078d5e4a794e6e7ae8c0c834975ecc9ded40562",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/mistake-prevention-coordinator-20261015",
+      "oid": "d30b0cbde85852ba7eba533535f4d0efaa5d0ff4",
+      "type": "tag",
+      "commit": "09872909af4a8e158b10668fee1ec5d232d3605f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/remove-proven-dead-code",
+      "oid": "85ecdd06dab8ddd8d706d2e97c5a99cc4453b8de",
+      "type": "tag",
+      "commit": "16f0aeeb1a853beb38e6a58f9931de675475d382",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/repository-overhaul",
+      "oid": "390212fe20465e9a82d3b64f07f5a9793335b133",
+      "type": "tag",
+      "commit": "46d3992e61a3456db6f85c1923e1182666bdf70b",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/repository-overhaul-1",
+      "oid": "370353080f954859dee7d8dc58c3e6d57a4fa044",
+      "type": "tag",
+      "commit": "dbc88d481ac85ea6c2f3dfa9697f280ee63a2e05",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/refactor/repository-overhaul-2",
+      "oid": "a4c0bcede1a81dc384402b5762039304b1d58d89",
+      "type": "tag",
+      "commit": "2bb0dd60f4ac1001bcae8c8262684311d9b5b8fb",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/repair/r1-b1-9e9bf89c",
+      "oid": "9fbc5469c33a5843c09be1d921cc149c74df0bbc",
+      "type": "tag",
+      "commit": "38eb662aad0dfdcae22cc233e613b36d650e2a70",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/verification/alignment-20261011",
+      "oid": "1a7fd23db88ebf14e4010415c002373982698f89",
+      "type": "tag",
+      "commit": "eabead64770142f0a2bfb97848e5d947a4a00156",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/verification/coverage-20261004",
+      "oid": "97510caa5ee659f64fb13b2f6d7ecf03dff937f0",
+      "type": "tag",
+      "commit": "9417f5fed12fb48a834662d2a6864a2cc0b6f8c8",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/verify/r3-exact-source-v1-14557610",
+      "oid": "e746ec2370b2d66b5f210cf2083c314899e8e99b",
+      "type": "tag",
+      "commit": "d38add5f228e67022a3001e27a820ad76657f37f",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tooling/wip/preserve-before-doc-fix-20260814",
+      "oid": "a9eea15b1a5b957aa1baacdefd672187b2ec5444",
+      "type": "tag",
+      "commit": "3ef4f14d3a09d852a1905bdccecaafbad1d98fd1",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/babysit/lol-pr70",
+      "oid": "9d2bef5f7639c10fef3c9ce81e54e72084e54f23",
+      "type": "tag",
+      "commit": "ab374af042d9b5c82788d69f56af762fec7c3419",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/backup/lol-swiss-team-names-20261019",
+      "oid": "8fc71db01ea146de5f9c48ea99b21c94d756a77f",
+      "type": "tag",
+      "commit": "edcc6a58a9068e2ae8de21577d2c8bf42c197484",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/group-event-dropdown-by-tier",
+      "oid": "fa8482714c08632e2d77d3e7b09b62bc0549e2d8",
+      "type": "tag",
+      "commit": "7f46f1a9b9a48b102cdc3481ef689d610ea856f9",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/issue-56-power-previews-20261008",
+      "oid": "d87994a739d827e1d6db7f7a740b4b3b5664bf32",
+      "type": "tag",
+      "commit": "1933bd8ba21e9319e7c846dda24ba317866ecb5a",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/leaguepedia-tournament-hub",
+      "oid": "fa403eab224e3088a7318054e19cd084360a050c",
+      "type": "tag",
+      "commit": "716534538ea2408225a8dcda3a3a026e441f7993",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/match-champions",
+      "oid": "4868d96e39454c5955745d92cd53facbedb46d5f",
+      "type": "tag",
+      "commit": "f74e0f4ecab5d8e50b1017709341924c0b606f29",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/refresh-and-live-tournaments-20261009",
+      "oid": "2ee500dedcc00c99ab0674457f5bbd7be7e2dcd6",
+      "type": "tag",
+      "commit": "a8be13c932e38927b6b264a49581469ede30e6a3",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/site-polish",
+      "oid": "1f9b23c4b138079091fdb781d69cfb7295cba86d",
+      "type": "tag",
+      "commit": "0385312758d2d7dbd1bb154180038e8658d741e3",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/swiss-bracket-preview",
+      "oid": "5638d9c15e9a5cc9185d303a82ee449364eae5e0",
+      "type": "tag",
+      "commit": "6f838f053ed09a56bcb77dd06f49d6c969a80682",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/swiss-scenario-preview",
+      "oid": "97f682a9db14ffd8633656ddbd3676abf9d3453a",
+      "type": "tag",
+      "commit": "b96c07c3f08c6c299557e62e2920a48f6f95c743",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/tournament-brackets",
+      "oid": "a83015b0e5401a9dee3db6269b178f0f2a62136d",
+      "type": "tag",
+      "commit": "1634a7ccb98af16dbc81ddecf848856487092c25",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/tournament-source-delivery-acceptance",
+      "oid": "281c9898d4bc287851894e57f663e8ec2a3d5fe0",
+      "type": "tag",
+      "commit": "a8be13c932e38927b6b264a49581469ede30e6a3",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/worlds-2026-knockout-47",
+      "oid": "144de64c74a596cfd4747246b508af82e317ad40",
+      "type": "tag",
+      "commit": "6e8830e8c4f4766390f8bdf6925c802b063c9de1",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/feat/worlds-simulation-47",
+      "oid": "50255c0e43d0c2d51e2d76a7598f986bc89c64f0",
+      "type": "tag",
+      "commit": "31876f0f1147a34c59d3dc1a74a58f5c97bdb47d",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/auto-select-team",
+      "oid": "b196b5e39b3ed358b814449d9e9adf1dfb24193e",
+      "type": "tag",
+      "commit": "fe8a8bc3f8b1554fd489d31c681b2255e3c092b6",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/automatic-tournament-ingestion",
+      "oid": "061f2bdf2459716bac1b2efaeed1834b67266eed",
+      "type": "tag",
+      "commit": "01ad9031641df1416d397b3a47658507fbe6b99c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/panels-115",
+      "oid": "8b768608aba361c9a75db5cb879b1801bfe76d26",
+      "type": "tag",
+      "commit": "f5e1d9a6da02bf11b80a8bc10413cf3e212bcd4d",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/swiss-draw-and-cls",
+      "oid": "59a265a8b2804a32b397c2343f012adbd862e225",
+      "type": "tag",
+      "commit": "a992829625bb20ecb80b06c557e4f47f60afb024",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/swiss-draw-buttons",
+      "oid": "71df543009fe5aed0f8d658bffb558feda9e6356",
+      "type": "tag",
+      "commit": "547198fcd91001540326da5884738c304e2d223e",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/team-previews-demacia-cup",
+      "oid": "f2bfa56c3120e7eb6d4bcdca6882b5bb5138dd00",
+      "type": "tag",
+      "commit": "610f30e47fafa8e6f7c082a3f153974a4378242c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/fix/worlds-knockout-probabilities-75",
+      "oid": "b4fe532cdd877d66d2c1e4d872844b6a1f7265e2",
+      "type": "tag",
+      "commit": "b45b14455b981c35cc5ecaa947d1e0c89549845c",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/t3code/mcp-0642bafa4a094c70",
+      "oid": "9754926d68166f2928d1db5a58085c970c5effa6",
+      "type": "tag",
+      "commit": "ab374af042d9b5c82788d69f56af762fec7c3419",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/archive/20261019/tournaments/t3code/mcp-d94d8845a7c94eeb",
+      "oid": "d14bd7dbf99a3fc49903f0d248419080677f5cf6",
+      "type": "tag",
+      "commit": "9354c42dee231ba9880118823dc33d5461690b28",
+      "inMain": false
+    },
+    {
+      "ref": "refs/tags/ranking-restart-baseline-2026-07-23",
+      "oid": "6ad2c19f43abbcaf8c1587ef68420ed880eb6fa3",
+      "type": "tag",
+      "commit": "3682553419beada82a7954ad02db366571320667",
+      "inMain": true
+    }
+  ],
+  "featureGoals": [
+    {
+      "key": "runtime",
+      "title": "Rust backend",
+      "goal": "Move production serving, data processing, ranking calculation and refresh coordination to Rust while preserving ranking results and recovery contracts."
+    },
+    {
+      "key": "tooling",
+      "title": "Code organization and development checks",
+      "goal": "Make the repository understandable and make required checks catch real faults without losing runtime, source-ownership or recovery guarantees."
+    },
+    {
+      "key": "tournaments",
+      "title": "Tournaments and predictions",
+      "goal": "Show current competitions, schedules, results, brackets, rule-correct Swiss draws and supported outcome forecasts with visible source and model evidence."
+    },
+    {
+      "key": "engine",
+      "title": "Ranking accuracy",
+      "goal": "Keep team, player and league scores accurate and fair by validating source matches, identities, competition strength and model evidence."
+    },
+    {
+      "key": "storage",
+      "title": "Ranking updates and reliability",
+      "goal": "Turn new results into complete, current and recoverable ranking generations with validated references, safe publication and bounded resource use."
+    },
+    {
+      "key": "board",
+      "title": "Rankings interface and history",
+      "goal": "Help people understand and compare ranking evidence through tables, filters, charts, team history and consistent score context."
+    },
+    {
+      "key": "site",
+      "title": "Site appearance and branding",
+      "goal": "Provide clear branding, reliable loading, readable layout, accessible controls and predictable navigation."
+    },
+    {
+      "key": "product",
+      "title": "Product direction and requirements",
+      "goal": "Build one connected League platform covering esports intelligence/scouting, builds and gameplay optimization, personal analytics, and a Windows/macOS companion."
+    }
+  ],
+  "annotatedTagObjects": [
+    "04da3c81c9271219f7278934a4db3c62d37cde40",
+    "0534e4500eb20c813f37b92b944b03fb869319ae",
+    "05aaf5857999306f908a2fce8674d11761965c35",
+    "061f2bdf2459716bac1b2efaeed1834b67266eed",
+    "06b30ec1ee327c287529e9a941f228ac188c5bf1",
+    "079946f0f942204265dd4fd76f8364c4e9f4bb38",
+    "083a4f98ab621e02dd02bf43cf854034a9048166",
+    "08532e1eb1dfd256179b4843c821e1167448577b",
+    "092b0558916761c3f6ae15a09193d942a4d4f6ff",
+    "0ac8b4fcda11bda4401f3b654fe506b983169238",
+    "0bf27133f824a31aa28b7f0b0cd0ee30f37e489b",
+    "0bfaf17c2d12deedd2aa71ceaab1c6a7749e0d3c",
+    "0da3a4534e5b4d08e1ae38550021e366306ddc95",
+    "0e3c5b19a5be8f06e879fa50c158a6e1f2e0ab87",
+    "0fa76c348454f4fcf283bcee0c0a71172de19298",
+    "1250dc75fc80361696f2ca57bc4128926206741d",
+    "134f0bab0d04401685873f5793fad3d8a068ef92",
+    "13f2c1e8ab1478fc4eaa93b0d530f4bca6d561c0",
+    "144de64c74a596cfd4747246b508af82e317ad40",
+    "17d7886b662d3c213b6e717ee8c7481abf72e3ec",
+    "184617367724cac9bf4a2994fa897735ec5ac1aa",
+    "1867d543232645a56652966fc3e09e21d552783d",
+    "1995b5d6a80d31bc3a6c1975148b4ff6a88c9f48",
+    "1a7fd23db88ebf14e4010415c002373982698f89",
+    "1acfdebceef1199c3efe5258ab70fe2bd1dc8df3",
+    "1b9a0cc123f94b3b55c7ece98a4396941d80dae8",
+    "1ce37c01ff33b3823d4ae82287dbd850766b77e0",
+    "1d147d66bb6798a9d4736ea4d8f539cbf730a3bf",
+    "1da7f133be5882cd3339ca589073eb627b6989c2",
+    "1ead11949608e23713f2c37d6848716c881c8f94",
+    "1f6d10fc3531bad87cb5d400032b09084694ded8",
+    "1f9b23c4b138079091fdb781d69cfb7295cba86d",
+    "228854cf8e0e16b8097de8a07a60581d7c5c0b05",
+    "2448c73346090a4436b1d1540009bdb0bea3da4a",
+    "247e67f9b1cddec1d33d34b2b244ece8ebd5a20d",
+    "267bb9fae12441d713b2eac7c5800cdbb406c95d",
+    "26f1716c4b3a7d0c4dbe22237409c56eae1b44c1",
+    "27aabd7351470cfff4e785fc6eac31292e26a6b6",
+    "281c9898d4bc287851894e57f663e8ec2a3d5fe0",
+    "285fe472b0f00a290b57acb42dcc1f2c9e77e0f9",
+    "289ec001802d07f17987050a6ae88ddf28d588d5",
+    "296446753820743300a209eb908d12a8c42ed341",
+    "2ace58f36984b4361523eac5a77ebe489075a31e",
+    "2c14f5870cfa0a853983f5502eb3b2735bf7a28d",
+    "2cb42b654bb1b79cff245976cc4983f012d13ca2",
+    "2ee500dedcc00c99ab0674457f5bbd7be7e2dcd6",
+    "2fabb4b6fc8147fe2ccf3cbf14f069c61e1c762a",
+    "2fbabb6f8ee4d9009d5194319f6fee77802f3ecc",
+    "2fdf36d4e2644af4ebd4f5ea9c3f464805861e0e",
+    "3050e4aee25fd0cb034c9836b7c8a2f0ddf14584",
+    "310c8699f2eec9f8e449fa8bcf6506de4a67696f",
+    "31eb2c9ed7df9c1c373ab6f545c614f4bc084906",
+    "326f0e649ba21eeff09716f7c85e0383bdd69608",
+    "329d13aa8c3d1cd5470727301201b567e2e953ed",
+    "32d62c80ec5b7bc35c6a983ec25e44e9837877c3",
+    "34b42b841dba0f52ad43ab464fc2a6de3cb00054",
+    "35e980658f8b8d46a85986b08f4d66f8b26f3f0a",
+    "370353080f954859dee7d8dc58c3e6d57a4fa044",
+    "37fdce3f06fe3b13d05f76ab8f26a1d5a76e4c2a",
+    "390212fe20465e9a82d3b64f07f5a9793335b133",
+    "3a602f8526ff178776616c48ff4c416277ee072b",
+    "40035afc15cdf3537f886d411c59b7d272ece612",
+    "4084a7fb492457f8e31577b16cf4d6bdaf188263",
+    "41335a6b8a062ed9c7623e53e7b1b217d2b86d13",
+    "422da1b3f6e62e9f801f302f5f9b6104f2a99063",
+    "4342dd17280acac4e38011c9f6966b35026d26f2",
+    "43892428e494568059f2aa6b08cc035ad417af2c",
+    "43adb834691228337332a9d242f8f8c7a16097e8",
+    "45a87dfd53cb3b6c1ed217a83dcabacd96d37fa3",
+    "45ef0741bcb604d2d3fe6061f4b0c54c99e9d11a",
+    "4868d96e39454c5955745d92cd53facbedb46d5f",
+    "48e1b830cb89c728694d5fd627be0af69098da0e",
+    "49de2e20f0b5b5a41444163734b7843fbada0013",
+    "4a7c1e364f8779521e758dcff880f8beb0eb0fe2",
+    "4be3803506f687ca2b03d319f543c4d720dd5d22",
+    "4e3ab446a13e63a0ac9a6dc4ea700413de8d6d39",
+    "4f7382f351cfdc3b0eb3e25414a07209f7716381",
+    "50255c0e43d0c2d51e2d76a7598f986bc89c64f0",
+    "505e79c6eedffbb36c14fae90c625b4285bd81a3",
+    "50d4e2f1abb94fe467cb4605affb0c648fc8cff6",
+    "50efe902675ab7919a166307e35434e2d5258ced",
+    "533c306124bb1ca688eee82e7cb3df09e9d1e284",
+    "53f2f856b6249bffd2847dbaf75b9504d034db96",
+    "551f920db794bc1ac7585f85b8b11d450278eaed",
+    "5556b7b21c163bd1d8a05e5dc21604ad238f88bf",
+    "55696ffb28f443ac51738d90097ec8c973cf11f2",
+    "560474e4624cd866ef7e2c6db67863086e33745d",
+    "560ba7edcd9e9ef75b20425c12c758f19d19c574",
+    "5638d9c15e9a5cc9185d303a82ee449364eae5e0",
+    "56f09089345e09ee615e4ac65dc9112bdfbdf02a",
+    "571b3353d145881a3e417c3f7ce2c926ab78992e",
+    "59a265a8b2804a32b397c2343f012adbd862e225",
+    "5a211e1fde5058bd4d902378895f374c9f38bac2",
+    "5a366c25d266eaa2e7015be7656e6086e259a789",
+    "5a7a6b40afb8a36a789e15b22b90954fcd84549e",
+    "5b4a3a1661edc20cc4864ece09341527491236c2",
+    "5f960449b0e12e555930ff705ad77106cb50d574",
+    "6034491c1f484ffad4a9e6d596bc90fca3de8742",
+    "606d49f62d5f3dec54d9dd327e3c174f623f727a",
+    "615dee8a9aa0f97f93476db36aa502e095e00465",
+    "67fc063233a22b742e2fc16650306af4bbe5a9a8",
+    "685f3caf9954d4407c8e3cb4169b8b81b027ad08",
+    "693541f2e3b65d4f1d3238454821392a621e8cfb",
+    "695d1156ab4825f2ae9077a95c8ffb500cad7568",
+    "6961a08bf98667959477ca47c470cd03fd7deffa",
+    "69a3494bb6d80969e52c847c7b59710e38afa265",
+    "6ad2c19f43abbcaf8c1587ef68420ed880eb6fa3",
+    "6afd7d390c64b9cdddd4c330912fa307fedd70e8",
+    "6e5762f76a1324de5fcdcdde548ad33149b4f34c",
+    "71df543009fe5aed0f8d658bffb558feda9e6356",
+    "72fcf1496da5d3e6f0997134fcc711b8176f0b78",
+    "740e4a794357c8e5038396fbe8d94bd74efda44c",
+    "74cd2f9dd1289828b222725cfc30341496cd271d",
+    "74e82b9b1344f234725293d901f849577f38c9a1",
+    "75d7f030fa76cefb211235ae903e06e4082cf502",
+    "7648583f00601728d92f12c101b55d6897225a7a",
+    "76b0c602b5db6f588aef0d7c1ef171bae9e606fe",
+    "7844894cec5de4448d3fbb785cb67cba1016403e",
+    "78684fb38a63b56e4c49fa2860e2d20ac6671b71",
+    "78d0e99e18da7d9116b6d309ed774359c2d2586b",
+    "7d949708856d038185dd8dcf3f0903b6d0d811da",
+    "7da3b2a1f898ae32a35ff74b389234273c03666b",
+    "7e9a23935b9d63d375cd92577f45b9882a970629",
+    "809401df899bd6acd495554016f29efbc291517c",
+    "82d984091b13921db980ec18b06e563ab2f45d99",
+    "82f009bb5fef885ec780a42c8f0ba930f3910acf",
+    "8300806b088a80e61e8eb2058d087cd346972e52",
+    "8423ae95fd2fc9943af6ce77419d96824f4843a4",
+    "84caae2d962139c986a767f499a8c848832f56f0",
+    "85ecdd06dab8ddd8d706d2e97c5a99cc4453b8de",
+    "88a4f5440a8baa49a533287373221181ff6e3f8d",
+    "88d5707d8d2bbec00c0dd65a178530e048d29e49",
+    "8b1491bd35ef50388551a481a42afc172763f276",
+    "8b36787235b4b230ca9f11a094c0bfbface85d8c",
+    "8b768608aba361c9a75db5cb879b1801bfe76d26",
+    "8c067174848a71ca833641853190599fe98df162",
+    "8c1fda652a30f2d3f8aeb4c90587a658c4363c22",
+    "8ceb0834dc26df90d73fae288d12a9a3721f5712",
+    "8d65f0b918233c28a660083c40990f3090b8e3a5",
+    "8ddec2409bd774822849fa024ecfada6b45bbe79",
+    "8e20bfdfb0a9576ed902ba7bb17e2bdda1a4c72f",
+    "8e5def6e2730c14c546197c8f562d8c7e18d3f28",
+    "8f547e9bcfc2e5857f4ee7a5e7f69e74db60da2a",
+    "8fc71db01ea146de5f9c48ea99b21c94d756a77f",
+    "90a5978f8ba2fcbca3ca4e089573f7383d20ebcd",
+    "90ad3a50abc88f05400641915422d315de843c53",
+    "91b57b172fbf1566e3ac5fe347385e4f177a5db6",
+    "929848b6e9b8486a7590c8e51a17c05fb8dfcfa2",
+    "94731f0f838e72c55c18c328ce2739ed8e26f50c",
+    "950beea66714bca5d4c7f608775ff31fa9856943",
+    "97510caa5ee659f64fb13b2f6d7ecf03dff937f0",
+    "9754926d68166f2928d1db5a58085c970c5effa6",
+    "97f682a9db14ffd8633656ddbd3676abf9d3453a",
+    "98574c08884813d265af8bc4ff7a19ed52140f8a",
+    "999016040f5410dac6476fcdbe96093fdaa29d33",
+    "99c892dd84e6325d6c96c325774723e43f2e7f97",
+    "9a00dc9623dfbfa250fde48c3ee85c1153cb396f",
+    "9c2c5902cd6f429fa1e42710405eb821cfa6a39a",
+    "9c67a0614739dd8793083eb894c4394e2c4df5b4",
+    "9d2bef5f7639c10fef3c9ce81e54e72084e54f23",
+    "9d47ccb338552679ae0e66da6a0c810dd5c701f4",
+    "9ef545b006d3a4562b030044311aba9e11bcd35b",
+    "9fbc5469c33a5843c09be1d921cc149c74df0bbc",
+    "9fe2d2a24ceb6add289838e9230c2da3cd7a6af1",
+    "a2eaf6cd35f1a463d79e3ac1eb96efbedef67655",
+    "a41499ac460438af393226f0d0e50a84c5896f72",
+    "a4c0bcede1a81dc384402b5762039304b1d58d89",
+    "a5e59cee44e303135b581d1aea46d8845ad09bf2",
+    "a83015b0e5401a9dee3db6269b178f0f2a62136d",
+    "a9eea15b1a5b957aa1baacdefd672187b2ec5444",
+    "aaf38d06afa2f041b1f32b35f95bfa2e786d86d0",
+    "aaf93ef062452a44d7e3f7be527310a5b34f55ed",
+    "ab14d040254d6487cc2361184f350b5bf313b16d",
+    "ab574f6dfe069a1f8fed24db2a217a724268a1f3",
+    "ae6a8bf796d01ee675ecffb1d260e3facb2215c3",
+    "af8b12ad16798a67078fe33d691eac6b1c4af306",
+    "affc4ad6c19b04544c516608753ad6dc39f66ae9",
+    "b143f81bbab56ac99d6f6048c5d644dbd149ba4e",
+    "b196b5e39b3ed358b814449d9e9adf1dfb24193e",
+    "b4fe532cdd877d66d2c1e4d872844b6a1f7265e2",
+    "b57dd7587a5f4bef8d35b46ba67399fcf70ce42f",
+    "b72991c82d75a2df4efe7bc73ac54f57f1d5a177",
+    "b78c7dadc91e33ff791b26fbc7ac5b43affcb299",
+    "ba6362fe5d366a45831c1d8f149fbdfe3a691d33",
+    "bafb76664b0b585cfde7ad31f5ee4c666f5924b9",
+    "bc568d59d3590fd5943a1b5b42cb7f1f584a01e0",
+    "bc8b62ac85752795ef1c0cebf3d6d8b7ed46861e",
+    "bcf56e2db67bced903d336bab8bb0d2c67c64f92",
+    "bed56a6e709c8f502cb812e0a664777fc9b69543",
+    "bf72c5674a30534ab523a73f9d7d037689e6dc14",
+    "bfdc139c90b3b06a218501a0b6a986eed7a63385",
+    "bff1de03ad270de49f7fc0bad34d733513e62b15",
+    "c03c2495073d401ff4381840d375cf5d5dfa54d2",
+    "c1de20b1f3c3f62ecaa3d870f52a37912f15de0b",
+    "c25925526dde9af11417a5101917644f089b7037",
+    "c288e1c6616a0546d485883af0411afb6cbf4d84",
+    "c3e4e0d2e9043ac014d6c0ea7bdd6554d58d1c5d",
+    "ca81aed13df22d47a22fecd3fb041c83528a23e4",
+    "cb428c4e29117dd0594aea8145fc983b909c923e",
+    "cdde3ccd01489d58ca14c5e68f49e6f7b7590486",
+    "ceb351b8850bd62f435c3b51bddde53cc2c403ec",
+    "cfafb9ffd253e48397132c4e5c2348e079b1b268",
+    "d0d284b6ef6bc4b5bb05523a422ae7e6a165a94b",
+    "d14bd7dbf99a3fc49903f0d248419080677f5cf6",
+    "d30b0cbde85852ba7eba533535f4d0efaa5d0ff4",
+    "d35f5f42ffbd7f784cd25c6a942f52bbfec957ab",
+    "d3eb29c43c45192903aafceece8e02bd700baf36",
+    "d6521361ed0f3c1c551ac3def8f9abbb3d88317b",
+    "d7fb38774ac6b6f463238fa8aab8a73de9c37c9c",
+    "d82b241445172f2ddc7f146d22555d46284d7e98",
+    "d87994a739d827e1d6db7f7a740b4b3b5664bf32",
+    "dbb863bf4caae060687391fdcef8e37700012c96",
+    "dd5c8103f38557b8c6dde5ac9e7c283322b112b7",
+    "e575da4a270139b18d72bed5bc9fed2326f457f9",
+    "e5a0bd48579215119ce1b3104e8e77d66130e928",
+    "e5da1ed5fb8eff46538938ebbfa70ba8a0545789",
+    "e5e5da29be0ded310d8fdc980cb1197407500a93",
+    "e736ae8de5bb488e9de9182fae0b6654a04c54a2",
+    "e746ec2370b2d66b5f210cf2083c314899e8e99b",
+    "e77f030c4da5c7989fa5859f8b6297cd506ee89b",
+    "e9a40f2ea34a571f543bdf7e80731ebbe6eb1eb9",
+    "e9d11e6b6498598da2dd4f8b97d2e2610091a0fe",
+    "ee464953bbdb7ba2a48ba760fe86855f44c036bf",
+    "ef38925076d597067ff234a4e8d17261fc55a0c2",
+    "ef675054e80b0b965f1e9e2493a8164b2eae808e",
+    "effed5d40dfb29fa05b0d2e898a1165824df036d",
+    "f19eb8ee75cd4abb81bed35a9f3989a7a9b013f7",
+    "f1edd33b0e1790a1be7dca3845870ea153d43566",
+    "f2aee6983a19368e6a88162442daac9f5799156e",
+    "f2bfa56c3120e7eb6d4bcdca6882b5bb5138dd00",
+    "f3264dc3c191af633f67c49e5106d3c172ded5d6",
+    "f3a8debffa5e48bc4a6975e44f681c19fe9e4986",
+    "f5f9f8685e5e383844c244a248d186d08fb1c250",
+    "f608f0e1ac268be55175c81737cb4e619c7c6550",
+    "f6b1ec7f45bbcea9a5470303abc0e4a65b43f144",
+    "f6c2102850af6dbe65ce10efe2edbd424135adce",
+    "f734d682e28fb2eb606264a2c68e3915943bc7e4",
+    "f80a66c37f6334a5b9445db9c159631e973e4c66",
+    "f9709dd5a730356952cbc6d9280d62a1ae8fcaaf",
+    "fa403eab224e3088a7318054e19cd084360a050c",
+    "fa8482714c08632e2d77d3e7b09b62bc0549e2d8",
+    "fd955809764291892bffe76dfcaf9b4f0772f3e3",
+    "fe9c58487f33133b188b121d0864fd17cf959a51",
+    "ffb049a4ac67204f1e0d448b57f25508846ecab8"
+  ]
+}

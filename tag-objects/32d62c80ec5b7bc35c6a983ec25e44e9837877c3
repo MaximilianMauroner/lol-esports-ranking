@@ -1,0 +1,11 @@
+object 8586c0816f986d0eb95b02213137a2499d62694a
+type commit
+tag archive/20261019/main/fix/report-match-context
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/report-match-context
+
+Feature group: main
+Original remote branch: refs/heads/fix/report-match-context
+Original commit: 8586c0816f986d0eb95b02213137a2499d62694a
+Source tree and history are retained unchanged.

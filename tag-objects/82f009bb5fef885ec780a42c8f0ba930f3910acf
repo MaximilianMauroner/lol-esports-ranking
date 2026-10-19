@@ -1,0 +1,11 @@
+object dc4b9d1fbbc710b9fc7fd54666b3c71a4823c30e
+type commit
+tag archive/20261019/storage/fix/incremental-ledger-digest-reuse
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/incremental-ledger-digest-reuse
+
+Feature group: storage
+Original remote branch: refs/heads/fix/incremental-ledger-digest-reuse
+Original commit: dc4b9d1fbbc710b9fc7fd54666b3c71a4823c30e
+Source tree and history are retained unchanged.

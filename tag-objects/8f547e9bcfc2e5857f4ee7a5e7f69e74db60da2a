@@ -1,0 +1,11 @@
+object 7dc40a8d2202ecd2111eb70f2c66d9ed6da79d6c
+type commit
+tag archive/20261019/storage/feat/incremental-ranking-crunch
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/incremental-ranking-crunch
+
+Feature group: storage
+Original remote branch: refs/heads/feat/incremental-ranking-crunch
+Original commit: 7dc40a8d2202ecd2111eb70f2c66d9ed6da79d6c
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 9c685d9d5e5714150429412625bda62d525bd123
+type commit
+tag archive/20261019/main/review/local-babysit-20261013
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch review/local-babysit-20261013
+
+Feature group: main
+Original remote branch: refs/heads/review/local-babysit-20261013
+Original commit: 9c685d9d5e5714150429412625bda62d525bd123
+Source tree and history are retained unchanged.

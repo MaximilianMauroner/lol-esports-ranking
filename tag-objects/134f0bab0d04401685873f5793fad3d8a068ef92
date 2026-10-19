@@ -1,0 +1,11 @@
+object 0ce9712ee1a43639c0cca0fdc310261be480beee
+type commit
+tag archive/20261019/board/feat/shared-ranking-board
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/shared-ranking-board
+
+Feature group: board
+Original remote branch: refs/heads/feat/shared-ranking-board
+Original commit: 0ce9712ee1a43639c0cca0fdc310261be480beee
+Source tree and history are retained unchanged.

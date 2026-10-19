@@ -1,0 +1,11 @@
+object b5eaa9b29598e39484a2f4e09a026eb28983d9fa
+type commit
+tag archive/20261019/main/fix/report-comparison-clarity
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/report-comparison-clarity
+
+Feature group: main
+Original remote branch: refs/heads/fix/report-comparison-clarity
+Original commit: b5eaa9b29598e39484a2f4e09a026eb28983d9fa
+Source tree and history are retained unchanged.

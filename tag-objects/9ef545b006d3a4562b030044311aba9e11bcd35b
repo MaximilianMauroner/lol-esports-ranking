@@ -1,0 +1,11 @@
+object 562347d88e8997591a8b6459e3f39dd95ea8e5af
+type commit
+tag archive/20261019/runtime/feat/rust-raw-generation-verification-84
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-raw-generation-verification-84
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-raw-generation-verification-84
+Original commit: 562347d88e8997591a8b6459e3f39dd95ea8e5af
+Source tree and history are retained unchanged.

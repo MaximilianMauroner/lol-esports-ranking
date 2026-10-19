@@ -1,0 +1,11 @@
+object 7f46f1a9b9a48b102cdc3481ef689d610ea856f9
+type commit
+tag archive/20261019/tournaments/feat/group-event-dropdown-by-tier
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/group-event-dropdown-by-tier
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/group-event-dropdown-by-tier
+Original commit: 7f46f1a9b9a48b102cdc3481ef689d610ea856f9
+Source tree and history are retained unchanged.

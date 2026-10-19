@@ -1,0 +1,11 @@
+object ef4d82a2ba3ec24095f3e004545f314c1fec9e4a
+type commit
+tag archive/20261019/runtime/feat/native-http-service
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/native-http-service
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/native-http-service
+Original commit: ef4d82a2ba3ec24095f3e004545f314c1fec9e4a
+Source tree and history are retained unchanged.

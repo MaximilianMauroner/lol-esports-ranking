@@ -1,0 +1,11 @@
+object 18e16048b8d9f2f73eeeb7f0ac4c0f362cd6e0e3
+type commit
+tag archive/20261019/board/design/board-scope-and-compare-ui
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch design/board-scope-and-compare-ui
+
+Feature group: board
+Original remote branch: refs/heads/design/board-scope-and-compare-ui
+Original commit: 18e16048b8d9f2f73eeeb7f0ac4c0f362cd6e0e3
+Source tree and history are retained unchanged.

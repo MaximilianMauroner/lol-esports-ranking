@@ -1,0 +1,11 @@
+object 6f6517a5aee70553c911d8e5f967dd6c14c40ff4
+type commit
+tag archive/20261019/runtime/fix/raw-http-target-capture
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/raw-http-target-capture
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/raw-http-target-capture
+Original commit: 6f6517a5aee70553c911d8e5f967dd6c14c40ff4
+Source tree and history are retained unchanged.

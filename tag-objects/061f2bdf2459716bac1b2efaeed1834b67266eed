@@ -1,0 +1,11 @@
+object 01ad9031641df1416d397b3a47658507fbe6b99c
+type commit
+tag archive/20261019/tournaments/fix/automatic-tournament-ingestion
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/automatic-tournament-ingestion
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/automatic-tournament-ingestion
+Original commit: 01ad9031641df1416d397b3a47658507fbe6b99c
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object f5e1d9a6da02bf11b80a8bc10413cf3e212bcd4d
+type commit
+tag archive/20261019/tournaments/fix/panels-115
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/panels-115
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/panels-115
+Original commit: f5e1d9a6da02bf11b80a8bc10413cf3e212bcd4d
+Source tree and history are retained unchanged.

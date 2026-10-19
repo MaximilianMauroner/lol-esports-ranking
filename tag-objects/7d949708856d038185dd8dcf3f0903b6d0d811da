@@ -1,0 +1,11 @@
+object 975ac6146ab72dc89d6efa2530f95a8f229e240c
+type commit
+tag archive/20261019/tooling/fix/benchmark-diagnostic-lifecycle-20261008
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/benchmark-diagnostic-lifecycle-20261008
+
+Feature group: tooling
+Original remote branch: refs/heads/fix/benchmark-diagnostic-lifecycle-20261008
+Original commit: 975ac6146ab72dc89d6efa2530f95a8f229e240c
+Source tree and history are retained unchanged.

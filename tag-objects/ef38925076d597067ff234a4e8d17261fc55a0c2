@@ -1,0 +1,11 @@
+object 4ec8913227e91bba1bd5bf684af6e3ca38ce7f33
+type commit
+tag archive/20261019/site/fix/labels-accessibility-116
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/labels-accessibility-116
+
+Feature group: site
+Original remote branch: refs/heads/fix/labels-accessibility-116
+Original commit: 4ec8913227e91bba1bd5bf684af6e3ca38ce7f33
+Source tree and history are retained unchanged.

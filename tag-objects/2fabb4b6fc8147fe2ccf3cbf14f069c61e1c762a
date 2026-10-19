@@ -1,0 +1,11 @@
+object cf6f548bbde46045bce2e3a13d4f6027c95ab9ee
+type commit
+tag archive/20261019/runtime/babysit/preserved-rust-stack-20261008
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch babysit/preserved-rust-stack-20261008
+
+Feature group: runtime
+Original remote branch: refs/heads/babysit/preserved-rust-stack-20261008
+Original commit: cf6f548bbde46045bce2e3a13d4f6027c95ab9ee
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object f0cf0d8bf23a909e279a67ea0b5b7b66b7151286
+type commit
+tag archive/20261019/runtime/feat/rust-storage-primitives-84
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-storage-primitives-84
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-storage-primitives-84
+Original commit: f0cf0d8bf23a909e279a67ea0b5b7b66b7151286
+Source tree and history are retained unchanged.

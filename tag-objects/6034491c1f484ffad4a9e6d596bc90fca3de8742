@@ -1,0 +1,11 @@
+object d0e83c12a1aea72cef0f194729b4d976af260eaa
+type commit
+tag archive/20261019/storage/feat/ranking-retention-audits
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-retention-audits
+
+Feature group: storage
+Original remote branch: refs/heads/feat/ranking-retention-audits
+Original commit: d0e83c12a1aea72cef0f194729b4d976af260eaa
+Source tree and history are retained unchanged.

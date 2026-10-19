@@ -1,0 +1,11 @@
+object c3a51f0a01427f2d214de6e6546cf0ee179a2b74
+type commit
+tag archive/20261019/main/ci/coalesce-superseded-pr-checks
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch ci/coalesce-superseded-pr-checks
+
+Feature group: main
+Original remote branch: refs/heads/ci/coalesce-superseded-pr-checks
+Original commit: c3a51f0a01427f2d214de6e6546cf0ee179a2b74
+Source tree and history are retained unchanged.

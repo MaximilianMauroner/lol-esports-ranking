@@ -1,0 +1,11 @@
+object 9bfc89e7f0d2453181ac2c6c0b9fd0b6f779895a
+type commit
+tag archive/20261019/storage/feat/ranking-publication-transaction
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-publication-transaction
+
+Feature group: storage
+Original remote branch: refs/heads/feat/ranking-publication-transaction
+Original commit: 9bfc89e7f0d2453181ac2c6c0b9fd0b6f779895a
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 1634a7ccb98af16dbc81ddecf848856487092c25
+type commit
+tag archive/20261019/tournaments/feat/tournament-brackets
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/tournament-brackets
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/tournament-brackets
+Original commit: 1634a7ccb98af16dbc81ddecf848856487092c25
+Source tree and history are retained unchanged.

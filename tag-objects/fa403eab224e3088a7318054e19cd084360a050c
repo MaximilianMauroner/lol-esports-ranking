@@ -1,0 +1,11 @@
+object 716534538ea2408225a8dcda3a3a026e441f7993
+type commit
+tag archive/20261019/tournaments/feat/leaguepedia-tournament-hub
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/leaguepedia-tournament-hub
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/leaguepedia-tournament-hub
+Original commit: 716534538ea2408225a8dcda3a3a026e441f7993
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object cd15d42a5fa684c0e42edba2ee920a2205728b7a
+type commit
+tag archive/20261019/runtime/fix/published-oracle-golden
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/published-oracle-golden
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/published-oracle-golden
+Original commit: cd15d42a5fa684c0e42edba2ee920a2205728b7a
+Source tree and history are retained unchanged.

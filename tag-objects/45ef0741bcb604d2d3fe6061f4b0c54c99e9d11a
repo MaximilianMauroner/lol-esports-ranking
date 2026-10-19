@@ -1,0 +1,11 @@
+object 324171f582fc9172aa2252ac5e9661c5355237c5
+type commit
+tag archive/20261019/storage/feat/presigned-ranking-delivery
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/presigned-ranking-delivery
+
+Feature group: storage
+Original remote branch: refs/heads/feat/presigned-ranking-delivery
+Original commit: 324171f582fc9172aa2252ac5e9661c5355237c5
+Source tree and history are retained unchanged.

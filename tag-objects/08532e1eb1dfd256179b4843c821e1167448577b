@@ -1,0 +1,11 @@
+object aad9891b3669d8f5c3c229ea15bafc57e0e95a71
+type commit
+tag archive/20261019/tooling/ci/reduce-actions-usage-20261014
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch ci/reduce-actions-usage-20261014
+
+Feature group: tooling
+Original remote branch: refs/heads/ci/reduce-actions-usage-20261014
+Original commit: aad9891b3669d8f5c3c229ea15bafc57e0e95a71
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object b0d35b6000ccaa4e8035e7e187221dda6b33be58
+type commit
+tag archive/20261019/runtime/feat/rust-raw-source
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-raw-source
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-raw-source
+Original commit: b0d35b6000ccaa4e8035e7e187221dda6b33be58
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 46e48baa6eb44f6acee91cce3f25bca3aa090980
+type commit
+tag archive/20261019/storage/feat/incremental-ranking-replay
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/incremental-ranking-replay
+
+Feature group: storage
+Original remote branch: refs/heads/feat/incremental-ranking-replay
+Original commit: 46e48baa6eb44f6acee91cce3f25bca3aa090980
+Source tree and history are retained unchanged.

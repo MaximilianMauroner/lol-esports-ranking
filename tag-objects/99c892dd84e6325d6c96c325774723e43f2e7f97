@@ -1,0 +1,11 @@
+object 7ec98ef7a0693d4cadbd29f8edc207c7855653cc
+type commit
+tag archive/20261019/board/t3code/mcp-f8ea25caedef40fa
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch t3code/mcp-f8ea25caedef40fa
+
+Feature group: board
+Original remote branch: refs/heads/t3code/mcp-f8ea25caedef40fa
+Original commit: 7ec98ef7a0693d4cadbd29f8edc207c7855653cc
+Source tree and history are retained unchanged.

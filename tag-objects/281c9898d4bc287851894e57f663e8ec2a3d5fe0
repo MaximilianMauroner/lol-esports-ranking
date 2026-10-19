@@ -1,0 +1,11 @@
+object a8be13c932e38927b6b264a49581469ede30e6a3
+type commit
+tag archive/20261019/tournaments/feat/tournament-source-delivery-acceptance
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/tournament-source-delivery-acceptance
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/tournament-source-delivery-acceptance
+Original commit: a8be13c932e38927b6b264a49581469ede30e6a3
+Source tree and history are retained unchanged.

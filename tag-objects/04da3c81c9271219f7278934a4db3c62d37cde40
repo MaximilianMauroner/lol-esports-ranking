@@ -1,0 +1,11 @@
+object 5205f2721805d8e20d4248977cc270477728ac45
+type commit
+tag archive/20261019/runtime/feat/rust-state-authority-84
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-state-authority-84
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-state-authority-84
+Original commit: 5205f2721805d8e20d4248977cc270477728ac45
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 9c3733a5f409a380db50bc618f67bd2f564e57c0
+type commit
+tag archive/20261019/storage/refactor/public-artifact-references
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch refactor/public-artifact-references
+
+Feature group: storage
+Original remote branch: refs/heads/refactor/public-artifact-references
+Original commit: 9c3733a5f409a380db50bc618f67bd2f564e57c0
+Source tree and history are retained unchanged.

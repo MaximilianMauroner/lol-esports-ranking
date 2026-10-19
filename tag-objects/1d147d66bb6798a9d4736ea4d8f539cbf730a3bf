@@ -1,0 +1,11 @@
+object 1e9a2a8619c8b04bb9c74d2ccf2a8e0b04496d0e
+type commit
+tag archive/20261019/tooling/cost/power-index-recovery-20261014
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch cost/power-index-recovery-20261014
+
+Feature group: tooling
+Original remote branch: refs/heads/cost/power-index-recovery-20261014
+Original commit: 1e9a2a8619c8b04bb9c74d2ccf2a8e0b04496d0e
+Source tree and history are retained unchanged.

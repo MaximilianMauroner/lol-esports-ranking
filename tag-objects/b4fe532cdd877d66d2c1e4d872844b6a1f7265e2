@@ -1,0 +1,11 @@
+object b45b14455b981c35cc5ecaa947d1e0c89549845c
+type commit
+tag archive/20261019/tournaments/fix/worlds-knockout-probabilities-75
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/worlds-knockout-probabilities-75
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/worlds-knockout-probabilities-75
+Original commit: b45b14455b981c35cc5ecaa947d1e0c89549845c
+Source tree and history are retained unchanged.

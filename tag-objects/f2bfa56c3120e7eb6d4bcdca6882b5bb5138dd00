@@ -1,0 +1,11 @@
+object 610f30e47fafa8e6f7c082a3f153974a4378242c
+type commit
+tag archive/20261019/tournaments/fix/team-previews-demacia-cup
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/team-previews-demacia-cup
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/team-previews-demacia-cup
+Original commit: 610f30e47fafa8e6f7c082a3f153974a4378242c
+Source tree and history are retained unchanged.

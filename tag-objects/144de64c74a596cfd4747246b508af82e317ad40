@@ -1,0 +1,11 @@
+object 6e8830e8c4f4766390f8bdf6925c802b063c9de1
+type commit
+tag archive/20261019/tournaments/feat/worlds-2026-knockout-47
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/worlds-2026-knockout-47
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/worlds-2026-knockout-47
+Original commit: 6e8830e8c4f4766390f8bdf6925c802b063c9de1
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 201e9c8d4ecf43237f9999d14744609ccb06377d
+type commit
+tag archive/20261019/runtime/feat/native-ranking-origin
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/native-ranking-origin
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/native-ranking-origin
+Original commit: 201e9c8d4ecf43237f9999d14744609ccb06377d
+Source tree and history are retained unchanged.

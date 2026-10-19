@@ -1,0 +1,11 @@
+object d701fc929563ffb82aefbf161472f6c755386387
+type commit
+tag archive/20261019/site/feat/site-cleanup
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/site-cleanup
+
+Feature group: site
+Original remote branch: refs/heads/feat/site-cleanup
+Original commit: d701fc929563ffb82aefbf161472f6c755386387
+Source tree and history are retained unchanged.

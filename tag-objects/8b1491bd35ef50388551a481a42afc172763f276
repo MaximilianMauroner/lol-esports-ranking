@@ -1,0 +1,11 @@
+object 4483456ac7eeb17f98b64c00b58c5e3a3e1b6ec4
+type commit
+tag archive/20261019/runtime/fix/minio-svcacct-admin-account
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/minio-svcacct-admin-account
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/minio-svcacct-admin-account
+Original commit: 4483456ac7eeb17f98b64c00b58c5e3a3e1b6ec4
+Source tree and history are retained unchanged.

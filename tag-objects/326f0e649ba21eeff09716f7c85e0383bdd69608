@@ -1,0 +1,11 @@
+object 455b2eb7f6667ec9befcb66695e7552ebb819c20
+type commit
+tag archive/20261019/runtime/test/diagnose-origin-iam-fixtures
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch test/diagnose-origin-iam-fixtures
+
+Feature group: runtime
+Original remote branch: refs/heads/test/diagnose-origin-iam-fixtures
+Original commit: 455b2eb7f6667ec9befcb66695e7552ebb819c20
+Source tree and history are retained unchanged.

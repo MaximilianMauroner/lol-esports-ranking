@@ -1,0 +1,11 @@
+object 55113b66a6c8e08c9dcc6e7e06a24b7f59bfe005
+type commit
+tag archive/20261019/runtime/feat/rust-m0-parity-fixtures
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-m0-parity-fixtures
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-m0-parity-fixtures
+Original commit: 55113b66a6c8e08c9dcc6e7e06a24b7f59bfe005
+Source tree and history are retained unchanged.

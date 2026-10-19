@@ -1,0 +1,11 @@
+object 083a0fb9dc15833e8f65ac82a8d52927a69af6ca
+type commit
+tag archive/20261019/runtime/feat/rust-public-generation-artifacts-84
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-public-generation-artifacts-84
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-public-generation-artifacts-84
+Original commit: 083a0fb9dc15833e8f65ac82a8d52927a69af6ca
+Source tree and history are retained unchanged.

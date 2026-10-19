@@ -1,0 +1,11 @@
+object 547198fcd91001540326da5884738c304e2d223e
+type commit
+tag archive/20261019/tournaments/fix/swiss-draw-buttons
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/swiss-draw-buttons
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/swiss-draw-buttons
+Original commit: 547198fcd91001540326da5884738c304e2d223e
+Source tree and history are retained unchanged.

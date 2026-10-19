@@ -1,0 +1,11 @@
+object 9a17a89926169958eb44c6f4b09df807c50469a0
+type commit
+tag archive/20261019/runtime/feat/rust-m0-code-unit-order
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-m0-code-unit-order
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-m0-code-unit-order
+Original commit: 9a17a89926169958eb44c6f4b09df807c50469a0
+Source tree and history are retained unchanged.

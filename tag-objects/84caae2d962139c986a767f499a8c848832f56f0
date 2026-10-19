@@ -1,0 +1,11 @@
+object d0551193fbcfd9cd9a5367942c6712e9428974fa
+type commit
+tag archive/20261019/runtime/feat/rust-public-archive-84
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-public-archive-84
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-public-archive-84
+Original commit: d0551193fbcfd9cd9a5367942c6712e9428974fa
+Source tree and history are retained unchanged.

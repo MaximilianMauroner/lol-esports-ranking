@@ -1,0 +1,11 @@
+object 069022e54b5ca76e4537b3da36eafeb8f3548226
+type commit
+tag archive/20261019/runtime/fix/native-origin-fixture-types
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/native-origin-fixture-types
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/native-origin-fixture-types
+Original commit: 069022e54b5ca76e4537b3da36eafeb8f3548226
+Source tree and history are retained unchanged.

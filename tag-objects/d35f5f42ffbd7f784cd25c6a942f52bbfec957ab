@@ -1,0 +1,11 @@
+object 42ca87688851d1afbb01298fd17b64b428ac791c
+type commit
+tag archive/20261019/storage/refactor/digest-object-identity
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch refactor/digest-object-identity
+
+Feature group: storage
+Original remote branch: refs/heads/refactor/digest-object-identity
+Original commit: 42ca87688851d1afbb01298fd17b64b428ac791c
+Source tree and history are retained unchanged.

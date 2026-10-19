@@ -1,0 +1,11 @@
+object 31bb67ed22a31505b2f95c7afcc14107c5a87895
+type commit
+tag archive/20261019/engine/fix/cup-source-reconciliation
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/cup-source-reconciliation
+
+Feature group: engine
+Original remote branch: refs/heads/fix/cup-source-reconciliation
+Original commit: 31bb67ed22a31505b2f95c7afcc14107c5a87895
+Source tree and history are retained unchanged.

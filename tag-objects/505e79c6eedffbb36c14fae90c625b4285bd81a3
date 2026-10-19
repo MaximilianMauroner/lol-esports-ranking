@@ -1,0 +1,11 @@
+object 2adb9df00ad17b227919d69ce2e798a4ec66f34c
+type commit
+tag archive/20261019/engine/fix/season-2026-patch-import
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/season-2026-patch-import
+
+Feature group: engine
+Original remote branch: refs/heads/fix/season-2026-patch-import
+Original commit: 2adb9df00ad17b227919d69ce2e798a4ec66f34c
+Source tree and history are retained unchanged.

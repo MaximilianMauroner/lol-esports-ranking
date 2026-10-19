@@ -1,0 +1,11 @@
+object eb8672953129ccdcaafb108a8e00320c638db502
+type commit
+tag archive/20261019/tooling/chore/ignore-local-t3-json-20261014
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch chore/ignore-local-t3-json-20261014
+
+Feature group: tooling
+Original remote branch: refs/heads/chore/ignore-local-t3-json-20261014
+Original commit: eb8672953129ccdcaafb108a8e00320c638db502
+Source tree and history are retained unchanged.

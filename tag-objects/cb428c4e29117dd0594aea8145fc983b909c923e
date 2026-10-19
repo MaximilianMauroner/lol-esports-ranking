@@ -1,0 +1,11 @@
+object d8d085b4c7ebe90133aef9f4569cb21b53a2a238
+type commit
+tag archive/20261019/site/fix/layout-111
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/layout-111
+
+Feature group: site
+Original remote branch: refs/heads/fix/layout-111
+Original commit: d8d085b4c7ebe90133aef9f4569cb21b53a2a238
+Source tree and history are retained unchanged.

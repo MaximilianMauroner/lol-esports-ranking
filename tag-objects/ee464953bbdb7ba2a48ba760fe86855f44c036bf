@@ -1,0 +1,11 @@
+object 4e5b01183467e1b2e61d0c51e8579b75866fc1b4
+type commit
+tag archive/20261019/site/fix/sources-panel-119
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/sources-panel-119
+
+Feature group: site
+Original remote branch: refs/heads/fix/sources-panel-119
+Original commit: 4e5b01183467e1b2e61d0c51e8579b75866fc1b4
+Source tree and history are retained unchanged.

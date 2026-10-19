@@ -1,0 +1,11 @@
+object e91fd466b2bf438c86a8426730028a284cf99871
+type commit
+tag archive/20261019/board/fix/url-state-114
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/url-state-114
+
+Feature group: board
+Original remote branch: refs/heads/fix/url-state-114
+Original commit: e91fd466b2bf438c86a8426730028a284cf99871
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object b96c07c3f08c6c299557e62e2920a48f6f95c743
+type commit
+tag archive/20261019/tournaments/feat/swiss-scenario-preview
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/swiss-scenario-preview
+
+Feature group: tournaments
+Original remote branch: refs/heads/feat/swiss-scenario-preview
+Original commit: b96c07c3f08c6c299557e62e2920a48f6f95c743
+Source tree and history are retained unchanged.

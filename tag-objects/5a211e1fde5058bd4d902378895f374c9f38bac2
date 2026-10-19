@@ -1,0 +1,11 @@
+object 6ea53d1415ab0b484e2ec3db1fc52f56802d9a68
+type commit
+tag archive/20261019/main/review/oracle-cup-consumers
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch review/oracle-cup-consumers
+
+Feature group: main
+Original remote branch: refs/heads/review/oracle-cup-consumers
+Original commit: 6ea53d1415ab0b484e2ec3db1fc52f56802d9a68
+Source tree and history are retained unchanged.

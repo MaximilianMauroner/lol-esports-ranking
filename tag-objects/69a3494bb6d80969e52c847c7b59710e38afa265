@@ -1,0 +1,11 @@
+object f721aa2530ea9640ad24af230f9f82be3eff8379
+type commit
+tag archive/20261019/engine/feat/ranking-accuracy
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/ranking-accuracy
+
+Feature group: engine
+Original remote branch: refs/heads/feat/ranking-accuracy
+Original commit: f721aa2530ea9640ad24af230f9f82be3eff8379
+Source tree and history are retained unchanged.

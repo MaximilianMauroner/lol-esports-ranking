@@ -1,0 +1,11 @@
+object 8eaf7e6dfce326af7478985ed15f539fd2847117
+type commit
+tag archive/20261019/runtime/babysit/rust-fetch-after89-20261008
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch babysit/rust-fetch-after89-20261008
+
+Feature group: runtime
+Original remote branch: refs/heads/babysit/rust-fetch-after89-20261008
+Original commit: 8eaf7e6dfce326af7478985ed15f539fd2847117
+Source tree and history are retained unchanged.

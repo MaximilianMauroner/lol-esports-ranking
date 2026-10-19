@@ -1,8 +1,0 @@
-[build]
-builder = "RAILPACK"
-buildCommand = "pnpm run typecheck"
-
-[deploy]
-startCommand = "node scripts/refresh-once.mjs"
-cronSchedule = "0 */6 * * *"
-restartPolicyType = "NEVER"

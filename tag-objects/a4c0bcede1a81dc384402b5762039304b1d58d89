@@ -1,0 +1,11 @@
+object 2bb0dd60f4ac1001bcae8c8262684311d9b5b8fb
+type commit
+tag archive/20261019/tooling/refactor/repository-overhaul-2
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch refactor/repository-overhaul-2
+
+Feature group: tooling
+Original remote branch: refs/heads/refactor/repository-overhaul-2
+Original commit: 2bb0dd60f4ac1001bcae8c8262684311d9b5b8fb
+Source tree and history are retained unchanged.

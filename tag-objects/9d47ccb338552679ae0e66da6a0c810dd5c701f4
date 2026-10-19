@@ -1,0 +1,11 @@
+object 962a06c133eb75ddda6c238716ce6a69642d54fc
+type commit
+tag archive/20261019/runtime/feat/rust-provider-fetch
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch feat/rust-provider-fetch
+
+Feature group: runtime
+Original remote branch: refs/heads/feat/rust-provider-fetch
+Original commit: 962a06c133eb75ddda6c238716ce6a69642d54fc
+Source tree and history are retained unchanged.

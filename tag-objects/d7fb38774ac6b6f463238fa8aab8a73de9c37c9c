@@ -1,0 +1,11 @@
+object 860336aaade31bd33a0b43157ad9629dd5dc436c
+type commit
+tag archive/20261019/runtime/babysit/rust-raw-after89-20261008
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch babysit/rust-raw-after89-20261008
+
+Feature group: runtime
+Original remote branch: refs/heads/babysit/rust-raw-after89-20261008
+Original commit: 860336aaade31bd33a0b43157ad9629dd5dc436c
+Source tree and history are retained unchanged.

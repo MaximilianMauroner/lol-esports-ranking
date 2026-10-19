@@ -1,0 +1,11 @@
+object 686b019a015b62135eaa9662bff3d4b2c8108f06
+type commit
+tag archive/20261019/runtime/babysit/ranking-rust-stack-20261008
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch babysit/ranking-rust-stack-20261008
+
+Feature group: runtime
+Original remote branch: refs/heads/babysit/ranking-rust-stack-20261008
+Original commit: 686b019a015b62135eaa9662bff3d4b2c8108f06
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object c2a87aebf3cb8fb8e09c82cdc79f64c14613ccd3
+type commit
+tag archive/20261019/site/fix/layout-narrative-paths
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/layout-narrative-paths
+
+Feature group: site
+Original remote branch: refs/heads/fix/layout-narrative-paths
+Original commit: c2a87aebf3cb8fb8e09c82cdc79f64c14613ccd3
+Source tree and history are retained unchanged.

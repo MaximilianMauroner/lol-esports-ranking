@@ -1,0 +1,11 @@
+object 221389e4d15e95a5a0857c73baed6534d4a00fcf
+type commit
+tag archive/20261019/runtime/fix/reader-connection-isolation
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/reader-connection-isolation
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/reader-connection-isolation
+Original commit: 221389e4d15e95a5a0857c73baed6534d4a00fcf
+Source tree and history are retained unchanged.

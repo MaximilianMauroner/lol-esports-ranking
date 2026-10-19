@@ -1,0 +1,11 @@
+object b04e2b9e84ae26e863ad0e4a7fcc82e230b53ae1
+type commit
+tag archive/20261019/board/fix/board-address-render-wait
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/board-address-render-wait
+
+Feature group: board
+Original remote branch: refs/heads/fix/board-address-render-wait
+Original commit: b04e2b9e84ae26e863ad0e4a7fcc82e230b53ae1
+Source tree and history are retained unchanged.

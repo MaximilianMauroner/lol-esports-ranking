@@ -1,0 +1,11 @@
+object edcc6a58a9068e2ae8de21577d2c8bf42c197484
+type commit
+tag archive/20261019/tournaments/backup/lol-swiss-team-names-20261019
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch backup/lol-swiss-team-names-20261019
+
+Feature group: tournaments
+Original remote branch: refs/heads/backup/lol-swiss-team-names-20261019
+Original commit: edcc6a58a9068e2ae8de21577d2c8bf42c197484
+Source tree and history are retained unchanged.

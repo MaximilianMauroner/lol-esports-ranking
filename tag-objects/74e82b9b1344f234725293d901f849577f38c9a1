@@ -1,0 +1,11 @@
+object 3e11e28099ff452f0375bc12f17a55b36e4d6bf4
+type commit
+tag archive/20261019/runtime/fix/native-origin-typecheck
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch fix/native-origin-typecheck
+
+Feature group: runtime
+Original remote branch: refs/heads/fix/native-origin-typecheck
+Original commit: 3e11e28099ff452f0375bc12f17a55b36e4d6bf4
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 6aa62c82c855be2f04309a1bc6efda0e97014fba
+type commit
+tag archive/20261019/board/fix/trajectory-date-labels
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/trajectory-date-labels
+
+Feature group: board
+Original remote branch: refs/heads/fix/trajectory-date-labels
+Original commit: 6aa62c82c855be2f04309a1bc6efda0e97014fba
+Source tree and history are retained unchanged.

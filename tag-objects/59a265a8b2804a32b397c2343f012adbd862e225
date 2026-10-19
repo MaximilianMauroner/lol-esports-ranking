@@ -1,0 +1,11 @@
+object a992829625bb20ecb80b06c557e4f47f60afb024
+type commit
+tag archive/20261019/tournaments/fix/swiss-draw-and-cls
+tagger Codex <codex@users.noreply.github.com> 1792413512 +0000
+
+Archive original branch fix/swiss-draw-and-cls
+
+Feature group: tournaments
+Original remote branch: refs/heads/fix/swiss-draw-and-cls
+Original commit: a992829625bb20ecb80b06c557e4f47f60afb024
+Source tree and history are retained unchanged.

@@ -1,0 +1,11 @@
+object 0a6bde8b323c2be01f42ceeeaab5723f385161de
+type commit
+tag archive/20261019/product/docs/product-foundation-spec
+tagger Codex <codex@users.noreply.github.com> 1792413511 +0000
+
+Archive original branch docs/product-foundation-spec
+
+Feature group: product
+Original remote branch: refs/heads/docs/product-foundation-spec
+Original commit: 0a6bde8b323c2be01f42ceeeaab5723f385161de
+Source tree and history are retained unchanged.
