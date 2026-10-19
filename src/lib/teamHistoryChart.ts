@@ -3,7 +3,6 @@ import type { TeamHistorySeries } from './snapshot'
 import { isMatchChartPointDetail, type ChartAttributionEntry, type ChartModelDetail, type ChartPoint, type ChartPointDetail } from './chartPoints'
 import { groupEntriesByDate } from './timelineCompaction'
 import { POWER_COMPONENT_LABELS } from './ratingComponentLabels'
-import { compareCodeUnits } from './codeUnitOrder.mjs'
 
 type TeamHistoryPoint = TeamHistorySeries['points'][number]
 type TeamHistoryContext = NonNullable<TeamHistoryPoint[3]>
@@ -77,45 +76,20 @@ export function withVisibleDeltas(points: ChartPoint[]): ChartPoint[] {
   })
 }
 
+/** Use the published rank at each recorded day, independent of loaded team shards. */
 export function deriveDailyRankSeries(history: Record<string, TeamHistorySeries>) {
-  const updatesByDay = new Map<string, { key: string; rating: number; detail?: ChartPointDetail }[]>()
-  for (const [key, series] of Object.entries(history)) {
-    for (const group of dailyHistoryGroups(series.points)) {
+  return new Map(Object.entries(history).map(([key, series]) => {
+    const points = dailyHistoryGroups(series.points).flatMap((group) => {
       const latest = group.points.at(-1)!
-      const rating = latest[1]
-      if (!Number.isFinite(rating)) continue
-      const updates = updatesByDay.get(group.date) ?? []
-      updates.push({ key, rating, detail: chartPointDetailFromHistoryGroup(group.points) })
-      updatesByDay.set(group.date, updates)
-    }
-  }
-
-  const ratings = new Map<string, number>()
-  const rankedSeries = new Map<string, ChartPoint[]>()
-  const days = [...updatesByDay.keys()].sort()
-  for (const day of days) {
-    const dayDetails = new Map<string, ChartPointDetail>()
-    for (const update of updatesByDay.get(day) ?? []) {
-      ratings.set(update.key, update.rating)
-      if (update.detail) dayDetails.set(update.key, update.detail)
-    }
-    const rankedKeys = [...ratings.entries()]
-      .sort((left, right) => right[1] - left[1] || compareCodeUnits(left[0], right[0]))
-      .map(([key]) => key)
-    const t = Date.parse(day)
-    for (let index = 0; index < rankedKeys.length; index += 1) {
-      const key = rankedKeys[index]
-      const points = rankedSeries.get(key) ?? []
-      const detail = dayDetails.get(key)
-      points.push({ t, y: index + 1, ...(detail ? { detail } : {}) })
-      rankedSeries.set(key, points)
-    }
-  }
-
-  for (const [key, points] of rankedSeries) {
-    rankedSeries.set(key, withRankVisibleDeltas(points))
-  }
-  return rankedSeries
+      if (!Number.isInteger(latest[2]) || latest[2] < 1) return []
+      return [{
+        t: Date.parse(group.date),
+        y: latest[2],
+        detail: chartPointDetailFromHistoryGroup(group.points),
+      }]
+    })
+    return [key, withRankVisibleDeltas(points)]
+  }))
 }
 
 function dailyHistoryGroups(points: TeamHistoryPoint[]) {
