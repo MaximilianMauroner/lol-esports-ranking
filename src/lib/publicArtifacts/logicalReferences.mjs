@@ -61,6 +61,16 @@ export function artifactReferences(content) {
   return [...paths]
 }
 
+export function assertReferenceClosure(edges, available) {
+  for (const [referrer, targets] of edges) {
+    for (const target of targets) {
+      if (!available.has(target)) {
+        throw new Error(`Incomplete public artifact references: ${referrer} references missing ${target}. Select the generated target in createPublicArtifactWritePlan.`)
+      }
+    }
+  }
+}
+
 export function normalizeLogicalArtifactUrl(value) {
   const url = new URL(value, 'https://public-artifacts.invalid')
   if (!url.pathname.startsWith('/data/')) return value
