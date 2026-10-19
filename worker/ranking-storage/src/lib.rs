@@ -4,6 +4,7 @@ mod public_generation;
 mod publication;
 mod raw_generation;
 mod s3;
+pub mod serving;
 mod state_generation;
 
 use ranking_contracts::{Result, canonical_json_value, gunzip, js_pretty_json_value, sha256};
