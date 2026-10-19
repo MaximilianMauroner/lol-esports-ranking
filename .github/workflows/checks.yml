@@ -20,7 +20,7 @@ jobs:
   checks:
     name: Install, verify, and bundle
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     outputs:
       full-validation: ${{ steps.changes.outputs.full-validation }}
 
