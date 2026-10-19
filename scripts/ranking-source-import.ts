@@ -5,8 +5,8 @@ import { mergeCommunityMatchSources } from '../src/lib/importers/communitySource
 import { importLeaguepediaSnapshot } from '../src/lib/importers/leaguepedia'
 import { importLolEsportsScheduleSnapshot } from '../src/lib/importers/lolEsports'
 import { importOraclesElixirCsv } from '../src/lib/importers/oraclesElixir'
-import { filterPublishedRatingUniverseInput, filterPublishedRatingUniverseMatches } from '../src/lib/ratingUniverse'
-import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles'
+import { filterPublishedRatingUniverseInput } from '../src/lib/ratingUniverse'
+import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles'
 import type { DataSourceInfo, DataSourceWarning } from '../src/lib/snapshot'
 import type { MatchRecord, TeamProfile } from '../src/types'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -68,11 +68,11 @@ export async function importRankingSourceData({
   for (const jsonPath of lolEsportsPaths) {
     lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(await readFile(jsonPath, 'utf8')), { sourceFileName: basename(jsonPath) }))
   }
-  const importedMatches = mergeCommunityMatchSources({
+  const importedMatches = resolveCompetitionHomeLeagues(mergeCommunityMatchSources({
     oracleMatches: oracleImports.flatMap((result) => result.matches),
     leaguepediaMatches: leaguepediaImports.flatMap((result) => result.matches),
     lolEsportsReferences: lolEsportsImports.flatMap((result) => result.events),
-  })
+  }))
   const importedTeams = mergeTeamProfiles([...leaguepediaImports.map((result) => result.teams), ...oracleImports.map((result) => result.teams)])
   const mergedTeams = importedMatches.length > 0
     ? { ...deriveTeamProfilesFromMatches(importedMatches, importedTeams), ...knownTeamIdentities }
@@ -95,24 +95,24 @@ export async function importRankingSourceData({
       ...(sourceRefreshReceipt('lolesports', manifest) ? { refreshReceipt: sourceRefreshReceipt('lolesports', manifest) } : {}),
     })),
     ...oracleImports.map((result): DataSourceInfo => {
-      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
+      const ratedMatches = matches.filter((match) => match.sourceProvider === 'oracles-elixir' && match.sourceFileName === result.source.fileName)
       return {
         name: result.source.fileName ? `Oracle's Elixir CSV: ${result.source.fileName}` : "Oracle's Elixir CSV",
         kind: 'game-stats', url: result.source.url, retrievedAt: result.source.retrievedAt,
         coverageStart: dateRange(ratedMatches).start, coverageEnd: dateRange(ratedMatches).end, rowCount: ratedMatches.length,
-        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after the published team-universe filter. ${result.source.attribution}`,
+        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Oracle's Elixir imports after source reconciliation and the published team-universe filter. ${result.source.attribution}`,
         status: ratedMatches.length > 0 ? 'active' : 'reference-only',
         ...(oracleWarnings.length ? { warnings: oracleWarnings } : {}),
         ...(sourceRefreshReceipt('oracle', manifest) ? { refreshReceipt: sourceRefreshReceipt('oracle', manifest) } : {}),
       }
     }),
     ...leaguepediaImports.map((result): DataSourceInfo => {
-      const ratedMatches = filterPublishedRatingUniverseMatches(result.matches, mergedTeams)
+      const ratedMatches = matches.filter((match) => match.sourceProvider === 'leaguepedia-cargo' && match.sourceFileName === result.source.fileName)
       return {
         name: result.source.fileName ? `Leaguepedia Cargo: ${result.source.fileName}` : 'Leaguepedia Cargo',
         kind: 'match-data', url: result.source.url, retrievedAt: result.source.retrievedAt,
         coverageStart: dateRange(ratedMatches).start, coverageEnd: dateRange(ratedMatches).end, rowCount: ratedMatches.length,
-        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after the published team-universe filter. ${result.source.attribution}`,
+        description: `${ratedMatches.length} rated games retained from ${result.source.gameCount} Leaguepedia Cargo imports for requested range ${result.source.start ?? 'unknown'} to ${result.source.end ?? 'unknown'} after source reconciliation and the published team-universe filter. ${result.source.attribution}`,
         status: ratedMatches.length > 0 ? 'active' : 'reference-only',
         ...(leaguepediaWarnings.length ? { warnings: leaguepediaWarnings } : {}),
         ...(sourceRefreshReceipt('leaguepedia', manifest) ? { refreshReceipt: sourceRefreshReceipt('leaguepedia', manifest) } : {}),

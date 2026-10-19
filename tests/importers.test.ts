@@ -48,6 +48,16 @@ test('Leaguepedia international rows use known team home leagues when explicit f
   assert.notEqual(lpl.delta, 0)
 })
 
+test('Leaguepedia import retains the public export URL from a downloaded snapshot', () => {
+  const sourceUrl = 'https://lol.fandom.com/wiki/Special:CargoExport?tables=ScoreboardGames'
+  const result = importLeaguepediaSnapshot({
+    sourceUrl,
+    matches: [{ id: 'public-export', date: '2026-10-03', event: '2026 Demacia Cup Global Invitational', patch: 26.18, teamA: 'JD Gaming', teamB: 'HANJIN BRION', winner: 'HANJIN BRION' }],
+  })
+  assert.equal(result.source.url, sourceUrl)
+  assert.equal(result.matches[0].sourceUrl, sourceUrl)
+})
+
 test('Leaguepedia import accepts numeric and missing CargoExport patch values', () => {
   const result = importLeaguepediaSnapshot({
     matches: [

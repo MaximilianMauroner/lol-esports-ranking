@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, createTournamentMovementArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
+import { createMatchHistoryArtifacts, createPlayerDirectory, createRegionHistory, createStaticRankingData, createStaticRankingSummaryData, createTeamHistory, createTeamHistoryArtifacts, createTournamentMovementArtifacts, snapshotKey, teamStandingKey } from '../src/lib/snapshot.ts'
 import { emptyRatingUpdateLedger } from '../src/lib/ratingCalculations.ts'
 import { PUBLIC_ARTIFACT_SCHEMA_VERSION, compactStanding } from '../src/lib/publicArtifacts/schema.ts'
 import { resolvePlayerScope } from '../src/lib/playerScopes.ts'
@@ -2253,6 +2253,34 @@ test('season filters publish calendar-aligned season-end standings instead of cu
   ])
   assert.equal(betaSeries?.points.at(-1)?.[3]?.opponent, 'Alpha')
   assert.equal(betaSeries?.points.at(-1)?.[3]?.result, 'W')
+})
+
+test('source seasons without calendar-aligned matches do not publish empty year scopes', () => {
+  const data = createStaticRankingData({
+    matches: [
+      seasonFilterMatch('valid-season-2026', '2026-10-01', 'Alpha'),
+      seasonFilterMatch('source-season-2027', '2026-10-02', 'Beta', 2027),
+    ],
+    teams: {
+      Alpha: { name: 'Alpha', code: 'ALP', region: 'LCK', league: 'LCK' },
+      Beta: { name: 'Beta', code: 'BET', region: 'LCK', league: 'LCK' },
+    },
+    rosters: {},
+    generatedAt: '2026-10-06T00:00:00.000Z',
+  })
+  const season2026Key = snapshotKey({ season: '2026', event: 'All', region: 'All' })
+  const season2027Key = snapshotKey({ season: '2027', event: 'All', region: 'All' })
+  const { manifest } = createStaticRankingSummaryData(data)
+  const history = createMatchHistoryArtifacts(data)
+
+  assert.deepEqual(manifest.filterOptions.seasons, ['All', '2026'])
+  assert.equal(data.snapshots[season2026Key].matchCount, 1)
+  assert.equal(data.snapshots[season2027Key], undefined)
+  assert.equal(manifest.snapshotIndex[season2027Key], undefined)
+  assert.equal(history.index.scopeIndex[season2027Key], undefined)
+  assert.equal(history.index.scopeIndex[season2026Key].gameCount, 1)
+  assert.equal(data.matches.length, 2)
+  assert.equal(data.snapshots[data.defaultSnapshotKey].matchCount, 2)
 })
 
 test('season scoped standings use league observed inside that season', () => {

@@ -1,6 +1,7 @@
 import {
   isCompetitionOnlyLeague,
   isKnownDomesticHomeLeague,
+  isUnknownLeague,
   leagueProfileScore,
   regionForLeague,
 } from '../data/competitionTaxonomy'
@@ -8,6 +9,29 @@ import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../data/team
 import type { MatchRecord, Region, TeamProfile } from '../types'
 
 export { isCompetitionOnlyLeague, isUnknownLeague } from '../data/competitionTaxonomy'
+
+/** Fill tournament placeholders from domestic evidence available before the game. */
+export function resolveCompetitionHomeLeagues(matches: MatchRecord[]) {
+  const observed = new Map<string, { league: string; region: Region }>()
+  return [...matches].sort((left, right) => (left.datetimeUtc ?? left.date).localeCompare(right.datetimeUtc ?? right.date)).map((match) => {
+    const resolved = { ...match }
+    for (const side of ['A', 'B'] as const) {
+      const team = canonicalTeamNameFor(match[`team${side}`])
+      const league = match[`team${side}HomeLeague`]
+      if (isKnownDomesticHomeLeague(league)) {
+        if (!isCompetitionOnlyLeague(match.league)) {
+          observed.set(team, { league, region: match[`team${side}Region`] ?? regionForLeague(league) })
+        }
+        continue
+      }
+      const prior = observed.get(team)
+      if (!prior || !isCompetitionOnlyLeague(match.league) || (league && !isUnknownLeague(league))) continue
+      resolved[`team${side}HomeLeague`] = prior.league
+      resolved[`team${side}Region`] = prior.region
+    }
+    return resolved
+  })
+}
 
 type LeagueObservation = {
   league: string

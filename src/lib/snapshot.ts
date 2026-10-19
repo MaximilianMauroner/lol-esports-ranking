@@ -1288,7 +1288,7 @@ export function createStaticRankingData({
   const hasOracleSource = matches.some((match) => match.sourceProvider === 'oracles-elixir')
   const hasLeaguepediaSource = matches.some((match) => match.sourceProvider === 'leaguepedia-cargo')
   const hasExternalSource = (sourceName: string) => externalSources.some((source) => source.name.toLowerCase().includes(sourceName))
-  const seasons = ['All', ...Array.from(new Set(matches.map(matchSeasonKey))).sort().reverse()]
+  const seasons = ['All', ...Array.from(new Set(matches.filter(isCalendarAlignedSeasonMatch).map(matchSeasonKey))).sort().reverse()]
   const events = ['All', ...Array.from(new Set(matches.map((match) => match.event))).sort()]
   const checkpointOptions = buildSeasonCheckpointOptions(matches, tournamentLifecycles)
   const checkpointByFilterKey = new Map(
@@ -2811,7 +2811,7 @@ function buildSnapshotFilters(
 
   for (const match of matches) {
     const season = matchSeasonKey(match)
-    addFilter({ season, event: 'All', region: 'All' })
+    if (isCalendarAlignedSeasonMatch(match)) addFilter({ season, event: 'All', region: 'All' })
     addFilter({ season: 'All', event: match.event, region: 'All' })
 
     for (const region of regionsForMatch(match, teams)) {

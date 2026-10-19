@@ -10,6 +10,7 @@ import { canonicalTeamNameFor, cleanDisplayName, teamCodeFor, teamIdentityFor } 
 
 export type LeaguepediaSnapshot = {
   source?: string
+  sourceUrl?: string
   fetchedAt?: string
   start?: string
   end?: string
@@ -64,6 +65,7 @@ export function importLeaguepediaSnapshot(
     retrievedAt?: string
   } = {},
 ): LeaguepediaImportResult {
+  options = { ...options, sourceUrl: options.sourceUrl ?? snapshot.sourceUrl }
   const matches: MatchRecord[] = []
   const teams: Record<string, TeamProfile> = {}
 

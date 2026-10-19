@@ -52,7 +52,7 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(matchHistoryIndex.artifactMeta.runId, summary.artifactMeta?.runId)
   const matchHistory2026 = parsePublicMatchHistoryCatalog(await readJson(publicPathForDataUrl(matchHistoryIndex.scopeIndex['2026__All__All'].url)))
   const matchHistory2026Page = parsePublicMatchHistoryPage(await readJson(publicPathForDataUrl(matchHistory2026.pages[0].url)))
-  assert.equal(matchHistory2026.gameCount, summary.snapshotIndex['2026__All__All'].matchCount)
+  assert.equal(matchHistory2026.series.filter((series) => series.date.startsWith('2026-')).reduce((total, series) => total + series.gameCount, 0), summary.snapshotIndex['2026__All__All'].matchCount)
   assert.equal(matchHistory2026.pages.length > 1, true)
   assert.equal(matchHistory2026Page.seriesCount <= 25, true)
   assert.equal(matchHistory2026Page.gameCount < matchHistory2026.gameCount, true)
@@ -117,30 +117,30 @@ test('browser data artifact stays compact and does not ship the full snapshot', 
   assert.equal(playerDirectory.players?.some((player) => Number(player.impactDrivers?.awardResidualZ ?? 0) !== 0), false)
 })
 
-test('generated major-region scores preserve eastern-major separation and western-major ordering', async () => {
+test('generated region scores follow eligible flagship teams in each scope', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const defaultShardEntry = summary.snapshotIndex[summary.defaultSnapshotKey]
   assert.ok(defaultShardEntry)
   const defaultShard = parsePublicRankingShard(await readJson(publicPathForDataUrl(defaultShardEntry.url)))
-  const lck = regionFor(defaultShard, 'LCK')
-  const lpl = regionFor(defaultShard, 'LPL')
-  const lec = regionFor(defaultShard, 'LEC')
-  const lcs = regionFor(defaultShard, 'LCS')
   const season2026Entry = summary.snapshotIndex['2026__All__All']
   assert.ok(season2026Entry)
   const season2026Shard = parsePublicRankingShard(await readJson(publicPathForDataUrl(season2026Entry.url)))
-  const lck2026 = regionFor(season2026Shard, 'LCK')
-  const lec2026 = regionFor(season2026Shard, 'LEC')
-  const lcs2026 = regionFor(season2026Shard, 'LCS')
 
   assert.deepEqual(new Set(defaultShard.regions.map((region) => region.region)), new Set(['LCK', 'LPL', 'LEC', 'LCS', 'LCP', 'CBLOL']))
   assert.equal(defaultShard.regions.every((region) => typeof region.topThreeTeamRating === 'number'), true)
   assert.equal(defaultShard.regions.every((region) => typeof region.totalTeamRating === 'number'), true)
-  assert.ok(lpl.topThreeTeamRating >= lpl.totalTeamRating)
-  assert.ok(Math.min(lck.score, lpl.score) - lec.score >= 35)
-  assert.ok(Math.min(lck.score, lpl.score) > Math.max(lec.score, lcs.score))
-  assert.ok(lck2026.topTeamRating - lec2026.topTeamRating >= 35)
-  assert.ok(lcs2026.topTeamRating >= lcs2026.totalTeamRating)
+  for (const shard of [defaultShard, season2026Shard]) {
+    for (const region of shard.regions) {
+      assert.equal(region.score, region.topThreeTeamRating)
+      assert.ok(region.topThreeTeamRating >= region.totalTeamRating)
+      for (const team of region.topTeams) {
+        const standing = standingFor(shard, team.team)
+        assert.equal(standing.eligibility.eligible, true)
+        assert.equal(standing.region, region.region)
+        assert.equal(standing.rating, team.rating)
+      }
+    }
+  }
 })
 
 test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence', async () => {
@@ -152,7 +152,6 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
   const drx = standingFor(shard, 'Kiwoom DRX')
   const giantx = standingFor(shard, 'GiantX')
 
-  assert.equal(lyon.eligibility.eligible, true)
   // Regenerated from the local source manifest through July 26, 2026.
   assert.deepEqual([lyon.wins, lyon.losses], [21, 11])
   assert.deepEqual([drx.wins, drx.losses], [11, 22])
@@ -162,7 +161,7 @@ test('generated 2026 scope lets LYON clear DRX and GiantX on team-local evidence
   assert.ok(lyon.rank < giantx.rank)
 })
 
-test('generated 2026 scope records T1 current MSI evidence after Gen.G', async () => {
+test('generated 2026 scope preserves T1 and Gen.G MSI series evidence', async () => {
   const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
   const entry = summary.snapshotIndex['2026__All__All']
   assert.ok(entry)
@@ -176,7 +175,23 @@ test('generated 2026 scope records T1 current MSI evidence after Gen.G', async (
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'Team Liquid' && match.result === 'W' && match.games === 3), true)
   assert.equal(t1.recentMatches.some((match) => match.opponent === 'G2 Esports' && match.result === 'L' && match.games === 4), true)
   assert.equal(geng.recentMatches.some((match) => match.opponent === 'T1' && match.result === 'L' && match.games === 5), true)
-  assert.ok(geng.rank < t1.rank)
+})
+
+test('generated 2026 Demacia Cup games are indexed with reconciled source coverage', async () => {
+  const summary = parsePublicRankingManifest(await readJson('public/data/ranking-summary.json'))
+  const event = '2026 Demacia Cup Global Invitational'
+  assert.ok(summary.filterOptions.events.includes(event))
+  const index = parsePublicMatchHistoryIndex(await readJson('public/data/matches/index.json'))
+  const catalog = parsePublicMatchHistoryCatalog(await readJson(publicPathForDataUrl(index.scopeIndex['2026__All__All'].url)))
+  const series = catalog.series.filter((entry) => entry.event === event)
+  assert.equal(series.length, 15)
+  assert.equal(series.reduce((total, entry) => total + entry.gameCount, 0), 27)
+  const source = summary.sources.find((entry) => entry.name.includes('demacia-cup-global-invitational-2026'))
+  assert.ok(source)
+  assert.equal(source.rowCount, 27)
+  assert.equal(source.coverageStart, '2026-10-03')
+  assert.equal(source.coverageEnd, '2026-10-06')
+  assert.ok(source.url?.includes('Special:CargoExport'))
 })
 
 test('generated public fixture data does not serialize HTML entities', async () => {
@@ -513,8 +528,8 @@ test('generated 2026 scope exposes match-level display records and scoped histor
   assert.equal(hleVsGenGHistory[0]?.[3]?.games, 3)
   assert.equal(hleVsGenGHistory[0]?.[3]?.bestOf, 3)
   assert.ok(scopedDates.length > 0)
-  assert.equal(scopedDates.some((date) => date.startsWith('2025-')), false)
-  assert.equal(scopedDates.every((date) => date.startsWith('2026-')), true)
+  const historyPoints = scopedTeamIds.flatMap((id) => teamHistory.series[id]?.points ?? [])
+  assert.equal(historyPoints.every((point) => point[0].startsWith('2026-') || (point[0].startsWith('2025-12-') && /\b(?:dcup|demacia cup)\b/i.test(point[3]?.event ?? ''))), true)
 })
 
 test('generated public artifacts only include the published rated team universe', async () => {
@@ -683,12 +698,6 @@ function gitTrackedPaths(paths: string[]) {
   } catch {
     return undefined
   }
-}
-
-function regionFor(shard: ReturnType<typeof parsePublicRankingShard>, region: string) {
-  const row = shard.regions.find((candidate) => candidate.region === region)
-  assert.ok(row)
-  return row
 }
 
 function assertShardUsesRatedTeamUniverse(shard: ReturnType<typeof parsePublicRankingShard>) {

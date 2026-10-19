@@ -6,7 +6,7 @@ import {
   regionForCompetitionSide,
   resolveHomeLeagueForCompetition,
 } from '../src/data/competitionTaxonomy.ts'
-import { deriveTeamProfilesFromMatches, mergeTeamProfiles } from '../src/lib/teamProfiles.ts'
+import { deriveTeamProfilesFromMatches, mergeTeamProfiles, resolveCompetitionHomeLeagues } from '../src/lib/teamProfiles.ts'
 import type { MatchRecord, TeamProfile } from '../src/types.ts'
 
 test('mergeTeamProfiles does not let later unknown profiles replace useful league identity', () => {
@@ -46,6 +46,25 @@ test('competition taxonomy keeps home-league fallback and event tier policy cent
     phase: 'Playoffs',
   }), 'worlds-playoffs')
   assert.ok(eventTierRank('worlds-playoffs') > eventTierRank('regional-regular'))
+})
+
+test('tournament placeholders use prior domestic evidence without future leakage or replacing explicit leagues', () => {
+  const games = [
+    match({ id: 'future-domestic', date: '2026-10-10', teamAHomeLeague: 'LEC', teamARegion: 'LEC' }),
+    match({ id: 'cup', date: '2026-10-03', league: 'DCup', teamAHomeLeague: 'Unknown', teamARegion: 'International' }),
+    match({ id: 'domestic', date: '2026-09-01', teamAHomeLeague: 'LFL', teamARegion: 'LEC' }),
+    match({ id: 'explicit', date: '2026-10-04', league: 'DCup', teamAHomeLeague: 'PCS', teamARegion: 'PCS' }),
+    match({ id: 'before-evidence', date: '2026-08-01', league: 'DCup', teamAHomeLeague: 'Unknown' }),
+    match({ id: 'domestic-placeholder', date: '2026-09-02', league: 'LEC', teamAHomeLeague: 'Unknown' }),
+  ]
+  const resolved = resolveCompetitionHomeLeagues(games)
+  const cup = resolved.find((game) => game.id === 'cup')!
+  assert.equal(cup.teamAHomeLeague, 'LFL')
+  assert.equal(cup.teamARegion, 'LEC')
+  assert.equal(resolved.find((game) => game.id === 'explicit')?.teamAHomeLeague, 'PCS')
+  assert.equal(resolved.find((game) => game.id === 'before-evidence')?.teamAHomeLeague, 'Unknown')
+  assert.equal(resolved.find((game) => game.id === 'domestic-placeholder')?.teamAHomeLeague, 'Unknown')
+  assert.equal(games.find((game) => game.id === 'cup')?.teamAHomeLeague, 'Unknown')
 })
 
 test('deriveTeamProfilesFromMatches prefers dominant non-competition home league over file order', () => {
