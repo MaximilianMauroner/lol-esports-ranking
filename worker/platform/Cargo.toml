@@ -18,13 +18,9 @@ tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi
 tokio-util = { version = "0.7", features = ["io"] }
 async-compression = { version = "0.4", features = ["gzip", "tokio"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-url = "2"
-percent-encoding = "2"
 httpdate = "1"
 rustix = { version = "1", features = ["fs"] }
-regex = "1"
 serde_json.workspace = true
-chrono.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

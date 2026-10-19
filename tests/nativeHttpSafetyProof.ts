@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdir, mkdtemp, open, readlink, readdir, rename, rm, symlink, truncate, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, open, readlink, readdir, rename, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { request } from 'node:http'
 import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -268,6 +268,33 @@ test('native forced drain of a slow body exits with failure', async () => {
   } finally {
     socket.destroy()
     if (!closed) await server.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+test('native storage faults use generic errors and readiness reports only accessibility', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'native-storage-fault-'))
+  const summary = join(root, 'ranking-summary.json')
+  await writeFile(summary, 'private unreadable content')
+  await chmod(summary, 0)
+  const server = await nativeServer(root)
+  try {
+    for (const method of ['GET', 'HEAD']) {
+      const response = await httpRead(server.port, '/data/ranking-summary.json', { method })
+      assert.equal(response.status, 500)
+      assert.equal(response.headers['cache-control'], 'no-store')
+      assert.doesNotMatch(response.body.toString(), /private unreadable content|native-storage-fault|Permission denied/)
+      if (method === 'HEAD') assert.equal(response.body.length, 0)
+    }
+    const ready = await httpRead(server.port, '/api/ready')
+    assert.equal(ready.status, 503)
+    assert.deepEqual(JSON.parse(ready.body.toString()), { ok: false, scope: 'local-summary-access', data: 'unavailable' })
+    await chmod(summary, 0o600)
+    const accessible = await httpRead(server.port, '/api/ready')
+    assert.equal(accessible.status, 200, 'accessibility does not certify JSON syntax or publication closure')
+  } finally {
+    await server.close()
     await rm(root, { recursive: true, force: true })
   }
 })

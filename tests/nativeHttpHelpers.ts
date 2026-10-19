@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import type { AddressInfo } from 'node:net'
 import { once } from 'node:events'
-import { access, mkdir, writeFile } from 'node:fs/promises'
-import { createServer, request, type IncomingHttpHeaders } from 'node:http'
-import { join, resolve } from 'node:path'
+import { access } from 'node:fs/promises'
+import { request, type IncomingHttpHeaders } from 'node:http'
+import { resolve } from 'node:path'
 
 const nativeBinary = process.env.RANKING_NATIVE_HTTP_BINARY
 assert.ok(nativeBinary, 'Build platform-api and set RANKING_NATIVE_HTTP_BINARY explicitly')
@@ -85,47 +84,4 @@ export function httpRead(port: number, path: string, options: { method?: string;
     req.on('error', reject)
     req.end()
   })
-}
-
-export async function nodeLocalServer(root: string, env: NodeJS.ProcessEnv = {}) {
-  const reservation = createServer()
-  await new Promise<void>((accept) => reservation.listen(0, '127.0.0.1', accept))
-  const port = (reservation.address() as AddressInfo).port
-  await new Promise<void>((accept, reject) => reservation.close((error) => error ? reject(error) : accept()))
-  const tournament = join(root, 'tournament')
-  await mkdir(tournament, { recursive: true })
-  await writeFile(join(tournament, 'feed.json'), '{"source":"synthetic-test"}')
-  const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/railway-server.mjs'], {
-    env: {
-      ...process.env, HOST: '127.0.0.1', PORT: String(port), RANKING_PUBLIC_DATA_DIR: root,
-      RAILWAY_DIST_DIR: root, TOURNAMENT_PUBLIC_DATA_DIR: tournament,
-      RANKING_REFRESH_ENABLED: 'false', RANKING_GZIP_ENABLED: 'true',
-      RANKING_BUCKET_NAME: '', RANKING_BUCKET_ENDPOINT: '', RANKING_BUCKET_ACCESS_KEY_ID: '', RANKING_BUCKET_SECRET_ACCESS_KEY: '',
-      ...env,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  const ended = once(child, 'exit')
-  void ended.catch(() => {})
-  let output = ''
-  child.stdout.on('data', (bytes) => { output += String(bytes) })
-  child.stderr.on('data', (bytes) => { output += String(bytes) })
-  const close = async () => {
-    child.kill('SIGTERM')
-    const timer = setTimeout(() => child.kill('SIGKILL'), 3_000)
-    await ended
-    clearTimeout(timer)
-  }
-  try {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (child.exitCode !== null) throw new Error(output)
-      const response = await httpRead(port, '/api/live').catch(() => undefined)
-      if (response?.status === 200) return { port, close }
-      await new Promise((accept) => setTimeout(accept, 20))
-    }
-    throw new Error(`Node fixture server did not start. ${output}`)
-  } catch (error) {
-    await close()
-    throw error
-  }
 }
