@@ -97,7 +97,7 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
         ...(retryReason ? { reason: retryReason } : {}),
       })
       if (!retryReason) {
-        response = responseWithBodyCleanup(response, releaseDeadline)
+        response = responseWithBodyCleanup(response, releaseDeadline, attemptTimeout)
         const terminal = snapshotProviderFetchTelemetry(telemetry, now() - startedAt)
         RESPONSE_TELEMETRY.set(response, terminal)
         if (!response.ok) await notifyFailureSafely(terminal, response)
@@ -211,25 +211,30 @@ export function retryDelayMs({ attempt, baseDelayMs = 500, maxDelayMs = 30_000, 
 
 export function providerFetchTelemetryFor(response) { return RESPONSE_TELEMETRY.get(response) }
 
-function responseWithBodyCleanup(response, cleanup) {
+function responseWithBodyCleanup(response, cleanup, deadline) {
   if (!response.body) {
     cleanup()
     return response
   }
   const reader = response.body.getReader()
-  void reader.closed.then(cleanup, cleanup)
+  void reader.closed.catch(cleanup)
   const body = new ReadableStream({
     async pull(controller) {
+      deadline?.ref?.()
       try {
         const { done, value } = await reader.read()
-        if (done) controller.close()
-        else controller.enqueue(value)
+        if (done) {
+          cleanup()
+          controller.close()
+        } else controller.enqueue(value)
       } catch (error) {
+        cleanup()
         controller.error(error)
       }
     },
-    cancel(reason) { return reader.cancel(reason) },
-  })
+    cancel(reason) { return reader.cancel(reason).finally(cleanup) },
+  }, { highWaterMark: 0 })
+  deadline?.unref?.()
   const result = new Response(body, response)
   for (const key of ['url', 'redirected', 'type']) {
     Object.defineProperty(result, key, { value: response[key] })
