@@ -120,7 +120,7 @@ export function mergeCommunityMatchSources({
     registerMatchKeys(seen, seenByRetained, match, match)
   }
 
-  const reconciled = reconcileSharedSeriesGames(merged)
+  const reconciled = reconcileSharedSeriesGames(merged, verifiedLeaguepediaLinks)
   enrichWithLolEsportsReferences(reconciled, lolEsportsReferences)
   return withSeriesStartDates(reconciled).sort((a, b) => compareCodeUnits(a.date, b.date))
 }
@@ -133,7 +133,8 @@ function registerMatchKeys(seen: Map<string, SeenMatch>, seenByRetained: Map<Mat
   for (const key of matchKeys(match)) seen.set(key, entry)
 }
 
-function reconcileSharedSeriesGames(matches: MatchRecord[]) {
+function reconcileSharedSeriesGames(matches: MatchRecord[], verifiedLinks: Map<MatchRecord, MatchRecord>) {
+  const sharedSeries = new Set([...verifiedLinks.values()].map((match) => sharedSeriesIdentity(match)?.seriesKey))
   const groups = new Map<string, MatchRecord[]>()
   const ungrouped: MatchRecord[] = []
 
@@ -143,7 +144,8 @@ function reconcileSharedSeriesGames(matches: MatchRecord[]) {
       ungrouped.push(match)
       continue
     }
-    groups.set(identity.key, [...(groups.get(identity.key) ?? []), match])
+    const key = sharedSeries.has(identity.seriesKey) ? identity.seriesKey : identity.key
+    groups.set(key, [...(groups.get(key) ?? []), match])
   }
 
   const reconciled = [...ungrouped]
