@@ -62,6 +62,8 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
     }, Math.max(1, remainingMs))
     let deadlineReleased = false
     let bodyOwnsDeadline = false
+    let response
+    let delayMs
     const releaseDeadline = () => {
       if (deadlineReleased) return
       deadlineReleased = true
@@ -72,8 +74,17 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
       }
     }
     try {
-      let response = await fetcher(input, { ...init, signal: attemptController.signal })
-      const bodyRetryReason = await options.retryResponse?.(response.clone?.() ?? response)
+      response = await fetcher(input, { ...init, signal: attemptController.signal })
+      let bodyRetryReason
+      if (options.retryResponse) {
+        const inspection = response.clone()
+        try {
+          bodyRetryReason = await options.retryResponse(inspection)
+        } finally {
+          // A tee's cancellation can wait for the caller's branch to finish.
+          void inspection.body?.cancel().catch(() => {})
+        }
+      }
       const retryReason = bodyRetryReason
         ? String(bodyRetryReason === true ? 'provider-rate-limited-body' : bodyRetryReason)
         : isRetryableStatus(response.status) ? `http-${response.status}` : undefined
@@ -101,7 +112,7 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
         throw error
       }
       const retryAfterMs = parseRetryAfterMs(response.headers?.get?.('retry-after'), now())
-      const delayMs = retryDelayMs({ attempt, baseDelayMs, maxDelayMs, retryAfterMs, random })
+      delayMs = retryDelayMs({ attempt, baseDelayMs, maxDelayMs, retryAfterMs, random })
       if (!canRetry({ now, startedAt, maxElapsedMs, delayMs })) {
         const error = terminalResponseError(response, retryReason, telemetry, now() - startedAt)
         await notifyFailureSafely(error.telemetry, error)
@@ -109,7 +120,6 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
       }
       recordRetry(telemetry, { attempt, delayMs, reason: retryReason, retryAfterMs })
       options.onRetry?.(telemetry.retries.at(-1), telemetry)
-      await sleep(delayMs)
     } catch (error) {
       if (init.signal?.aborted) {
         const reason = init.signal.reason ?? error
@@ -144,14 +154,17 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
         error: errorMessage(error),
       })
       if (deadlineExpired || attempt >= maxAttempts) break
-      const delayMs = retryDelayMs({ attempt, baseDelayMs, maxDelayMs, random })
+      delayMs = retryDelayMs({ attempt, baseDelayMs, maxDelayMs, random })
       if (!canRetry({ now, startedAt, maxElapsedMs, delayMs })) break
       recordRetry(telemetry, { attempt, delayMs, reason: 'network-error' })
       options.onRetry?.(telemetry.retries.at(-1), telemetry)
-      await sleep(delayMs)
     } finally {
-      if (!bodyOwnsDeadline) releaseDeadline()
+      if (!bodyOwnsDeadline) {
+        await response?.body?.cancel().catch(() => {})
+        releaseDeadline()
+      }
     }
+    await sleep(delayMs)
   }
 
   const terminal = snapshotProviderFetchTelemetry(telemetry, now() - startedAt)
