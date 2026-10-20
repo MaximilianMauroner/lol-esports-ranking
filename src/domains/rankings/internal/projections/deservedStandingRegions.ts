@@ -12,6 +12,7 @@ import {
   dssRegionSeedPerformancePoints,
   dssRegionStagePoints,
   dssSeriesWinProbability,
+  dssSeriesLedgerTotals,
   type DssSeriesLedgerEntry,
 } from './deservedStanding.ts'
 import {
@@ -417,9 +418,12 @@ function regionSummaryFor(
   }
   const rawScore = dssRegionScoreRaw(input)
   const dss = dssRegionScore(input)
-  const internationalWins = entries.filter((entry) => entry.observedSeriesResult > 0.5).length
-  const internationalLosses = entries.filter((entry) => entry.observedSeriesResult < 0.5).length
-  const expectedInternationalWins = entries.reduce((sum, entry) => sum + entry.expectedSeriesResult, 0)
+  const {
+    wins: internationalWins,
+    losses: internationalLosses,
+    observedPoints: observedInternationalPoints,
+    expectedPoints: expectedInternationalWins,
+  } = dssSeriesLedgerTotals(entries)
   const gameDifferentialAboveExpectation = entries.reduce((sum, entry) => sum + entry.observedGameWinRate - entry.expectedGameWinRate, 0)
 
   return {
@@ -441,7 +445,7 @@ function regionSummaryFor(
     internationalWins,
     internationalLosses,
     expectedInternationalWins,
-    internationalWinsAboveExpectation: internationalWins - expectedInternationalWins,
+    internationalWinsAboveExpectation: observedInternationalPoints - expectedInternationalWins,
     gameDifferentialAboveExpectation,
     averageOpponentReferenceStrength: weightedAverage(entries, (entry) => entry.opponentReferenceStrength, (entry) => entry.seriesWeight * entry.rosterValidity),
     bo5Record: recordFor(entries.filter((entry) => entry.bestOf >= 5)),
@@ -517,10 +521,8 @@ function averageResidual(teams: DeservedStandingTeamSummary[]) {
 }
 
 function recordFor(entries: DeservedStandingRegionLedgerEntry[]): DeservedStandingRegionRecord {
-  return {
-    wins: entries.filter((entry) => entry.observedSeriesResult > 0.5).length,
-    losses: entries.filter((entry) => entry.observedSeriesResult < 0.5).length,
-  }
+  const { wins, losses } = dssSeriesLedgerTotals(entries)
+  return { wins, losses }
 }
 
 function isMajorRegion(region: Region) {

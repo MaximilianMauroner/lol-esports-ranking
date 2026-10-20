@@ -243,6 +243,22 @@ export type DssSeriesLedgerEntry = {
   weightedSeriesValue: number
 }
 
+export function dssSeriesLedgerTotals(
+  entries: readonly Pick<DssSeriesLedgerEntry, 'observedSeriesResult' | 'expectedSeriesResult'>[],
+) {
+  let wins = 0
+  let losses = 0
+  let observedPoints = 0
+  let expectedPoints = 0
+  for (const entry of entries) {
+    if (entry.observedSeriesResult > 0.5) wins += 1
+    if (entry.observedSeriesResult < 0.5) losses += 1
+    observedPoints += entry.observedSeriesResult
+    expectedPoints += entry.expectedSeriesResult
+  }
+  return { wins, losses, observedPoints, expectedPoints }
+}
+
 export function dssGameWinProbability({
   referenceStrength,
   opponentReferenceStrength,

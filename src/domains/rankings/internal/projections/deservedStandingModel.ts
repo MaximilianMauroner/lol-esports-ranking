@@ -4,6 +4,7 @@ import {
   dssCausalInputsForMatches,
   dssCurrentRosterValidity,
   dssSeriesLedgerEntriesForMatches,
+  dssSeriesLedgerTotals,
   dssTeamComponentsFromSeries,
   dssWeightedSeriesFromLedgerEntry,
   type DssSeriesLedgerEntry,
@@ -189,9 +190,7 @@ function teamSummaryFor(
     uncertainty,
     baseScore: options.baseScoreFor?.(team, entries),
   })
-  const wins = entries.filter((entry) => entry.observedSeriesResult > 0.5).length
-  const losses = entries.filter((entry) => entry.observedSeriesResult < 0.5).length
-  const expectedWins = entries.reduce((sum, entry) => sum + entry.expectedSeriesResult, 0)
+  const { wins, losses, observedPoints: observedSeriesPoints, expectedPoints: expectedSeriesPoints } = dssSeriesLedgerTotals(entries)
   const gameDifferentialAboveExpectation = entries.reduce((sum, entry) => {
     return sum + entry.observedGameWinRate - entry.expectedGameWinRate
   }, 0)
@@ -203,8 +202,8 @@ function teamSummaryFor(
     ...(components.conservativeDss === undefined ? {} : { conservativeDss: components.conservativeDss }),
     wins,
     losses,
-    expectedWins,
-    winsAboveExpectation: wins - expectedWins,
+    expectedWins: expectedSeriesPoints,
+    winsAboveExpectation: observedSeriesPoints - expectedSeriesPoints,
     gameDifferentialAboveExpectation,
     currentRosterValidity: dssCurrentRosterValidity(weightedSeries),
     seriesCount: entries.length,
