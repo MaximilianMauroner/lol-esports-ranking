@@ -167,6 +167,21 @@ for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as con
   })
 }
 
+test('caller abort still governs an unread provider body after the payload arrives', async () => {
+  const controller = new AbortController()
+  const response = await fetchWithRetry('https://provider.invalid', { signal: controller.signal }, {
+    fetcher: async (_input, init) => new Response(new ReadableStream({
+      start(body) {
+        body.enqueue(new TextEncoder().encode('{"ok":true}'))
+        body.close()
+        init?.signal?.addEventListener('abort', () => body.error(init.signal?.reason), { once: true })
+      },
+    })),
+  })
+  controller.abort()
+  await assert.rejects(response.json(), { name: 'AbortError' })
+})
+
 for (const outcome of ['retry', 'max attempts', 'max elapsed', 'inspection error', 'terminal callback error'] as const) {
   test(`provider releases discarded bodies on ${outcome}`, async () => {
     let released = false
