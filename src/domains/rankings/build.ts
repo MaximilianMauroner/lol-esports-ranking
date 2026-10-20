@@ -75,7 +75,6 @@ export {
 export type {
   SeriesResultInput,
   SeriesResultUpdate,
-  SeriesResultCapture,
-  SeriesResultDateBatch,
-  SeriesResultDateObserver,
 } from './internal/replay/seriesResultUpdate.ts'
+
+export type { SeriesPassCapture, SeriesPassFrame, SeriesPassExpectation, SeriesPassObserver } from './internal/replay/seriesPass.ts'

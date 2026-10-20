@@ -116,10 +116,12 @@ jobs:
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test --test-concurrency=1 tests/railwayServer.test.ts tests/nativeServingLifecycle.integration.ts
       - name: Live model config parity
         run: pnpm exec tsx --tsconfig tsconfig.app.json tools/audit/check-rust-parity.ts
-      - name: Native series-result synthetic parity and CLI boundaries
+      - name: Native series-pass replay parity and CLI boundaries
         env:
           RANKING_COMPUTE_TEST_BINARY: ${{ github.workspace }}/worker/target/debug/ranking-refresh
-        run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/seriesResultShadow.test.ts
+        run: |
+          test -x "$RANKING_COMPUTE_TEST_BINARY"
+          pnpm exec tsx --tsconfig tsconfig.app.json --test tests/seriesPassShadow.test.ts
       - name: Rust raw seam integration
         env:
           RANKING_RAW_SOURCE_WORKER: rust

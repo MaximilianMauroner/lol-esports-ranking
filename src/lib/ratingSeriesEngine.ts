@@ -44,7 +44,9 @@ import { applyRosterContinuityForSeries, roundedContinuity } from '../domains/ra
 import { recordSideAdjustmentSample, sideAdjustmentFor } from '../domains/rankings/internal/replay/sideAdjustments.ts'
 import { resolveCanonicalSeries, type CanonicalSeries } from '../domains/rankings/internal/evidence/seriesResolver.ts'
 import { neutralWinProbability } from '../domains/rankings/internal/queries/winProbability.ts'
-import { calculateSeriesResultUpdate, seriesStrengthSignal, type SeriesResultCapture, type SeriesResultInput } from '../domains/rankings/internal/replay/seriesResultUpdate.ts'
+import { calculateSeriesResultUpdate, seriesStrengthSignal, type SeriesResultInput } from '../domains/rankings/internal/replay/seriesResultUpdate.ts'
+import { SeriesPassRecorder } from '../domains/rankings/internal/replay/seriesPassCapture.ts'
+import type { SeriesPassSample } from '../domains/rankings/internal/replay/seriesPass.ts'
 import {
   initialTeamRating,
   latentStrengthResultBudgetShares,
@@ -121,9 +123,12 @@ export function processRatingSeriesForDate({
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
   capture?: boolean
 }) {
-  const captures: SeriesResultCapture[] | undefined = capture ? [] : undefined
   const batch = ratingBatchSnapshot(state)
-  for (const series of ratingSeriesGroupsForDate(matches)) {
+  const groups = ratingSeriesGroupsForDate(matches)
+  const recorder = capture ? new SeriesPassRecorder({
+    groups, matches, profiles: teams, state, lastDate, sideAdjustments, playerEdges: pregamePlayerRatingEdges,
+  }) : undefined
+  for (const [seriesIndex, series] of groups.entries()) {
     applyRosterContinuityForSeries(
       series.finalMatch,
       state.ratings,
@@ -132,10 +137,9 @@ export function processRatingSeriesForDate({
       state.lastRosterByTeam,
       state.currentRosterContinuity,
     )
-    const result = processRatingSeries({ series, teams, state, batch, sideAdjustments, lastDate, pregamePlayerRatingEdges, capture })
-    if (captures && result) captures.push(result)
+    processRatingSeries({ series, teams, state, batch, sideAdjustments, lastDate, pregamePlayerRatingEdges, recorder, seriesIndex })
   }
-  return captures
+  return recorder?.finish()
 }
 
 function pregamePredictionForMatch({
@@ -332,7 +336,8 @@ function processRatingSeries({
   sideAdjustments,
   lastDate,
   pregamePlayerRatingEdges,
-  capture,
+  recorder,
+  seriesIndex,
 }: {
   series: RatingSeriesGroup
   teams: Record<string, TeamProfile>
@@ -341,7 +346,8 @@ function processRatingSeries({
   sideAdjustments: Map<string, number>
   lastDate: string
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
-  capture: boolean
+  recorder?: SeriesPassRecorder
+  seriesIndex: number
 }) {
   const finalMatch = series.finalMatch
   const seriesLeagueA = homeLeagueForTeam(finalMatch, series.teamA, teams)
@@ -375,6 +381,7 @@ function processRatingSeries({
     international: isInternationalMatch(finalMatch),
   }
   const nodeResult = calculateSeriesResultUpdate(input)
+  recorder?.recordSeries(seriesIndex, input, nodeResult)
   const {
     expectedOutcomeA, expectedOutcomeB, leagueSignalShare, teamFormShare,
     seriesResidualA, seriesResidualB, seriesResultEvidenceA, seriesResultEvidenceB,
@@ -395,8 +402,9 @@ function processRatingSeries({
   const seriesObservedByTeam = new Map([[series.teamA, series.observedOutcomeA], [series.teamB, series.observedOutcomeB]])
   const seriesExecutionRatings = new Map(batch.executionRatings)
 
-  for (const match of series.matches) {
+  for (const [memberIndex, match] of series.matches.entries()) {
     processSeriesMember({
+      recorder, seriesIndex, memberIndex,
       match,
       finalMatch,
       series,
@@ -425,20 +433,10 @@ function processRatingSeries({
       pregamePlayerRatingEdges,
     })
   }
-  if (capture) {
-    return Object.freeze({
-      seriesId: series.key,
-      matchIds: Object.freeze(series.matches.map((match) => match.officialGameId ?? match.sourceGameId ?? match.id)),
-      input: Object.freeze({ ...input, teams: Object.freeze([
-        Object.freeze({ ...input.teams[0] }), Object.freeze({ ...input.teams[1] }),
-      ] as const) }),
-      nodeResult: Object.freeze({ ...nodeResult }),
-    })
-  }
 }
 
-
 function processSeriesMember({
+  recorder, seriesIndex, memberIndex,
   match,
   finalMatch,
   series,
@@ -466,6 +464,9 @@ function processSeriesMember({
   leagueSignalShare,
   pregamePlayerRatingEdges,
 }: {
+  recorder?: SeriesPassRecorder
+  seriesIndex: number
+  memberIndex: number
   match: MatchRecord
   finalMatch: MatchRecord
   series: RatingSeriesGroup
@@ -493,6 +494,7 @@ function processSeriesMember({
   leagueSignalShare: number
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
 }) {
+  const leagueHistoryStart = recorder ? state.leagueHistory.length : 0
   const ratingA = batch.ratings.get(match.teamA) ?? initialTeamRating
   const ratingB = batch.ratings.get(match.teamB) ?? initialTeamRating
   const executionRatingA = seriesExecutionRatings.get(match.teamA) ?? initialTeamRating
@@ -529,16 +531,18 @@ function processSeriesMember({
   // Use the same public component projection on both sides of the update.
   // The latent team offset may exceed the public soft cap; subtracting it
   // directly manufactured negative impact even for a winning team.
-  const previousPublishedPowerRatingA = ratingFromComponents(ratingComponents({
+  const previousComponentsA = ratingComponents({
     teamRating: liveRatingBeforeA, leagueScore: liveLeagueScoreBeforeA,
     rosterPriorOffset: publishedRosterPriorOffsetA, momentum: liveMomentumBeforeA,
     contextAdjustment: 0, uncertainty: liveUncertaintyBeforeA,
-  }))
-  const previousPublishedPowerRatingB = ratingFromComponents(ratingComponents({
+  })
+  const previousPublishedPowerRatingA = ratingFromComponents(previousComponentsA)
+  const previousComponentsB = ratingComponents({
     teamRating: liveRatingBeforeB, leagueScore: liveLeagueScoreBeforeB,
     rosterPriorOffset: publishedRosterPriorOffsetB, momentum: liveMomentumBeforeB,
     contextAdjustment: 0, uncertainty: liveUncertaintyBeforeB,
-  }))
+  })
+  const previousPublishedPowerRatingB = ratingFromComponents(previousComponentsB)
   const currentPowerRatingA = powerRatingA + rosterPriorOffsetA + momentumA
   const currentPowerRatingB = powerRatingB + rosterPriorOffsetB + momentumB
   const effectiveRatingA = currentPowerRatingA + sideAdjustmentA
@@ -574,8 +578,10 @@ function processSeriesMember({
   const seriesStrengthSignal = isSeriesFinal ? series.strengthSignal : 0
   const executionExpectedA = expectedScore(executionEffectiveRatingA, executionEffectiveRatingB)
   const executionExpectedB = 1 - executionExpectedA
-  const executionOutcomeA = executionSoftOutcome(aWon ? 1 : 0, teamExecutionIndex(match, 'A'))
-  const executionOutcomeB = executionSoftOutcome(aWon ? 0 : 1, teamExecutionIndex(match, 'B'))
+  const executionIndexA = teamExecutionIndex(match, 'A')
+  const executionOutcomeA = executionSoftOutcome(aWon ? 1 : 0, executionIndexA)
+  const executionIndexB = teamExecutionIndex(match, 'B')
+  const executionOutcomeB = executionSoftOutcome(aWon ? 0 : 1, executionIndexB)
   const executionDeltaA = Math.round(gameK * ratingUpdateRecencyWeight * (executionOutcomeA - executionExpectedA))
   const executionDeltaB = Math.round(gameK * ratingUpdateRecencyWeight * (executionOutcomeB - executionExpectedB))
 
@@ -751,27 +757,97 @@ function processSeriesMember({
   updateRecord(match.teamA, aWon, state)
   updateRecord(match.teamB, !aWon, state)
   const historyRanks = historyDisplayRankMap(state, teams)
-  addFactors(match.teamA, {
+  const factorsA = {
     context: normalize(matchEventK, 12, 34),
     recency: factorRecency,
     execution: aWon ? 1 : 0,
     opponent: normalize(effectiveRatingB, 1350, 1700),
     league: normalize(leagueScoreA + Math.max(0, leagueDelta.deltaA), 1440, 1560),
-  }, state)
-  addFactors(match.teamB, {
+  }
+  addFactors(match.teamA, factorsA, state)
+  const factorsB = {
     context: normalize(matchEventK, 12, 34),
     recency: factorRecency,
     execution: aWon ? 0 : 1,
     opponent: normalize(effectiveRatingA, 1350, 1700),
     league: normalize(leagueScoreB + Math.max(0, leagueDelta.deltaB), 1440, 1560),
-  }, state)
+  }
+  addFactors(match.teamB, factorsB, state)
   appendHistory(match, match.teamA, match.teamB, updatedPowerRatingA, liveRatingAfterA, updatedLeagueAdjustmentA, sideAdjustmentA, updatedComponentsA, updateLedgerA, historyDeltaA, historyRanks.get(match.teamA) ?? 1, aWon, state.histories, series)
   appendHistory(match, match.teamB, match.teamA, updatedPowerRatingB, liveRatingAfterB, updatedLeagueAdjustmentB, sideAdjustmentB, updatedComponentsB, updateLedgerB, historyDeltaB, historyRanks.get(match.teamB) ?? 1, !aWon, state.histories, series)
-  recordSideAdjustmentSample(match, state.sideAdjustmentSamples)
+  const sideSampleWrites: Array<readonly [string, SeriesPassSample]> | undefined = recorder ? [] : undefined
+  recordSideAdjustmentSample(match, state.sideAdjustmentSamples,
+    sideSampleWrites ? (key, sample) => sideSampleWrites.push([key, sample]) : undefined)
   recordTeamContext(match, state.lastRosterByTeam, state.lastPatchByTeam, state.lastRosterFingerprintByTeam)
   trackMatchForPlacement(state.eventTrackers, match, teams)
   state.previousMatch = match
   state.processedMatchCount += 1
+  recorder?.recordMember(seriesIndex, memberIndex, {
+    seriesFinal: isSeriesFinal, gameK, recency: factorRecency, leagueHistoryStart,
+    sideSamples: sideSampleWrites!,
+    sides: [
+      {
+        snapshotRating: ratingA,
+        localExecutionBefore: executionRatingA,
+        snapshotLeagueScore: leagueScoreA,
+        snapshotMomentum: momentumA,
+        powerRating: powerRatingA,
+        executionPowerRating: executionPowerRatingA,
+        currentPowerRating: currentPowerRatingA,
+        effectiveRating: effectiveRatingA,
+        executionEffectiveRating: executionEffectiveRatingA,
+        liveRatingBefore: liveRatingBeforeA,
+        liveLeagueBefore: liveLeagueScoreBeforeA,
+        liveMomentumBefore: liveMomentumBeforeA,
+        liveUncertaintyBefore: liveUncertaintyBeforeA,
+        previousComponents: previousComponentsA,
+        executionIndex: executionIndexA,
+        executionExpected: executionExpectedA,
+        executionOutcome: executionOutcomeA,
+        executionDelta: executionDeltaA,
+        localExecutionRating: seriesExecutionRatings.get(match.teamA) ?? null,
+        seriesDelta: deltaA,
+        publishedRosterPriorOffset: publishedRosterPriorOffsetA,
+        updatedRosterPriorOffset: updatedRosterPriorOffsetA,
+        updatedLeagueScore: updatedLeagueScoreA,
+        leagueDelta: leagueDelta.deltaA,
+        components: updatedComponentsA,
+        displayRating: updatedPowerRatingA,
+        historyDelta: historyDeltaA,
+        factors: factorsA,
+      },
+      {
+        snapshotRating: ratingB,
+        localExecutionBefore: executionRatingB,
+        snapshotLeagueScore: leagueScoreB,
+        snapshotMomentum: momentumB,
+        powerRating: powerRatingB,
+        executionPowerRating: executionPowerRatingB,
+        currentPowerRating: currentPowerRatingB,
+        effectiveRating: effectiveRatingB,
+        executionEffectiveRating: executionEffectiveRatingB,
+        liveRatingBefore: liveRatingBeforeB,
+        liveLeagueBefore: liveLeagueScoreBeforeB,
+        liveMomentumBefore: liveMomentumBeforeB,
+        liveUncertaintyBefore: liveUncertaintyBeforeB,
+        previousComponents: previousComponentsB,
+        executionIndex: executionIndexB,
+        executionExpected: executionExpectedB,
+        executionOutcome: executionOutcomeB,
+        executionDelta: executionDeltaB,
+        localExecutionRating: seriesExecutionRatings.get(match.teamB) ?? null,
+        seriesDelta: deltaB,
+        publishedRosterPriorOffset: publishedRosterPriorOffsetB,
+        updatedRosterPriorOffset: updatedRosterPriorOffsetB,
+        updatedLeagueScore: updatedLeagueScoreB,
+        leagueDelta: leagueDelta.deltaB,
+        components: updatedComponentsB,
+        displayRating: updatedPowerRatingB,
+        historyDelta: historyDeltaB,
+        factors: factorsB,
+      },
+    ],
+  })
 }
 
 function recordLeagueStrengthHistory({

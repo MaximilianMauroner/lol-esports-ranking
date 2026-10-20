@@ -208,7 +208,7 @@ function earliestStartTime(games: MatchRecord[]) {
     .sort()[0]
 }
 
-function gameNumberFor(match: MatchRecord) {
+export function gameNumberFor(match: MatchRecord) {
   if (match.gameNumber !== undefined) return match.gameNumber
   for (const value of [match.officialGameId, match.sourceGameId, match.sourceMatchId, match.id]) {
     const parsed = value?.match(/(?:game[_-]?|[_-])([1-5])$/i)?.[1]
