@@ -24,21 +24,6 @@ export type SeriesResultInput = Readonly<{
 
 export type SeriesResultUpdate = ReturnType<typeof calculateSeriesResultUpdate>
 
-export type SeriesResultCapture = Readonly<{
-  seriesId: string
-  matchIds: readonly string[]
-  input: SeriesResultInput
-  nodeResult: Readonly<SeriesResultUpdate>
-}>
-
-export type SeriesResultDateBatch = Readonly<{
-  utcDate: string
-  authoritativeMatchIds: readonly string[]
-  series: readonly SeriesResultCapture[]
-}>
-
-export type SeriesResultDateObserver = (batch: SeriesResultDateBatch) => void
-
 /** The production series-result calculation. It does not read game-performance statistics. */
 export function calculateSeriesResultUpdate(input: SeriesResultInput) {
   const [teamA, teamB] = input.teams

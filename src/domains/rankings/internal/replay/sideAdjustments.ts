@@ -15,7 +15,11 @@ export function sideAdjustmentsFromSamples(samples: SideAdjustmentSamples) {
   )
 }
 
-export function recordSideAdjustmentSample(match: MatchRecord, samples: SideAdjustmentSamples) {
+export function recordSideAdjustmentSample(
+  match: MatchRecord,
+  samples: SideAdjustmentSamples,
+  observe?: (key: string, sample: { blueWins: number; total: number }) => void,
+) {
   const blueWon = blueSideWon(match)
   if (blueWon === undefined) return
   for (const key of [match.patch || 'all', 'all']) {
@@ -24,6 +28,7 @@ export function recordSideAdjustmentSample(match: MatchRecord, samples: SideAdju
       blueWins: current.blueWins + (blueWon ? 1 : 0),
       total: current.total + 1,
     })
+    observe?.(key, samples.get(key)!)
   }
 }
 
