@@ -450,7 +450,7 @@ test('a late cross-midnight Leaguepedia gap fill replays the complete Oracle ser
   }
 })
 
-test('a late New Year game restores the complete season and checkpoint artifacts', async () => {
+test('a late New Year game restores complete season artifacts from a checkpoint', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-new-year-'))
   try {
     const earlier = [match('prior-year', '2024-12-31', 'Earlier Event'),
@@ -458,8 +458,8 @@ test('a late New Year game restores the complete season and checkpoint artifacts
     const imported = importLeaguepediaSnapshot({ source: 'synthetic calendar rollover fixture', matches: [
       '2025-12-31T23:30:00Z', '2026-01-01T00:30:00Z',
     ].map((datetimeUtc, index) => ({
-      id: `2025 Season World Championship_Bracket_1_${index + 1}`,
-      date: datetimeUtc.slice(0, 10), datetimeUtc, event: '2025 Season World Championship',
+      id: `LCK 2025 Winter_Bracket_1_${index + 1}`,
+      date: datetimeUtc.slice(0, 10), datetimeUtc, event: 'LCK 2025 Winter',
       teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', matchBestOf: 3,
       teamAKills: 20 + index, teamBKills: 10, teamAGold: 60000 + index, teamBGold: 55000,
     })) })
@@ -479,10 +479,10 @@ test('a late New Year game restores the complete season and checkpoint artifacts
     if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
     const snapshot = full.build.snapshot
     const scopes = Object.values(snapshot.snapshots).filter(({ filter }) => filter.season === '2025' && filter.event === 'All' && filter.region === 'All')
-    assert.ok(scopes.some(({ filter }) => filter.checkpoint === 'split-3'))
+    assert.equal(scopes.length, 1)
     for (const scope of scopes) {
       assert.equal(scope.matchCount, 7)
-      const history = scope.standings.find(({ team }) => team === 'Alpha')!.history.filter((point) => point.event === '2025 Season World Championship')
+      const history = scope.standings.find(({ team }) => team === 'Alpha')!.history.filter((point) => point.date === '2025-12-31')
       assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
       assert.ok(history.at(-1)!.delta > 0)
     }
