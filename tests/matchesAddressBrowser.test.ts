@@ -6,7 +6,146 @@ import { createServer, type Plugin } from 'vite'
 import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 import { createPublicArtifactWritePlan, publicMatchHistoryShardPath } from '../src/domains/rankings/internal/published/writePlan.ts'
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
+import { archiveReferences } from '../src/domains/rankings/internal/published/archive.mjs'
 import type { MatchRecord } from '../src/domains/rankings/types.ts'
+
+test('Match year controls publish reloadable addresses before archive nodes arrive', { timeout: 60_000 }, async (t) => {
+  const matches: MatchRecord[] = Array.from({ length: 120 }, (_, index) => {
+    const year = index < 60 ? 2025 : 2026
+    const date = `${year}-01-${String(index % 28 + 1).padStart(2, '0')}`
+    return {
+      id: `sample-game-${index}`, officialMatchId: `sample-series-${index}-${'s'.repeat(6000)}`, sourceProvider: 'seed',
+      date, datetimeUtc: `${date}T12:00:00.000Z`, season: year, event: 'Sample season', phase: 'Regular season', region: 'LCK', league: 'LCK',
+      teamAKills: 10, teamBKills: 5, teamAGold: 60_000, teamBGold: 55_000, patch: '', bestOf: 1, bestOfBasis: 'provider', tier: 'regional-regular',
+      teamA: 'Alpha', teamB: 'Beta', winner: index % 2 ? 'Alpha' : 'Beta',
+    }
+  })
+  const data = createStaticRankingData({
+    matches, teams: { Alpha: { name: 'Alpha', code: 'ALP', league: 'LCK', region: 'LCK' }, Beta: { name: 'Beta', code: 'BET', league: 'LCK', region: 'LCK' } },
+    rosters: {}, generatedAt: '2026-10-02T00:00:00.000Z', dataMode: 'seeded-sample', source: 'Synthetic archive navigation fixture',
+  })
+  const plan = createPublicArtifactWritePlan(data)
+  const entries: Array<{ logicalPath: string; digest: string; bytes: number }> = []
+  const objects = new Map<string, string>()
+  const nodes2025 = new Set<string>()
+  for (const write of plan.writes) {
+    const prepared = prepareSemanticArtifact(write.value)
+    entries.push({ logicalPath: `/data/${write.relativePath}`, digest: prepared.digest, bytes: prepared.bytes })
+    for (const object of [...(prepared.children ?? []), prepared]) {
+      objects.set(`/data/objects/sha256/${object.digest}`, object.canonicalJson)
+      for (const ref of archiveReferences(object.semantic.content)) if (ref.year === '2025') nodes2025.add(`/data/objects/sha256/${ref.sha256}`)
+    }
+  }
+  assert.ok(nodes2025.size)
+  const meta = plan.manifest.artifactMeta
+  assert.ok(meta)
+  const manifest = createGenerationManifest({ generationId: meta.runId, rootManifest: plan.manifest, entries })
+  let hold2025 = false
+  const pending: Array<() => void> = []
+  const release = () => { hold2025 = false; pending.splice(0).forEach((respond) => respond()) }
+  const fixture: Plugin = { name: 'matches-year-address-fixture', configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const path = new URL(request.url ?? '/', 'http://fixture.invalid').pathname
+      if (!path.startsWith('/data/')) return next()
+      const body = path === '/data/ranking-summary.json' ? JSON.stringify(manifest) : objects.get(path)
+      response.setHeader('content-type', 'application/json')
+      response.statusCode = body ? 200 : 404
+      if (hold2025 && nodes2025.has(path)) { pending.push(() => response.end(body)); return }
+      response.end(body ?? '{}')
+    })
+  } }
+  const server = await createServer({ publicDir: false, logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixture] })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    await server.listen()
+    const address = server.httpServer!.address()
+    assert.ok(address && typeof address !== 'string')
+    const base = `http://127.0.0.1:${address.port}`
+    const executablePath = chromium.executablePath()
+    browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    page.setDefaultTimeout(5_000)
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const filters = 'scope=all&team=Alpha&league=LCK&event=Sample+season&size=50'
+    const hash2026 = `#matches?${filters}&matchesYear=2026&page=2`
+    const hash2025 = `#matches?${filters}&matchesYear=2025&page=2`
+    const rows = page.locator('table tbody tr')
+    const pager = page.getByLabel('Match history pagination', { exact: true })
+    const year = page.getByLabel('Match history year')
+    const query = () => new URLSearchParams(new URL(page.url()).hash.split('?')[1])
+    const request2025 = () => page.waitForRequest((request) => nodes2025.has(new URL(request.url()).pathname))
+    async function expectHeld(expected: string) {
+      await page.getByText('Loading match history', { exact: true }).waitFor()
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+      assert.equal(await rows.count(), 0, 'the old year must not remain visible')
+      assert.deepEqual([...query()].sort(), [...new URLSearchParams(expected)].sort())
+    }
+
+    await t.test('a year control resets page two before loading and reload keeps the requested filters', async () => {
+      await page.goto(`${base}/${hash2026}`)
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await rows.nth(9).waitFor()
+      await year.selectOption('2026')
+      assert.equal(query().get('page'), '2', 'selecting the effective year must keep the page')
+      hold2025 = true
+      const requested = request2025()
+      await year.selectOption('2025')
+      await requested
+      await expectHeld(`${filters}&matchesYear=2025`)
+      const reloaded = request2025()
+      await page.reload()
+      await reloaded
+      await expectHeld(`${filters}&matchesYear=2025`)
+      release()
+      await pager.getByText('Page 1 of 2', { exact: true }).waitFor()
+      await rows.nth(49).waitFor()
+      assert.equal(await year.inputValue(), '2025')
+      assert.equal(await rows.count(), 50)
+      assert.ok((await rows.allTextContents()).every((row) => row.includes('2025')))
+      assert.deepEqual([...query()].sort(), [...new URLSearchParams(`${filters}&matchesYear=2025`)].sort())
+    })
+
+    await t.test('All clears the year and page while preserving the other filters', async () => {
+      release()
+      await page.goto(`${base}/${hash2025}`)
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await rows.nth(9).waitFor()
+      await year.selectOption('All')
+      await pager.getByText('Page 1 of 3', { exact: true }).waitFor()
+      await rows.nth(49).waitFor()
+      await page.waitForFunction(() => !new URLSearchParams(location.hash.split('?')[1]).has('matchesYear'))
+      assert.deepEqual([...query()].sort(), [...new URLSearchParams(filters)].sort())
+    })
+
+    await t.test('back and forward retain the addressed year and page while its catalog is held', async () => {
+      release()
+      await page.goto(`${base}/?freshHistory${hash2026}`)
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await rows.nth(9).waitFor()
+      hold2025 = true
+      const requested = request2025()
+      await page.evaluate((hash) => { location.hash = hash }, hash2025)
+      await requested
+      await expectHeld(`${filters}&matchesYear=2025&page=2`)
+      await page.goBack()
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await rows.nth(9).waitFor()
+      assert.equal(await year.inputValue(), '2026')
+      assert.equal(query().get('page'), '2')
+      await page.goForward()
+      await expectHeld(`${filters}&matchesYear=2025&page=2`)
+      assert.ok(pending.length > 0)
+      release()
+      await pager.getByText('Page 2 of 2', { exact: true }).waitFor()
+      await rows.nth(9).waitFor()
+      assert.equal(await year.inputValue(), '2025')
+      assert.equal(await rows.count(), 10)
+      assert.equal(query().get('page'), '2')
+    })
+    assert.deepEqual(errors, [])
+  } finally { release(); await browser?.close(); await server.close() }
+})
 
 test('Matches event choices and addressed pages survive catalog loading and real document reloads', { timeout: 90_000 }, async (t) => {
   const matches: MatchRecord[] = Array.from({ length: 66 }, (_, index) => {
