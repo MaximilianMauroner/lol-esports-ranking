@@ -465,7 +465,7 @@ fn semantic_object_bytes(reference: &Reference, compressed: &[u8]) -> Result<Vec
             "Legacy compressed length mismatch",
         )?;
     }
-    let bytes = gunzip(compressed)?;
+    let bytes = gunzip(compressed, reference.bytes)?;
     ensure(
         bytes.len() as u64 == reference.bytes && sha256(&bytes) == reference.sha256,
         "Raw semantic digest mismatch",
