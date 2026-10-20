@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { getEventListeners } from 'node:events'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import test from 'node:test'
@@ -180,6 +181,62 @@ test('caller abort still governs an unread provider body after the payload arriv
   })
   controller.abort()
   await assert.rejects(response.json(), { name: 'AbortError' })
+})
+
+for (const cancellation of ['caller abort', 'helper deadline'] as const) {
+  test(`${cancellation} rejects an inspected unread body and releases the caller listener`, async (t) => {
+    const server = createServer((_request, response) => response.end('{"ok":true}'))
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => {
+      server.closeAllConnections()
+      return new Promise<void>((resolve) => server.close(() => resolve()))
+    })
+    const controller = new AbortController()
+    let expire: (() => void) | undefined
+    const response = await fetchWithRetry(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, {
+      signal: controller.signal,
+    }, {
+      retryResponse: async (inspection) => { assert.deepEqual(await inspection.json(), { ok: true }); return undefined },
+      setTimeoutFn: ((callback: () => void, delay: number) => {
+        expire = callback
+        return setTimeout(callback, delay)
+      }) as typeof setTimeout,
+    })
+    assert.equal(getEventListeners(controller.signal, 'abort').length, 1)
+    if (cancellation === 'caller abort') controller.abort()
+    else expire!()
+    const result = await response.json().then(() => 'body completed', (error: Error) => error.name)
+    assert.equal(result, cancellation === 'caller abort' ? 'AbortError' : 'TimeoutError')
+    assert.equal(getEventListeners(controller.signal, 'abort').length, 0)
+  })
+}
+
+test('clones retain fetched response metadata through repeated cloning', async (t) => {
+  const server = createServer((request, response) => {
+    if (request.url === '/redirect') response.writeHead(302, { location: '/final' }).end()
+    else response.writeHead(201, { 'x-fixture': 'retained' }).end('{"ok":true}')
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => {
+    server.closeAllConnections()
+    return new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const controller = new AbortController()
+  const response = await fetchWithRetry(`${base}/redirect`, { signal: controller.signal })
+  const clone = response.clone()
+  const secondClone = clone.clone()
+  for (const copy of [response, clone, secondClone]) {
+    assert.equal(copy.url, `${base}/final`)
+    assert.equal(copy.redirected, true)
+    assert.equal(copy.type, 'basic')
+    assert.equal(copy.status, 201)
+    assert.equal(copy.headers.get('x-fixture'), 'retained')
+  }
+  assert.deepEqual(await Promise.all([response, clone, secondClone].map((copy) => copy.json())), [
+    { ok: true }, { ok: true }, { ok: true },
+  ])
+  assert.equal(getEventListeners(controller.signal, 'abort').length, 0)
 })
 
 for (const outcome of ['retry', 'max attempts', 'max elapsed', 'inspection error', 'terminal callback error'] as const) {
