@@ -1,10 +1,12 @@
+use ranking_contracts::limits::STORED_LIMIT;
 use ranking_contracts::{Result, sha256};
 use reqwest::{Method, Url, blocking::Client};
 use ring::hmac;
-use std::{collections::BTreeMap, env, time::Duration};
+use std::{collections::BTreeMap, env, io::Read, time::Duration};
 
 pub struct Bucket {
     client: Client,
+    request_timeout: Duration,
     endpoint: Url,
     bucket: String,
     region: String,
@@ -51,6 +53,7 @@ impl Bucket {
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .map_err(|_| "Cannot create S3 client")?,
+            request_timeout: Duration::from_secs(120),
             endpoint,
             bucket: required(&["RANKING_BUCKET_NAME", "S3_BUCKET", "BUCKET"])?,
             region: optional(&[
@@ -146,7 +149,12 @@ impl Bucket {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         headers.insert("authorization".into(), format!("AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed}, Signature={signature}", self.access));
-        let mut request = self.client.request(method, url).body(body);
+        let head = method == Method::HEAD;
+        let mut request = self
+            .client
+            .request(method, url)
+            .timeout(self.request_timeout)
+            .body(body);
         for (key, value) in headers {
             request = request.header(key, value);
         }
@@ -164,10 +172,21 @@ impl Bucket {
             })
             .collect::<BTreeMap<_, _>>();
         let etag = headers.get("etag").cloned().unwrap_or_default();
-        let body = response
-            .bytes()
-            .map_err(|_| "S3 response body failed")?
-            .to_vec();
+        if !head
+            && response
+                .content_length()
+                .is_some_and(|length| length > STORED_LIMIT)
+        {
+            return Err("S3 stored object exceeds byte limit".into());
+        }
+        let mut body = Vec::new();
+        response
+            .take(STORED_LIMIT + 1)
+            .read_to_end(&mut body)
+            .map_err(|_| "S3 response body failed")?;
+        if body.len() as u64 > STORED_LIMIT {
+            return Err("S3 stored object exceeds byte limit".into());
+        }
         Ok(Object {
             status,
             etag,
@@ -224,6 +243,160 @@ fn required(keys: &[&str]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ranking_contracts::limits::STORED_LIMIT;
+    use std::io::{Read, Write};
+
+    fn serve(headers: &str, body: Vec<u8>) -> (Bucket, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let headers = headers.to_owned();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            let _ = stream.write_all(
+                format!("HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}\r\n").as_bytes(),
+            );
+            let _ = stream.write_all(&body);
+        });
+        let bucket = Bucket {
+            client: Client::builder()
+                .no_proxy()
+                .no_gzip()
+                .no_brotli()
+                .no_deflate()
+                .no_zstd()
+                .build()
+                .unwrap(),
+            request_timeout: Duration::from_secs(120),
+            endpoint,
+            bucket: "fixture".into(),
+            region: "auto".into(),
+            access: "fixture-access".into(),
+            secret: "fixture-secret".into(),
+            prefix: "rankings".into(),
+            path_style: true,
+        };
+        (bucket, server)
+    }
+
+    #[test]
+    fn s3_body_reads_keep_the_total_request_deadline() {
+        let timeout = Duration::from_millis(250);
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.set_nodelay(true).unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 20\r\n\r\n")
+                .unwrap();
+            for _ in 0..20 {
+                if stream.write_all(b"x").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let bucket = Bucket {
+            client: Client::builder()
+                .no_proxy()
+                .timeout(timeout)
+                .build()
+                .unwrap(),
+            request_timeout: timeout,
+            endpoint,
+            bucket: "fixture".into(),
+            region: "auto".into(),
+            access: "fixture-access".into(),
+            secret: "fixture-secret".into(),
+            prefix: "rankings".into(),
+            path_style: true,
+        };
+        let result = bucket.request(Method::GET, "objects/fixture", BTreeMap::new(), vec![]);
+        server.join().unwrap();
+        let error = result
+            .err()
+            .expect("S3 body exceeded the total request deadline");
+        assert_eq!(error, "S3 response body failed");
+    }
+
+    #[test]
+    fn s3_http_bodies_are_bounded() {
+        let oversized = vec![b'x'; STORED_LIMIT as usize + 1];
+        let chunked = [
+            format!("{:x}\r\n", oversized.len()).into_bytes(),
+            oversized.clone(),
+            b"\r\n0\r\n\r\n".to_vec(),
+        ]
+        .concat();
+        for (headers, body) in [
+            ("Transfer-Encoding: chunked\r\n".to_owned(), chunked),
+            (
+                format!("Content-Length: {}\r\n", oversized.len()),
+                Vec::new(),
+            ),
+            (String::new(), oversized),
+        ] {
+            let (bucket, server) = serve(&headers, body);
+            let result = bucket.request(Method::GET, "objects/fixture", BTreeMap::new(), vec![]);
+            server.join().unwrap();
+            let error = result.err().expect("oversized S3 body was accepted");
+            assert!(error.contains("limit"), "{error}");
+            assert!(!error.contains("fixture-secret"));
+        }
+    }
+
+    #[test]
+    fn s3_http_accepts_the_exact_stored_limit() {
+        let body = vec![b'x'; STORED_LIMIT as usize];
+        let (bucket, server) = serve(&format!("Content-Length: {}\r\n", body.len()), body.clone());
+        let response = bucket
+            .request(Method::GET, "objects/fixture", BTreeMap::new(), vec![])
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(response.body, body);
+    }
+
+    #[test]
+    fn s3_head_preserves_lengths_larger_than_the_body_limit() {
+        let size = STORED_LIMIT + 1;
+        let (bucket, server) = serve(&format!("Content-Length: {size}\r\n"), Vec::new());
+        let response = bucket
+            .request(Method::HEAD, "objects/fixture", BTreeMap::new(), vec![])
+            .unwrap();
+        server.join().unwrap();
+        assert!(response.body.is_empty());
+        assert_eq!(
+            response.headers.get("content-length"),
+            Some(&size.to_string())
+        );
+    }
+
     #[test]
     fn object_paths_stay_in_the_selected_prefix() {
         for key in [

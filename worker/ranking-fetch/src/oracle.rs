@@ -4,7 +4,7 @@ use crate::{
 };
 use reqwest::Url;
 use serde_json::{Value, json};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub struct Outcome {
     pub files: Vec<PathBuf>,
@@ -51,7 +51,7 @@ pub fn download(
             let name = parsed
                 .path_segments()
                 .and_then(Iterator::last)
-                .filter(|v| v.contains('.'))
+                .filter(|name| plain_csv_name(name))
                 .map(str::to_owned)
                 .unwrap_or(format!("oracles-elixir-{}.csv", index + 1));
             sources.push((name, url.into()));
@@ -76,22 +76,7 @@ pub fn download(
                 String::new()
             }
         };
-        let pattern = regex::Regex::new(
-            r#"https://drive\.google\.com/file/d/([^/]+)/view\?usp=drive_web[\s\S]*?<div class="flip-entry-title">([^<]+)</div>"#,
-        )?;
-        for entry in pattern.captures_iter(&html) {
-            let name = entry[2]
-                .replace("&amp;", "&")
-                .replace("&quot;", "\"")
-                .replace("&#39;", "'")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">");
-            if name.ends_with(".csv") {
-                let mut url = Url::parse("https://drive.google.com/uc?export=download")?;
-                url.query_pairs_mut().append_pair("id", &entry[1]);
-                sources.push((name, url.into()));
-            }
-        }
+        sources.extend(drive_sources(&html, warnings, &mut failures)?);
     }
     if sources.is_empty() {
         warnings.push(if skipped_drive { "Oracle download was enabled, but Google Drive discovery was disabled and no direct Oracle CSV URL was provided.".into() } else { format!("No Oracle CSVs were discovered in {folder_url}.") });
@@ -121,7 +106,10 @@ pub fn download(
             let response = http.get(
                 Url::parse(url)?,
                 &[("user-agent", options.text_or("userAgent", USER_AGENT))],
-                &Policy::default(),
+                &Policy {
+                    body_limit: ranking_contracts::limits::SEMANTIC_LIMIT,
+                    ..Policy::default()
+                },
             )?;
             let prefix = String::from_utf8_lossy(&response.body[..response.body.len().min(256)]);
             let prefix = prefix.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
@@ -160,6 +148,47 @@ pub fn download(
         folder_url,
         discovered_count: original_count,
     })
+}
+
+pub(super) fn drive_sources(
+    html: &str,
+    warnings: &mut Vec<String>,
+    failures: &mut Vec<Value>,
+) -> Result<Vec<(String, String)>> {
+    let mut sources = Vec::new();
+    let pattern = regex::Regex::new(
+        r#"https://drive\.google\.com/file/d/([^/]+)/view\?usp=drive_web[\s\S]*?<div class="flip-entry-title">([^<]+)</div>"#,
+    )?;
+    for entry in pattern.captures_iter(html) {
+        let name = entry[2]
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">");
+        if name.ends_with(".csv") {
+            let mut url = Url::parse("https://drive.google.com/uc?export=download")?;
+            url.query_pairs_mut().append_pair("id", &entry[1]);
+            if !plain_csv_name(&name) {
+                let message = "Oracle source name must be a plain CSV file name";
+                failures.push(json!({"source":name,"url":url.as_str(),"error":message}));
+                warnings.push(format!(
+                    "Oracle source {name} was not downloaded: {message}"
+                ));
+                continue;
+            }
+            sources.push((name, url.into()));
+        }
+    }
+    Ok(sources)
+}
+
+fn plain_csv_name(name: &str) -> bool {
+    let mut components = Path::new(name).components();
+    name.ends_with(".csv")
+        && !name.contains('\\')
+        && matches!(components.next(), Some(Component::Normal(_)))
+        && components.next().is_none()
 }
 
 fn discovery_failure_message(message: &str) -> String {

@@ -465,7 +465,7 @@ fn semantic_object_bytes(reference: &Reference, compressed: &[u8]) -> Result<Vec
             "Legacy compressed length mismatch",
         )?;
     }
-    let bytes = gunzip(compressed)?;
+    let bytes = gunzip(compressed, reference.bytes)?;
     ensure(
         bytes.len() as u64 == reference.bytes && sha256(&bytes) == reference.sha256,
         "Raw semantic digest mismatch",
@@ -630,6 +630,64 @@ fn restore(
 #[cfg(test)]
 mod lossless_graph_tests {
     use super::*;
+
+    #[test]
+    fn raw_gzip_expansion_stops_before_a_corrupt_trailer() {
+        let text = format!("\"{}\"", "x".repeat(250_003));
+        let single = gzip(text.as_bytes()).unwrap();
+        let split = [
+            gzip(&text.as_bytes()[..100_000]).unwrap(),
+            gzip(&text.as_bytes()[100_000..]).unwrap(),
+        ]
+        .concat();
+        for mut compressed in [single, split] {
+            compressed.truncate(compressed.len() - 8);
+            for limit in [1, 60_013, 150_007] {
+                let hash = sha256(text.as_bytes());
+                let reference = Reference {
+                    key: format!("raw/objects/sha256/{hash}"),
+                    sha256: hash,
+                    bytes: limit,
+                    storage_encoding: "gzip".into(),
+                    compressed_bytes: Some(compressed.len() as u64),
+                };
+                for result in [
+                    decode_object(&reference, &compressed).map(|_| ()),
+                    decode_lossless_object(&reference, &compressed).map(|_| ()),
+                ] {
+                    let error = result.unwrap_err().to_string();
+                    assert_eq!(
+                        error, "Gzip semantic size exceeds limit",
+                        "must reject expansion at {limit} bytes before reading the corrupt trailer: {error}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn raw_gzip_accepts_the_exact_declared_size_across_members() {
+        let text = br#"{"games":[],"source":"fixture"}"#;
+        let compressed = [
+            gzip(&text[..10]).unwrap(),
+            gzip(&text[10..]).unwrap(),
+            vec![0; 8],
+        ]
+        .concat();
+        let hash = sha256(text);
+        let reference = Reference {
+            key: format!("raw/objects/sha256/{hash}"),
+            sha256: hash,
+            bytes: text.len() as u64,
+            storage_encoding: "gzip".into(),
+            compressed_bytes: Some(compressed.len() as u64),
+        };
+        assert_eq!(
+            decode_object(&reference, &compressed).unwrap(),
+            json!({"games":[],"source":"fixture"})
+        );
+        assert!(decode_lossless_object(&reference, &compressed).is_ok());
+    }
 
     // Node prepareRawSourceReceipt/canonicalJsonFor golden. Every unconstrained
     // receipt string category uses unpaired UTF-16; both digests are Node's.

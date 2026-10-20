@@ -14,13 +14,13 @@ pub fn decode_gzip(compressed: &[u8], limit: u64, mut consume: impl FnMut(&[u8])
         loop {
             let size = member
                 .read(&mut buffer)
-                .map_err(|_| "State member gzip is corrupt")?;
+                .map_err(|_| "Gzip member is corrupt")?;
             if size == 0 {
                 break;
             }
             bytes += size as u64;
             if bytes > limit {
-                return Err("State member semantic size mismatch".into());
+                return Err("Gzip semantic size exceeds limit".into());
             }
             consume(&buffer[..size]);
             crc.update(&buffer[..size]);
@@ -30,11 +30,11 @@ pub fn decode_gzip(compressed: &[u8], limit: u64, mut consume: impl FnMut(&[u8])
         let (trailer, rest) = member
             .into_inner()
             .split_at_checked(8)
-            .ok_or("State member gzip is corrupt")?;
+            .ok_or("Gzip member is corrupt")?;
         let expected_crc = u32::from_le_bytes([trailer[0], trailer[1], trailer[2], trailer[3]]);
         let expected_bytes = u32::from_le_bytes([trailer[4], trailer[5], trailer[6], trailer[7]]);
         if crc.finalize() != expected_crc || member_bytes != expected_bytes {
-            return Err("State member gzip is corrupt".into());
+            return Err("Gzip member is corrupt".into());
         }
         remaining = rest;
         // Match Node's concatenated members and zero-padding end marker.
@@ -46,7 +46,7 @@ pub fn decode_gzip(compressed: &[u8], limit: u64, mut consume: impl FnMut(&[u8])
 }
 
 fn gzip_payload(compressed: &[u8]) -> Result<&[u8]> {
-    let error = "State member gzip is corrupt";
+    let error = "Gzip member is corrupt";
     let fixed = compressed.get(..10).ok_or(error)?;
     let flags = fixed[3];
     if fixed[..3] != [0x1f, 0x8b, 8] || flags & 0xe0 != 0 {
