@@ -434,6 +434,57 @@ mod tests {
     }
 
     #[test]
+    fn direct_oracle_urls_keep_safe_fallback_names() {
+        for (segment, expected) in [
+            ("season.CSV", "oracles-elixir-1.csv"),
+            ("season.Csv", "oracles-elixir-1.csv"),
+            ("season.json", "oracles-elixir-1.csv"),
+            ("download", "oracles-elixir-1.csv"),
+            ("season.csv", "season.csv"),
+        ] {
+            let body = b"gameid,date\ngame,2026-01-01\n".to_vec();
+            let (mut url, server) = serve(200, "Content-Type: text/csv\r\n", body.clone());
+            url.set_path(segment);
+            let directory = std::env::current_dir()
+                .unwrap()
+                .join("target")
+                .join(format!(
+                    "oracle-direct-{}-{}",
+                    std::process::id(),
+                    crate::now_ms()
+                ));
+            let options = crate::Options::parse(&["--oracle-csv-url".into(), url.into()]);
+            let mut http = Http {
+                client: Client::builder().no_proxy().build().unwrap(),
+                ..Http::default()
+            };
+            let outcome = crate::oracle::download(
+                &mut http,
+                &options,
+                &directory,
+                "2026-01-01",
+                "2026-12-31",
+                &mut Vec::new(),
+            )
+            .unwrap();
+            if http.requests > 0 {
+                server.join().unwrap();
+            }
+            let downloaded = std::fs::read(directory.join(expected));
+            if directory.exists() {
+                std::fs::remove_dir_all(&directory).unwrap();
+            }
+            assert!(
+                outcome.failures.is_empty(),
+                "{segment}: {:?}",
+                outcome.failures
+            );
+            assert_eq!(outcome.files, vec![directory.join(expected)]);
+            assert_eq!(downloaded.unwrap(), body);
+        }
+    }
+
+    #[test]
     fn retry_after_preserves_budget_and_server_minimum() {
         assert_eq!(retry_after_ms("1.2345", 0), Some(1235));
         assert_eq!(
