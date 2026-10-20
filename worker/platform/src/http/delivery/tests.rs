@@ -27,6 +27,8 @@ fn pinned_directory_survives_path_replacement() {
     assert_eq!(bytes, "original");
     assert_eq!(opened.metadata.len(), 8);
     assert!(LocalRoot::open(&original).is_err());
+    std::fs::create_dir(external.join("nested")).unwrap();
+    assert!(LocalRoot::open(&original.join("nested")).is_err());
 }
 
 #[test]
@@ -94,7 +96,7 @@ fn cancelled_open_jobs_keep_admission_until_the_blocking_work_finishes() {
         std::fs::write(base.join("ranking-summary.json"), b"{}").unwrap();
         let data = Arc::new(
             LocalData::open(&LocalDataOptions {
-                data_root: base.clone(),
+                data_root: base,
                 ..LocalDataOptions::default()
             })
             .unwrap(),
