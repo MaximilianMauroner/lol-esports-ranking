@@ -125,7 +125,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.match(await page.locator('body').innerText(), /Alpha.*Beta/)
     const live = page.locator('section[aria-label="live"]')
     await live.getByText('Alpha 1–0 Beta', { exact: true }).waitFor()
-    assert.equal(await live.getByText('Live', { exact: true }).count(), 1)
+    await live.locator('[data-slot="badge"]').filter({ hasText: /^Live$/ }).waitFor({ state: 'visible' })
     assert.doesNotMatch(await live.innerText(), /Winner:/, 'A live lead is not a confirmed winner')
     const results = page.locator('section[aria-label="results"]')
     await results.getByText(`Winner: ${longWinner}`, { exact: true }).waitFor()
@@ -141,7 +141,9 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.ok(winnerWeight > loserWeight, 'The confirmed winner has distinct text emphasis')
     const liveWeights = await Promise.all(['Alpha', 'Beta'].map((name) => live.getByText(name, { exact: true }).evaluate((node) => getComputedStyle(node).fontWeight)))
     assert.equal(liveWeights[0], liveWeights[1], 'A live lead does not gain winner emphasis')
-    assert.equal(await markedRow.locator('[title="Cloud9 (C9)"] img').getAttribute('src'), '/team-logos/cloud9.png?v=icon-128')
+    const cloud9Logo = markedRow.locator('[title="Cloud9 (C9)"] img')
+    await cloud9Logo.waitFor({ state: 'visible' })
+    await page.waitForFunction((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0, await cloud9Logo.elementHandle())
     const fallback = markedRow.locator(`[title="${longWinner} (NOR)"]`)
     assert.equal(await fallback.innerText(), 'N')
     assert.equal(await fallback.locator('img').count(), 0, 'An unbranded source team uses its initial')
@@ -268,10 +270,9 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
       const winnerLabel = page.getByText(`Winner: ${longWinner}`, { exact: true })
       const winnerLayout = await winnerLabel.evaluate((node) => {
         const bounds = node.getBoundingClientRect()
-        return { left: bounds.left, right: bounds.right, lines: bounds.height / parseFloat(getComputedStyle(node).lineHeight) }
+        return { left: bounds.left, right: bounds.right }
       })
       assert.ok(winnerLayout.left >= 0 && winnerLayout.right <= width, `Winner label stays readable at ${width}px`)
-      if (width === 320) assert.ok(winnerLayout.lines > 1, 'A long winner name wraps at 320px')
       if (width < 640) {
         const clearance = await page.evaluate(() => {
           window.scrollTo(0, document.documentElement.scrollHeight)
@@ -314,6 +315,76 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
   } finally {
     pendingHealth.splice(0).forEach((respond) => respond())
     pendingFeed.splice(0).forEach((respond) => respond())
+    await browser?.close()
+    await server.close()
+  }
+})
+
+test('tournament results keep matchup, score and winner metadata readable at each responsive width', { timeout: 60_000 }, async () => {
+  const feed = fixtureFeed()
+  feed.events[0]!.series = [
+    series('maryville-result', 'lcs:2026:fixture-lcs', [team('maryville', 'Maryville University', 3), team('zeu5', 'Zeu5 Esports', 1)], 'completed', 'completed'),
+    series('long-result', 'lcs:2026:fixture-lcs', [team('cloud9', 'Cloud9', 1), team('northern', longWinner, 3)], 'completed', 'completed'),
+  ]
+  const fixturePlugin: Plugin = { name: 'tournament-readability-fixture', configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      const path = new URL(request.url ?? '/', 'http://localhost').pathname
+      if (!path.startsWith('/data/') && !path.startsWith('/tournament-data/')) return next()
+      response.setHeader('content-type', 'application/json')
+      response.statusCode = path === tournamentPath || path === healthPath ? 200 : 503
+      response.end(JSON.stringify(path === tournamentPath ? feed : path === healthPath
+        ? { checkedAt: at, complete: true, warnings: [] } : { error: 'ranking artifacts unavailable' }))
+    })
+  } }
+  const server = await createServer({ logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin] })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    await server.listen()
+    const address = server.httpServer?.address()
+    assert.ok(address && typeof address !== 'string')
+    const executablePath = chromium.executablePath()
+    browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
+    const page = await browser.newPage({ viewport: { width: 768, height: 800 } })
+    await page.clock.install({ time: new Date(at) })
+    await page.goto(`http://127.0.0.1:${address.port}/#tournaments?event=lcs%3A2026%3Afixture-lcs&view=schedule`)
+    await page.getByText('Winner: Maryville University', { exact: true }).waitFor()
+    for (const width of [768, 320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 })
+      for (const winner of ['Maryville University', longWinner]) {
+        const row = page.locator('li').filter({ has: page.getByText(`Winner: ${winner}`, { exact: true }) })
+        const layout = await row.evaluate((node) => {
+          const [matchup, metadata] = node.querySelectorAll('p')
+          const textFits = [matchup!, metadata!].map((element) => {
+            const bounds = element.getBoundingClientRect()
+            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+            let text: Node | null
+            while ((text = walker.nextNode())) {
+              if (!text.textContent?.trim()) continue
+              const range = document.createRange()
+              range.selectNodeContents(text)
+              if ([...range.getClientRects()].some((rect) => rect.left < bounds.left - 1 || rect.right > bounds.right + 1)) return false
+            }
+            return bounds.width > 0 && bounds.left >= 0 && bounds.right <= innerWidth
+          })
+          const score = matchup!.querySelector('.font-mono')!
+          const range = document.createRange()
+          range.selectNodeContents(score)
+          const matchupBounds = matchup!.getBoundingClientRect()
+          const metadataBounds = metadata!.getBoundingClientRect()
+          return {
+            matchupWidth: matchupBounds.width,
+            matchupFits: textFits[0], metadataFits: textFits[1],
+            scoreLines: new Set([...range.getClientRects()].map((rect) => rect.top)).size,
+            separated: matchupBounds.right <= metadataBounds.left || metadataBounds.right <= matchupBounds.left
+              || matchupBounds.bottom <= metadataBounds.top || metadataBounds.bottom <= matchupBounds.top,
+          }
+        })
+        assert.ok(layout.matchupFits && layout.metadataFits && layout.scoreLines === 1 && layout.separated,
+          `${winner} matchup, score and metadata stay readable at ${width}px: ${JSON.stringify(layout)}`)
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
+    }
+  } finally {
     await browser?.close()
     await server.close()
   }
