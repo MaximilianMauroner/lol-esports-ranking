@@ -18,20 +18,15 @@ export function useTeamDetailAddress(
   requestedScope: string,
   effectiveScope: string,
 ) {
-  const [model, setModel] = useState(() => {
-    // A cold scope remount must read the result of the earlier silent repair.
-    const live = currentHashQuery()
-    return { address, detail: fromAddress(live), allowOmittedScope: !live.has('scope') }
-  })
+  const [model, setModel] = useState(() => ({ address, detail: fromAddress(currentHashQuery()) }))
   let detail = model.address === address ? model.detail : fromAddress(address)
   if (detail.kind === 'open' && !scope.has(detail.value)) {
     detail = { kind: 'missing', value: detail.value, scope }
   } else if (detail.kind === 'missing' && detail.scope !== scope) {
     detail = { kind: 'closed' }
   }
-  const allowOmittedScope = model.address === address && model.allowOmittedScope
   if (model.address !== address || model.detail !== detail) {
-    setModel({ address, detail, allowOmittedScope })
+    setModel({ address, detail })
   }
 
   useEffect(() => {
@@ -40,10 +35,10 @@ export function useTeamDetailAddress(
     const live = currentHashQuery()
     if (route !== 'rankings' || live.get('teamDetail') !== detail.value) return
     const liveScope = live.get('scope')
-    if (liveScope !== requestedScope && liveScope !== effectiveScope && !(liveScope === null && allowOmittedScope)) return
+    if (liveScope !== null && liveScope !== requestedScope && liveScope !== effectiveScope) return
     live.delete('teamDetail')
     writeNavigationHash(`#rankings?${live.toString()}`, 'replace')
-  }, [allowOmittedScope, detail, effectiveScope, requestedScope])
+  }, [detail, effectiveScope, requestedScope])
 
   function open(value: string) {
     writeNavigationHash(hashWithParam('teamDetail', value), 'push')
