@@ -241,6 +241,7 @@ test('Railway HEAD releases a bucket response that stalls after headers', async 
       response.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000', etag: '"head-fixture"' })
       response.write('{"standings":')
       response.on('close', () => releaseBody?.())
+      if (request.method === 'HEAD') response.end()
       return
     }
     response.writeHead(404)
