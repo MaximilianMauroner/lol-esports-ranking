@@ -167,6 +167,58 @@ for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as con
   })
 }
 
+for (const outcome of ['retry', 'max attempts', 'max elapsed', 'inspection error', 'terminal callback error'] as const) {
+  test(`provider releases discarded bodies on ${outcome}`, async () => {
+    let released = false
+    let calls = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode('busy')) },
+      cancel() { released = true },
+    })
+    const request = fetchWithRetry('https://provider.invalid', {}, {
+      fetcher: async () => {
+        calls += 1
+        if (calls > 1) {
+          assert.equal(released, true, 'Release the previous response before another request')
+          return new Response('ok')
+        }
+        return new Response(body, { status: outcome === 'terminal callback error' ? 200 : 503 })
+      },
+      maxAttempts: outcome === 'max attempts' || outcome === 'inspection error' || outcome === 'terminal callback error' ? 1 : 2,
+      maxElapsedMs: outcome === 'max elapsed' ? 10 : 5_000,
+      baseDelayMs: outcome === 'max elapsed' ? 100 : 0,
+      retryResponse: outcome === 'inspection error' ? () => { throw new Error('inspection failed') } : undefined,
+      onTerminal: outcome === 'terminal callback error' ? () => { throw new Error('terminal callback failed') } : undefined,
+      sleep: async () => { assert.equal(released, true, 'Release the response before backoff') },
+    })
+    if (outcome === 'retry') assert.equal(await (await request).text(), 'ok')
+    else await assert.rejects(request)
+    assert.equal(released, true, 'Release the response before returning a terminal failure')
+  })
+}
+
+test('provider releases both branches of an inspected retry response', async () => {
+  let released = false
+  let calls = 0
+  const response = await fetchWithRetry('https://provider.invalid', {}, {
+    fetcher: async () => {
+      calls += 1
+      if (calls > 1) {
+        assert.equal(released, true)
+        return new Response('ok')
+      }
+      return new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode('busy')) },
+        cancel() { released = true },
+      }))
+    },
+    retryResponse: () => calls === 1,
+    baseDelayMs: 0,
+    sleep: async () => { assert.equal(released, true) },
+  })
+  assert.equal(await response.text(), 'ok')
+})
+
 test('caller timeout preserves abort semantics and attaches one persisted terminal attempt', async () => {
   let failureCalls = 0
   let persisted: ReturnType<typeof snapshotProviderFetchTelemetry> | undefined
