@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import test from 'node:test'
 import { createProviderFetchTelemetry, fetchWithRetry, parseRetryAfterMs, providerFetchTelemetryFor, snapshotProviderFetchTelemetry } from '../scripts/provider-fetch-retry.mjs'
 
@@ -103,9 +105,10 @@ test('maxElapsed aborts an in-flight provider attempt and emits failure telemetr
   assert.equal(failure?.attempts.at(-1)?.reason, 'max-elapsed')
 })
 
-test('attempt deadline remains a referenced liveness handle until fetch settles and is then cleared', async () => {
+test('attempt deadline stays active until the response body is consumed', async () => {
   let deadline: ReturnType<typeof setTimeout> | undefined
   let cleared = false
+  let finishBody: (() => void) | undefined
   const setDeadline = ((callback: () => void, delay?: number) => {
     deadline = setTimeout(callback, delay)
     return deadline
@@ -113,7 +116,12 @@ test('attempt deadline remains a referenced liveness handle until fetch settles 
   const response = await fetchWithRetry('https://provider.invalid', {}, {
     fetcher: async () => {
       assert.equal(deadline?.hasRef(), true)
-      return new Response('ok', { status: 200 })
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('ok'))
+          finishBody = () => controller.close()
+        },
+      }), { status: 200 })
     },
     setTimeoutFn: setDeadline,
     clearTimeoutFn: (timeout) => {
@@ -122,8 +130,42 @@ test('attempt deadline remains a referenced liveness handle until fetch settles 
     },
   })
   assert.equal(response.status, 200)
+  assert.equal(cleared, false)
+  finishBody?.()
+  assert.equal(await response.text(), 'ok')
   assert.equal(cleared, true)
 })
+
+for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as const) {
+  test(`${abort} stops a provider body that stalls after headers`, async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.write('{"ok":')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/stalled`
+    const controller = new AbortController()
+    const signal = abort === 'caller timeout' ? AbortSignal.timeout(500) : controller.signal
+    let guard: ReturnType<typeof setTimeout> | undefined
+    try {
+      const response = await fetchWithRetry(url, { signal }, {
+        maxElapsedMs: abort === 'helper deadline' ? 500 : 5_000,
+      })
+      assert.equal(response.url, url)
+      const body = response.json()
+      if (abort === 'caller abort') controller.abort()
+      const outcome = await Promise.race([
+        body.then(() => 'body completed', (error: Error) => error.name),
+        new Promise<string>((resolve) => { guard = setTimeout(() => resolve('body stayed open'), 1_500) }),
+      ])
+      assert.match(outcome, /^(AbortError|TimeoutError)$/)
+    } finally {
+      clearTimeout(guard)
+      server.closeAllConnections()
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    }
+  })
+}
 
 test('caller timeout preserves abort semantics and attaches one persisted terminal attempt', async () => {
   let failureCalls = 0
