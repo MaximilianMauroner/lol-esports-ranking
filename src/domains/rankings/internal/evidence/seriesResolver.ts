@@ -49,6 +49,23 @@ export function resolveCanonicalSeries(matches: readonly MatchRecord[]): Canonic
     .sort(compareCanonicalSeries)
 }
 
+/**
+ * Replay rates one complete UTC date at a time and updates a series only once
+ * it completes inside that date. A series that crosses midnight would split
+ * into two incomplete halves, so every game carries its series' first UTC date.
+ */
+export function withSeriesStartDates(matches: readonly MatchRecord[]): MatchRecord[] {
+  const startDates = new Map<MatchRecord, string>()
+  for (const series of resolveCanonicalSeries(matches)) {
+    const startDate = series.games.map((game) => game.date).sort(compareCodeUnits)[0]!
+    for (const game of series.games) startDates.set(game, startDate)
+  }
+  return matches.map((match) => {
+    const date = startDates.get(match) ?? match.date
+    return date === match.date ? match : { ...match, date }
+  })
+}
+
 export function canonicalSeriesForMatches(matches: readonly MatchRecord[]) {
   const byMatchId = new Map<string, CanonicalSeries>()
   for (const series of resolveCanonicalSeries(matches)) {
