@@ -31,6 +31,7 @@ import { cn } from '../../shared/utils'
 import { TeamMark } from '../../components/TeamMark'
 import { RegionDepthChart } from '../../components/RegionDepthChart'
 import { CompareToggle } from '../rankings/CompareToggle'
+import { seriesWinner } from '../matches/seriesOutcome'
 
 export function RegionsView({
   regions,
@@ -151,7 +152,7 @@ export function RegionsView({
                   </span>
                   <span className="grid min-w-0 gap-0.5 text-sm text-muted-foreground tabular-nums [&_b]:font-semibold [&_b]:text-foreground [&_small]:block [&_small]:leading-[1.25] [&_small]:text-[var(--faint)] max-[1180px]:hidden">
                     <span className="block" title={`Bo2 ties count as half a win. Exact record ${formatRecord(region.internationalWins, region.internationalLosses)}.`}>
-                      International record <span className="whitespace-nowrap"><b>{formatInternationalRecord(region)}</b> · {formatRatio(region.internationalWinRate)}</span>
+                      International record <span className="whitespace-nowrap"><b>{formatRecord(region.internationalWins, region.internationalLosses)}</b> · {formatRatio(region.internationalWinRate)}</span>
                     </span>
                     <small title={`Average opponent power ${formatRating(region.averageOpponentRating)}`}>
                       {formatSignedDecimal(region.winsOverExpected)} wins vs expected
@@ -508,11 +509,8 @@ function RegionMatchRow({
   const teamAIsRegional = teamNames.has(summary.teamA.name)
   const teamBIsRegional = teamNames.has(summary.teamB.name)
   const regionalClash = teamAIsRegional && teamBIsRegional
-  const regionWon = regionalClash
-    ? undefined
-    : teamAIsRegional
-      ? summary.seriesWinsA > summary.seriesWinsB
-      : summary.seriesWinsB > summary.seriesWinsA
+  const winner = seriesWinner(summary)
+  const regionWon = winner === (teamAIsRegional ? 'A' : 'B')
   const impactParts = [
     teamAIsRegional && typeof summary.impact.teamA === 'number' ? `${summary.teamA.code} ${formatSigned(summary.impact.teamA)}` : undefined,
     teamBIsRegional && typeof summary.impact.teamB === 'number' ? `${summary.teamB.code} ${formatSigned(summary.impact.teamB)}` : undefined,
@@ -545,9 +543,9 @@ function RegionMatchRow({
       <div>
         <span className={cn(
           'inline-flex items-center rounded-full px-2 py-1 text-2xs font-bold',
-          regionalClash ? 'bg-[var(--surface-3)] text-muted-foreground' : regionWon ? 'bg-[var(--win-soft)] text-[var(--win)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]',
+          regionalClash || winner === undefined ? 'bg-[var(--surface-3)] text-muted-foreground' : regionWon ? 'bg-[var(--win-soft)] text-[var(--win)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]',
         )}>
-          {regionalClash ? 'Regional matchup' : regionWon ? 'Region win' : 'Region loss'}
+          {regionalClash ? 'Regional matchup' : winner === undefined ? 'Region draw' : regionWon ? 'Region win' : 'Region loss'}
         </span>
         <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
           {impactParts.length > 0 ? `Team Power ${impactParts.join(' · ')}` : '—'}
@@ -662,11 +660,6 @@ function RegionDepthLegend() {
       </li>
     </ul>
   )
-}
-
-/** Whole-series record. Bo2 ties add half wins, so this rounds them for display. */
-function formatInternationalRecord(region: Pick<RegionStrength, 'internationalWins' | 'internationalLosses'>) {
-  return formatRecord(Math.round(region.internationalWins), Math.round(region.internationalLosses))
 }
 
 function formatSignedDecimal(value?: number) {

@@ -98,6 +98,7 @@ export function RankingRoute() {
   const [regionPicks, setRegionPicks] = useState<RegionStrength[]>([])
   const [teamSearch, setTeamSearch] = useState(() => hashParam('team') ?? '')
   const [boardHashQuery, setBoardHashQuery] = useState(currentHashQuery)
+  const [matchesHashQuery, setMatchesHashQuery] = useState(currentHashQuery)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
   const selectScope = useCallback((nextScope: string) => {
@@ -143,6 +144,7 @@ export function RankingRoute() {
       setMatchYear(hashParam('matchesYear'))
       if (nextMode === 'regions') setLoadRegionHistory(true)
       if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
+      if (nextMode === 'matches') setMatchesHashQuery(currentHashQuery())
       const nextScope = readScopeFromHash()
       if (nextScope) selectScope(nextScope)
       // Every board filter is read in this one listener. React renders after
@@ -461,7 +463,7 @@ export function RankingRoute() {
               </>
             ) : null}
             {mode === 'matches' ? (
-              <MatchesView archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
+              <MatchesView hashQuery={matchesHashQuery} archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
             ) : null}
           </Suspense>
         )}

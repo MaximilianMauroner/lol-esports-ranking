@@ -205,9 +205,8 @@ test('Matches event choices and addressed pages survive catalog loading and real
         Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } })
       })
       holdSnapshot = true
-      await navigate('#matches?scope=all')
+      await navigate('#matches?scope=all&page=2')
       await rows.nth(24).waitFor()
-      await page.getByRole('button', { name: 'Next page', exact: true }).click()
       await pager.getByText('Page 2 of 3', { exact: true }).waitFor()
       await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('page') === '2')
       const requestedSnapshot = page.waitForRequest((request) => new URL(request.url()).pathname === snapshotPath)
