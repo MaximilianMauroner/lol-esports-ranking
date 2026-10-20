@@ -224,6 +224,90 @@ fn required(keys: &[&str]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ranking_contracts::limits::STORED_LIMIT;
+    use std::io::{Read, Write};
+
+    fn serve(headers: &str, body: Vec<u8>) -> (Bucket, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let headers = headers.to_owned();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            let _ = stream.write_all(
+                format!("HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}\r\n").as_bytes(),
+            );
+            let _ = stream.write_all(&body);
+        });
+        let bucket = Bucket {
+            client: Client::builder()
+                .no_proxy()
+                .no_gzip()
+                .no_brotli()
+                .no_deflate()
+                .no_zstd()
+                .build()
+                .unwrap(),
+            endpoint,
+            bucket: "fixture".into(),
+            region: "auto".into(),
+            access: "fixture-access".into(),
+            secret: "fixture-secret".into(),
+            prefix: "rankings".into(),
+            path_style: true,
+        };
+        (bucket, server)
+    }
+
+    #[test]
+    fn s3_http_bodies_are_bounded() {
+        let oversized = vec![b'x'; STORED_LIMIT as usize + 1];
+        let chunked = [
+            format!("{:x}\r\n", oversized.len()).into_bytes(),
+            oversized.clone(),
+            b"\r\n0\r\n\r\n".to_vec(),
+        ]
+        .concat();
+        for (headers, body) in [
+            ("Transfer-Encoding: chunked\r\n".to_owned(), chunked),
+            (
+                format!("Content-Length: {}\r\n", oversized.len()),
+                Vec::new(),
+            ),
+            (String::new(), oversized),
+        ] {
+            let (bucket, server) = serve(&headers, body);
+            let result = bucket.request(Method::GET, "objects/fixture", BTreeMap::new(), vec![]);
+            server.join().unwrap();
+            let error = result.err().expect("oversized S3 body was accepted");
+            assert!(error.contains("limit"), "{error}");
+            assert!(!error.contains("fixture-secret"));
+        }
+    }
+
+    #[test]
+    fn s3_http_accepts_the_exact_stored_limit() {
+        let body = vec![b'x'; STORED_LIMIT as usize];
+        let (bucket, server) = serve(&format!("Content-Length: {}\r\n", body.len()), body.clone());
+        let response = bucket
+            .request(Method::GET, "objects/fixture", BTreeMap::new(), vec![])
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(response.body, body);
+    }
+
     #[test]
     fn object_paths_stay_in_the_selected_prefix() {
         for key in [

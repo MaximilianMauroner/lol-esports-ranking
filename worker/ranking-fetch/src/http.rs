@@ -240,6 +240,92 @@ fn retry_delay(attempt: u32, base: u64, retry_after: Option<u64>, random: f64) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ranking_contracts::limits::DOCUMENT_LIMIT;
+    use std::io::{Read, Write};
+
+    fn serve(headers: &str, body: Vec<u8>) -> (Url, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/fixture",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let headers = headers.to_owned();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            let _ = stream.write_all(
+                format!("HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}\r\n").as_bytes(),
+            );
+            let _ = stream.write_all(&body);
+        });
+        (url, server)
+    }
+
+    #[test]
+    fn provider_http_bodies_are_bounded() {
+        let oversized = vec![b'x'; DOCUMENT_LIMIT as usize + 1];
+        let chunked = [
+            format!("{:x}\r\n", oversized.len()).into_bytes(),
+            oversized.clone(),
+            b"\r\n0\r\n\r\n".to_vec(),
+        ]
+        .concat();
+        let compressed = ranking_contracts::gzip(&oversized).unwrap();
+        for (headers, body) in [
+            ("Transfer-Encoding: chunked\r\n".to_owned(), chunked),
+            (
+                format!("Content-Length: {}\r\n", oversized.len()),
+                Vec::new(),
+            ),
+            (String::new(), oversized),
+            (
+                format!(
+                    "Content-Encoding: gzip\r\nContent-Length: {}\r\n",
+                    compressed.len()
+                ),
+                compressed,
+            ),
+        ] {
+            let (url, server) = serve(&headers, body);
+            let mut http = Http {
+                client: Client::builder().no_proxy().build().unwrap(),
+                ..Http::default()
+            };
+            let result = http.get(url, &[], &Policy::default());
+            server.join().unwrap();
+            let error = result.err().expect("oversized provider body was accepted");
+            assert!(error.to_string().contains("limit"), "{error}");
+            assert_eq!(http.requests, 1);
+            assert!(http.terminal_failure);
+        }
+    }
+
+    #[test]
+    fn provider_http_accepts_the_exact_document_limit() {
+        let body = vec![b'x'; DOCUMENT_LIMIT as usize];
+        let (url, server) = serve(&format!("Content-Length: {}\r\n", body.len()), body.clone());
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let response = http.get(url, &[], &Policy::default()).unwrap();
+        server.join().unwrap();
+        assert_eq!(response.body, body);
+    }
+
     #[test]
     fn retry_after_preserves_budget_and_server_minimum() {
         assert_eq!(retry_after_ms("1.2345", 0), Some(1235));
