@@ -9,6 +9,7 @@ import { createServer, type Plugin } from 'vite'
 import { appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, pinPreMatchReceipt } from '../src/domains/tournaments/internal/tournamentForecast'
 import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/domains/rankings/internal/published/schema'
 import type { TournamentFeed, TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
+import { closedSelectKeysChangeValue } from './fixtures/nativeSelect'
 
 const eventId = 'worlds:2026'
 const identityMap = { version: 1 as const, source: 'lolesports-persisted-site-api' as const, revision: 'reviewed-synthetic-fixture', mappings: [
@@ -111,9 +112,14 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await preview.getByLabel('Series score (winner first)').selectOption('2')
     await preview.getByRole('status').filter({ hasText: 'Gen.G wins 3–2.' }).waitFor()
     await preview.getByLabel('Winner', { exact: true }).focus()
-    await page.keyboard.press('Home')
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Home')
+    if (closedSelectKeysChangeValue) {
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Home')
+    } else {
+      await preview.getByLabel('Winner', { exact: true }).selectOption('home')
+      await preview.getByLabel('Series score (winner first)').selectOption('0')
+    }
     await preview.getByRole('status').filter({ hasText: 'T1 wins 3–0.' }).waitFor()
     assert.match(await preview.innerText(), /internal pre-series state or verified event weighting/)
     assert.match(await preview.innerText(), /Future lineups, patch, game order and performance inputs are also unavailable/)
