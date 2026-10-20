@@ -162,7 +162,7 @@ function SeriesRow({ series, timezone, now, forecasts }: { series: TournamentSer
   const receipt = forecast?.status === 'ready' && 'receiptKey' in forecast ? forecast : null
   const conditional = receipt && (series.status === 'live' || series.status === 'completed') ? scoreConditionedSeriesOdds(receipt, series) : null
   const scored = first?.gameWins != null || second?.gameWins != null
-  return <li className="grid gap-x-4 gap-y-0.5 px-3 py-2 md:grid-cols-[8.5rem_6.5rem_minmax(0,1fr)_auto] md:items-baseline">
+  return <li className="grid gap-x-4 gap-y-0.5 px-3 py-2 md:grid-cols-[8.5rem_6.5rem_minmax(0,1fr)_minmax(0,1fr)] md:items-baseline">
     <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground md:contents">
       <span className="font-mono text-foreground tabular-nums">{series.startTime ? formatClock(series.startTime, timezone) : 'Time not supplied'}</span>
       <span>{series.stage ?? 'Stage not supplied'}</span>
