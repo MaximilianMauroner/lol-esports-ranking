@@ -7,9 +7,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-pub(super) const STORED_LIMIT: u64 = 64 * 1024 * 1024;
-pub(super) const DOCUMENT_LIMIT: u64 = 8 * 1024 * 1024;
-pub(super) const SEMANTIC_LIMIT: u64 = 256 * 1024 * 1024;
+pub(super) use ranking_contracts::limits::{DOCUMENT_LIMIT, SEMANTIC_LIMIT, STORED_LIMIT};
 pub(super) const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(super) struct Transport {

@@ -41,6 +41,7 @@ pub fn download(
         attempts: 7,
         base_delay_ms: 1000,
         leaguepedia: true,
+        ..Policy::default()
     };
     let mut matches = Vec::new();
     let mut offset = 0;

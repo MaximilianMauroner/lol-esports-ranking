@@ -149,7 +149,10 @@ impl PublicationMember<'_> {
             || key.starts_with("raw/objects/sha256/")
             || key.starts_with("state/objects/sha256/");
         let actual = if compressed {
-            sha256(&gunzip(body).map_err(|_| "Generation publication object gzip is corrupt")?)
+            sha256(
+                &gunzip(body, crate::limits::SEMANTIC_LIMIT)
+                    .map_err(|_| "Generation publication object gzip is corrupt")?,
+            )
         } else {
             sha256(body)
         };

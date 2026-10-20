@@ -205,7 +205,7 @@ fn sync_object(
         return Err("Invalid immutable object identity".into());
     }
     let compressed = fs::read(path).map_err(|e| e.to_string())?;
-    let semantic = gunzip(&compressed).map_err(|_| "Invalid object gzip")?;
+    let semantic = gunzip(&compressed, bytes).map_err(|_| "Invalid object gzip")?;
     if semantic.len() as u64 != bytes || sha256(&semantic) != digest {
         return Err("Object semantic identity mismatch".into());
     }
@@ -240,7 +240,8 @@ fn sync_object(
             {
                 return Err("Stored object metadata mismatch".into());
             }
-            if gunzip(&stored.body).map_err(|_| "Stored object gzip is corrupt")? != semantic {
+            if gunzip(&stored.body, bytes).map_err(|_| "Stored object gzip is corrupt")? != semantic
+            {
                 return Err("Stored object semantic identity mismatch".into());
             }
             ("unchanged", stored.body.len())
