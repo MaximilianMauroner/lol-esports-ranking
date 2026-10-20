@@ -20,25 +20,38 @@ import { WorldsTournamentPanel } from './WorldsTournamentPanel'
 
 /** The server rechecks Leaguepedia every five minutes while the hub is viewed. */
 const STALE_MS = 15 * REFRESH_MS
+const EMPTY_EVENTS: TournamentEvent[] = []
+
+function replaceLegacyEventAlias(requested: string, address: string | undefined): void {
+  if (!address || requested === address || window.location.hash.slice(1).split('?', 2)[0] !== 'tournaments') return
+  const query = currentHashQuery()
+  if (hashParam('event', query) !== requested) return
+  query.set('event', address)
+  writeNavigationHash(`#tournaments?${query}`, 'replace')
+}
+
 export function TournamentsView() {
   const { state, now, forecastArtifacts, refresh } = useTournamentResources()
   const [requestedEvent, setRequestedEvent] = useState(() => hashParam('event') ?? '')
   const [view, setView] = useState(() => hashParam('view'))
+  const events = state.status === 'ready' ? state.feed.events : EMPTY_EVENTS
   useEffect(() => {
-    const onHashChange = () => { setRequestedEvent(hashParam('event') ?? ''); setView(hashParam('view')) }
+    const onHashChange = () => {
+      const query = currentHashQuery()
+      const requested = hashParam('event', query) ?? ''
+      const link = resolveEventLink(events, requested)
+      replaceLegacyEventAlias(requested, link.kind === 'resolved' ? link.address : undefined)
+      setRequestedEvent(requested)
+      setView(hashParam('view', query))
+    }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
-
-  const events = state.status === 'ready' ? state.feed.events : []
+  }, [events])
   const link = resolveEventLink(events, requestedEvent)
   const selected = link.kind === 'resolved' ? link.event : link.kind === 'absent' ? nextEvent(events, now) : undefined
   const address = link.kind === 'resolved' ? link.address : undefined
   useEffect(() => {
-    if (!address || requestedEvent === address || hashParam('event') !== requestedEvent) return
-    const query = currentHashQuery()
-    query.set('event', address)
-    writeNavigationHash(`#tournaments?${query}`, 'replace')
+    replaceLegacyEventAlias(requestedEvent, address)
   }, [address, requestedEvent])
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time'
   const grouped = useMemo(() => groupTournamentSeries(selected?.series ?? []), [selected])

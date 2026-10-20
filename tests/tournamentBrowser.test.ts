@@ -147,13 +147,39 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.equal(new URLSearchParams(new URL(normalized.changes[0]!).hash.split('?')[1]).get('event'), worldsId)
     assert.deepEqual(normalized.query, [['event', worldsAddress], ['view', 'schedule'], ['scope', 'season:2026'], ['scenario', 'kept']])
     assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
+    const repeatedHistoryLength = await page.evaluate((id) => {
+      const query = new URLSearchParams(location.hash.split('?')[1])
+      query.set('event', id)
+      location.hash = `#tournaments?${query}`
+      return history.length
+    }, worldsId)
+    await page.waitForURL((url) => new URLSearchParams(url.hash.split('?')[1]).get('event') === worldsAddress)
+    const repeated = await page.evaluate(() => ({
+      historyLength: history.length,
+      changes: Reflect.get(window, 'tournamentHashChanges') as string[],
+      query: [...new URLSearchParams(location.hash.split('?')[1])],
+    }))
+    assert.equal(repeated.historyLength, repeatedHistoryLength, 'Repeated legacy normalization replaces the entry')
+    assert.equal(repeated.changes.length, 2, 'Each identical raw navigation emits only its native hashchange')
+    assert.equal(new URLSearchParams(new URL(repeated.changes[1]!).hash.split('?')[1]).get('event'), worldsId)
+    assert.deepEqual(repeated.query, normalized.query, 'Repeated normalization preserves every query parameter')
+    assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
+    await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
     await page.locator('#tournament-event').selectOption('lcs:2026:fixture-lcs')
     await page.getByRole('heading', { name: 'LCS 2026', exact: true }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
     await page.goBack()
     await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
-    assert.equal((await page.evaluate(() => Reflect.get(window, 'tournamentHashChanges') as string[])).length, 3, 'Picker and Back emit one real hashchange each after normalization')
+    assert.equal((await page.evaluate(() => Reflect.get(window, 'tournamentHashChanges') as string[])).length, 4, 'Picker and Back emit one real hashchange each after normalization')
+    const awayHash = `#rankings?${new URLSearchParams({ event: worldsId, view: 'schedule', scope: 'season:2026', scenario: 'kept' })}`
+    await page.evaluate((hash) => { location.hash = hash }, awayHash)
+    await page.locator('#tournament-event').waitFor({ state: 'hidden' })
+    assert.equal(new URL(page.url()).hash, awayHash, 'A departing tournament listener must not normalize another route')
+    await page.goBack()
+    await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('event'), worldsAddress)
+    assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
     holdNextFeed = true
     await page.reload()
     await waitForPendingFeed(pendingFeed)
