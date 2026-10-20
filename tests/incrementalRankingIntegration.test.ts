@@ -544,6 +544,61 @@ for (const laterDays of [[2], [2, 3]]) {
   })
 }
 
+test('an April same-day insertion refreshes later scopes while retaining earlier checkpoints and movement', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-historical-insertion-'))
+  try {
+    const matches = [
+      match('prior-year', '2024-12-31', 'Earlier Event'),
+      ...[1, 2, 3].map((day) => match(`march-${day}`, `2025-03-0${day}`, 'March event')),
+      ...[9, 10].map((day) => match(`fst-${day}`, `2025-03-${String(day).padStart(2, '0')}`, 'First Stand 2025', {
+        league: 'FST', region: 'International', tier: 'minor-international',
+      })),
+      ...[4, 5].map((day) => match(`april-${day}`, `2025-04-0${day}`, day === 4 ? 'Pre-insertion event' : 'Spring')),
+      ...[2, 3].map((day) => match(`january-${day}`, `2026-01-0${day}`, 'January event')),
+      ...[1, 2].map((day) => match(`august-${day}`, `2025-08-0${day}`, 'Summer')),
+    ]
+    const baseline = await run(root, 'baseline', fixtureSource(structuredClone(matches)), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    for (const scenario of [
+      { name: 'historical', addition: match('late-april', '2025-04-05', 'Spring', { datetimeUtc: '2025-04-05T18:00:00Z' }), kind: 'same-day-insertion' },
+      { name: 'append', addition: match('latest-january', '2026-01-04', 'January event'), kind: 'latest-append' },
+    ]) {
+      const complete = [...matches, scenario.addition]
+      const restored = restoreFrom(baseline)
+      assert.ok(restored.checkpoints.some(({ candidate }) => candidate.boundary.date < '2025-04-05'), JSON.stringify(restored.stateManifest.checkpoints.map(({ boundary }) => boundary)))
+      const incremental = await run(root, scenario.name, fixtureSource(structuredClone(complete)), {
+        mode: 'gated', cause: 'pending-match', enabled: true, restored,
+      })
+      const full = await run(root, `${scenario.name}-full`, fixtureSource(structuredClone(complete)), {
+        mode: 'gated', cause: 'daily-audit', enabled: false,
+      })
+      assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+      assert.equal(incremental.metrics.classification, scenario.kind)
+      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || !baseline.build) {
+        throw new Error('baseline, incremental patch, and full publication required')
+      }
+      const published = join(root, `${scenario.name}-published`)
+      await cp(baseline.build.publicDataDir, published, { recursive: true })
+      await materializePublicArtifactPatch(published, incremental.patch)
+      await assertPublishedArtifactBytes(baseline, incremental, full, published)
+      const paths = incremental.patch.expectedLogicalPaths
+      const earlier = paths.filter((path) => /season-2024|2024__All|split-1/.test(path))
+      assert.ok(earlier.length > 0)
+      for (const path of earlier) assert.ok(incremental.metrics.reusedPaths.includes(path), `retained ${path}`)
+      const movementPath = paths.find((path) => path.includes('/tournament-moves/') && path.includes('fst'))!
+      assert.ok(movementPath, 'synthetic First Stand movement is published')
+      assert.ok(incremental.metrics.reusedPaths.includes(movementPath))
+      const unchanged = await run(root, `${scenario.name}-unchanged`, fixtureSource(structuredClone(complete)), {
+        mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreIncremental(restored, incremental),
+      })
+      assert.equal(unchanged.action, 'no-change')
+      assert.equal(unchanged.metrics.replayedMatchCount, 0)
+      await assert.rejects(access(join(root, `${scenario.name}-unchanged-full.json`)))
+    }
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('incremental byte metrics include repeated archive children and an unchanged forced root', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-artifact-bytes-'))
   try {
