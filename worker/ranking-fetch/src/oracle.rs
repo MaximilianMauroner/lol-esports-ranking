@@ -181,7 +181,74 @@ fn discovery_failure_message(message: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::discovery_failure_message;
+    use super::*;
+    use crate::http::Response;
+
+    #[test]
+    fn drive_file_names_cannot_escape_the_download_directory() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!(
+                "oracle-paths-{}-{}",
+                std::process::id(),
+                crate::now_ms()
+            ));
+        let directory = root.join("downloads/nested");
+        std::fs::create_dir_all(&directory).unwrap();
+        let escaped = root.join("escape.csv");
+        let absolute = root.join("absolute.csv");
+        for path in [&escaped, &absolute] {
+            std::fs::write(path, b"preserve existing file").unwrap();
+        }
+        let names = [
+            "../../escape.csv".to_owned(),
+            absolute.to_str().unwrap().to_owned(),
+            "subdirectory/child.csv".to_owned(),
+            "./dot.csv".to_owned(),
+            "subdirectory/../child.csv".to_owned(),
+            "2026_valid.csv".to_owned(),
+        ];
+        let html = names
+            .iter()
+            .enumerate()
+            .map(|(id, name)| format!(
+                r#"https://drive.google.com/file/d/{id}/view?usp=drive_web<div class="flip-entry-title">{name}</div>"#
+            ))
+            .collect::<String>();
+        let mut responses = vec![Response {
+            body: html.into_bytes(),
+            content_type: "text/html".into(),
+        }];
+        responses.extend(names.iter().map(|_| Response {
+            body: b"gameid,date\ngame,2026-01-01\n".to_vec(),
+            content_type: "text/csv".into(),
+        }));
+        let mut http = Http::fixture(responses);
+        let mut warnings = Vec::new();
+        let outcome = download(
+            &mut http,
+            &Options::default(),
+            &directory,
+            "2026-01-01",
+            "2026-12-31",
+            &mut warnings,
+        )
+        .unwrap();
+        let observed = (
+            outcome.files,
+            outcome.failures.len(),
+            http.requests,
+            std::fs::read(&escaped).unwrap(),
+            std::fs::read(&absolute).unwrap(),
+        );
+        std::fs::remove_dir_all(root).unwrap();
+        assert_eq!(observed.0, vec![directory.join("2026_valid.csv")]);
+        assert_eq!(observed.1, names.len() - 1);
+        assert_eq!(observed.2, 2, "invalid names must not be downloaded");
+        assert_eq!(observed.3, b"preserve existing file");
+        assert_eq!(observed.4, b"preserve existing file");
+    }
 
     #[test]
     fn discovery_failure_matches_node_terminal_http_diagnostic() {

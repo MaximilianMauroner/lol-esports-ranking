@@ -9,6 +9,8 @@ use std::{
 #[derive(Default)]
 pub struct Http {
     client: Client,
+    #[cfg(test)]
+    fixtures: Option<std::collections::VecDeque<Response>>,
     pub requests: u64,
     pub retries: Vec<Value>,
     attempts: Vec<Value>,
@@ -73,11 +75,26 @@ pub(crate) fn set_query_parameter(url: &mut Url, key: &str, value: &str) {
 }
 
 impl Http {
+    #[cfg(test)]
+    pub fn fixture(responses: Vec<Response>) -> Self {
+        Self {
+            fixtures: Some(responses.into()),
+            ..Self::default()
+        }
+    }
+
     pub fn snapshot(&self) -> Value {
         json!({"requests":self.requests,"retryCount":self.retries.len(),"retries":self.retries,"attempts":self.attempts})
     }
 
     pub fn get(&mut self, url: Url, headers: &[(&str, &str)], policy: &Policy) -> Result<Response> {
+        #[cfg(test)]
+        if let Some(fixtures) = &mut self.fixtures {
+            self.requests += 1;
+            return fixtures
+                .pop_front()
+                .ok_or("Unexpected fixture request".into());
+        }
         self.terminal_failure = false;
         let started = Instant::now();
         let mut last_error = String::from("Provider request exceeded maxElapsedMs");
