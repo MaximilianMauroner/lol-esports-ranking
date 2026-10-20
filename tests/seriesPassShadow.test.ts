@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/domains/rankings/build.ts'
 import {
-  compareSeriesPassResponse, encodeSeriesPassRequest, MAX_BATCH_BYTES, numberBits, readBounded, runSeriesPassShadow, sha256,
+  compareSeriesPassResponse, encodeSeriesPassRequest, MAX_BATCH_BYTES, numberBits, readBounded, runSeriesPassShadow,
+  seriesPassDateResponseBytes, sha256,
 } from '../tools/audit/series-pass-shadow.ts'
 import { game, observe, profiles, roster, sparseDate, variedGames } from './seriesPassFixtures.ts'
 
@@ -153,6 +154,30 @@ test('sparse maps preserve absence and ordered insertions while local execution 
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+test('response byte counts match native serialization of nulls, UTF-8, bits and integer references', { skip: !binary }, async () => {
+  const root = await temporary()
+  try {
+    const captures = [sparseDate(), ...observe([game('utf8', {
+      date: '2026-01-02', datetimeUtc: undefined, patch: '26.é', event: 'LCK 春 "é"\n\\',
+      teamARoster: roster('春'),
+    })], (state) => state.momentums.set('Alpha', -0)).captures]
+    const result = await runSeriesPassShadow({ captures, binaryPath: binary!, outputDir: join(root, 'serialization') })
+    assert.equal(result.batches.length, 1)
+    const response = await readFile(result.batches[0].outputPath)
+    const { dates, ...envelope } = JSON.parse(response.toString())
+    assert.equal(dates[0].teams[0].rating, null)
+    assert.equal(dates[0].series[0].members[0].sides[0].executionDelta, '8000000000000000')
+    assert.deepEqual(dates[0].inserted.teams.previousDisplayRatings, [0, 1])
+    assert.deepEqual(dates[1].teams[0].latestRatingUpdate, { member: { series: 0, member: 0, side: 0 } })
+    assert.equal(dates[1].teams[0].lastPatch, '26.é')
+    for (const [index, capture] of captures.entries()) {
+      assert.equal(seriesPassDateResponseBytes(capture.expected), Buffer.byteLength(JSON.stringify(dates[index])))
+    }
+    const envelopeBytes = Buffer.byteLength(JSON.stringify({ ...envelope, dates: [] }))
+    assert.equal(response.length, envelopeBytes + captures.reduce((sum, capture) => sum + seriesPassDateResponseBytes(capture.expected), 0) + 1)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('native preserves league priors, caps and tier transfers through the real replay', { skip: !binary }, async () => {
   const root = await temporary()
   try {
@@ -281,14 +306,21 @@ test('Node enforces native process deadlines, byte limits, truncated output and 
 test('fake transport splits small inputs when complete-date responses exceed 64 MiB together', async () => {
   const root = await temporary()
   try {
-    const original = observe(variedGames()).captures.slice(1, 3)
+    const original = observe(variedGames()).captures.slice(1, 3).map((capture) => ({ ...capture, expected: { ...capture.expected,
+      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: '' } : team),
+    } }))
     const request = encodeSeriesPassRequest(original.map((capture) => capture.frame))
     assert(request.length < 16 << 10)
     const template = join(root, 'template.json')
-    await writeFile(template, JSON.stringify(responseFor(original, request)))
-    const padding = 'é'.repeat(17 << 20)
-    const captures = original.map((capture) => ({ ...capture, expected: { ...capture.expected,
-      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: padding } : team),
+    const base = JSON.stringify(responseFor(original, request))
+    await writeFile(template, base)
+    const extraBytes = MAX_BATCH_BYTES + 1 - Buffer.byteLength(base)
+    const repeat = Math.floor(extraBytes / 4)
+    const padding = 'é'.repeat(repeat)
+    const suffix = 'x'.repeat(extraBytes % 4)
+    const captures = original.map((capture, dateIndex) => ({ ...capture, expected: { ...capture.expected,
+      teams: capture.expected.teams.map((team, index) => index === 0
+        ? { ...team, lastPatch: padding + (dateIndex === 1 ? suffix : '') } : team),
     } }))
     const executable = join(root, 'response.cjs')
     await writeFile(executable, `#!${process.execPath}
@@ -299,7 +331,7 @@ const input = JSON.parse(request)
 const response = JSON.parse(fs.readFileSync(${JSON.stringify(template)}, 'utf8'))
 response.requestSha256 = crypto.createHash('sha256').update(request).digest('hex')
 response.dates = input.dates.map(frame => response.dates.find(date => date.utcDate === frame.utcDate))
-for (const date of response.dates) date.teams[0].lastPatch = 'é'.repeat(17 << 20)
+for (const date of response.dates) date.teams[0].lastPatch = 'é'.repeat(${repeat}) + (date.utcDate === ${JSON.stringify(captures[1].frame.utcDate)} ? ${JSON.stringify(suffix)} : '')
 const bytes = JSON.stringify(response)
 if (Buffer.byteLength(bytes) > ${MAX_BATCH_BYTES}) {
   process.stderr.write('series-pass: response exceeds 64 MiB')
@@ -309,6 +341,9 @@ fs.writeFileSync(process.argv[4], bytes)
 `, { mode: 0o755 })
     const result = await runSeriesPassShadow({ captures, binaryPath: executable, outputDir: join(root, 'split') })
     assert.equal(result.batches.length, 2)
+    assert.equal(result.dates, 2)
+    assert.equal(result.series, 3)
+    assert.equal(result.members, 4)
     const counts = compareSeriesPassResponse(responseFor(captures, request), captures, request)
     for (const key of Object.keys(counts) as (keyof typeof counts)[]) assert.equal(result[key], counts[key], key)
     for (const [index, batch] of result.batches.entries()) {
@@ -326,8 +361,14 @@ fs.writeFileSync(process.argv[4], bytes)
 test('an oversized complete-date response fails with its date and limit before spawn', async () => {
   const root = await temporary()
   try {
-    const captures = observe([game('oversized-response')]).captures.map((capture) => ({ ...capture, expected: { ...capture.expected,
-      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: 'é'.repeat(33 << 20) } : team),
+    const original = observe([game('oversized-response')]).captures.map((capture) => ({ ...capture, expected: { ...capture.expected,
+      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: '' } : team),
+    } }))
+    const request = encodeSeriesPassRequest(original.map((capture) => capture.frame))
+    const extraBytes = MAX_BATCH_BYTES + 1 - Buffer.byteLength(JSON.stringify(responseFor(original, request)))
+    const padding = 'é'.repeat(Math.floor(extraBytes / 2)) + 'x'.repeat(extraBytes % 2)
+    const captures = original.map((capture) => ({ ...capture, expected: { ...capture.expected,
+      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: padding } : team),
     } }))
     const marker = join(root, 'spawned')
     const executable = join(root, 'must-not-spawn.cjs')

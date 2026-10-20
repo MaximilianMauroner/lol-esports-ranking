@@ -10,6 +10,11 @@ export const MAX_BATCH_BYTES = 64 << 20
 export const MAX_DATE_BYTES = 8 << 20
 const BATCH_INPUT_BUDGET = 16 << 20
 const model = { version: transparentGprModelMetadata.version, configHash: transparentGprModelMetadata.configHash }
+const RESPONSE_ENVELOPE_BYTES = Buffer.byteLength(JSON.stringify({
+  schema: 'series-pass-response-v1', requestSha256: '0'.repeat(64), model, dates: [],
+}))
+
+type SizedDate = Readonly<{ capture: SeriesPassCapture; requestBytes: number; responseBytes: number }>
 
 export function sha256(bytes: string | Uint8Array) {
   return createHash('sha256').update(bytes).digest('hex')
@@ -50,6 +55,21 @@ export function encodeSeriesPassRequest(frames: readonly SeriesPassFrame[]) {
   const bytes = Buffer.from(JSON.stringify({ schema: 'series-pass-batch-v1', model, dates }))
   assert(bytes.length <= MAX_BATCH_BYTES, 'Request exceeds 64 MiB')
   return bytes
+}
+
+export function seriesPassDateResponseBytes(expected: SeriesPassCapture['expected']) {
+  const size = (value: unknown, indexes = false): number => {
+    if (typeof value === 'number') return Buffer.byteLength(indexes ? JSON.stringify(value) : JSON.stringify(numberBits(value)))
+    if (Array.isArray(value)) return 2 + Math.max(0, value.length - 1) + value.reduce((sum, child) => sum + size(child, indexes), 0)
+    if (value !== null && typeof value === 'object') {
+      const entries = Object.entries(value)
+      const source = entries.length === 1 && entries[0][0] === 'member'
+      return 2 + Math.max(0, entries.length - 1) + entries.reduce((sum, [key, child]) =>
+        sum + Buffer.byteLength(JSON.stringify(key)) + 1 + size(child, indexes || source || key === 'inserted'), 0)
+    }
+    return Buffer.byteLength(JSON.stringify(value))
+  }
+  return size(expected)
 }
 
 function record(value: unknown): asserts value is Record<string, unknown> {
@@ -197,17 +217,28 @@ export async function runSeriesPassShadow({ captures, binaryPath, outputDir, dea
   const binarySha256 = sha256(await readFile(binary))
   const chunks: SeriesPassCapture[][] = []
   let chunk: SeriesPassCapture[] = []
-  let size = 0
+  let requestBytes = 0
+  let responseBytes = RESPONSE_ENVELOPE_BYTES
   for (const capture of captures) {
-    const bytes = Buffer.byteLength(JSON.stringify(wireFrame(capture.frame)))
-    assert(bytes <= MAX_DATE_BYTES, 'Complete date exceeds 8 MiB')
-    if (chunk.length && size + bytes > BATCH_INPUT_BUDGET) {
+    const date: SizedDate = {
+      capture,
+      requestBytes: Buffer.byteLength(JSON.stringify(wireFrame(capture.frame))),
+      responseBytes: seriesPassDateResponseBytes(capture.expected),
+    }
+    assert(date.requestBytes <= MAX_DATE_BYTES, 'Complete date exceeds 8 MiB')
+    assert(RESPONSE_ENVELOPE_BYTES + date.responseBytes <= MAX_BATCH_BYTES,
+      `Complete date ${capture.frame.utcDate} response exceeds 64 MiB`)
+    const commaBytes = chunk.length ? 1 : 0
+    if (chunk.length && (requestBytes + date.requestBytes > BATCH_INPUT_BUDGET
+      || responseBytes + commaBytes + date.responseBytes > MAX_BATCH_BYTES)) {
       chunks.push(chunk)
       chunk = []
-      size = 0
+      requestBytes = 0
+      responseBytes = RESPONSE_ENVELOPE_BYTES
     }
-    chunk.push(capture)
-    size += bytes
+    responseBytes += (chunk.length ? 1 : 0) + date.responseBytes
+    chunk.push(date.capture)
+    requestBytes += date.requestBytes
   }
   if (chunk.length) chunks.push(chunk)
   const batches: Awaited<ReturnType<typeof runBatch>>[] = []
