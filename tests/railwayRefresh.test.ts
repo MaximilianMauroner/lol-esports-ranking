@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import test from 'node:test'
+import { runRefreshOnce } from '../scripts/refresh-once.mjs'
 import { prepareContentAddressedState, prepareStateObject, stateObjectReferenceFor, syncContentAddressedStateObject, writeIncrementalStateManifest } from '../scripts/incremental-state-storage.mjs'
 import { canonicalJsonFor, createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import {
@@ -540,7 +541,7 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
   }
 })
 
-test('refresh wrapper retries failed publication when source data is unchanged', async () => {
+test('refresh wrapper retries failed publication when source data is unchanged', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'lol-ranking-publish-retry-'))
   const rawDir = join(root, 'raw')
   const statePath = join(rawDir, 'refresh-state.json')
@@ -548,6 +549,7 @@ test('refresh wrapper retries failed publication when source data is unchanged',
   let publishAttempts = 0
   let publishedReceipts = 0
   let crunchCount = 0
+  let providerOutage = false
   const client = {
     async send(command: { input: { Key?: string; Body?: unknown } }) {
       if (command instanceof PutObjectCommand && command.input.Key === 'rankings/latest-publish.json') {
@@ -574,6 +576,13 @@ test('refresh wrapper retries failed publication when source data is unchanged',
     run: async (command: string, commandArgs: string[]) => {
       if (commandArgs.includes('scripts/download-local-data.mjs')) {
         const outDir = valueAfter(commandArgs, '--out-dir')
+        if (providerOutage) {
+          await writeFile(valueAfter(commandArgs, '--manifest'), JSON.stringify(strictDownloaderOutageManifest(
+            valueAfter(commandArgs, '--start'),
+            valueAfter(commandArgs, '--end'),
+          )))
+          throw new Error('Injected provider outage')
+        }
         const sourcePath = join(outDir, 'leaguepedia.json')
         await writeFile(sourcePath, JSON.stringify({ matches: [{ id: 'game-1', winner: 'Blue' }] }))
         await writeFile(valueAfter(commandArgs, '--manifest'), JSON.stringify(manifest(sourcePath)))
@@ -593,6 +602,12 @@ test('refresh wrapper retries failed publication when source data is unchanged',
     const failedState = JSON.parse(await readFile(statePath, 'utf8'))
     assert.equal(failedState.lastRun.result, 'failed')
 
+    providerOutage = true
+    const stale = await refreshDataIfChanged(args, options)
+    assert.equal(stale.status, 'stale-source')
+    assert.equal(publishAttempts, 1)
+    providerOutage = false
+
     const second = await refreshDataIfChanged(args, options)
     assert.equal(publishedReceipts, 1, 'unchanged source must publish after a failed publication')
     assert.equal(second.changed, true)
@@ -602,12 +617,63 @@ test('refresh wrapper retries failed publication when source data is unchanged',
     assert.equal(third.changed, false)
     assert.equal(publishAttempts, 2)
     assert.equal(crunchCount, 2)
+    const publishedState = await readFile(statePath, 'utf8')
 
-    await writeFile(statePath, JSON.stringify({ ...failedState, fingerprint: second.fingerprint }))
-    const legacyRetry = await refreshDataIfChanged(args, options)
-    assert.equal(legacyRetry.changed, true)
-    assert.equal(publishedReceipts, 2, 'failed state from an older worker must publish again')
-    assert.equal(crunchCount, 3)
+    await t.test('legacy failed publication still retries after a stale-source run', async () => {
+      await writeFile(statePath, JSON.stringify({ ...failedState, fingerprint: second.fingerprint }))
+      providerOutage = true
+      const stale = await refreshDataIfChanged(args, options)
+      assert.equal(stale.status, 'stale-source')
+      const staleState = JSON.parse(await readFile(statePath, 'utf8'))
+      assert.equal(staleState.lastRun.result, 'stale-source')
+      providerOutage = false
+
+      const before = publishedReceipts
+      const legacyRetry = await refreshDataIfChanged(args, options)
+      assert.equal(publishedReceipts, before + 1, 'failed publication must retry after a stale-source run')
+      assert.equal(legacyRetry.changed, true)
+      const unchanged = await refreshDataIfChanged(args, options)
+      assert.equal(unchanged.changed, false)
+      assert.equal(publishedReceipts, before + 1)
+    })
+
+    await t.test('probe-only failure after successful publication keeps identical source unchanged', async () => {
+      await writeFile(statePath, publishedState)
+      const before = { publishAttempts, crunchCount }
+      await assert.rejects(runRefreshOnce({
+        env: {
+          RANKING_REFRESH_MODE: 'gated',
+          RANKING_REFRESH_STATE: statePath,
+          RANKING_TRIGGER_STATE: join(root, 'trigger-state.json'),
+          RANKING_REFRESH_METRICS_PATH: join(root, 'probe-metrics.json'),
+        },
+        bucketConfig: bucketConfig(),
+        bucketClient: client,
+        acquireLease: async () => ({
+          acquired: true,
+          lease: { owner: 'probe-worker', fencingToken: 1 },
+          etag: 'probe-lease',
+        }),
+        assertLease: async () => ({ live: true }),
+        releaseLease: async () => ({ released: true }),
+        readBucketJson: async () => ({ found: false }),
+        writeBucketJson: async () => ({ written: true, etag: 'probe-state' }),
+        readLocalState: async () => undefined,
+        writeLocalState: async () => undefined,
+        fetchProbe: async () => { throw new Error('Injected probe failure') },
+        sendAlert: async () => undefined,
+        setInterval: () => ({ unref() {} }),
+        clearInterval: () => undefined,
+        logger: { log() {}, warn() {}, error() {} },
+      }), /Injected probe failure/)
+      const probeState = JSON.parse(await readFile(statePath, 'utf8'))
+      assert.equal(probeState.lastRun.result, 'failed')
+
+      const unchanged = await refreshDataIfChanged(args, options)
+      assert.equal(publishAttempts, before.publishAttempts, 'probe-only failure must not republish identical source')
+      assert.equal(crunchCount, before.crunchCount, 'probe-only failure must not recrunch identical source')
+      assert.equal(unchanged.changed, false)
+    })
   } finally {
     await rm(root, { recursive: true, force: true })
   }
