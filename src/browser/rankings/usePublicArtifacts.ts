@@ -110,7 +110,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
   const [matchHistoryAttempt, setMatchHistoryAttempt] = useState(0)
   const [matchHistoryIndexState, setMatchHistoryIndexState] = useState<PublicArtifactState<PublicMatchHistoryIndex>>({ status: 'idle' })
-  const [matchHistoryCatalogState, setMatchHistoryCatalogState] = useState<PublicArtifactState<PublicMatchHistoryCatalog>>({ status: 'idle' })
+  const [matchHistoryCatalogState, setMatchHistoryCatalogState] = useState<PublicArtifactState<{ catalog: PublicMatchHistoryCatalog; year?: string }>>({ status: 'idle' })
   const [matchHistoryPages, setMatchHistoryPages] = useState<Record<number, MatchHistoryPageState>>({})
   const matchHistoryCatalogRef = useRef<PublicMatchHistoryCatalog | undefined>(undefined)
   const matchHistoryPagesRef = useRef(matchHistoryPages)
@@ -146,11 +146,13 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   )
   const matchHistoryYears = matchHistoryIndexState.status === 'ready' ? matchHistoryIndexState.data.scopeIndex[snapshotKey(filter)]?.years ?? [] : []
   const selectedMatchYear = matchHistoryYear && matchHistoryYear !== 'All' && (matchHistoryIndexState.status !== 'ready' || matchHistoryYears.includes(matchHistoryYear)) ? matchHistoryYear : undefined
-  const matchHistoryState = useMemo<MatchHistoryState>(() => (
-    matchHistoryCatalogState.status === 'ready'
-      ? { status: 'ready', data: { catalog: matchHistoryCatalogState.data, pages: matchHistoryPages } }
-      : requestedState(loadMatchHistory, matchHistoryCatalogState)
-  ), [loadMatchHistory, matchHistoryCatalogState, matchHistoryPages])
+  const matchHistoryState = useMemo<MatchHistoryState>(() => {
+    if (matchHistoryCatalogState.status !== 'ready') return requestedState(loadMatchHistory, matchHistoryCatalogState)
+    const { catalog, year } = matchHistoryCatalogState.data
+    // Effects replace the catalog after navigation. The previous selection cannot clamp the new address.
+    if (snapshotKey(catalog.filter) !== snapshotKey(filter) || year !== selectedMatchYear) return { status: 'loading' }
+    return { status: 'ready', data: { catalog, pages: matchHistoryPages } }
+  }, [filter, loadMatchHistory, matchHistoryCatalogState, matchHistoryPages, selectedMatchYear])
 
   useEffect(() => {
     let active = true
@@ -324,7 +326,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
         matchHistoryPagesRef.current = {}
         setMatchHistoryPages({})
         matchHistoryCatalogRef.current = catalog
-        setMatchHistoryCatalogState({ status: 'ready', data: catalog })
+        setMatchHistoryCatalogState({ status: 'ready', data: { catalog, year: selectedMatchYear } })
       } catch (error) {
         if (isAbortError(error)) return
         setMatchHistoryCatalogState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load match history' })
@@ -363,9 +365,9 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
 
   useEffect(() => {
     if (matchHistoryCatalogState.status !== 'ready') return
-    if (matchHistoryCatalogRef.current !== matchHistoryCatalogState.data) return
+    if (matchHistoryCatalogRef.current !== matchHistoryCatalogState.data.catalog) return
     // The default ledger page has 25 series, which can span multiple stored pages.
-    const initialPages = [...new Set(matchHistoryCatalogState.data.series.slice(0, 25).map((series) => series.page))]
+    const initialPages = [...new Set(matchHistoryCatalogState.data.catalog.series.slice(0, 25).map((series) => series.page))]
     if (initialPages.length) requestMatchHistoryPages(initialPages)
   }, [matchHistoryCatalogState, requestMatchHistoryPages])
 
