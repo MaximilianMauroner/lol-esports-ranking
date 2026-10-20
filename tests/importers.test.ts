@@ -1297,6 +1297,35 @@ test('a next-day Bo1 reference does not take the last game of a cross-midnight B
   assert.deepEqual(standingsWithSecondGameAt('2026-01-25 00:20:00'), standingsWithSecondGameAt('2026-01-24 23:55:00'))
 })
 
+test('consecutive Bo3 rematches with ordinal source match IDs keep their own official results', () => {
+  const oracleMatches = [1, 2].flatMap((round) => [1, 2].map((gameNumber) => matchFixture({
+    id: `round-${round}-game-${gameNumber}`, sourceGameId: `opaque-${round}-${gameNumber}`,
+    sourceProvider: 'oracles-elixir', sourceMatchId: `round_${round}`, gameNumber,
+    date: `2026-01-${23 + round}`, datetimeUtc: `2026-01-${23 + round}T18:${gameNumber * 10}:00Z`,
+    bestOf: 3, bestOfBasis: 'provider', teamA: 'Team Liquid', teamB: 'Shopify Rebellion', winner: 'Team Liquid',
+  })))
+  const references = [1, 2].map((round) => ({ ...lockInReference(),
+    matchId: `synthetic-official-round-${round}`, date: `2026-01-${23 + round}`,
+    startTime: `2026-01-${23 + round}T18:00:00Z`,
+  }))
+  for (const ordered of [oracleMatches, [...oracleMatches].reverse()]) {
+    const matches = mergeCommunityMatchSources({ oracleMatches: ordered, leaguepediaMatches: [], lolEsportsReferences: references })
+    const series = resolveCanonicalSeries(matches)
+    assert.equal(series.length, 2)
+    assert.deepEqual(series.map(({ date, state, games }) => ({ date, state, games: games.length })), [
+      { date: '2026-01-24', state: 'completed', games: 2 },
+      { date: '2026-01-25', state: 'completed', games: 2 },
+    ])
+    assert.deepEqual(matches.map(({ sourceMatchId, officialMatchId }) => ({ sourceMatchId, officialMatchId }))
+      .sort((left, right) => left.sourceMatchId!.localeCompare(right.sourceMatchId!)),
+    oracleMatches.map(({ sourceMatchId }) => ({ sourceMatchId, officialMatchId: `synthetic-official-round-${sourceMatchId!.at(-1)}` })))
+    const history = buildRankingModel(matches, {}).standings.find(({ team }) => team === 'Team Liquid')!.history
+    const updates = history.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic')
+    assert.deepEqual(updates.map((point) => point.source.officialMatchId), references.map((reference) => reference.matchId))
+    assert.ok(updates.every((point) => point.delta > 0))
+  }
+})
+
 function lockInReference(): LolEsportsReferenceEvent {
   return {
     sourceProvider: 'lol-esports-api', matchId: 'official-lock-in', date: '2026-01-24',
