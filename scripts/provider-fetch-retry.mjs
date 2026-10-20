@@ -27,15 +27,11 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
   const telemetry = options.telemetry ?? createProviderFetchTelemetry()
   const startedAt = now()
   let lastError
-  let failureNotified = false
-  const notifyFailure = async (terminal) => {
-    if (failureNotified) return
-    failureNotified = true
-    await options.onFailure?.(terminal)
-  }
+  let failureNotification
   const notifyFailureSafely = async (terminal, outcome) => {
     try {
-      await notifyFailure(terminal)
+      failureNotification ??= Promise.resolve().then(() => options.onFailure?.(terminal))
+      await failureNotification
     } catch (persistenceError) {
       attachTelemetryPersistenceError(outcome, persistenceError)
     }
@@ -97,7 +93,22 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
         ...(retryReason ? { reason: retryReason } : {}),
       })
       if (!retryReason) {
-        response = responseWithBodyCleanup(response, releaseDeadline, attemptTimeout, attemptController.signal)
+        const responseAttemptIndex = telemetry.attempts.length - 1
+        const reportBodyFailure = async (error) => {
+          if (init.signal?.aborted) return
+          const finishedAtMs = now()
+          telemetry.attempts[responseAttemptIndex] = {
+            ...telemetry.attempts[responseAttemptIndex],
+            finishedAtMs,
+            retryable: false,
+            reason: deadlineExpired ? 'max-elapsed' : 'body-error',
+            error: errorMessage(error),
+          }
+          const terminal = snapshotProviderFetchTelemetry(telemetry, finishedAtMs - startedAt)
+          attachTelemetry(error, terminal)
+          await notifyFailureSafely(terminal, error)
+        }
+        response = responseWithBodyCleanup(response, releaseDeadline, attemptTimeout, attemptController.signal, reportBodyFailure)
         const terminal = snapshotProviderFetchTelemetry(telemetry, now() - startedAt)
         RESPONSE_TELEMETRY.set(response, terminal)
         if (!response.ok) await notifyFailureSafely(terminal, response)
@@ -211,7 +222,7 @@ export function retryDelayMs({ attempt, baseDelayMs = 500, maxDelayMs = 30_000, 
 
 export function providerFetchTelemetryFor(response) { return RESPONSE_TELEMETRY.get(response) }
 
-function responseWithBodyCleanup(response, cleanup, deadline, signal) {
+function responseWithBodyCleanup(response, cleanup, deadline, signal, onFailure) {
   if (!response.body) {
     cleanup()
     return response
@@ -225,11 +236,12 @@ function responseWithBodyCleanup(response, cleanup, deadline, signal) {
     signal.removeEventListener('abort', abort)
     cleanup()
   }
-  const fail = (error) => {
+  const fail = async (error) => {
     if (finished) return
-    bodyController.error(error)
     finish()
     void reader.cancel(error).catch(() => {})
+    await onFailure(error)
+    bodyController.error(error)
   }
   const abort = () => fail(signal.reason)
   const body = new ReadableStream({
@@ -248,7 +260,7 @@ function responseWithBodyCleanup(response, cleanup, deadline, signal) {
           controller.close()
         } else controller.enqueue(value)
       } catch (error) {
-        fail(error)
+        await fail(error)
       } finally {
         deadline?.unref?.()
       }
