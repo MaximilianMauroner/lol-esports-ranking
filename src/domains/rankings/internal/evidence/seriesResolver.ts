@@ -140,13 +140,17 @@ function canonicalSeriesId(match: MatchRecord) {
   return fallbackBase
 }
 
-function sourceMatchSeriesKey(match: MatchRecord) {
+export function sourceMatchSeriesKey(match: MatchRecord) {
   if (!match.sourceMatchId) return undefined
   const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
     .sort((left, right) => compareCodeUnits(left, right))
-  const gameAlias = /^(?:.+[_-]game[_-]?[1-5]|.+_.+_\d+_[1-5])$/i.test(match.sourceMatchId)
-  const sourceId = gameAlias ? sourceSeriesId(match.sourceMatchId) : match.sourceMatchId
+  const sourceId = sourceMatchSeriesId(match.sourceMatchId)
   return joinKey('source-match', sourceId, ...teams)
+}
+
+export function sourceMatchSeriesId(value: string) {
+  const gameAlias = /^(?:.+[_-]game[_-]?[1-5]|.+_.+_\d+_[1-5])$/i.test(value)
+  return gameAlias ? sourceSeriesId(value) : value
 }
 
 function sourceSeriesId(value: string) {

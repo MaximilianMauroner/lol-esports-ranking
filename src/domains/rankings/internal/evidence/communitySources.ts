@@ -2,7 +2,7 @@ import type { MatchRecord } from '../../types.ts'
 import { eventTierRank, inferEventTier } from './competitionTaxonomy.ts'
 import { canonicalTeamNameFor } from './teamIdentity.ts'
 import { tournamentFamilyForEvent } from './internationalTournaments.ts'
-import { withSeriesStartDates } from './seriesResolver.ts'
+import { sourceMatchSeriesId, sourceMatchSeriesKey, withSeriesStartDates } from './seriesResolver.ts'
 export type LolEsportsReferenceTeam = {
   id?: string
   name: string
@@ -190,12 +190,13 @@ function reconcileSharedSeriesGames(matches: MatchRecord[], verifiedLinks: Map<M
 }
 
 function sharedSeriesIdentity(match: MatchRecord) {
+  if (match.sourceMatchId && sourceMatchSeriesId(match.sourceMatchId) === match.sourceMatchId) return undefined
   for (const value of [match.sourceMatchId, match.sourceGameId]) {
     if (!value) continue
     const parsed = value.match(/^(.*?)[_-](?:game[_-]?)?([1-5])$/i)
     if (!parsed?.[1] || !parsed[2]) continue
-    const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
-    const seriesKey = `${teams}::${normalizeText(parsed[1])}`
+    const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)].sort(compareCodeUnits)
+    const seriesKey = JSON.stringify([parsed[1], ...teams])
     return {
       key: `${match.date}::${seriesKey}`,
       seriesKey,
@@ -217,15 +218,15 @@ function enrichWithLolEsportsReferences(matches: MatchRecord[], references: LolE
   const seriesReferencesByTeams = uniqueReferenceMap(references, referenceTeamKeys)
   const seriesStartDates = new Map<string, string>()
   for (const match of matches) {
-    const identity = sharedSeriesIdentity(match)
-    if (!identity) continue
-    const startDate = seriesStartDates.get(identity.seriesKey)
-    if (!startDate || match.date < startDate) seriesStartDates.set(identity.seriesKey, match.date)
+    const seriesKey = sourceMatchSeriesKey(match) ?? sharedSeriesIdentity(match)?.seriesKey
+    if (!seriesKey) continue
+    const startDate = seriesStartDates.get(seriesKey)
+    if (!startDate || match.date < startDate) seriesStartDates.set(seriesKey, match.date)
   }
 
   for (const match of matches) {
-    const identity = sharedSeriesIdentity(match)
-    const seriesDate = identity ? seriesStartDates.get(identity.seriesKey) : match.date
+    const seriesKey = sourceMatchSeriesKey(match) ?? sharedSeriesIdentity(match)?.seriesKey
+    const seriesDate = seriesKey ? seriesStartDates.get(seriesKey) : match.date
     const seriesReference = seriesReferencesByTeams.get(matchTeamDateKey(match, seriesDate))
     if (seriesReference && strategyCount(seriesReference) > 1) {
       enrichWithLolEsportsReference(match, seriesReference, { includeGameId: false })
