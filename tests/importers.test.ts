@@ -1162,7 +1162,32 @@ test('community merge reconciles overlapping Oracle and Leaguepedia MSI series o
   assert.equal(merged.every((match) => match.sourceProvider === 'oracles-elixir'), true)
 })
 
-test('community merge completes a partial Oracle series with the missing Leaguepedia game', () => {
+for (const lastGameDate of ['2026-07-10', '2026-07-11']) {
+  test(`community merge completes a partial Oracle series with the missing Leaguepedia game on ${lastGameDate}`, () => {
+    const merged = mergeCommunityMatchSources(partialOracleSeriesSources(lastGameDate))
+    const resolved = resolveCanonicalSeries(merged)
+    assert.equal(resolved.length, 1)
+    const [series] = resolved
+    assert.equal(merged.length, 3)
+    assert.deepEqual(merged.map((match) => match.sourceProvider).sort(), ['leaguepedia-cargo', 'oracles-elixir', 'oracles-elixir'])
+    assert.equal(merged.every((match) => match.event === 'MSI 2026'), true)
+    assert.equal(series.games.length, 3)
+    assert.equal(series.format, 5)
+    assert.equal(series.state, 'completed')
+    assert.equal(Math.max(series.winsA, series.winsB), 3)
+    assert.equal(Math.min(series.winsA, series.winsB), 0)
+    const standings = buildRankingModel(merged, {}).standings
+    const sameDate = buildRankingModel(mergeCommunityMatchSources(partialOracleSeriesSources('2026-07-10')), {}).standings
+    assert.deepEqual(standings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+      sameDate.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })))
+    const history = standings.find(({ team }) => team === 'LYON')!.history
+    assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit),
+      ['series-member-no-team-update', 'series-member-no-team-update', 'series-atomic'])
+    assert.ok(history.at(-1)!.delta > 0)
+  })
+}
+
+function partialOracleSeriesSources(lastGameDate: string) {
   const seriesId = '2026 Mid-Season Invitational_Bracket Round 3_1'
   const oracleMatches = [1, 2].map((game) => matchFixture({
     id: `oe-lyon-g2-${game}`,
@@ -1187,7 +1212,7 @@ test('community merge completes a partial Oracle series with the missing Leaguep
     id: `lp-${snapshot}-lyon-g2-${game}`,
     sourceProvider: 'leaguepedia-cargo',
     sourceGameId: `${seriesId}_${game}`,
-    date: '2026-07-10',
+    date: game === 3 ? lastGameDate : '2026-07-10',
     event: '2026 Mid-Season Invitational',
     phase: 'Playoffs',
     region: 'International',
@@ -1204,17 +1229,8 @@ test('community merge completes a partial Oracle series with the missing Leaguep
     teamBGold: 55000 + game,
   })))
 
-  const merged = mergeCommunityMatchSources({ oracleMatches, leaguepediaMatches })
-  const [series] = resolveCanonicalSeries(merged)
-  assert.equal(merged.length, 3)
-  assert.deepEqual(merged.map((match) => match.sourceProvider).sort(), ['leaguepedia-cargo', 'oracles-elixir', 'oracles-elixir'])
-  assert.equal(merged.every((match) => match.event === 'MSI 2026'), true)
-  assert.equal(series.games.length, 3)
-  assert.equal(series.format, 5)
-  assert.equal(series.state, 'completed')
-  assert.equal(Math.max(series.winsA, series.winsB), 3)
-  assert.equal(Math.min(series.winsA, series.winsB), 0)
-})
+  return { oracleMatches, leaguepediaMatches }
+}
 
 test('a Bo3 that crosses UTC midnight moves ratings the same as the series on one UTC date', () => {
   const ratingsWithSecondGameAt = (datetimeUtc: string) => {

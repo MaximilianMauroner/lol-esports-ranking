@@ -416,6 +416,39 @@ for (const officialSchedule of [false, true]) {
   })
 }
 
+test('a late cross-midnight Leaguepedia gap fill replays the complete Oracle series after a checkpoint', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-gap-fill-'))
+  try {
+    const games = [1, 2, 3].map((gameNumber) => match(`gap-${gameNumber}`, gameNumber === 3 ? '2026-01-06' : '2026-01-05', 'Event C', {
+      sourceMatchId: undefined, gameNumber, bestOf: 5, bestOfBasis: 'provider',
+      datetimeUtc: gameNumber === 3 ? '2026-01-06T00:20:00Z' : `2026-01-05T23:${gameNumber * 10}:00Z`,
+      teamAKills: 10 + gameNumber, teamAGold: 60_000 + gameNumber,
+    }))
+    const source = (complete: boolean) => fixtureSource(mergeCommunityMatchSources({
+      oracleMatches: [...baseMatches(), ...games.slice(0, 2)],
+      leaguepediaMatches: games.slice(0, complete ? 3 : 2).map((game, index) => ({
+        ...game, id: `lp-gap-${index + 1}`, sourceProvider: 'leaguepedia-cargo', sourceGameId: `Event C_Round 1_1_${index + 1}`,
+      })),
+    }))
+    const base = await run(root, 'base', source(false), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(base)
+    assert.ok(restored.checkpoints.some((entry) => entry.candidate.boundary.date === '2026-01-05'))
+    const incremental = await run(root, 'incremental', source(true), { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    const full = await run(root, 'full', source(true), { mode: 'gated', cause: 'daily-audit', enabled: false })
+    assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+    assert.deepEqual(semanticMap(incremental), semanticMap(full))
+    assert.ok(incremental.metrics.selectedBoundary! < '2026-01-05')
+    if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
+    const history = full.build.snapshot.snapshots[full.build.snapshot.defaultSnapshotKey]!.standings
+      .find(({ team }) => team === 'Alpha')!.history.filter((point) => point.event === 'Event C')
+    assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit),
+      ['series-member-no-team-update', 'series-member-no-team-update', 'series-atomic'])
+    assert.ok(history.at(-1)!.delta > 0)
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('incremental byte metrics include repeated archive children and an unchanged forced root', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-artifact-bytes-'))
   try {
