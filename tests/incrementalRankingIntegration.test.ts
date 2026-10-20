@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, cp, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -17,6 +17,9 @@ import { createStaticRankingData } from '../src/domains/rankings/internal/projec
 import { buildPlayerModel } from '../src/domains/rankings/internal/replay/model.ts'
 import { runRefreshOnce } from '../scripts/refresh-once.mjs'
 import { parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
+import { materializePublicArtifactPatch } from '../scripts/public-artifact-materialization.mjs'
+import { artifactReferences, assertReferenceClosure } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
+import { crossMidnightReviewCases } from './fixtures/crossMidnightReviewCases.ts'
 
 test('partial player directory preserves valid unaffected season players and diagnostics', () => {
   const merged = mergePartialPlayerDirectoryArtifact({
@@ -492,6 +495,55 @@ test('a late New Year game restores complete season artifacts from a checkpoint'
   }
 })
 
+for (const laterDays of [[2], [2, 3]]) {
+  test(`a late New Year game refreshes published 2026 ratings and history with ${laterDays.length} later games`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'incremental-new-year-dependent-'))
+    try {
+      const scenario = crossMidnightReviewCases().find(({ name }) => name === 'new-year')!
+      const earlier = ['2024-12-31', ...[26, 27, 28, 29, 30].map((day) => `2025-12-${day}`)]
+        .map((date) => match(`earlier-${date}`, date, 'Earlier Event', { teamAKills: 20, teamBKills: 10 }))
+      const later = laterDays.map((day) => match(`independent-jan${day}`, `2026-01-0${day}`, 'Independent January event', {
+        teamAKills: 20, teamBKills: 10,
+      }))
+      const source = (sources: typeof scenario.complete) => fixtureSource(mergeCommunityMatchSources({
+        ...structuredClone(sources), oracleMatches: [...earlier, ...sources.oracleMatches, ...later],
+      }))
+      const baseline = await run(root, 'baseline', source(scenario.partial), { mode: 'gated', cause: 'daily-audit', enabled: true })
+      const restored = restoreFrom(baseline)
+      const incremental = await run(root, 'incremental', source(scenario.complete), {
+        mode: 'gated', cause: 'pending-match', enabled: true, restored,
+      })
+      const full = await run(root, 'full', source(scenario.complete), { mode: 'gated', cause: 'daily-audit', enabled: false })
+      assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+      assert.equal(incremental.metrics.classification, 'same-day-insertion')
+      assert.equal(incremental.metrics.selectedBoundary, '2025-12-30')
+      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || !baseline.build) {
+        throw new Error('baseline, incremental patch, and full publication required')
+      }
+      const published = join(root, 'published')
+      await cp(baseline.build.publicDataDir, published, { recursive: true })
+      await materializePublicArtifactPatch(published, incremental.patch)
+      const scopePath = 'scopes/season-2026.json'
+      const actual = JSON.parse(await readFile(join(published, scopePath), 'utf8'))
+      const expected = JSON.parse(await readFile(join(full.build.publicDataDir, scopePath), 'utf8'))
+      const alphaRating = (scope: { standings: { team: string; rating: number }[] }) => scope.standings.find(({ team }) => team === 'Alpha')!.rating
+      assert.equal(alphaRating(actual), alphaRating(expected), 'published 2026 Alpha rating must include the completed December series')
+      if (laterDays.length === 1) assert.equal(alphaRating(actual), 1969)
+      await assertPublishedArtifactBytes(baseline, incremental, full, published)
+      for (const path of ['/data/scopes/season-2026.json', '/data/matches/pages/season-2026-2026000001.json',
+        ...(laterDays.length > 1 ? ['/data/history/team-series/2026__All__All.json'] : [])]) {
+        assert.ok(incremental.metrics.changedPaths.includes(path), `regenerated ${path}`)
+      }
+      for (const path of ['/data/scopes/season-2024.json', '/data/history/team-series/2024__All__All.json',
+        '/data/matches/pages/season-2024-2024000001.json']) {
+        assert.ok(incremental.metrics.reusedPaths.includes(path), `retained ${path}`)
+      }
+    } finally {
+      if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+    }
+  })
+}
+
 test('incremental byte metrics include repeated archive children and an unchanged forced root', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-artifact-bytes-'))
   try {
@@ -956,6 +1008,27 @@ test('match-page contraction removes obsolete trailing page objects', async () =
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
 })
+
+async function assertPublishedArtifactBytes(
+  baseline: IncrementalRankingBuildResult,
+  incremental: Extract<IncrementalRankingBuildResult, { action: 'publish-incremental' }>,
+  full: Extract<IncrementalRankingBuildResult, { action: 'publish-full' }>,
+  published: string,
+) {
+  if (baseline.action !== 'publish-full') throw new Error('full baseline required')
+  for (const build of [baseline.build, full.build]) {
+    const edges = new Map(build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, artifactReferences(write.value)]))
+    assertReferenceClosure(edges, new Set(edges.keys()))
+  }
+  assert.deepEqual(incremental.patch.expectedLogicalPaths.toSorted(), full.build.publicPlan.writes.map((write) => `/data/${write.relativePath}`).sort())
+  for (const write of full.build.publicPlan.writes) {
+    const path = write.relativePath
+    const actual = prepareSemanticArtifact(JSON.parse(await readFile(join(published, path), 'utf8')))
+    const expected = prepareSemanticArtifact(JSON.parse(await readFile(join(full.build.publicDataDir, path), 'utf8')))
+    assert.ok(actual.canonicalBytes.equals(expected.canonicalBytes), `canonical publication bytes for ${path}`)
+    assert.ok(actual.compressed.equals(expected.compressed), `gzip publication bytes for ${path}`)
+  }
+}
 
 function run(
   root: string,
