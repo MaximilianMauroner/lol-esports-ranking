@@ -11,6 +11,7 @@ export class ProviderFetchError extends Error {
 /**
  * Retries one provider request. Callers must keep broad/paginated fetch loops
  * outside this helper so a failed page cannot duplicate already completed work.
+ * The caller signal and elapsed deadline also cover the returned response body.
  */
 export async function fetchWithRetry(input, init = {}, options = {}) {
   const fetcher = options.fetcher ?? fetch
@@ -59,19 +60,20 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
       deadlineExpired = true
       attemptController.abort(new DOMException('Provider request exceeded maxElapsedMs', 'TimeoutError'))
     }, Math.max(1, remainingMs))
-    try {
-      let response
-      let bodyRetryReason
+    let deadlineReleased = false
+    let bodyOwnsDeadline = false
+    const releaseDeadline = () => {
+      if (deadlineReleased) return
+      deadlineReleased = true
       try {
-        response = await fetcher(input, { ...init, signal: attemptController.signal })
-        bodyRetryReason = await options.retryResponse?.(response.clone?.() ?? response)
+        clearTimeoutFn(attemptTimeout)
       } finally {
-        try {
-          clearTimeoutFn(attemptTimeout)
-        } finally {
-          init.signal?.removeEventListener('abort', forwardAbort)
-        }
+        init.signal?.removeEventListener('abort', forwardAbort)
       }
+    }
+    try {
+      let response = await fetcher(input, { ...init, signal: attemptController.signal })
+      const bodyRetryReason = await options.retryResponse?.(response.clone?.() ?? response)
       const retryReason = bodyRetryReason
         ? String(bodyRetryReason === true ? 'provider-rate-limited-body' : bodyRetryReason)
         : isRetryableStatus(response.status) ? `http-${response.status}` : undefined
@@ -84,10 +86,12 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
         ...(retryReason ? { reason: retryReason } : {}),
       })
       if (!retryReason) {
+        response = responseWithBodyCleanup(response, releaseDeadline)
         const terminal = snapshotProviderFetchTelemetry(telemetry, now() - startedAt)
         RESPONSE_TELEMETRY.set(response, terminal)
         if (!response.ok) await notifyFailureSafely(terminal, response)
         await options.onTerminal?.(terminal)
+        bodyOwnsDeadline = true
         return response
       }
       lastError = new ProviderFetchError(`Retryable provider response: ${retryReason}`)
@@ -145,6 +149,8 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
       recordRetry(telemetry, { attempt, delayMs, reason: 'network-error' })
       options.onRetry?.(telemetry.retries.at(-1), telemetry)
       await sleep(delayMs)
+    } finally {
+      if (!bodyOwnsDeadline) releaseDeadline()
     }
   }
 
@@ -191,6 +197,32 @@ export function retryDelayMs({ attempt, baseDelayMs = 500, maxDelayMs = 30_000, 
 }
 
 export function providerFetchTelemetryFor(response) { return RESPONSE_TELEMETRY.get(response) }
+
+function responseWithBodyCleanup(response, cleanup) {
+  if (!response.body) {
+    cleanup()
+    return response
+  }
+  const reader = response.body.getReader()
+  void reader.closed.then(cleanup, cleanup)
+  const body = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read()
+        if (done) controller.close()
+        else controller.enqueue(value)
+      } catch (error) {
+        controller.error(error)
+      }
+    },
+    cancel(reason) { return reader.cancel(reason) },
+  })
+  const result = new Response(body, response)
+  for (const key of ['url', 'redirected', 'type']) {
+    Object.defineProperty(result, key, { value: response[key] })
+  }
+  return result
+}
 
 function isRetryableStatus(status) { return status === 429 || (status >= 500 && status <= 599) }
 
