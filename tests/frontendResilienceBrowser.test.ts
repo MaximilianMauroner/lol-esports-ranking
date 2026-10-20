@@ -39,6 +39,7 @@ test('Regions and Matches recover and follow addressed state', { timeout: 60_000
       const region = page.getByTitle('Open LCK region detail', { exact: true })
       await region.waitFor()
       assert.match(await region.innerText(), /International record 0\.5–0\.5/)
+      assert.equal(await page.getByText(/0\.5–0\.5 intl$/).count(), 2, 'both chart captions must keep the half-win record')
     })
 
     await t.test('an international Bo2 draw has a draw label for either region', async () => {
@@ -78,6 +79,31 @@ test('Regions and Matches recover and follow addressed state', { timeout: 60_000
       assert.equal(await page.getByRole('searchbox', { name: 'Find a team' }).inputValue(), 'G2')
       assert.equal(await alert.count(), 0)
     })
+
+    for (const [mode, module] of [
+      ['matches', 'matches/MatchesView'],
+      ['regions', 'regions/RegionsView'],
+      ['tournaments', 'tournaments/TournamentsView'],
+    ]) {
+      await t.test(`a failed ${mode} chunk keeps the shell and other routes usable`, async () => {
+        const isolated = await browser!.newPage()
+        try {
+          await isolated.route(`**/src/views/${module}.tsx`, (route) => route.fulfill({ status: 503, body: 'Synthetic local chunk failure' }))
+          await isolated.goto(`${base}/#${mode}?scope=all`)
+          await isolated.getByRole('button', { name: 'Reload page', exact: true }).waitFor()
+          assert.equal(await isolated.getByRole('banner').count(), 1, 'a view failure must keep the header')
+          const navigation = isolated.getByRole('navigation', { name: 'Primary', exact: true }).filter({ visible: true })
+          await navigation.getByRole('link', { name: 'Rankings', exact: true }).click()
+          await isolated.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
+          assert.equal(await isolated.getByRole('button', { name: 'Reload page', exact: true }).count(), 0)
+          await navigation.getByRole('link', { name: mode === 'regions' ? 'Matches' : 'Regions', exact: true }).click()
+          await isolated.getByText(mode === 'regions' ? 'Series ledger' : 'Regional standings', { exact: true }).waitFor()
+          await isolated.goto(`${base}/privacy`)
+          await isolated.getByRole('heading', { name: 'Privacy policy', exact: true }).waitFor()
+          await isolated.getByText(/public tournament feed in your browser's local storage/).waitFor()
+        } finally { await isolated.close() }
+      })
+    }
   } finally {
     await browser?.close()
     await server.close()
