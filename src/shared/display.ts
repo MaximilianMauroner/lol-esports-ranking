@@ -9,7 +9,7 @@ const ratingFormatter = new Intl.NumberFormat('en', { maximumFractionDigits: 0 }
 const oneDecimal = new Intl.NumberFormat('en', { maximumFractionDigits: 1 })
 const twoDecimal = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
-const calendarDateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+export const calendarDateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 const dateTimeFormatter = new Intl.DateTimeFormat('en', {
   month: 'short',
   day: 'numeric',

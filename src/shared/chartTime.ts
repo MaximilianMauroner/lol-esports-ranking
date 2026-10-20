@@ -1,8 +1,8 @@
-const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
+import { calendarDateFormatter } from './display.ts'
 
 export const invalidDateLabel = 'Unknown date'
 
-export function formatChartTimestamp(value: unknown, formatter: Intl.DateTimeFormat = fullDate) {
+export function formatChartTimestamp(value: unknown, formatter: Intl.DateTimeFormat = calendarDateFormatter) {
   const timestamp = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(timestamp)) return invalidDateLabel
   const date = new Date(timestamp)
@@ -12,5 +12,5 @@ export function formatChartTimestamp(value: unknown, formatter: Intl.DateTimeFor
 
 export function formatChartTooltipTimestamp(payload: unknown) {
   if (!Array.isArray(payload)) return invalidDateLabel
-  return formatChartTimestamp(payload[0]?.payload?.t, fullDate)
+  return formatChartTimestamp(payload[0]?.payload?.t)
 }
