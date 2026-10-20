@@ -44,6 +44,7 @@ export type RankingEvidence = {
 }
 
 export type RankingUniverse = {
+  scopeStandings: readonly RankingSummaryStanding[]
   select: (selection: RankingBoardSelection) => RankingBoard
   standings: readonly RankingSummaryStanding[]
   rankedStandings: readonly RankingSummaryStanding[]
@@ -117,6 +118,7 @@ export function createRankingBoard(evidence: RankingEvidence): RankingUniverse {
   const powerByRegion = new Map(evidence.regions.map((entry) => [entry.region, displayRegionPowerScore(entry)]))
   const presentRegions = Array.from(new Set(scopeStandings.map((team) => team.region).filter(Boolean)))
   const universe: RankingUniverse = {
+    scopeStandings,
     select,
     standings,
     rankedStandings: ranked.toSorted(compareTeamRank),
