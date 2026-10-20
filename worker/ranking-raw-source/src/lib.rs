@@ -631,6 +631,64 @@ fn restore(
 mod lossless_graph_tests {
     use super::*;
 
+    #[test]
+    fn raw_gzip_expansion_stops_before_a_corrupt_trailer() {
+        let text = format!("\"{}\"", "x".repeat(250_003));
+        let single = gzip(text.as_bytes()).unwrap();
+        let split = [
+            gzip(&text.as_bytes()[..100_000]).unwrap(),
+            gzip(&text.as_bytes()[100_000..]).unwrap(),
+        ]
+        .concat();
+        for mut compressed in [single, split] {
+            compressed.truncate(compressed.len() - 8);
+            for limit in [1, 60_013, 150_007] {
+                let hash = sha256(text.as_bytes());
+                let reference = Reference {
+                    key: format!("raw/objects/sha256/{hash}"),
+                    sha256: hash,
+                    bytes: limit,
+                    storage_encoding: "gzip".into(),
+                    compressed_bytes: Some(compressed.len() as u64),
+                };
+                for result in [
+                    decode_object(&reference, &compressed).map(|_| ()),
+                    decode_lossless_object(&reference, &compressed).map(|_| ()),
+                ] {
+                    let error = result.unwrap_err().to_string();
+                    assert!(
+                        error.contains("semantic size"),
+                        "must reject expansion at {limit} bytes before reading the corrupt trailer: {error}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn raw_gzip_accepts_the_exact_declared_size_across_members() {
+        let text = br#"{"games":[],"source":"fixture"}"#;
+        let compressed = [
+            gzip(&text[..10]).unwrap(),
+            gzip(&text[10..]).unwrap(),
+            vec![0; 8],
+        ]
+        .concat();
+        let hash = sha256(text);
+        let reference = Reference {
+            key: format!("raw/objects/sha256/{hash}"),
+            sha256: hash,
+            bytes: text.len() as u64,
+            storage_encoding: "gzip".into(),
+            compressed_bytes: Some(compressed.len() as u64),
+        };
+        assert_eq!(
+            decode_object(&reference, &compressed).unwrap(),
+            json!({"games":[],"source":"fixture"})
+        );
+        assert!(decode_lossless_object(&reference, &compressed).is_ok());
+    }
+
     // Node prepareRawSourceReceipt/canonicalJsonFor golden. Every unconstrained
     // receipt string category uses unpaired UTF-16; both digests are Node's.
     const NODE_RECEIPT: &str = r#"{"artifactKind":"raw-source-generation-receipt","coverage":{"end":"2026-01-01","start":"2026-01-01"},"generationId":"utf16-golden","importerVersion":"worker-\ud800","leaguepedia":[{"contentSha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","object":{"bytes":1,"key":"raw/objects/sha256/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","storageEncoding":"gzip"},"sourceFileName":"provider-\ud800.json"}],"lolesports":[],"oracle":[{"baseline":{"bytes":1,"key":"raw/objects/sha256/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","storageEncoding":"gzip"},"deltas":[],"digestScheme":"oracle-game-inventory-v1","effectiveOracleDigest":"b6a1bf7d83836bb968437f9358d9d07647fc577ca4c907fae971b44ed74ee357","gameInventory":[{"date":"2026-01-01","digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","gameId":"game-\ud800","league":"league-\udc00","sourceOrder":0}],"headerDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sourceFileName":"oracle-\udc00.csv"}],"rawIdentityDigest":"377373f082b6b227e70daa30c35c7e9e6b2e28d1e56d70977efab0128a825eb1","schemaVersion":1,"sourceReceiptDigest":"b996f7d22bd2cc067dcb85a410d70340aaf3b447a94f32068ed7a2b73d8c6e6b","sourceReceiptInputs":{"nested":{"key\udc00":"\\ud800"},"warning":"\ud800"},"storageMode":"content-addressed-raw-gzip-v2"}"#;
