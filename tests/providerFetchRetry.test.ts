@@ -5,6 +5,11 @@ import type { AddressInfo } from 'node:net'
 import test from 'node:test'
 import { createProviderFetchTelemetry, fetchWithRetry, parseRetryAfterMs, providerFetchTelemetryFor, snapshotProviderFetchTelemetry } from '../scripts/provider-fetch-retry.mjs'
 
+type BodyFailure = Error & {
+  telemetry?: ReturnType<typeof snapshotProviderFetchTelemetry>
+  telemetryPersistenceError?: Error
+}
+
 test('provider retry honors Retry-After seconds and date with injected telemetry', async () => {
   const delays: number[] = []
   let clock = Date.parse('2026-07-23T00:00:00Z')
@@ -139,6 +144,7 @@ test('attempt deadline stays active until the response body is consumed', async 
 
 for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as const) {
   test(`${abort} stops a provider body that stalls after headers`, async () => {
+    let failureCalls = 0
     const server = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' })
       response.write('{"ok":')
@@ -151,6 +157,7 @@ for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as con
     try {
       const response = await fetchWithRetry(url, { signal }, {
         maxElapsedMs: abort === 'helper deadline' ? 500 : 5_000,
+        onFailure: () => { failureCalls += 1 },
       })
       assert.equal(response.url, url)
       const body = response.json()
@@ -160,6 +167,7 @@ for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as con
         new Promise<string>((resolve) => { guard = setTimeout(() => resolve('body stayed open'), 1_500) }),
       ])
       assert.match(outcome, /^(AbortError|TimeoutError)$/)
+      assert.equal(failureCalls, abort === 'helper deadline' ? 1 : 0)
     } finally {
       clearTimeout(guard)
       server.closeAllConnections()
@@ -167,6 +175,119 @@ for (const abort of ['caller abort', 'caller timeout', 'helper deadline'] as con
     }
   })
 }
+
+for (const failure of ['helper deadline', 'transport error'] as const) {
+  test(`${failure} persists body diagnostics before rejecting the consumer`, { timeout: 3_000 }, async (t) => {
+    let requests = 0
+    let terminate: (() => void) | undefined
+    const server = createServer((_request, response) => {
+      requests += 1
+      if (requests === 1) response.writeHead(503).end('busy')
+      else {
+        response.writeHead(200, { 'content-type': 'application/json' })
+        response.write('{"ok":')
+        terminate = () => response.destroy(new Error('fixture transport failed'))
+      }
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    t.after(() => {
+      server.closeAllConnections()
+      return new Promise<void>((resolve) => server.close(() => resolve()))
+    })
+    let failureCalls = 0
+    let persisted: ReturnType<typeof snapshotProviderFetchTelemetry> | undefined
+    const terminals: ReturnType<typeof snapshotProviderFetchTelemetry>[] = []
+    const caller = new AbortController()
+    const response = await fetchWithRetry(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, {
+      signal: caller.signal,
+    }, {
+      maxElapsedMs: failure === 'helper deadline' ? 500 : 2_000,
+      baseDelayMs: 0,
+      onTerminal: (value) => { terminals.push(value) },
+      onFailure: async (value) => {
+        failureCalls += 1
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        persisted = structuredClone(value)
+      },
+    })
+    const headers = structuredClone(providerFetchTelemetryFor(response))
+    const reading = response.json()
+    if (failure === 'transport error') terminate!()
+    await assert.rejects(reading, (error: BodyFailure) => {
+      assert.equal(error.name, failure === 'helper deadline' ? 'TimeoutError' : 'TypeError')
+      assert.equal(failureCalls, 1)
+      assert.ok(persisted, 'Finish failure persistence before rejecting the caller')
+      assert.deepEqual(error.telemetry, persisted)
+      return true
+    })
+    assert.equal(requests, 2, 'Do not retry a body after returning its response')
+    assert.equal(persisted?.requests, 2)
+    assert.equal(persisted?.retryCount, 1)
+    assert.equal(persisted?.attempts.length, 2)
+    const attempt = persisted?.attempts.at(-1)
+    assert.equal(attempt?.status, 200)
+    assert.equal(attempt?.retryable, false)
+    assert.equal(attempt?.reason, failure === 'helper deadline' ? 'max-elapsed' : 'body-error')
+    assert.match(attempt?.error ?? '', failure === 'helper deadline' ? /maxElapsedMs/ : /terminated/)
+    assert.ok(attempt!.finishedAtMs >= headers!.attempts.at(-1)!.finishedAtMs)
+    assert.ok(persisted!.elapsedMs! >= headers!.elapsedMs!)
+    assert.equal(terminals.length, 1)
+    assert.deepEqual(terminals[0], headers, 'Keep onTerminal as the header decision snapshot')
+    assert.equal(getEventListeners(caller.signal, 'abort').length, 0)
+  })
+}
+
+for (const status of [200, 404]) {
+  test(`HTTP ${status} preserves the body error when its single failure hook rejects`, async () => {
+    const original = new TypeError('fixture body transport error')
+    const persistenceError = new Error('fixture receipt write failed')
+    let source: ReadableStreamDefaultController<Uint8Array> | undefined
+    let calls = 0
+    let terminalCalls = 0
+    let failureCalls = 0
+    const response = await fetchWithRetry('https://provider.invalid', {}, {
+      fetcher: async () => {
+        calls += 1
+        return new Response(new ReadableStream<Uint8Array>({ start(controller) { source = controller } }), { status })
+      },
+      onTerminal: () => { terminalCalls += 1 },
+      onFailure: async (value) => {
+        failureCalls += 1
+        assert.equal(value.attempts.at(-1)?.status, status)
+        await new Promise((resolve) => setImmediate(resolve))
+        throw persistenceError
+      },
+    })
+    const reading = response.text()
+    source!.error(original)
+    await assert.rejects(reading, (error: BodyFailure) => {
+      assert.equal(error, original)
+      assert.equal(error.telemetryPersistenceError, persistenceError)
+      assert.equal(error.telemetry?.requests, 1)
+      assert.equal(error.telemetry?.attempts.at(-1)?.status, status)
+      assert.equal(error.telemetry?.attempts.at(-1)?.reason, 'body-error')
+      return true
+    })
+    assert.equal(failureCalls, 1)
+    assert.equal(terminalCalls, 1)
+    assert.equal(calls, 1)
+  })
+}
+
+test('explicit body cancellation releases resources without reporting a provider failure', async () => {
+  const caller = new AbortController()
+  let failureCalls = 0
+  let cancelCalls = 0
+  const response = await fetchWithRetry('https://provider.invalid', { signal: caller.signal }, {
+    fetcher: async () => new Response(new ReadableStream({ cancel() { cancelCalls += 1 } })),
+    onFailure: () => { failureCalls += 1 },
+  })
+  await response.body!.cancel('caller discarded body')
+  caller.abort()
+  assert.equal(cancelCalls, 1)
+  assert.equal(failureCalls, 0)
+  assert.equal(getEventListeners(caller.signal, 'abort').length, 0)
+})
 
 test('caller abort still governs an unread provider body after the payload arrives', async () => {
   const controller = new AbortController()
