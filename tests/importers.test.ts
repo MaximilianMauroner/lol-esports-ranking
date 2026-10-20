@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
+import { mergeCommunityMatchSources, type LolEsportsReferenceEvent } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { canonicalTeamNameFor, teamCodeFor } from '../src/domains/rankings/internal/evidence/teamIdentity.ts'
 import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
 import { importLolEsportsScheduleSnapshot } from '../scripts/rankings/providers/lolEsports.ts'
@@ -1232,6 +1232,63 @@ test('a Bo3 that crosses UTC midnight moves ratings the same as the series on on
   assert.ok(sameDate.find((standing) => standing.team === 'Shopify Rebellion')!.baseRating < 1500)
   assert.deepEqual(ratingsWithSecondGameAt('2026-01-25 00:20:00'), sameDate)
 })
+
+for (const matchBestOf of [3, undefined]) {
+  test(`official schedule references keep a cross-midnight Bo3 whole with provider format ${matchBestOf ?? 'unknown'}`, () => {
+    const standingsWithSecondGameAt = (datetimeUtc: string) => {
+      const leaguepedia = importLeaguepediaSnapshot({
+        matches: [lockInGame(1, '2026-01-24 23:30:00'), lockInGame(2, datetimeUtc)]
+          .map((game) => ({ ...game, matchBestOf })),
+      })
+      const matches = mergeCommunityMatchSources({
+        oracleMatches: [], leaguepediaMatches: leaguepedia.matches,
+        lolEsportsReferences: [lockInReference()],
+      })
+      return buildRankingModel(matches, leaguepedia.teams).standings
+        .map(({ team, baseRating, rating }) => ({ team, baseRating, rating }))
+        .sort((left, right) => left.team.localeCompare(right.team))
+    }
+    const sameDate = standingsWithSecondGameAt('2026-01-24 23:55:00')
+    assert.ok(sameDate.find((standing) => standing.team === 'Team Liquid')!.baseRating > 1500)
+    assert.deepEqual(standingsWithSecondGameAt('2026-01-25 00:20:00'), sameDate)
+  })
+}
+
+test('a next-day Bo1 reference does not take the last game of a cross-midnight Bo3', () => {
+  const standingsWithSecondGameAt = (datetimeUtc: string) => {
+    const leaguepedia = importLeaguepediaSnapshot({
+      matches: [
+        { ...lockInGame(1, '2026-01-25 18:00:00'), id: 'LCS 2026 Lock-In_Week 1_2_1', matchBestOf: 1 },
+        { ...lockInGame(2, datetimeUtc), matchBestOf: undefined },
+        { ...lockInGame(1, '2026-01-24 23:30:00'), matchBestOf: undefined },
+      ],
+    })
+    const matches = mergeCommunityMatchSources({
+      oracleMatches: [], leaguepediaMatches: leaguepedia.matches,
+      lolEsportsReferences: [
+        lockInReference(),
+        { ...lockInReference(), matchId: 'next-day-bo1', date: '2026-01-25', startTime: '2026-01-25T18:00:00Z',
+          strategy: { type: 'bestOf', count: 1 }, gameIds: ['next-day-game'] },
+      ],
+    })
+    return buildRankingModel(matches, leaguepedia.teams).standings
+      .map(({ team, baseRating, rating, history }) => ({
+        team, baseRating, rating,
+        history: history.map(({ date, delta, source }) => ({ date, delta, officialMatchId: source.officialMatchId })),
+      }))
+      .sort((left, right) => left.team.localeCompare(right.team))
+  }
+  assert.deepEqual(standingsWithSecondGameAt('2026-01-25 00:20:00'), standingsWithSecondGameAt('2026-01-24 23:55:00'))
+})
+
+function lockInReference(): LolEsportsReferenceEvent {
+  return {
+    sourceProvider: 'lol-esports-api', matchId: 'official-lock-in', date: '2026-01-24',
+    startTime: '2026-01-24T23:00:00Z', state: 'completed', strategy: { type: 'bestOf', count: 3 },
+    teams: [{ name: 'Team Liquid', outcome: 'win', gameWins: 2 }, { name: 'Shopify Rebellion', outcome: 'loss', gameWins: 0 }],
+    gameIds: [], games: [],
+  }
+}
 
 function lockInGame(gameNumber: number, datetimeUtc: string) {
   return {

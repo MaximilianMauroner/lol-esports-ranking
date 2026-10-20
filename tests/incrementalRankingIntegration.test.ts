@@ -370,31 +370,51 @@ test('append, same-day insertion, and historical correction use whole-date repla
   }
 })
 
-test('a series game that arrives after midnight and after the last refresh still completes its series incrementally', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'incremental-cross-midnight-'))
-  try {
-    const seriesGame = (gameNumber: number, datetimeUtc: string) => match(`m5-${gameNumber}`, datetimeUtc.slice(0, 10), 'Event C', {
-      sourceMatchId: 'series-m5', gameNumber, bestOf: 3, bestOfBasis: 'official', datetimeUtc,
-    })
-    const mergedSource = (matches: MatchRecord[]) => fixtureSource(mergeCommunityMatchSources({ oracleMatches: matches, leaguepediaMatches: [] }))
-    const firstGame = seriesGame(1, '2026-01-05T23:30:00.000Z')
-    const base = await run(root, 'base', mergedSource([...baseMatches(), firstGame]), { mode: 'gated', cause: 'daily-audit', enabled: true })
-    const source = mergedSource([...baseMatches(), firstGame, seriesGame(2, '2026-01-06T00:20:00.000Z')])
+for (const officialSchedule of [false, true]) {
+  test(`a series game that arrives after midnight and after the last refresh still completes its series incrementally${officialSchedule ? ' with official schedule references' : ''}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'incremental-cross-midnight-'))
+    try {
+      const seriesGame = (gameNumber: number, datetimeUtc: string) => match(`m5-${gameNumber}`, datetimeUtc.slice(0, 10), 'Event C', {
+        sourceMatchId: 'series-m5', gameNumber, bestOf: 3, bestOfBasis: 'official', datetimeUtc,
+        ...(officialSchedule ? {
+          sourceProvider: 'leaguepedia-cargo', sourceMatchId: undefined, sourceGameId: `Event C_Week 1_1_${gameNumber}`,
+          bestOf: 1, bestOfBasis: 'fallback',
+        } as const : {}),
+      })
+      const mergedSource = (matches: MatchRecord[]) => fixtureSource(mergeCommunityMatchSources({
+        oracleMatches: matches, leaguepediaMatches: [],
+        lolEsportsReferences: officialSchedule ? [{
+          sourceProvider: 'lol-esports-api', matchId: 'official-m5', date: '2026-01-05', startTime: '2026-01-05T23:00:00Z',
+          strategy: { type: 'bestOf', count: 3 }, teams: [{ name: 'Alpha' }, { name: 'Beta' }], gameIds: [], games: [],
+        }] : [],
+      }))
+      const firstGame = seriesGame(1, '2026-01-05T23:30:00.000Z')
+      const base = await run(root, 'base', mergedSource([...baseMatches(), firstGame]), { mode: 'gated', cause: 'daily-audit', enabled: true })
+      const source = mergedSource([...baseMatches(), firstGame, seriesGame(2, '2026-01-06T00:20:00.000Z')])
 
-    const incremental = await run(root, 'incremental', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(base) })
-    const full = await run(root, 'full', source, { mode: 'gated', cause: 'daily-audit', enabled: false })
+      const incremental = await run(root, 'incremental', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(base) })
+      const full = await run(root, 'full', source, { mode: 'gated', cause: 'daily-audit', enabled: false })
 
-    assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
-    assert.deepEqual(semanticMap(incremental), semanticMap(full))
-    if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
-    const standings = full.build.snapshot.snapshots[full.build.snapshot.defaultSnapshotKey]!.standings
-    const seriesHistory = standings.find((standing) => standing.team === 'Alpha')!.history.filter((point) => point.event === 'Event C')
-    assert.deepEqual(seriesHistory.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
-    assert.ok(seriesHistory.at(-1)!.delta > 0)
-  } finally {
-    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
-  }
-})
+      assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+      assert.deepEqual(semanticMap(incremental), semanticMap(full))
+      if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
+      const standings = full.build.snapshot.snapshots[full.build.snapshot.defaultSnapshotKey]!.standings
+      const seriesHistory = standings.find((standing) => standing.team === 'Alpha')!.history.filter((point) => point.event === 'Event C')
+      assert.deepEqual(seriesHistory.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
+      assert.ok(seriesHistory.at(-1)!.delta > 0)
+      const sameDateSource = mergedSource([...baseMatches(), firstGame, seriesGame(2, '2026-01-05T23:55:00.000Z')])
+      const sameDate = await run(root, 'same-date', sameDateSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
+      if (sameDate.action !== 'publish-full' || !('snapshot' in sameDate.build)) throw new Error('full snapshot required')
+      const sameDateStandings = sameDate.build.snapshot.snapshots[sameDate.build.snapshot.defaultSnapshotKey]!.standings
+      assert.deepEqual(
+        standings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+        sameDateStandings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+      )
+    } finally {
+      if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+    }
+  })
+}
 
 test('incremental byte metrics include repeated archive children and an unchanged forced root', async () => {
   const root = await mkdtemp(join(tmpdir(), 'incremental-artifact-bytes-'))
