@@ -174,7 +174,7 @@ function SeriesRow({ series, timezone, now, forecasts }: { series: TournamentSer
           : <span key={index} className="size-5 shrink-0 rounded-sm border border-dashed border-border" />)}
       </span>
       <p className="min-w-0 text-sm text-[var(--text-strong)]">
-        <span className={winner === 0 && winningTeam?.name ? 'font-bold' : undefined}>{first?.name ?? 'TBD'}</span> {scored ? <span className="font-mono tabular-nums">{score(first?.gameWins)}–{score(second?.gameWins)}</span> : <span className="text-[var(--faint)]">vs</span>} <span className={winner === 1 && winningTeam?.name ? 'font-bold' : undefined}>{second?.name ?? 'TBD'}</span>
+        <span className={winner === 0 && winningTeam?.name ? 'font-bold' : undefined}>{first?.name ?? 'TBD'}</span> {scored ? <span className="font-mono whitespace-nowrap tabular-nums">{score(first?.gameWins)}–{score(second?.gameWins)}</span> : <span className="text-[var(--faint)]">vs</span>} <span className={winner === 1 && winningTeam?.name ? 'font-bold' : undefined}>{second?.name ?? 'TBD'}</span>
       </p>
     </div>
     <p className="flex min-w-0 flex-wrap gap-x-3 text-xs text-muted-foreground md:justify-end">

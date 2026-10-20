@@ -324,6 +324,12 @@ test('tournament results keep matchup, score and winner metadata readable at eac
   const feed = fixtureFeed()
   feed.events[0]!.series = [
     series('maryville-result', 'lcs:2026:fixture-lcs', [team('maryville', 'Maryville University', 3), team('zeu5', 'Zeu5 Esports', 1)], 'completed', 'completed'),
+    series('maryville-cupid', 'lcs:2026:fixture-lcs', [team('maryville', 'Maryville University', 3), team('cupid', 'Cupid Esports', 0)], 'completed', 'completed'),
+    series('maryville-disguised', 'lcs:2026:fixture-lcs', [team('maryville', 'Maryville University', 0), team('disguised', 'Disguised', 3)], 'completed', 'completed'),
+    series('shopify-kt', 'lcs:2026:fixture-lcs', [team('shopify', 'Shopify Rebellion', 0), team('kt', 'KT Rolster', 1)], 'completed', 'completed'),
+    series('shopify-jd', 'lcs:2026:fixture-lcs', [team('shopify', 'Shopify Rebellion', 0), team('jd', 'JD Gaming', 2)], 'completed', 'completed'),
+    series('kabum-lions', 'lcs:2026:fixture-lcs', [team('kabum', 'KaBuM! Ilha das Lendas', 3), team('lions', 'Golden Lions', 0)], 'completed', 'completed'),
+    series('kabum-9z', 'lcs:2026:fixture-lcs', [team('kabum', 'KaBuM! Ilha das Lendas', 3), team('9z', '9z Globant', 1)], 'completed', 'completed'),
     series('long-result', 'lcs:2026:fixture-lcs', [team('cloud9', 'Cloud9', 1), team('northern', longWinner, 3)], 'completed', 'completed'),
   ]
   const fixturePlugin: Plugin = { name: 'tournament-readability-fixture', configureServer(server) {
@@ -347,11 +353,21 @@ test('tournament results keep matchup, score and winner metadata readable at eac
     const page = await browser.newPage({ viewport: { width: 768, height: 800 } })
     await page.clock.install({ time: new Date(at) })
     await page.goto(`http://127.0.0.1:${address.port}/#tournaments?event=lcs%3A2026%3Afixture-lcs&view=schedule`)
-    await page.getByText('Winner: Maryville University', { exact: true }).waitFor()
-    for (const width of [768, 320, 390, 1024, 1280]) {
+    await page.getByText('Winner: Maryville University', { exact: true }).first().waitFor()
+    await page.evaluate(() => document.fonts.ready)
+    assert.ok(await page.evaluate(() => document.documentElement.scrollHeight > innerHeight), 'The fixture schedule scrolls naturally')
+    const widths = [...new Set([
+      320, 335, 390, 768, 800, 850, 910, 1024, 1280,
+      ...([[330, 340], [768, 780], [796, 816], [836, 856], [900, 918]] as const)
+        .flatMap(([start, end]) => Array.from({ length: (end - start) / 2 + 1 }, (_, index) => start + index * 2)),
+    ])].sort((a, b) => a - b)
+    const failures: Array<{ width: number, matchup: string, layout: unknown }> = []
+    for (const width of widths) {
       await page.setViewportSize({ width, height: 800 })
-      for (const winner of ['Maryville University', longWinner]) {
-        const row = page.locator('li').filter({ has: page.getByText(`Winner: ${winner}`, { exact: true }) })
+      for (const result of feed.events[0]!.series) {
+        const [first, second] = result.teams
+        const matchup = `${first!.name} ${first!.gameWins}–${second!.gameWins} ${second!.name}`
+        const row = page.locator('li').filter({ has: page.getByText(matchup, { exact: true }) })
         const layout = await row.evaluate((node) => {
           const [matchup, metadata] = node.querySelectorAll('p')
           const textFits = [matchup!, metadata!].map((element) => {
@@ -379,11 +395,14 @@ test('tournament results keep matchup, score and winner metadata readable at eac
               || matchupBounds.bottom <= metadataBounds.top || metadataBounds.bottom <= matchupBounds.top,
           }
         })
-        assert.ok(layout.matchupFits && layout.metadataFits && layout.scoreLines === 1 && layout.separated,
-          `${winner} matchup, score and metadata stay readable at ${width}px: ${JSON.stringify(layout)}`)
+        if (!layout.matchupFits || !layout.metadataFits || layout.scoreLines !== 1 || !layout.separated) {
+          failures.push({ width, matchup, layout })
+        }
       }
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
     }
+    console.log(JSON.stringify({ readabilityWidths: widths, rows: feed.events[0]!.series.length, failures }))
+    assert.deepEqual(failures, [], 'Matchups, atomic scores and winner metadata stay readable across responsive widths')
   } finally {
     await browser?.close()
     await server.close()
