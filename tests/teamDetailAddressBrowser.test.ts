@@ -82,6 +82,76 @@ async function expectTeam(page: Page, name: string) {
   await drawer(page).getByRole('heading', { name: `Synthetic ${name}`, exact: true }).waitFor()
 }
 
+for (const width of [1280, 390]) {
+  for (const cold of [false, true]) {
+    test(`an omitted-scope native rejection stays consumed after a ${cold ? 'cold' : 'warm'} scope switch and reload at ${width}px`, { timeout: 60_000 }, async () => {
+      await withFixture(async (page, base, fixture) => {
+        if (cold) fixture.held.add('/data/scopes/season-2025.json')
+        else {
+          await page.goto(`${base}${board('2025')}`)
+          await page.getByTitle('Open Synthetic Retired', { exact: true }).waitFor()
+        }
+        if (cold) await page.goto(`${base}${board()}`)
+        else {
+          await page.getByLabel('Season', { exact: true }).selectOption('2026')
+          await page.getByTitle('Open Synthetic Retired', { exact: true }).waitFor({ state: 'hidden' })
+        }
+        await page.getByTitle('Open Synthetic Alpha', { exact: true }).waitFor()
+        for (let repeat = 0; repeat < 2; repeat++) {
+          const before = await page.evaluate(() => ({ entries: history.length, events: Reflect.get(window, 'teamNavigationEvents').length }))
+          await setHash(page, `#rankings?eligibility=all&teamDetail=${teamIds.retired}`)
+          await notice(page).waitFor()
+          assert.equal(await page.getByLabel('Season', { exact: true }).inputValue(), '2026')
+          await repaired(page)
+          assert.deepEqual(await query(page), { eligibility: 'all' })
+          assert.equal(await drawer(page).count(), 0)
+          assert.equal(await page.evaluate(() => history.length), before.entries + 1, 'Only the native navigation adds an entry')
+          const events = await page.evaluate(() => Reflect.get(window, 'teamNavigationEvents') as Array<{ type: string; trusted: boolean }>)
+          const received = events.slice(before.events)
+          assert.equal(received.filter((event) => event.type === 'hashchange').length, 1)
+          assert.ok(received.every((event) => event.trusted), 'Repair emits no synthetic global event')
+        }
+        await page.getByRole('heading', { name: 'Power over time', exact: true }).hover()
+        await page.locator('.recharts-line-curve').first().waitFor()
+        assert.ok(fixture.requests.some((path) => path.startsWith('/data/history/team-series/')))
+        await page.getByLabel('Season', { exact: true }).selectOption('2025')
+        if (cold) {
+          await page.getByRole('status').filter({ hasText: 'Loading 2025 source season' }).waitFor()
+          assert.equal((await query(page)).teamDetail, undefined)
+          fixture.release('/data/scopes/season-2025.json')
+        }
+        await page.getByTitle('Open Synthetic Retired', { exact: true }).waitFor()
+        assert.equal(await drawer(page).count(), 0)
+        assert.equal(await notice(page).count(), 0)
+        await page.reload()
+        await page.getByTitle('Open Synthetic Retired', { exact: true }).waitFor()
+        assert.equal(await drawer(page).count(), 0, 'Reload cannot revive the rejected request')
+        assert.equal((await query(page)).teamDetail, undefined)
+      }, width)
+    })
+  }
+}
+
+test('valid omitted-scope native links retain the selected season, filters and unknown parameters', { timeout: 60_000 }, async () => {
+  await withFixture(async (page, base) => {
+    for (const [season, name, id] of [['2025', 'Retired', teamIds.retired], ['2026', 'Alpha', teamIds.alpha]]) {
+      await page.goto(`${base}${board(season)}`)
+      await page.getByTitle(`Open Synthetic ${name}`, { exact: true }).waitFor()
+      await setHash(page, `#rankings?eligibility=all&teamDetail=${id}&team=Hidden&region=LEC&sort=wins&size=15&keep=omitted`)
+      await expectTeam(page, name)
+      assert.equal(await page.getByLabel('Season', { exact: true }).inputValue(), season)
+      assert.equal(await notice(page).count(), 0)
+      assert.deepEqual(await query(page), { eligibility: 'all', teamDetail: id, team: 'Hidden', region: 'LEC', sort: 'wins', size: '15', keep: 'omitted' })
+      const entries = await page.evaluate(() => history.length)
+      await drawer(page).getByRole('button', { name: 'Close', exact: true }).click()
+      await drawer(page).waitFor({ state: 'hidden' })
+      assert.equal(await page.evaluate(() => history.length), entries)
+      assert.equal((await query(page)).keep, 'omitted')
+      assert.equal((await query(page)).teamDetail, undefined)
+    }
+  })
+})
+
 test('a rejected link stays consumed through a warm scope change and repeated native requests are distinct', { timeout: 60_000 }, async () => {
   await withFixture(async (page, base) => {
     await page.goto(`${base}${board('2025')}`)
