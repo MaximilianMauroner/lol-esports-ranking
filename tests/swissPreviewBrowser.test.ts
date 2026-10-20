@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import test from 'node:test'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { chromium, type Locator, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
 import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan'
@@ -57,7 +59,8 @@ function fixtureFeed() {
   }
 }
 
-test('Swiss preview builds, compares, shares and resets scenarios without changing live data', { timeout: 90_000 }, async () => {
+for (const forecasts of ['0', '1']) for (const ratingsAvailable of [true, false]) {
+test(`Swiss manual preview preserves scenarios with forecasts=${forecasts}, ratings=${ratingsAvailable}`, { timeout: 90_000 }, async () => {
   const feed = fixtureFeed()
   const ratings = rankingArtifacts()
   const requests: string[] = []
@@ -71,13 +74,18 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
         response.setHeader('content-type', 'application/json')
         if (path === '/tournament-data/feed.json') return response.end(JSON.stringify(feed))
         if (path === '/tournament-data/feed.json.health.json') return response.end(JSON.stringify({ checkedAt: feed.fetchedAt, complete: true, warnings: [] }))
-        if (ratings.has(path)) return response.end(ratings.get(path))
+        if (ratingsAvailable && ratings.has(path)) return response.end(ratings.get(path))
         response.statusCode = 503
         response.end(JSON.stringify({ error: 'ranking artifacts unavailable' }))
       })
     },
   }
-  const server = await createServer({ logLevel: 'silent', server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin] })
+  const server = await createServer({
+    configFile: false, logLevel: 'silent',
+    define: { 'import.meta.env.VITE_TOURNAMENT_FORECASTS_ENABLED': JSON.stringify(forecasts) },
+    resolve: { alias: { '@': new URL('../src', import.meta.url).pathname } },
+    server: { host: '127.0.0.1', port: 0 }, plugins: [fixturePlugin, react(), tailwindcss()],
+  })
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
   try {
     await server.listen()
@@ -89,7 +97,11 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, timezoneId: 'Europe/Vienna' })
     const external: string[] = []
     const errors: string[] = []
-    page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
+    await page.route('**/*', (route) => {
+      if (route.request().url().startsWith(base)) return route.continue()
+      external.push(route.request().url())
+      return route.abort()
+    })
     page.on('pageerror', (error) => errors.push(String(error)))
     await page.clock.install({ time: new Date(at) })
 
@@ -101,24 +113,14 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.match(await body(page), /Live draws are not available: The Round 1 draw is not in the schedule yet\./)
     assert.equal(await page.locator('#swiss-start').inputValue(), 'seeds')
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
-    const odds = page.getByRole('region', { name: 'Region odds' })
-    await odds.getByText('Choose the Play-In winner to see the odds.').waitFor()
-    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'no odds without the full field')
+    await page.getByText('Future Swiss draw probabilities are unavailable.', { exact: true }).waitFor({ timeout: 5_000 })
+    await page.getByText('Use picks and draws to explore possible outcomes.', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('region', { name: 'Region odds' }).count(), 0)
+    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'the preview shows no team or region advancement percentages')
 
     await page.locator('#swiss-playin').selectOption('LEC')
     assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
-    await odds.getByRole('table').waitFor()
-    const regionOdds = new Map((await odds.getByRole('row').allInnerTexts()).slice(1).map((row) => {
-      const [region, any, average] = row.split('\t')
-      return [region, { any: parseFloat(any), average: parseFloat(average) }]
-    }))
-    assert.deepEqual([...regionOdds.keys()].sort(), ['CBLOL', 'LCK', 'LCP', 'LCS', 'LEC', 'LPL', 'West (LEC + LCS)'])
-    const regionTotal = [...regionOdds].filter(([region]) => !region.startsWith('West')).reduce((sum, [, row]) => sum + row.average, 0)
-    assert.ok(Math.abs(regionTotal - 8) < 0.35, `eight teams get out on average, got ${regionTotal}`)
-    const west = regionOdds.get('West (LEC + LCS)')!
-    assert.ok(west.any >= Math.max(regionOdds.get('LEC')!.any, regionOdds.get('LCS')!.any), 'the West gets a team out at least as often as each of its regions')
-    assert.ok(regionOdds.get('LCK')!.any > regionOdds.get('CBLOL')!.any, 'the higher-rated region gets out more often')
-    assert.match(await odds.innerText(), /FNC \d+%/, 'the Play-In team has its own share')
+    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'selecting the full field does not add advancement percentages')
     const playInPool = page.getByRole('list', { name: 'Round 1 pools' })
     assert.match(await playInPool.getByTitle('Fnatic', { exact: true }).innerText(), /FNC[\s\S]*LEC/)
     await page.reload()
@@ -126,7 +128,7 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     assert.equal(await page.locator('#swiss-playin option:checked').textContent(), 'Fnatic (LEC)')
     assert.equal(await playInPool.getByTitle('Fnatic', { exact: true }).count(), 1)
     await page.locator('#swiss-playin').selectOption('LCS')
-    await odds.getByText('The LCS Play-In team is not in the schedule yet, so the odds are unavailable.').waitFor()
+    assert.equal(await page.getByText('Future Swiss draw probabilities are unavailable.', { exact: true }).count(), 1)
     // The whole bracket is visible before the draw: Round 1 offers the draw, later rounds wait for it.
     assert.equal(await fillButton(page, 1).count(), 1)
     for (const round of [2, 3, 4, 5]) assert.match(await page.getByRole('region', { name: `Round ${round}` }).innerText(), new RegExp(`Drawn after Round ${round - 1}`))
@@ -370,6 +372,9 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
       assert.ok(tableOverflow <= 1, `The standings table fits its panel at ${width}px: ${tableOverflow}px too wide`)
     }
 
+    if (forecasts === '0') assert.deepEqual(requests.filter((entry) => entry.startsWith('GET /data/')), [], 'the manual preview does not load ratings when forecasts are disabled')
+    assert.equal(await page.getByRole('region', { name: 'Region odds' }).count(), 0)
+    assert.doesNotMatch(await body(page), /\d+(\.\d+)?%/, 'completed scenarios do not add advancement percentages')
     assert.deepEqual(errors, [])
     assert.deepEqual(external, [])
     assert.ok(requests.every((entry) => entry.startsWith('GET ')), `Only reads are sent: ${requests.filter((entry) => !entry.startsWith('GET '))}`)
@@ -378,6 +383,8 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     await server.close()
   }
 })
+
+}
 
 function teamName(seed: string) {
   return seedBaseline(null).teams.find((team) => team.id === seed)!.label
