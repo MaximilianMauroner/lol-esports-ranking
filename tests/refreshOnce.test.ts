@@ -748,16 +748,46 @@ async function runRefreshChildCase(kind: 'unchanged' | 'stale-source' | 'error',
     RANKING_BUCKET_RESTORE_RAW: 'false',
     RANKING_BUCKET_UPLOAD_ENABLED: 'false',
   }
+  const output = join(paths.root, 'ranking-snapshot.full.json')
+  const publicDataDir = join(paths.root, 'public')
   const args = [
     '--raw-dir', paths.raw,
     '--manifest', paths.manifest,
     '--state', paths.refreshState,
     '--staging-dir', paths.staging,
-    '--skip-crunch',
+    '--output', output,
+    '--public-data-dir', publicDataDir,
+    '--reconciliation-output', paths.reconciliation,
     '--end', '2026-07-22',
   ]
-  await refreshDataIfChanged(args, { run: fakeRun, env })
-  if (kind === 'unchanged') await refreshDataIfChanged(args, { run: fakeRun, env })
+  if (kind === 'unchanged') {
+    const baseline = await refreshDataIfChanged(args, {
+      env: {
+        ...env,
+        RANKING_REFRESH_RUN_ID: `${context.runId}-baseline`,
+        RANKING_REFRESH_METRICS_PATH: join(paths.root, 'baseline-metrics.json'),
+      },
+      bucketConfig: { enabled: false },
+      run: async (command: string, childArgs: string[]) => {
+        if (childArgs.includes('scripts/download-local-data.mjs')) return fakeRun(command, childArgs)
+        assert.equal(command, 'pnpm')
+        assert.deepEqual(childArgs, [
+          'exec', 'tsx', 'scripts/build-static-snapshot.ts',
+          '--output', output,
+          '--public-data-dir', publicDataDir,
+          '--manifest', paths.manifest,
+          '--reconciliation-output', paths.reconciliation,
+        ])
+        await mkdir(publicDataDir, { recursive: true })
+        const artifact = JSON.stringify({ syntheticFixture: 'unchanged-metrics-baseline' })
+        await writeFile(output, artifact)
+        await writeFile(join(publicDataDir, 'ranking-summary.json'), artifact)
+      },
+    })
+    assert.equal(baseline.changed, true)
+    await assert.rejects(readFile(paths.reconciliation), { code: 'ENOENT' })
+  }
+  await refreshDataIfChanged([...args, '--skip-crunch'], { run: fakeRun, env })
 }
 
 function downloaderSource(
