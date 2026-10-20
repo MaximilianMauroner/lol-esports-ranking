@@ -72,3 +72,10 @@ export {
 export {
   evaluateConditionalPowerResultComponent,
 } from './internal/scenarios/conditionalPowerResultComponent.ts'
+export type {
+  SeriesResultInput,
+  SeriesResultUpdate,
+  SeriesResultCapture,
+  SeriesResultDateBatch,
+  SeriesResultDateObserver,
+} from './internal/replay/seriesResultUpdate.ts'

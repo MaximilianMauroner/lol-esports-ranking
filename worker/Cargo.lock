@@ -914,6 +914,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ranking-compute"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ranking-contracts",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ranking-contracts"
 version = "0.1.0"
 dependencies = [
@@ -954,6 +964,7 @@ dependencies = [
 name = "ranking-refresh"
 version = "0.1.0"
 dependencies = [
+ "ranking-compute",
  "ranking-contracts",
  "ranking-fetch",
  "ranking-raw-source",

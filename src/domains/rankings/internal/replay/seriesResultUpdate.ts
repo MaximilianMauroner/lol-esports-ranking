@@ -4,16 +4,15 @@ import { rosterVolatilityMultiplier, uncertaintyKMultiplier } from './ratingCalc
 import { domesticStableTransferWeightsByTier, latentStrengthResultBudgetShares, ratingUpdateRecencyWeight } from '../policy/modelConfig.ts'
 import { neutralWinProbability } from '../queries/winProbability.ts'
 
-type ResultTeam = {
+type ResultTeam = Readonly<{
   team: string
   league: string
   currentPowerRating: number
   uncertainty: number
   rosterContinuity: number | undefined
-}
+}>
 
-/** The production series-result calculation. It does not read game-performance statistics. */
-export function calculateSeriesResultUpdate(input: {
+export type SeriesResultInput = Readonly<{
   teams: readonly [ResultTeam, ResultTeam]
   bestOf: SeriesFormat
   observedOutcomeA: number
@@ -21,7 +20,27 @@ export function calculateSeriesResultUpdate(input: {
   strengthSignal: number
   eventK: number
   international: boolean
-}) {
+}>
+
+export type SeriesResultUpdate = ReturnType<typeof calculateSeriesResultUpdate>
+
+export type SeriesResultCapture = Readonly<{
+  seriesId: string
+  matchIds: readonly string[]
+  input: SeriesResultInput
+  nodeResult: Readonly<SeriesResultUpdate>
+}>
+
+export type SeriesResultDateBatch = Readonly<{
+  utcDate: string
+  authoritativeMatchIds: readonly string[]
+  series: readonly SeriesResultCapture[]
+}>
+
+export type SeriesResultDateObserver = (batch: SeriesResultDateBatch) => void
+
+/** The production series-result calculation. It does not read game-performance statistics. */
+export function calculateSeriesResultUpdate(input: SeriesResultInput) {
   const [teamA, teamB] = input.teams
   const seriesExpected = neutralWinProbability(
     { team: teamA.team, rating: teamA.currentPowerRating, uncertainty: teamA.uncertainty },

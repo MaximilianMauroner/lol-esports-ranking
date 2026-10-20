@@ -44,7 +44,7 @@ import { applyRosterContinuityForSeries, roundedContinuity } from '../domains/ra
 import { recordSideAdjustmentSample, sideAdjustmentFor } from '../domains/rankings/internal/replay/sideAdjustments.ts'
 import { resolveCanonicalSeries, type CanonicalSeries } from '../domains/rankings/internal/evidence/seriesResolver.ts'
 import { neutralWinProbability } from '../domains/rankings/internal/queries/winProbability.ts'
-import { calculateSeriesResultUpdate, seriesStrengthSignal } from '../domains/rankings/internal/replay/seriesResultUpdate.ts'
+import { calculateSeriesResultUpdate, seriesStrengthSignal, type SeriesResultCapture, type SeriesResultInput } from '../domains/rankings/internal/replay/seriesResultUpdate.ts'
 import {
   initialTeamRating,
   latentStrengthResultBudgetShares,
@@ -111,6 +111,7 @@ export function processRatingSeriesForDate({
   sideAdjustments,
   lastDate,
   pregamePlayerRatingEdges,
+  capture = false,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
@@ -118,7 +119,9 @@ export function processRatingSeriesForDate({
   sideAdjustments: Map<string, number>
   lastDate: string
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
+  capture?: boolean
 }) {
+  const captures: SeriesResultCapture[] | undefined = capture ? [] : undefined
   const batch = ratingBatchSnapshot(state)
   for (const series of ratingSeriesGroupsForDate(matches)) {
     applyRosterContinuityForSeries(
@@ -129,8 +132,10 @@ export function processRatingSeriesForDate({
       state.lastRosterByTeam,
       state.currentRosterContinuity,
     )
-    processRatingSeries({ series, teams, state, batch, sideAdjustments, lastDate, pregamePlayerRatingEdges })
+    const result = processRatingSeries({ series, teams, state, batch, sideAdjustments, lastDate, pregamePlayerRatingEdges, capture })
+    if (captures && result) captures.push(result)
   }
+  return captures
 }
 
 function pregamePredictionForMatch({
@@ -327,6 +332,7 @@ function processRatingSeries({
   sideAdjustments,
   lastDate,
   pregamePlayerRatingEdges,
+  capture,
 }: {
   series: RatingSeriesGroup
   teams: Record<string, TeamProfile>
@@ -335,6 +341,7 @@ function processRatingSeries({
   sideAdjustments: Map<string, number>
   lastDate: string
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
+  capture: boolean
 }) {
   const finalMatch = series.finalMatch
   const seriesLeagueA = homeLeagueForTeam(finalMatch, series.teamA, teams)
@@ -356,14 +363,7 @@ function processRatingSeries({
   const seriesCurrentPowerRatingB = seriesPowerRatingB + seriesRosterPriorOffsetB + seriesMomentumB
   const seriesUncertaintyA = batch.uncertainties.get(series.teamA) ?? maximumUncertainty
   const seriesUncertaintyB = batch.uncertainties.get(series.teamB) ?? maximumUncertainty
-  const {
-    expectedOutcomeA, expectedOutcomeB, leagueSignalShare, teamFormShare,
-    seriesResidualA, seriesResidualB, seriesResultEvidenceA, seriesResultEvidenceB,
-    uncertaintyMultiplierA, uncertaintyMultiplierB, rosterMultiplierA, rosterMultiplierB,
-    stableTransferWeightA, stableTransferWeightB, appliedTeamStableShareA, appliedTeamStableShareB,
-    baseStableDeltaA, baseStableDeltaB, baseFormDeltaA, baseFormDeltaB, baseLeagueDeltaA, baseLeagueDeltaB,
-    seriesDeltaA, seriesDeltaB,
-  } = calculateSeriesResultUpdate({
+  const input: SeriesResultInput = {
     teams: [
       { team: series.teamA, league: seriesLeagueA, currentPowerRating: seriesCurrentPowerRatingA,
         uncertainty: seriesUncertaintyA, rosterContinuity: state.currentRosterContinuity.get(series.teamA) },
@@ -373,7 +373,16 @@ function processRatingSeries({
     bestOf: series.bestOf, observedOutcomeA: series.observedOutcomeA, observedOutcomeB: series.observedOutcomeB,
     strengthSignal: series.strengthSignal, eventK: eventKFactorForMatch(finalMatch, state.eventWeightContext),
     international: isInternationalMatch(finalMatch),
-  })
+  }
+  const nodeResult = calculateSeriesResultUpdate(input)
+  const {
+    expectedOutcomeA, expectedOutcomeB, leagueSignalShare, teamFormShare,
+    seriesResidualA, seriesResidualB, seriesResultEvidenceA, seriesResultEvidenceB,
+    uncertaintyMultiplierA, uncertaintyMultiplierB, rosterMultiplierA, rosterMultiplierB,
+    stableTransferWeightA, stableTransferWeightB, appliedTeamStableShareA, appliedTeamStableShareB,
+    baseStableDeltaA, baseStableDeltaB, baseFormDeltaA, baseFormDeltaB, baseLeagueDeltaA, baseLeagueDeltaB,
+    seriesDeltaA, seriesDeltaB,
+  } = nodeResult
   const seriesDeltaByTeam = new Map([[series.teamA, seriesDeltaA], [series.teamB, seriesDeltaB]])
   const seriesResidualByTeam = new Map([[series.teamA, seriesResidualA], [series.teamB, seriesResidualB]])
   const seriesEvidenceByTeam = new Map([[series.teamA, seriesResultEvidenceA], [series.teamB, seriesResultEvidenceB]])
@@ -414,6 +423,16 @@ function processRatingSeries({
       teamFormShare,
       leagueSignalShare,
       pregamePlayerRatingEdges,
+    })
+  }
+  if (capture) {
+    return Object.freeze({
+      seriesId: series.key,
+      matchIds: Object.freeze(series.matches.map((match) => match.officialGameId ?? match.sourceGameId ?? match.id)),
+      input: Object.freeze({ ...input, teams: Object.freeze([
+        Object.freeze({ ...input.teams[0] }), Object.freeze({ ...input.teams[1] }),
+      ] as const) }),
+      nodeResult: Object.freeze({ ...nodeResult }),
     })
   }
 }

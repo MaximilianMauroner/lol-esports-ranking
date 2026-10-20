@@ -39,6 +39,7 @@ import {
 import { createRatingRunState, ensureMatchRunEntities, type RatingRunState } from './ratingRunState.ts'
 import type { PlacementTournamentLifecycle } from './placementResiduals.ts'
 import { emitPregamePredictionsForDate, processRatingSeriesForDate } from '../../../../lib/ratingSeriesEngine.ts'
+import type { SeriesResultDateObserver } from './seriesResultUpdate.ts'
 import { roundedContinuity } from './rosterContinuityRating.ts'
 import { rosterBasisByTeam } from '../players/rosters.ts'
 import { sideAdjustmentsFromSamples } from './sideAdjustments.ts'
@@ -119,10 +120,12 @@ export function replayRatingDates({
     context.tournamentLifecycles,
   ),
   replayMatches,
+  onSeriesResultDate,
 }: {
   context: RatingReplayContext
   state?: RatingRunState
   replayMatches: readonly MatchRecord[]
+  onSeriesResultDate?: SeriesResultDateObserver
 }) {
   const sortedReplayMatches = replayMatches.toSorted(compareReplayMatches)
   if (state.processedThroughUtcDate) rebaseCheckpointRecencyFactors(state, context.lastDate)
@@ -154,6 +157,7 @@ export function replayRatingDates({
       state,
       lastDate: context.lastDate,
       pregamePlayerRatingEdges: context.pregamePlayerRatingEdges,
+      onSeriesResultDate,
     })
   }
   return state
@@ -176,6 +180,7 @@ export type RatingUtcDateBoundaryInput = {
   state: RatingRunState
   lastDate: string
   pregamePlayerRatingEdges: Map<string, PregamePlayerRatingEdge>
+  onSeriesResultDate?: SeriesResultDateObserver
 }
 
 /**
@@ -188,6 +193,7 @@ export function processRatingUtcDateBoundary({
   state,
   lastDate,
   pregamePlayerRatingEdges,
+  onSeriesResultDate,
 }: RatingUtcDateBoundaryInput) {
   const firstMatch = dateMatches[0]
   if (!firstMatch) throw new Error('A rating UTC date boundary cannot be empty')
@@ -259,18 +265,26 @@ export function processRatingUtcDateBoundary({
     pregamePlayerRatingEdges,
     sideAdjustments,
   })
-  processRatingSeriesForDate({
+  const series = processRatingSeriesForDate({
     matches: dateMatches,
     teams,
     state,
     sideAdjustments,
     lastDate,
     pregamePlayerRatingEdges,
+    capture: onSeriesResultDate !== undefined,
   })
   state.processedThroughUtcDate = firstMatch.date
   state.processedThroughUtcDateMatchIds = dateMatches
     .map(replayMatchIdentity)
     .sort()
+  if (onSeriesResultDate) {
+    onSeriesResultDate(Object.freeze({
+      utcDate: firstMatch.date,
+      authoritativeMatchIds: Object.freeze([...state.processedThroughUtcDateMatchIds]),
+      series: Object.freeze(series!),
+    }))
+  }
 }
 
 export function finalizeRatingRunStateAtUtcBoundary(
