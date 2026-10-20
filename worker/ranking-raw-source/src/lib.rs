@@ -656,8 +656,8 @@ mod lossless_graph_tests {
                     decode_lossless_object(&reference, &compressed).map(|_| ()),
                 ] {
                     let error = result.unwrap_err().to_string();
-                    assert!(
-                        error.contains("semantic size"),
+                    assert_eq!(
+                        error, "Gzip semantic size exceeds limit",
                         "must reject expansion at {limit} bytes before reading the corrupt trailer: {error}"
                     );
                 }

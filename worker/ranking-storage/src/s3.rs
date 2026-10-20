@@ -159,7 +159,7 @@ impl Bucket {
             request = request.header(key, value);
         }
         // Never emit reqwest's URL-bearing error: signed requests and credentials stay private.
-        let mut response = request.send().map_err(|_| "S3 transport request failed")?;
+        let response = request.send().map_err(|_| "S3 transport request failed")?;
         let status = response.status().as_u16();
         let headers = response
             .headers()
@@ -180,18 +180,12 @@ impl Bucket {
             return Err("S3 stored object exceeds byte limit".into());
         }
         let mut body = Vec::new();
-        let mut buffer = [0; 65_536];
-        loop {
-            let count = response
-                .read(&mut buffer)
-                .map_err(|_| "S3 response body failed")?;
-            if count == 0 {
-                break;
-            }
-            if body.len() as u64 + count as u64 > STORED_LIMIT {
-                return Err("S3 stored object exceeds byte limit".into());
-            }
-            body.extend_from_slice(&buffer[..count]);
+        response
+            .take(STORED_LIMIT + 1)
+            .read_to_end(&mut body)
+            .map_err(|_| "S3 response body failed")?;
+        if body.len() as u64 > STORED_LIMIT {
+            return Err("S3 stored object exceeds byte limit".into());
         }
         Ok(Object {
             status,

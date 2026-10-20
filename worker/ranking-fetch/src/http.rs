@@ -11,8 +11,6 @@ use std::{
 #[derive(Default)]
 pub struct Http {
     client: Client,
-    #[cfg(test)]
-    fixtures: Option<std::collections::VecDeque<Response>>,
     pub requests: u64,
     pub retries: Vec<Value>,
     attempts: Vec<Value>,
@@ -79,26 +77,11 @@ pub(crate) fn set_query_parameter(url: &mut Url, key: &str, value: &str) {
 }
 
 impl Http {
-    #[cfg(test)]
-    pub fn fixture(responses: Vec<Response>) -> Self {
-        Self {
-            fixtures: Some(responses.into()),
-            ..Self::default()
-        }
-    }
-
     pub fn snapshot(&self) -> Value {
         json!({"requests":self.requests,"retryCount":self.retries.len(),"retries":self.retries,"attempts":self.attempts})
     }
 
     pub fn get(&mut self, url: Url, headers: &[(&str, &str)], policy: &Policy) -> Result<Response> {
-        #[cfg(test)]
-        if let Some(fixtures) = &mut self.fixtures {
-            self.requests += 1;
-            return fixtures
-                .pop_front()
-                .ok_or("Unexpected fixture request".into());
-        }
         self.terminal_failure = false;
         let started = Instant::now();
         let mut last_error = String::from("Provider request exceeded maxElapsedMs");
@@ -223,7 +206,7 @@ impl Http {
     }
 }
 
-fn read_body(mut response: reqwest::blocking::Response, limit: u64) -> io::Result<Vec<u8>> {
+fn read_body(response: reqwest::blocking::Response, limit: u64) -> io::Result<Vec<u8>> {
     let exceeded = || {
         io::Error::new(
             io::ErrorKind::FileTooLarge,
@@ -237,19 +220,14 @@ fn read_body(mut response: reqwest::blocking::Response, limit: u64) -> io::Resul
         return Err(exceeded());
     }
     let mut body = Vec::new();
-    let mut buffer = [0; 65_536];
-    loop {
-        let count = response
-            .read(&mut buffer)
-            .map_err(|_| io::Error::other("terminated"))?;
-        if count == 0 {
-            return Ok(body);
-        }
-        if body.len() as u64 + count as u64 > limit {
-            return Err(exceeded());
-        }
-        body.extend_from_slice(&buffer[..count]);
+    response
+        .take(limit + 1)
+        .read_to_end(&mut body)
+        .map_err(|_| io::Error::other("terminated"))?;
+    if body.len() as u64 > limit {
+        return Err(exceeded());
     }
+    Ok(body)
 }
 
 fn retry_after_ms(value: &str, now: u64) -> Option<u64> {
@@ -431,6 +409,93 @@ mod tests {
         assert!(outcome.failures.is_empty());
         assert_eq!(outcome.files.len(), 1);
         assert_eq!(length, size);
+    }
+
+    #[test]
+    fn drive_file_names_cannot_escape_the_download_directory() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!(
+                "oracle-paths-{}-{}",
+                std::process::id(),
+                crate::now_ms()
+            ));
+        let directory = root.join("downloads/nested");
+        std::fs::create_dir_all(&directory).unwrap();
+        let escaped = root.join("escape.csv");
+        let absolute = root.join("absolute.csv");
+        for path in [&escaped, &absolute] {
+            std::fs::write(path, b"preserve existing file").unwrap();
+        }
+        let names = [
+            "../../escape.csv".to_owned(),
+            absolute.to_str().unwrap().to_owned(),
+            "subdirectory/child.csv".to_owned(),
+            "./dot.csv".to_owned(),
+            "subdirectory/../child.csv".to_owned(),
+            "2027_invalid/child.csv".to_owned(),
+            "subdirectory\\child.csv".to_owned(),
+            "2026_valid.csv".to_owned(),
+        ];
+        let html = names
+            .iter()
+            .enumerate()
+            .map(|(id, name)| format!(
+                r#"https://drive.google.com/file/d/{id}/view?usp=drive_web<div class="flip-entry-title">{name}</div>"#
+            ))
+            .collect::<String>();
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let (folder_url, folder_server) =
+            serve(200, "Content-Type: text/html\r\n", html.into_bytes());
+        let response = http.get(folder_url, &[], &Policy::default()).unwrap();
+        folder_server.join().unwrap();
+        let mut warnings = Vec::new();
+        let mut failures = Vec::new();
+        let sources =
+            crate::oracle::drive_sources(&response.text(), &mut warnings, &mut failures).unwrap();
+        assert_eq!(
+            sources,
+            vec![(
+                "2026_valid.csv".into(),
+                "https://drive.google.com/uc?export=download&id=7".into()
+            )]
+        );
+        let csv = b"gameid,date\ngame,2026-01-01\n".to_vec();
+        let (mut url, server) = serve(200, "Content-Type: text/csv\r\n", csv.clone());
+        url.set_path(&sources[0].0);
+        let options = crate::Options::parse(&["--oracle-csv-url".into(), url.into()]);
+        let outcome = crate::oracle::download(
+            &mut http,
+            &options,
+            &directory,
+            "2026-01-01",
+            "2026-12-31",
+            &mut warnings,
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert!(outcome.failures.is_empty());
+        assert_eq!(
+            std::fs::read(directory.join("2026_valid.csv")).unwrap(),
+            csv
+        );
+        let observed = (
+            outcome.files,
+            failures.len(),
+            http.requests,
+            std::fs::read(&escaped).unwrap(),
+            std::fs::read(&absolute).unwrap(),
+        );
+        std::fs::remove_dir_all(root).unwrap();
+        assert_eq!(observed.0, vec![directory.join("2026_valid.csv")]);
+        assert_eq!(observed.1, names.len() - 1);
+        assert_eq!(observed.2, 2, "invalid names must not be downloaded");
+        assert_eq!(observed.3, b"preserve existing file");
+        assert_eq!(observed.4, b"preserve existing file");
     }
 
     #[test]
