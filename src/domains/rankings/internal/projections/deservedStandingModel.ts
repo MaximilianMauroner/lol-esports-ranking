@@ -191,6 +191,7 @@ function teamSummaryFor(
   })
   const wins = entries.filter((entry) => entry.observedSeriesResult > 0.5).length
   const losses = entries.filter((entry) => entry.observedSeriesResult < 0.5).length
+  const observedSeriesPoints = entries.reduce((sum, entry) => sum + entry.observedSeriesResult, 0)
   const expectedWins = entries.reduce((sum, entry) => sum + entry.expectedSeriesResult, 0)
   const gameDifferentialAboveExpectation = entries.reduce((sum, entry) => {
     return sum + entry.observedGameWinRate - entry.expectedGameWinRate
@@ -204,7 +205,7 @@ function teamSummaryFor(
     wins,
     losses,
     expectedWins,
-    winsAboveExpectation: wins - expectedWins,
+    winsAboveExpectation: observedSeriesPoints - expectedWins,
     gameDifferentialAboveExpectation,
     currentRosterValidity: dssCurrentRosterValidity(weightedSeries),
     seriesCount: entries.length,
