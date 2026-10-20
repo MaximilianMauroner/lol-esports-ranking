@@ -73,6 +73,7 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     await page.addInitScript(() => { window.IntersectionObserver = class implements IntersectionObserver { readonly root = null; readonly rootMargin = '0px'; readonly scrollMargin = '0px'; readonly thresholds = []; observe() {} unobserve() {} disconnect() {} takeRecords() { return [] } } })
     await page.goto(base)
     await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
+    await page.getByTitle('Open Alpha', { exact: true }).waitFor()
     const bootstrap = new Set(requests)
     const historyObjects = entries.filter((entry) => /\/history\/|\/matches\//.test(entry.logicalPath) && !entry.logicalPath.endsWith('/tournament-moves/index.json')).map((entry) => `/data/objects/sha256/${entry.digest}`)
     assert.ok(historyObjects.every((path) => !bootstrap.has(path)), JSON.stringify(entries.filter((entry) => bootstrap.has(`/data/objects/sha256/${entry.digest}`)).map((entry) => entry.logicalPath)))
