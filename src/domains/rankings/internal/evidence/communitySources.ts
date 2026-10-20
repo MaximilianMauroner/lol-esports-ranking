@@ -193,8 +193,10 @@ function sharedSeriesIdentity(match: MatchRecord) {
     const parsed = value.match(/^(.*?)[_-](?:game[_-]?)?([1-5])$/i)
     if (!parsed?.[1] || !parsed[2]) continue
     const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
+    const seriesKey = `${teams}::${normalizeText(parsed[1])}`
     return {
-      key: `${match.date}::${teams}::${normalizeText(parsed[1])}`,
+      key: `${match.date}::${seriesKey}`,
+      seriesKey,
       gameId: value,
       gameNumber: Number(parsed[2]),
     }
@@ -211,17 +213,26 @@ function enrichWithLolEsportsReferences(matches: MatchRecord[], references: LolE
   if (references.length === 0 || matches.length === 0) return
   const bo1ReferencesByOutcome = uniqueReferenceMap(references.filter((reference) => strategyCount(reference) <= 1), referenceOutcomeKeys)
   const seriesReferencesByTeams = uniqueReferenceMap(references, referenceTeamKeys)
+  const seriesStartDates = new Map<string, string>()
+  for (const match of matches) {
+    const identity = sharedSeriesIdentity(match)
+    if (!identity) continue
+    const startDate = seriesStartDates.get(identity.seriesKey)
+    if (!startDate || match.date < startDate) seriesStartDates.set(identity.seriesKey, match.date)
+  }
 
   for (const match of matches) {
-    const bo1Reference = bo1ReferencesByOutcome.get(matchOutcomeKey(match))
-    if (bo1Reference) {
-      enrichWithLolEsportsReference(match, bo1Reference, { includeGameId: bo1Reference.gameIds.length === 1 })
+    const identity = sharedSeriesIdentity(match)
+    const seriesDate = identity ? seriesStartDates.get(identity.seriesKey) : match.date
+    const seriesReference = seriesReferencesByTeams.get(matchTeamDateKey(match, seriesDate))
+    if (seriesReference && strategyCount(seriesReference) > 1) {
+      enrichWithLolEsportsReference(match, seriesReference, { includeGameId: false })
       continue
     }
 
-    const seriesReference = seriesReferencesByTeams.get(matchTeamDateKey(match))
-    if (seriesReference && strategyCount(seriesReference) > 1) {
-      enrichWithLolEsportsReference(match, seriesReference, { includeGameId: false })
+    const bo1Reference = bo1ReferencesByOutcome.get(matchOutcomeKey(match))
+    if (bo1Reference) {
+      enrichWithLolEsportsReference(match, bo1Reference, { includeGameId: bo1Reference.gameIds.length === 1 })
     }
   }
 }
@@ -290,9 +301,9 @@ function referenceTeamKeys(reference: LolEsportsReferenceEvent) {
   return teams ? [`${reference.date}::${teams}`] : []
 }
 
-function matchTeamDateKey(match: MatchRecord) {
+function matchTeamDateKey(match: MatchRecord, date = match.date) {
   const teams = [normalizeTeamName(match.teamA), normalizeTeamName(match.teamB)].sort().join('::')
-  return `${match.date}::${teams}`
+  return `${date}::${teams}`
 }
 
 function referenceWinner(reference: LolEsportsReferenceEvent) {
