@@ -174,6 +174,20 @@ test('games without source IDs retain fallback date grouping', () => {
   assert.deepEqual(series.map((item) => item.games.length), [1, 2])
 })
 
+test('matching game ID stems across midnight do not establish an uncorroborated provider alias', () => {
+  const games = midnightSweep('2026-10-15', '2026-10-16')
+    .map((match) => ({ ...match, sourceMatchId: undefined }))
+  const merged = mergeCommunityMatchSources({
+    oracleMatches: [{ ...games[0], sourceProvider: 'oracles-elixir' }],
+    leaguepediaMatches: games.slice(1),
+  })
+  assert.equal(merged.length, 3)
+  const series = resolveCanonicalSeries(merged)
+  assert.deepEqual(series.map(({ date, games }) => ({ date, games: games.length })), [
+    { date: '2026-10-15', games: 1 }, { date: '2026-10-16', games: 2 },
+  ])
+})
+
 test('explicit series identifiers ending in a hyphen and number remain distinct across dates', () => {
   const games = midnightSweep('2026-10-15', '2026-10-16').map((match, index) => ({
     ...match, sourceMatchId: `series-${index + 1}`, bestOf: 1, bestOfBasis: 'provider' as const,
