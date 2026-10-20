@@ -540,6 +540,73 @@ test('refresh wrapper skips crunch when staged source digest is unchanged', asyn
   }
 })
 
+test('refresh wrapper retries failed publication when source data is unchanged', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lol-ranking-publish-retry-'))
+  const rawDir = join(root, 'raw')
+  const statePath = join(rawDir, 'refresh-state.json')
+  const publicDataDir = join(root, 'public-data')
+  let publishAttempts = 0
+  let publishedReceipts = 0
+  let crunchCount = 0
+  const client = {
+    async send(command: { input: { Key?: string; Body?: unknown } }) {
+      if (command instanceof PutObjectCommand && command.input.Key === 'rankings/latest-publish.json') {
+        publishAttempts += 1
+        if (publishAttempts === 1) throw new Error('Injected publication failure')
+        publishedReceipts += 1
+      }
+      return {}
+    },
+  }
+  const args = [
+    '--raw-dir', rawDir,
+    '--manifest', join(rawDir, 'manifest.json'),
+    '--state', statePath,
+    '--staging-dir', join(root, 'staging'),
+    '--output', join(root, 'derived.json'),
+    '--public-data-dir', publicDataDir,
+    '--end', '2026-06-29',
+  ]
+  const options = {
+    bucketClient: client,
+    bucketConfig: bucketConfig(),
+    env: { RANKING_BUCKET_RESTORE_RAW: 'false' },
+    run: async (command: string, commandArgs: string[]) => {
+      if (commandArgs.includes('scripts/download-local-data.mjs')) {
+        const outDir = valueAfter(commandArgs, '--out-dir')
+        const sourcePath = join(outDir, 'leaguepedia.json')
+        await writeFile(sourcePath, JSON.stringify({ matches: [{ id: 'game-1', winner: 'Blue' }] }))
+        await writeFile(valueAfter(commandArgs, '--manifest'), JSON.stringify(manifest(sourcePath)))
+        return
+      }
+      assert.equal(command, 'pnpm')
+      assert.ok(commandArgs.includes('scripts/build-static-snapshot.ts'))
+      crunchCount += 1
+      await mkdir(publicDataDir, { recursive: true })
+      await writeFile(join(publicDataDir, 'ranking-summary.json'), '{}\n')
+    },
+  }
+
+  try {
+    await assert.rejects(refreshDataIfChanged(args, options), /Injected publication failure/)
+    assert.equal(publishedReceipts, 0)
+    const failedState = JSON.parse(await readFile(statePath, 'utf8'))
+    assert.equal(failedState.lastRun.result, 'failed')
+
+    const second = await refreshDataIfChanged(args, options)
+    assert.equal(publishedReceipts, 1, 'unchanged source must publish after a failed publication')
+    assert.equal(second.changed, true)
+    assert.equal(crunchCount, 2)
+
+    const third = await refreshDataIfChanged(args, options)
+    assert.equal(third.changed, false)
+    assert.equal(publishAttempts, 2)
+    assert.equal(crunchCount, 2)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('refresh date window bootstraps without raw baseline and then uses rolling lookback', () => {
   assert.deepEqual(refreshDateWindow({
     args: { lookbackDays: '7' },
