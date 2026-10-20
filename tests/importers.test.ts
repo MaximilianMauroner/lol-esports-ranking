@@ -1216,6 +1216,42 @@ test('community merge completes a partial Oracle series with the missing Leaguep
   assert.equal(Math.min(series.winsA, series.winsB), 0)
 })
 
+test('a Bo3 that crosses UTC midnight moves ratings the same as the series on one UTC date', () => {
+  const ratingsWithSecondGameAt = (datetimeUtc: string) => {
+    const leaguepedia = importLeaguepediaSnapshot({
+      matches: [lockInGame(1, '2026-01-24 23:30:00'), lockInGame(2, datetimeUtc)],
+    })
+    const matches = mergeCommunityMatchSources({ oracleMatches: [], leaguepediaMatches: leaguepedia.matches })
+    return buildRankingModel(matches, leaguepedia.teams).standings
+      .map(({ team, baseRating, rating }) => ({ team, baseRating, rating }))
+      .sort((left, right) => left.team.localeCompare(right.team))
+  }
+  const sameDate = ratingsWithSecondGameAt('2026-01-24 23:55:00')
+
+  assert.ok(sameDate.find((standing) => standing.team === 'Team Liquid')!.baseRating > 1500)
+  assert.ok(sameDate.find((standing) => standing.team === 'Shopify Rebellion')!.baseRating < 1500)
+  assert.deepEqual(ratingsWithSecondGameAt('2026-01-25 00:20:00'), sameDate)
+})
+
+function lockInGame(gameNumber: number, datetimeUtc: string) {
+  return {
+    id: `LCS 2026 Lock-In_Week 1_1_${gameNumber}`,
+    date: datetimeUtc.slice(0, 10),
+    datetimeUtc,
+    event: 'LCS 2026 Lock-In',
+    patch: '26.1',
+    matchBestOf: 3,
+    teamA: 'Team Liquid',
+    teamB: 'Shopify Rebellion',
+    winner: 'Team Liquid',
+    loser: 'Shopify Rebellion',
+    teamAKills: 20,
+    teamBKills: 9,
+    teamAGold: 62000,
+    teamBGold: 54000,
+  }
+}
+
 test('team code cleanup uses known source abbreviations for major teams', () => {
   const identities = [
     ['LNG Esports', 'LNG'],
