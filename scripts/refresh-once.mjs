@@ -396,17 +396,31 @@ export async function runRefreshOnce(options = {}) {
           error,
         )
         finalRecord = failure.record
+        const persistenceErrors = []
         try {
           await assertLive()
           state = recordPendingAttempt(state, dueMatchIds, { attemptedAt: now(), reason: failure.primaryError })
           state.fencingToken = authority.lease.fencingToken
           state.lastRun = finalRecord
-          await persistRefreshTelemetry(finalRecord)
-          await writeRefreshMetrics(childMetricsPath, finalRecord)
-          await persistState(state)
+          try {
+            await persistRefreshTelemetry(finalRecord)
+          } catch (persistenceError) {
+            persistenceErrors.push(`refresh-state: ${errorMessage(persistenceError)}`)
+          }
+          try {
+            await writeRefreshMetrics(childMetricsPath, finalRecord)
+          } catch (persistenceError) {
+            persistenceErrors.push(`metrics: ${errorMessage(persistenceError)}`)
+          }
+          try {
+            await persistState(state)
+          } catch (persistenceError) {
+            persistenceErrors.push(`trigger-state: ${errorMessage(persistenceError)}`)
+          }
         } catch (persistenceError) {
-          logger.warn(`Unable to persist canonical refresh failure: ${errorMessage(persistenceError)}`)
+          persistenceErrors.push(errorMessage(persistenceError))
         }
+        if (persistenceErrors.length > 0) logger.warn(`Unable to persist canonical refresh failure: ${persistenceErrors.join('; ')}`)
         await (options.sendAlert ?? defaultSendAlert)(env, 'refresh-ingestion-failed', failure.primaryError, now, logger)
         throw failure.error
       }
