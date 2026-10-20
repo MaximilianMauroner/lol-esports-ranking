@@ -102,7 +102,16 @@ test('ranking browser bootstraps without archive history, selects a year, pages,
     holdIndex = false
     pendingIndex.splice(0).forEach((respond) => respond())
     await page.locator('table').getByText('Sample 2025', { exact: true }).first().waitFor()
+    await page.getByRole('button', { name: 'Last page', exact: true }).click()
+    await page.getByText('Page 3 of 3', { exact: true }).waitFor()
+    await page.locator('table').getByText('Sample 2025', { exact: true }).first().waitFor()
+    await page.getByRole('button', { name: 'First page', exact: true }).click()
     await page.getByLabel('Match history year').selectOption('All')
+    await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
+    await page.getByRole('button', { name: 'Next page', exact: true }).click()
+    await page.getByText('Page 2 of 5', { exact: true }).waitFor()
+    await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 25)
+    await page.getByRole('button', { name: 'First page', exact: true }).click()
     await page.locator('table').getByText('Sample 2026', { exact: true }).first().waitFor()
     // Media-query rem uses the browser's initial font, not a CSS font-size override.
     await page.setViewportSize({ width: 800, height: 844 })
