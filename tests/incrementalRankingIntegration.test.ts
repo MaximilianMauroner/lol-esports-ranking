@@ -9,6 +9,7 @@ import { buildRankingIncrementally, mergePartialPlayerDirectoryArtifact, type In
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { prepareStateCheckpoint, prepareStateObject, stateObjectReferenceFor } from '../scripts/incremental-state-storage.mjs'
 import type { RankingSourceImport } from '../scripts/rankings/source-input.ts'
+import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
 import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
 import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
@@ -444,6 +445,48 @@ test('a late cross-midnight Leaguepedia gap fill replays the complete Oracle ser
     assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit),
       ['series-member-no-team-update', 'series-member-no-team-update', 'series-atomic'])
     assert.ok(history.at(-1)!.delta > 0)
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a late New Year game restores the complete season and checkpoint artifacts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-new-year-'))
+  try {
+    const earlier = [match('prior-year', '2024-12-31', 'Earlier Event'),
+      ...[26, 27, 28, 29, 30].map((day) => match(`dec-${day}`, `2025-12-${day}`, 'Earlier Event'))]
+    const imported = importLeaguepediaSnapshot({ source: 'synthetic calendar rollover fixture', matches: [
+      '2025-12-31T23:30:00Z', '2026-01-01T00:30:00Z',
+    ].map((datetimeUtc, index) => ({
+      id: `2025 Season World Championship_Bracket_1_${index + 1}`,
+      date: datetimeUtc.slice(0, 10), datetimeUtc, event: '2025 Season World Championship',
+      teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', matchBestOf: 3,
+      teamAKills: 20 + index, teamBKills: 10, teamAGold: 60000 + index, teamBGold: 55000,
+    })) })
+    const source = (complete: boolean) => fixtureSource(mergeCommunityMatchSources({
+      oracleMatches: earlier, leaguepediaMatches: imported.matches.slice(0, complete ? 2 : 1).map((game) => ({
+        ...game, teamAHomeLeague: 'LCK', teamBHomeLeague: 'LCK', teamARegion: 'LCK', teamBRegion: 'LCK',
+      })),
+    }))
+    const base = await run(root, 'base', source(false), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(base)
+    assert.ok(restored.checkpoints.some((entry) => entry.candidate.boundary.date === '2025-12-31'))
+    const incremental = await run(root, 'incremental', source(true), { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    const full = await run(root, 'full', source(true), { mode: 'gated', cause: 'daily-audit', enabled: false })
+    assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+    assert.deepEqual(semanticMap(incremental), semanticMap(full))
+    assert.ok(incremental.metrics.selectedBoundary! < '2025-12-31')
+    if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
+    const snapshot = full.build.snapshot
+    const scopes = Object.values(snapshot.snapshots).filter(({ filter }) => filter.season === '2025' && filter.event === 'All' && filter.region === 'All')
+    assert.ok(scopes.some(({ filter }) => filter.checkpoint === 'split-3'))
+    for (const scope of scopes) {
+      assert.equal(scope.matchCount, 7)
+      const history = scope.standings.find(({ team }) => team === 'Alpha')!.history.filter((point) => point.event === '2025 Season World Championship')
+      assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
+      assert.ok(history.at(-1)!.delta > 0)
+    }
+    assert.deepEqual(snapshot.filterOptions.seasons, ['All', '2025', '2024'])
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }

@@ -4,7 +4,7 @@ import { importOraclesElixirCsv } from '../scripts/rankings/providers/oraclesEli
 import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
 import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { resolveCanonicalSeries } from '../src/domains/rankings/internal/evidence/seriesResolver.ts'
-import { createMatchHistoryArtifacts, createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
+import { createMatchHistoryArtifacts, createStaticRankingData, createTeamHistoryArtifacts, snapshotKey } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
 const oracleCsv = [
   'gameid,date,year,league,split,playoffs,game,patch,position,side,teamname,result,kills,totalgold,gamelength',
@@ -251,4 +251,64 @@ test('official identity inheritance stays within the source series and canonical
   assert.equal(series.find((item) => item.id === 'official-match\u0000115660588583040710')?.games.length, 3)
   assert.ok(series.filter((item) => item.id !== 'official-match\u0000115660588583040710')
     .every((item) => item.games.length === 1 && item.id.startsWith('source-match\u0000')))
+})
+
+function calendarRolloverSource(lastDatetimeUtc = '2026-01-01T00:30:00Z') {
+  return importLeaguepediaSnapshot({ source: 'synthetic calendar rollover fixture', matches: [
+    '2025-12-31T23:30:00Z', lastDatetimeUtc,
+  ].map((datetimeUtc, index) => ({
+    id: `2025 Season World Championship_Bracket_1_${index + 1}`,
+    date: datetimeUtc.slice(0, 10), datetimeUtc, event: '2025 Season World Championship',
+    teamA: 'T1', teamB: 'Gen.G', winner: 'T1', matchBestOf: 3,
+    teamAKills: 20 + index, teamBKills: 10, teamAGold: 60000 + index, teamBGold: 55000,
+  })) })
+}
+
+test('a New Year series retains every game in its start-year season and checkpoint artifacts', () => {
+  const imported = calendarRolloverSource()
+  const original = structuredClone(imported.matches)
+  const merged = mergeCommunityMatchSources({ oracleMatches: [], leaguepediaMatches: imported.matches })
+  const data = createStaticRankingData({ matches: merged, teams: imported.teams, rosters: {}, generatedAt: '2026-01-02T00:00:00Z' })
+  const sameDate = calendarRolloverSource('2025-12-31T23:55:00Z')
+  const baseline = createStaticRankingData({
+    matches: mergeCommunityMatchSources({ oracleMatches: [], leaguepediaMatches: sameDate.matches }),
+    teams: sameDate.teams, rosters: {}, generatedAt: '2026-01-02T00:00:00Z',
+  })
+  const history = createMatchHistoryArtifacts(data)
+  const teamHistory = createTeamHistoryArtifacts(data)
+  const keys = [data.defaultSnapshotKey,
+    snapshotKey({ season: '2025', event: 'All', region: 'All' }),
+    snapshotKey({ season: '2025', event: 'All', region: 'All', checkpoint: 'split-3' }),
+  ]
+  for (const key of keys) {
+    const snapshot = data.snapshots[key]
+    assert.equal(snapshot.matchCount, 2, key)
+    assert.equal(history.index.scopeIndex[key].gameCount, 2, key)
+    const games = Object.values(history.pages[key]).flatMap((page) => page.matches)
+    assert.deepEqual(games.map((game) => game.id).sort(), original.map((game) => game.sourceGameId).sort(), key)
+    assert.equal(new Set(games.map((game) => game.id)).size, 2)
+    const standing = snapshot.standings.find(({ team }) => team === 'T1')!
+    assert.deepEqual(standing.history.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
+    assert.ok(standing.history.at(-1)!.delta > 0)
+    assert.deepEqual(snapshot.standings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+      baseline.snapshots[key].standings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })))
+    assert.deepEqual(teamHistory.shards[key], createTeamHistoryArtifacts(baseline).shards[key])
+  }
+  assert.deepEqual(data.filterOptions.seasons, ['All', '2025'])
+  assert.deepEqual(merged.map(({ date, season }) => ({ date, season })), [
+    { date: '2025-12-31', season: 2025 }, { date: '2025-12-31', season: 2025 },
+  ])
+  assert.deepEqual(merged.map(({ datetimeUtc, sourceGameId, sourceUrl, sourceProvider }) => ({ datetimeUtc, sourceGameId, sourceUrl, sourceProvider })),
+    original.map(({ datetimeUtc, sourceGameId, sourceUrl, sourceProvider }) => ({ datetimeUtc, sourceGameId, sourceUrl, sourceProvider })))
+  assert.deepEqual(imported.matches, original)
+})
+
+test('New Year normalization preserves a provider competition season that was not calendar-aligned', () => {
+  const imported = calendarRolloverSource()
+  for (const season of [2024, 2026]) {
+    const games = imported.matches.map((match) => ({ ...match, sourceProvider: 'oracles-elixir' as const, season }))
+    const merged = mergeCommunityMatchSources({ oracleMatches: games, leaguepediaMatches: [] })
+    assert.deepEqual(merged.map((match) => match.season), [season, season])
+    assert.deepEqual(merged.map((match) => match.date), ['2025-12-31', '2025-12-31'])
+  }
 })
