@@ -1,8 +1,10 @@
 use crate::{Result, now_ms};
+use ranking_contracts::limits::DOCUMENT_LIMIT;
 use reqwest::{Url, blocking::Client};
 use serde_json::{Value, json};
 use std::{
     borrow::Cow,
+    io::{self, Read},
     time::{Duration, Instant},
 };
 
@@ -21,6 +23,7 @@ pub struct Policy {
     pub attempts: u32,
     pub base_delay_ms: u64,
     pub leaguepedia: bool,
+    pub body_limit: u64,
 }
 impl Default for Policy {
     fn default() -> Self {
@@ -28,6 +31,7 @@ impl Default for Policy {
             attempts: 5,
             base_delay_ms: 500,
             leaguepedia: false,
+            body_limit: DOCUMENT_LIMIT,
         }
     }
 }
@@ -132,10 +136,17 @@ impl Http {
                     // Leaguepedia inspects bodies for rate limits. Other providers
                     // classify failures from headers even when a body never arrives.
                     let body = if policy.leaguepedia || (200..=299).contains(&status) {
-                        response.bytes().map(|body| body.to_vec())
+                        read_body(response, policy.body_limit)
                     } else {
                         Ok(Vec::new())
                     };
+                    if let Err(error) = &body
+                        && error.kind() == io::ErrorKind::FileTooLarge
+                    {
+                        self.terminal_failure = true;
+                        self.attempts.push(json!({"attempt":attempt,"startedAtMs":attempt_start,"finishedAtMs":now_ms(),"status":status,"retryable":false,"reason":"body-limit"}));
+                        return Err(error.to_string().into());
+                    }
                     let reason = if policy.leaguepedia
                         && body
                             .as_ref()
@@ -155,7 +166,7 @@ impl Http {
                             self.terminal_failure = true;
                             return Err(format!("HTTP {status} from {url}").into());
                         }
-                        let body = body.map_err(|_| "terminated")?;
+                        let body = body?;
                         return Ok(Response { body, content_type });
                     };
                     last_error = format!("Provider request exhausted retries: {reason}");
@@ -212,6 +223,35 @@ impl Http {
     }
 }
 
+fn read_body(mut response: reqwest::blocking::Response, limit: u64) -> io::Result<Vec<u8>> {
+    let exceeded = || {
+        io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            "Provider response body exceeds byte limit",
+        )
+    };
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit)
+    {
+        return Err(exceeded());
+    }
+    let mut body = Vec::new();
+    let mut buffer = [0; 65_536];
+    loop {
+        let count = response
+            .read(&mut buffer)
+            .map_err(|_| io::Error::other("terminated"))?;
+        if count == 0 {
+            return Ok(body);
+        }
+        if body.len() as u64 + count as u64 > limit {
+            return Err(exceeded());
+        }
+        body.extend_from_slice(&buffer[..count]);
+    }
+}
+
 fn retry_after_ms(value: &str, now: u64) -> Option<u64> {
     let value = value.trim();
     if value.is_empty() {
@@ -243,7 +283,7 @@ mod tests {
     use ranking_contracts::limits::DOCUMENT_LIMIT;
     use std::io::{Read, Write};
 
-    fn serve(headers: &str, body: Vec<u8>) -> (Url, std::thread::JoinHandle<()>) {
+    fn serve(status: u16, headers: &str, body: Vec<u8>) -> (Url, std::thread::JoinHandle<()>) {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let url = Url::parse(&format!(
             "http://{}/fixture",
@@ -267,7 +307,8 @@ mod tests {
                 request.extend_from_slice(&buffer[..count]);
             }
             let _ = stream.write_all(
-                format!("HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}\r\n").as_bytes(),
+                format!("HTTP/1.1 {status} Fixture\r\nConnection: close\r\n{headers}\r\n")
+                    .as_bytes(),
             );
             let _ = stream.write_all(&body);
         });
@@ -299,7 +340,7 @@ mod tests {
                 compressed,
             ),
         ] {
-            let (url, server) = serve(&headers, body);
+            let (url, server) = serve(200, &headers, body);
             let mut http = Http {
                 client: Client::builder().no_proxy().build().unwrap(),
                 ..Http::default()
@@ -316,7 +357,11 @@ mod tests {
     #[test]
     fn provider_http_accepts_the_exact_document_limit() {
         let body = vec![b'x'; DOCUMENT_LIMIT as usize];
-        let (url, server) = serve(&format!("Content-Length: {}\r\n", body.len()), body.clone());
+        let (url, server) = serve(
+            200,
+            &format!("Content-Length: {}\r\n", body.len()),
+            body.clone(),
+        );
         let mut http = Http {
             client: Client::builder().no_proxy().build().unwrap(),
             ..Http::default()
@@ -324,6 +369,68 @@ mod tests {
         let response = http.get(url, &[], &Policy::default()).unwrap();
         server.join().unwrap();
         assert_eq!(response.body, body);
+    }
+
+    #[test]
+    fn oversized_leaguepedia_rate_limit_bodies_do_not_retry() {
+        let (url, server) = serve(429, "", vec![b'x'; 65_537]);
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let policy = Policy {
+            leaguepedia: true,
+            body_limit: 32,
+            base_delay_ms: 0,
+            ..Policy::default()
+        };
+        let result = http.get(url, &[], &policy);
+        server.join().unwrap();
+        let error = result
+            .err()
+            .expect("oversized rate limit body was accepted");
+        assert!(error.to_string().contains("limit"), "{error}");
+        assert_eq!(http.requests, 1);
+        assert!(http.retries.is_empty());
+        assert!(http.terminal_failure);
+    }
+
+    #[test]
+    fn oracle_csv_downloads_can_exceed_the_document_limit() {
+        let mut body = b"gameid,date\n".to_vec();
+        body.resize(DOCUMENT_LIMIT as usize + 1, b'x');
+        let size = body.len() as u64;
+        let (url, server) = serve(200, &format!("Content-Length: {size}\r\n"), body);
+        let directory = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!(
+                "oracle-body-{}-{}",
+                std::process::id(),
+                crate::now_ms()
+            ));
+        let options = crate::Options::parse(&["--oracle-csv-url".into(), url.into()]);
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let outcome = crate::oracle::download(
+            &mut http,
+            &options,
+            &directory,
+            "2026-01-01",
+            "2026-12-31",
+            &mut Vec::new(),
+        )
+        .unwrap();
+        server.join().unwrap();
+        let length = std::fs::metadata(directory.join("oracles-elixir-1.csv"))
+            .unwrap()
+            .len();
+        std::fs::remove_dir_all(directory).unwrap();
+        assert!(outcome.failures.is_empty());
+        assert_eq!(outcome.files.len(), 1);
+        assert_eq!(length, size);
     }
 
     #[test]

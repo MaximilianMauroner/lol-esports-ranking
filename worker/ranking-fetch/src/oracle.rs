@@ -134,7 +134,10 @@ pub fn download(
             let response = http.get(
                 Url::parse(url)?,
                 &[("user-agent", options.text_or("userAgent", USER_AGENT))],
-                &Policy::default(),
+                &Policy {
+                    body_limit: ranking_contracts::limits::SEMANTIC_LIMIT,
+                    ..Policy::default()
+                },
             )?;
             let prefix = String::from_utf8_lossy(&response.body[..response.body.len().min(256)]);
             let prefix = prefix.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');

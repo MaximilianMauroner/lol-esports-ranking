@@ -1,7 +1,8 @@
+use ranking_contracts::limits::STORED_LIMIT;
 use ranking_contracts::{Result, sha256};
 use reqwest::{Method, Url, blocking::Client};
 use ring::hmac;
-use std::{collections::BTreeMap, env, time::Duration};
+use std::{collections::BTreeMap, env, io::Read, time::Duration};
 
 pub struct Bucket {
     client: Client,
@@ -146,12 +147,13 @@ impl Bucket {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         headers.insert("authorization".into(), format!("AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed}, Signature={signature}", self.access));
+        let head = method == Method::HEAD;
         let mut request = self.client.request(method, url).body(body);
         for (key, value) in headers {
             request = request.header(key, value);
         }
         // Never emit reqwest's URL-bearing error: signed requests and credentials stay private.
-        let response = request.send().map_err(|_| "S3 transport request failed")?;
+        let mut response = request.send().map_err(|_| "S3 transport request failed")?;
         let status = response.status().as_u16();
         let headers = response
             .headers()
@@ -164,10 +166,27 @@ impl Bucket {
             })
             .collect::<BTreeMap<_, _>>();
         let etag = headers.get("etag").cloned().unwrap_or_default();
-        let body = response
-            .bytes()
-            .map_err(|_| "S3 response body failed")?
-            .to_vec();
+        if !head
+            && response
+                .content_length()
+                .is_some_and(|length| length > STORED_LIMIT)
+        {
+            return Err("S3 stored object exceeds byte limit".into());
+        }
+        let mut body = Vec::new();
+        let mut buffer = [0; 65_536];
+        loop {
+            let count = response
+                .read(&mut buffer)
+                .map_err(|_| "S3 response body failed")?;
+            if count == 0 {
+                break;
+            }
+            if body.len() as u64 + count as u64 > STORED_LIMIT {
+                return Err("S3 stored object exceeds byte limit".into());
+            }
+            body.extend_from_slice(&buffer[..count]);
+        }
         Ok(Object {
             status,
             etag,
@@ -306,6 +325,21 @@ mod tests {
             .unwrap();
         server.join().unwrap();
         assert_eq!(response.body, body);
+    }
+
+    #[test]
+    fn s3_head_preserves_lengths_larger_than_the_body_limit() {
+        let size = STORED_LIMIT + 1;
+        let (bucket, server) = serve(&format!("Content-Length: {size}\r\n"), Vec::new());
+        let response = bucket
+            .request(Method::HEAD, "objects/fixture", BTreeMap::new(), vec![])
+            .unwrap();
+        server.join().unwrap();
+        assert!(response.body.is_empty());
+        assert_eq!(
+            response.headers.get("content-length"),
+            Some(&size.to_string())
+        );
     }
 
     #[test]
