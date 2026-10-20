@@ -277,3 +277,67 @@ test('Node enforces native process deadlines, byte limits, truncated output and 
     await assert.rejects(readBounded(oversized, 16), /byte limit/)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
+test('fake transport splits small inputs when complete-date responses exceed 64 MiB together', async () => {
+  const root = await temporary()
+  try {
+    const original = observe(variedGames()).captures.slice(1, 3)
+    const request = encodeSeriesPassRequest(original.map((capture) => capture.frame))
+    assert(request.length < 16 << 10)
+    const template = join(root, 'template.json')
+    await writeFile(template, JSON.stringify(responseFor(original, request)))
+    const padding = 'é'.repeat(17 << 20)
+    const captures = original.map((capture) => ({ ...capture, expected: { ...capture.expected,
+      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: padding } : team),
+    } }))
+    const executable = join(root, 'response.cjs')
+    await writeFile(executable, `#!${process.execPath}
+const fs = require('node:fs')
+const crypto = require('node:crypto')
+const request = fs.readFileSync(process.argv[3])
+const input = JSON.parse(request)
+const response = JSON.parse(fs.readFileSync(${JSON.stringify(template)}, 'utf8'))
+response.requestSha256 = crypto.createHash('sha256').update(request).digest('hex')
+response.dates = input.dates.map(frame => response.dates.find(date => date.utcDate === frame.utcDate))
+for (const date of response.dates) date.teams[0].lastPatch = 'é'.repeat(17 << 20)
+const bytes = JSON.stringify(response)
+if (Buffer.byteLength(bytes) > ${MAX_BATCH_BYTES}) {
+  process.stderr.write('series-pass: response exceeds 64 MiB')
+  process.exit(1)
+}
+fs.writeFileSync(process.argv[4], bytes)
+`, { mode: 0o755 })
+    const result = await runSeriesPassShadow({ captures, binaryPath: executable, outputDir: join(root, 'split') })
+    assert.equal(result.batches.length, 2)
+    const counts = compareSeriesPassResponse(responseFor(captures, request), captures, request)
+    for (const key of Object.keys(counts) as (keyof typeof counts)[]) assert.equal(result[key], counts[key], key)
+    for (const [index, batch] of result.batches.entries()) {
+      const input = await readFile(batch.inputPath)
+      assert.deepEqual(input, encodeSeriesPassRequest([captures[index].frame]))
+      assert.equal(batch.requestSha256, sha256(input))
+      const output = await readFile(batch.outputPath)
+      assert(output.length <= MAX_BATCH_BYTES)
+      assert.equal(batch.responseSha256, sha256(output))
+      assert.deepEqual(JSON.parse(output.toString()).dates, responseFor([captures[index]], input).dates)
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test('an oversized complete-date response fails with its date and limit before spawn', async () => {
+  const root = await temporary()
+  try {
+    const captures = observe([game('oversized-response')]).captures.map((capture) => ({ ...capture, expected: { ...capture.expected,
+      teams: capture.expected.teams.map((team, index) => index === 0 ? { ...team, lastPatch: 'é'.repeat(33 << 20) } : team),
+    } }))
+    const marker = join(root, 'spawned')
+    const executable = join(root, 'must-not-spawn.cjs')
+    await writeFile(executable, `#!${process.execPath}
+require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'spawned')
+process.exit(2)
+`, { mode: 0o755 })
+    await assert.rejects(runSeriesPassShadow({ captures, binaryPath: executable, outputDir: join(root, 'oversized') }),
+      /2026-01-01.*response.*64 MiB/)
+    await assert.rejects(readFile(marker), { code: 'ENOENT' })
+    await assert.rejects(readFile(join(root, 'oversized', 'batch-0', 'request.json')), { code: 'ENOENT' })
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
