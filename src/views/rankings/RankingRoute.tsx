@@ -118,6 +118,16 @@ export function RankingRoute() {
     selectScope(nextScope)
   }
 
+  function selectMatchYearFromControl(nextYear: string) {
+    if (nextYear === (selectedMatchYear ?? 'All')) return
+    const query = currentHashQuery()
+    if (nextYear === 'All') query.delete('matchesYear')
+    else query.set('matchesYear', nextYear)
+    query.delete('page')
+    writeNavigationHash(`#matches?${query.toString()}`, 'replace')
+    setMatchYear(nextYear)
+  }
+
   const searchRef = useRef<HTMLInputElement | null>(null)
   const searchTeams = useCallback((value: string) => {
     setTeamSearch(value)
@@ -465,7 +475,7 @@ export function RankingRoute() {
                 </>
               ) : null}
               {mode === 'matches' ? (
-                <MatchesView hashQuery={matchesHashQuery} archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
+                <MatchesView hashQuery={matchesHashQuery} archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={selectMatchYearFromControl} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
               ) : null}
             </Suspense>
           </RouteErrorBoundary>
