@@ -155,7 +155,7 @@ export function assertArtifactDependencyPlanMatchesSemanticChanges(
 function matchTouchesScope(match: MatchRecord, scope: ArtifactScopeDependency, kind?: RankingChangeKind) {
   const filter = scope.filter
   const scopeSeason = filter.season === 'All' ? undefined : Number(filter.season)
-  if (kind === 'historical-correction' && scopeSeason !== undefined && Number.isFinite(scopeSeason)) {
+  if ((kind === 'historical-correction' || kind === 'same-day-insertion') && scopeSeason !== undefined && Number.isFinite(scopeSeason)) {
     if (scopeSeason > match.season) return true
     if (scopeSeason === match.season && filter.checkpoint && scope.checkpointEndUtcDate && match.date <= scope.checkpointEndUtcDate) return true
   }

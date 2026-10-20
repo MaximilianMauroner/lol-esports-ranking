@@ -495,8 +495,10 @@ test('a late New Year game restores complete season artifacts from a checkpoint'
   }
 })
 
-for (const laterDays of [[2], [2, 3]]) {
-  test(`a late New Year game refreshes published 2026 ratings and history with ${laterDays.length} later games`, async () => {
+for (const { laterDays, demacia } of [
+  { laterDays: [2], demacia: false }, { laterDays: [2, 3], demacia: false }, { laterDays: [2, 3], demacia: true },
+]) {
+  test(`a late New Year game refreshes published 2026 ratings and history with ${laterDays.length} later game${laterDays.length === 1 ? '' : 's'}${demacia ? ' and Demacia lead-in' : ''}`, async () => {
     const root = await mkdtemp(join(tmpdir(), 'incremental-new-year-dependent-'))
     try {
       const scenario = crossMidnightReviewCases().find(({ name }) => name === 'new-year')!
@@ -507,6 +509,9 @@ for (const laterDays of [[2], [2, 3]]) {
       }))
       const source = (sources: typeof scenario.complete) => fixtureSource(mergeCommunityMatchSources({
         ...structuredClone(sources), oracleMatches: [...earlier, ...sources.oracleMatches, ...later],
+        leaguepediaMatches: sources.leaguepediaMatches.map((game) => ({
+          ...game, ...(demacia ? { event: 'Demacia Cup 2025' } : {}),
+        })),
       }))
       const baseline = await run(root, 'baseline', source(scenario.partial), { mode: 'gated', cause: 'daily-audit', enabled: true })
       const restored = restoreFrom(baseline)
@@ -517,7 +522,7 @@ for (const laterDays of [[2], [2, 3]]) {
       assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
       assert.equal(incremental.metrics.classification, 'same-day-insertion')
       assert.equal(incremental.metrics.selectedBoundary, '2025-12-30')
-      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || !baseline.build) {
+      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || baseline.action !== 'publish-full') {
         throw new Error('baseline, incremental patch, and full publication required')
       }
       const published = join(root, 'published')
@@ -573,7 +578,7 @@ test('an April same-day insertion refreshes later scopes while retaining earlier
       })
       assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
       assert.equal(incremental.metrics.classification, scenario.kind)
-      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || !baseline.build) {
+      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || baseline.action !== 'publish-full') {
         throw new Error('baseline, incremental patch, and full publication required')
       }
       const published = join(root, `${scenario.name}-published`)
@@ -584,7 +589,7 @@ test('an April same-day insertion refreshes later scopes while retaining earlier
       const earlier = paths.filter((path) => /season-2024|2024__All|split-1/.test(path))
       assert.ok(earlier.length > 0)
       for (const path of earlier) assert.ok(incremental.metrics.reusedPaths.includes(path), `retained ${path}`)
-      const movementPath = paths.find((path) => path.includes('/tournament-moves/') && path.includes('fst'))!
+      const movementPath = paths.find((path) => path.includes('/tournament-moves/') && path.includes('first-stand'))!
       assert.ok(movementPath, 'synthetic First Stand movement is published')
       assert.ok(incremental.metrics.reusedPaths.includes(movementPath))
       const unchanged = await run(root, `${scenario.name}-unchanged`, fixtureSource(structuredClone(complete)), {
@@ -1072,7 +1077,7 @@ async function assertPublishedArtifactBytes(
 ) {
   if (baseline.action !== 'publish-full') throw new Error('full baseline required')
   for (const build of [baseline.build, full.build]) {
-    const edges = new Map(build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, artifactReferences(write.value)]))
+    const edges = new Map(build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, artifactReferences(write.value as Record<string, unknown>)]))
     assertReferenceClosure(edges, new Set(edges.keys()))
   }
   assert.deepEqual(incremental.patch.expectedLogicalPaths.toSorted(), full.build.publicPlan.writes.map((write) => `/data/${write.relativePath}`).sort())
