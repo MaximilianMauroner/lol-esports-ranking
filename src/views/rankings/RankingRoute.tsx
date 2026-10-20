@@ -12,6 +12,7 @@ import {
   usePublicArtifacts,
 } from '../../browser/rankings/usePublicArtifacts'
 import { RegionBadge } from '../../components/ui'
+import { RouteErrorBoundary } from '../../components/RouteErrorBoundary'
 import { Alert } from '../../components/ui/alert'
 import { LoadingState } from '../../components/ui/loading'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from '../../data/legal'
@@ -407,65 +408,67 @@ export function RankingRoute() {
         {snapshotState.status !== 'ready' ? (
           <ScopedSnapshotState state={snapshotState} scope={scopeLabel(effectiveScope)} layout={PAGE_LAYOUTS[mode]} />
         ) : (
-          <Suspense fallback={<LoadingState presentation="page" layout={PAGE_LAYOUTS[mode]} label={`Loading ${MODE_TITLES[mode].title}`} />}>
-            {mode === 'regions' ? (
-              <RegionsView
-                regions={regions}
-                standings={standings}
-                regionHistory={activeRegionHistory}
-                matchHistoryState={matchHistoryState}
-                onRequestMatchHistoryPages={requestMatchHistoryPages}
-                pickedIds={regionPickIds}
-                onToggle={toggleRegion}
-                onRequestRegionHistory={requestRegionHistory}
-              />
-            ) : null}
-            {mode === 'rankings' ? (
-              <>
-                <TeamsView
-                  universe={universe}
+          <RouteErrorBoundary key={mode}>
+            <Suspense fallback={<LoadingState presentation="page" layout={PAGE_LAYOUTS[mode]} label={`Loading ${MODE_TITLES[mode].title}`} />}>
+              {mode === 'regions' ? (
+                <RegionsView
                   regions={regions}
-                  model={loadedData.model}
-                  players={activePlayers}
-                  currentLineups={activePlayerScope.currentLineups}
-                  playerLoadState={playerLoadState}
-                  playerScopeLabel={activePlayerScope.label}
-                  search={teamSearch}
-                  onSearchChange={setTeamSearch}
-                  pickedTeams={activeTeamPicks}
-                  historyState={teamHistoryState}
-                  requestedTournamentFilter={tournamentFilter}
-                  tournamentMovementIndexState={tournamentMovementIndexState}
-                  tournamentMovementState={tournamentMovementState}
-                  onRetryTournamentMovements={retryTournamentMovements}
-                  regionsHref={hashForModeAndScope('regions', effectiveScope)}
-                  hashQuery={boardHashQuery}
-                  dataSummary={{
-                    source: loadedData.source,
-                    sources: loadedData.sources,
-                    scopeLabel: scopeLabel(effectiveScope),
-                    matchCount,
-                    coverageStart: loadedData.coverage?.coverageStart,
-                    coverageEnd: loadedData.coverage?.coverageEnd,
-                    latestMatchDate: loadedData.coverage?.latestMatchDate,
-                    movementBaseline: movementBaseline.label,
-                    rollingWindow: snapshot?.rollingWindow,
-                    seeded,
-                    sourceBreakdown: snapshot?.sourceBreakdown ?? [],
-                    rosterCoverage: loadedData.dataQuality?.rosterCoverage,
-                  }}
-                  onToggle={toggleTeam}
-                  onRequestPlayers={requestPlayers}
-                  onRequestTeamHistory={drawerOpen ? undefined : requestTeamHistory}
-                  onTournamentFilterChange={setTournamentFilter}
-                  onPrefetchTournament={prefetchTournament}
+                  standings={standings}
+                  regionHistory={activeRegionHistory}
+                  matchHistoryState={matchHistoryState}
+                  onRequestMatchHistoryPages={requestMatchHistoryPages}
+                  pickedIds={regionPickIds}
+                  onToggle={toggleRegion}
+                  onRequestRegionHistory={requestRegionHistory}
                 />
-              </>
-            ) : null}
-            {mode === 'matches' ? (
-              <MatchesView hashQuery={matchesHashQuery} archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
-            ) : null}
-          </Suspense>
+              ) : null}
+              {mode === 'rankings' ? (
+                <>
+                  <TeamsView
+                    universe={universe}
+                    regions={regions}
+                    model={loadedData.model}
+                    players={activePlayers}
+                    currentLineups={activePlayerScope.currentLineups}
+                    playerLoadState={playerLoadState}
+                    playerScopeLabel={activePlayerScope.label}
+                    search={teamSearch}
+                    onSearchChange={setTeamSearch}
+                    pickedTeams={activeTeamPicks}
+                    historyState={teamHistoryState}
+                    requestedTournamentFilter={tournamentFilter}
+                    tournamentMovementIndexState={tournamentMovementIndexState}
+                    tournamentMovementState={tournamentMovementState}
+                    onRetryTournamentMovements={retryTournamentMovements}
+                    regionsHref={hashForModeAndScope('regions', effectiveScope)}
+                    hashQuery={boardHashQuery}
+                    dataSummary={{
+                      source: loadedData.source,
+                      sources: loadedData.sources,
+                      scopeLabel: scopeLabel(effectiveScope),
+                      matchCount,
+                      coverageStart: loadedData.coverage?.coverageStart,
+                      coverageEnd: loadedData.coverage?.coverageEnd,
+                      latestMatchDate: loadedData.coverage?.latestMatchDate,
+                      movementBaseline: movementBaseline.label,
+                      rollingWindow: snapshot?.rollingWindow,
+                      seeded,
+                      sourceBreakdown: snapshot?.sourceBreakdown ?? [],
+                      rosterCoverage: loadedData.dataQuality?.rosterCoverage,
+                    }}
+                    onToggle={toggleTeam}
+                    onRequestPlayers={requestPlayers}
+                    onRequestTeamHistory={drawerOpen ? undefined : requestTeamHistory}
+                    onTournamentFilterChange={setTournamentFilter}
+                    onPrefetchTournament={prefetchTournament}
+                  />
+                </>
+              ) : null}
+              {mode === 'matches' ? (
+                <MatchesView hashQuery={matchesHashQuery} archiveYears={matchHistoryYears} archiveYear={selectedMatchYear} onYearChange={setMatchYear} searchRef={searchRef} state={matchHistoryState} onRequestPages={requestMatchHistoryPages} />
+              ) : null}
+            </Suspense>
+          </RouteErrorBoundary>
         )}
         <footer aria-label="Project disclaimer" className="mx-[var(--page-x)] mt-7 flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-4 text-xs leading-[1.55] text-[var(--faint)] [&>a]:inline-flex [&>a]:min-h-6 [&>a]:min-w-6 [&>a]:items-center">
           <span>{RIOT_PROJECT_NOTICE}</span>

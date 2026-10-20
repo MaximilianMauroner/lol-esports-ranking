@@ -71,6 +71,7 @@ export function MatchesView({ hashQuery, state, onRequestPages, searchRef, archi
   const page = catalog ? Math.min(requestedPage, pageCount) : view.page
   // Bind an addressed page only once its catalog is available. Later scope or
   // year changes reset it, and a smaller catalog permanently clamps it.
+  // The query guard preserves the address update queued above in this render.
   if (catalog && hashQuery === appliedQuery && (view.scopeKey !== scopeKey || view.page !== page)) setView({ ...view, scopeKey, page })
   const pageStart = (page - 1) * view.pageSize
   const visibleRefs = filtered.slice(pageStart, pageStart + view.pageSize)
@@ -239,7 +240,7 @@ export function MatchesView({ hashQuery, state, onRequestPages, searchRef, archi
             {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
               <Alert className="m-4 w-auto">
                 {pageFailure.message}
-                <Button type="button" variant="outline" className="mt-2 w-fit" onClick={() => onRequestPages(neededPages)}>Retry</Button>
+                {pageFailure.status === 'error' ? <Button type="button" variant="outline" className="mt-2 w-fit" onClick={() => onRequestPages(neededPages)}>Retry</Button> : null}
               </Alert>
             ) : null}
           </>

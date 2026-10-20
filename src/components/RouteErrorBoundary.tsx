@@ -12,15 +12,15 @@ export class RouteErrorBoundary extends Component<{ children: ReactNode }, { fai
   render() {
     if (!this.state.failed) return this.props.children
     return (
-      <main className="mx-auto w-full max-w-xl px-4 py-12">
+      <section className="mx-auto w-full max-w-xl px-4 py-12">
         <Alert variant="destructive">
           <AlertTitle>This page could not load</AlertTitle>
           <AlertDescription>
-            <p>Check your connection and reload the page to try again.</p>
+            <p>Reload the page to try again.</p>
             <Button type="button" variant="outline" onClick={() => window.location.reload()}>Reload page</Button>
           </AlertDescription>
         </Alert>
-      </main>
+      </section>
     )
   }
 }

@@ -151,7 +151,7 @@ export function RegionsView({
                     <span className="hidden max-[1180px]:block">{formatSignedDecimal(region.winsOverExpected)} wins vs expected</span>
                   </span>
                   <span className="grid min-w-0 gap-0.5 text-sm text-muted-foreground tabular-nums [&_b]:font-semibold [&_b]:text-foreground [&_small]:block [&_small]:leading-[1.25] [&_small]:text-[var(--faint)] max-[1180px]:hidden">
-                    <span className="block" title={`Bo2 ties count as half a win. Exact record ${formatRecord(region.internationalWins, region.internationalLosses)}.`}>
+                    <span className="block">
                       International record <span className="whitespace-nowrap"><b>{formatRecord(region.internationalWins, region.internationalLosses)}</b> · {formatRatio(region.internationalWinRate)}</span>
                     </span>
                     <small title={`Average opponent power ${formatRating(region.averageOpponentRating)}`}>
@@ -510,7 +510,14 @@ function RegionMatchRow({
   const teamBIsRegional = teamNames.has(summary.teamB.name)
   const regionalClash = teamAIsRegional && teamBIsRegional
   const winner = seriesWinner(summary)
-  const regionWon = winner === (teamAIsRegional ? 'A' : 'B')
+  const outcome: 'clash' | 'draw' | 'win' | 'loss' = regionalClash ? 'clash' : winner === undefined ? 'draw' : winner === (teamAIsRegional ? 'A' : 'B') ? 'win' : 'loss'
+  const outcomeClass = {
+    clash: 'bg-[var(--surface-3)] text-muted-foreground',
+    draw: 'bg-[var(--surface-3)] text-muted-foreground',
+    win: 'bg-[var(--win-soft)] text-[var(--win)]',
+    loss: 'bg-[var(--loss-soft)] text-[var(--loss)]',
+  }[outcome]
+  const outcomeLabel = { clash: 'Regional matchup', draw: 'Region draw', win: 'Region win', loss: 'Region loss' }[outcome]
   const impactParts = [
     teamAIsRegional && typeof summary.impact.teamA === 'number' ? `${summary.teamA.code} ${formatSigned(summary.impact.teamA)}` : undefined,
     teamBIsRegional && typeof summary.impact.teamB === 'number' ? `${summary.teamB.code} ${formatSigned(summary.impact.teamB)}` : undefined,
@@ -543,9 +550,9 @@ function RegionMatchRow({
       <div>
         <span className={cn(
           'inline-flex items-center rounded-full px-2 py-1 text-2xs font-bold',
-          regionalClash || winner === undefined ? 'bg-[var(--surface-3)] text-muted-foreground' : regionWon ? 'bg-[var(--win-soft)] text-[var(--win)]' : 'bg-[var(--loss-soft)] text-[var(--loss)]',
+          outcomeClass,
         )}>
-          {regionalClash ? 'Regional matchup' : winner === undefined ? 'Region draw' : regionWon ? 'Region win' : 'Region loss'}
+          {outcomeLabel}
         </span>
         <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
           {impactParts.length > 0 ? `Team Power ${impactParts.join(' · ')}` : '—'}
