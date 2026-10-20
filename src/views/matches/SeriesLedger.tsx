@@ -31,7 +31,7 @@ type TeamResult = 'won' | 'lost' | 'level'
 const DELTA_BAR_WIDTH = 36
 const MISSING_NOTE = 'Power changes for this series do not reconcile.'
 
-/** Series ledger for tablet and desktop widths. The Source column drops below 1100px. */
+/** Series ledger for tablet and desktop widths. */
 export function SeriesTable({ series, expanded, onToggle, publication }: SeriesListProps) {
   return (
     <Table className="table-fixed" containerClassName="hidden border-t border-border md:block">
@@ -40,7 +40,6 @@ export function SeriesTable({ series, expanded, onToggle, publication }: SeriesL
           <TableHead className="w-40 pl-4 lg:w-52 xl:w-56">Date</TableHead>
           <TableHead className="text-center">Result</TableHead>
           <TableHead className="w-48 lg:w-64 xl:w-72">Rating change</TableHead>
-          <TableHead className="hidden w-32 min-[1100px]:table-cell">Source</TableHead>
           <TableHead className="w-14"><span className="sr-only">Games</span></TableHead>
         </TableRow>
       </TableHeader>
@@ -95,9 +94,6 @@ function SeriesTableRows({ series, expanded, onToggle, publication }: { series: 
             </div>
           ) : <RatingChangeNote change={change} match={match} publication={publication} />}
         </TableCell>
-        <TableCell className="hidden min-[1100px]:table-cell">
-          <Badge variant="secondary" className="max-w-full text-[var(--faint)]">{providerLabel(match.source.provider)}</Badge>
-        </TableCell>
         <TableCell className="pr-3 text-right">
           {expandable ? <ExpandButton expanded={expanded} onToggle={onToggle} match={match} /> : null}
         </TableCell>
@@ -132,9 +128,6 @@ function GameTableRow({ game }: { game: PublicMatchHistoryEntry }) {
         </div>
       </TableCell>
       <TableCell />
-      <TableCell className="hidden min-[1100px]:table-cell">
-        <Badge variant="secondary" className="max-w-full text-[var(--faint)]">{providerLabel(game.source.provider)}</Badge>
-      </TableCell>
       <TableCell />
     </TableRow>
   )
@@ -192,7 +185,7 @@ function SeriesCard({ series, expanded, onToggle, publication }: { series: Match
               {change.upset ? <UpsetTag change={change} match={match} /> : null}
             </div>
           ) : <RatingChangeNote change={change} match={match} publication={publication} />}
-          <span className="text-2xs text-[var(--faint)]">{seriesContext(series)} · {providerLabel(match.source.provider)}</span>
+          <span className="text-2xs text-[var(--faint)]">{seriesContext(series)}</span>
         </div>
       </div>
       {expanded ? (
@@ -362,8 +355,4 @@ function seriesContext(series: MatchSeries) {
   const match = series.summary
   const games = `${series.games.length} ${series.games.length === 1 ? 'game' : 'games'}`
   return [`Bo${match.bestOf}`, games, match.patch ? `Patch ${match.patch}` : 'Patch unknown'].join(' · ')
-}
-
-function providerLabel(provider: PublicMatchHistoryEntry['source']['provider']) {
-  return provider === 'oracles-elixir' ? "Oracle's Elixir" : provider === 'leaguepedia-cargo' ? 'Leaguepedia' : 'Seed'
 }

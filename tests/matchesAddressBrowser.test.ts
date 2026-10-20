@@ -239,12 +239,12 @@ test('Matches event choices and addressed pages survive catalog loading and real
       assert.ok(options.some((option) => option.value === 'Unknown Invitational 2025' && option.label === option.value))
       assert.equal(new Set(options.map((option) => option.label)).size, options.length)
       await event.selectOption('Demacia Cup 2025')
-      await rows.first().getByText('Leaguepedia', { exact: true }).waitFor()
+      await rows.first().getByText('Demacia Cup 2025', { exact: true }).waitFor()
       assert.equal(await rows.count(), 1)
       await pager.getByText('1–1 of 1', { exact: true }).waitFor()
       await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('event') === 'Demacia Cup 2025')
       await event.selectOption('DCup 2025')
-      await rows.nth(24).getByText("Oracle's Elixir", { exact: true }).waitFor()
+      await rows.nth(24).getByText('Demacia Cup 2025', { exact: true }).waitFor()
       await pager.getByText('1–25 of 27', { exact: true }).waitFor()
       for (const width of [390, 320]) {
         await page.setViewportSize({ width, height: 844 })
@@ -253,7 +253,7 @@ test('Matches event choices and addressed pages survive catalog loading and real
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `no overflow at ${width}px`)
         await event.selectOption('Demacia Cup 2025')
         await pager.getByText('1–1 of 1', { exact: true }).waitFor()
-        await page.getByLabel('Match history results').getByText(/Leaguepedia/).filter({ visible: true }).first().waitFor()
+        await page.getByLabel('Match history results').getByText('Demacia Cup 2025', { exact: true }).filter({ visible: true }).first().waitFor()
         await event.selectOption('DCup 2025')
         await pager.getByText('1–25 of 27', { exact: true }).waitFor()
       }
