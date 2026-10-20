@@ -10,7 +10,9 @@ import {
 import { calculateSeriesResultUpdate } from '../src/domains/rankings/internal/replay/seriesResultUpdate.ts'
 import { createRatingRunState } from '../src/domains/rankings/internal/replay/ratingRunState.ts'
 import { resolveCanonicalSeries } from '../src/domains/rankings/evidence.ts'
+import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../src/domains/rankings/types.ts'
+import { crossMidnightReviewCases, crossMidnightTeams } from './fixtures/crossMidnightReviewCases.ts'
 import {
   compareSeriesResultResponse, encodeSeriesResultRequest, MAX_BATCH_BYTES, numberBits, readBounded, runSeriesResultShadow, sha256,
 } from '../tools/audit/series-result-shadow.ts'
@@ -150,45 +152,91 @@ test('native CLI calculates all 24 fields exactly against actual TypeScript synt
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
-test('native CLI preserves real replay parity for a series crossing UTC midnight', { skip: !binary }, async () => {
-  const teams: Record<string, TeamProfile> = Object.fromEntries(['Alpha', 'Beta'].map((name) => [name, { name, code: name, league: 'LCK', region: 'LCK' }]))
-  const matches: MatchRecord[] = ['2026-01-01T23:50:00Z', '2026-01-02T00:30:00Z'].map((datetimeUtc, index) => ({
-    id: `series_game_${index + 1}`, sourceGameId: `series_game_${index + 1}`,
-    sourceProvider: 'oracles-elixir', dataCompleteness: 'scoreboard-game-stats',
-    date: datetimeUtc.slice(0, 10), datetimeUtc, season: 2026,
-    event: 'LCK 2026 Spring', phase: 'Regular season', region: 'LCK', league: 'LCK', patch: '26.1', bestOf: 3,
-    tier: 'regional-regular', teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', teamAKills: 20, teamBKills: 12,
-    teamAGold: 65000, teamBGold: 59000,
-  }))
-  const baselineContext = createRatingReplayContext(structuredClone(matches), structuredClone(teams))
-  const baseline = replayRatingDates({ context: baselineContext, replayMatches: baselineContext.authoritativeMatches })
-  const context = createRatingReplayContext(structuredClone(matches), structuredClone(teams))
-  const state = createRatingRunState(context.authoritativeMatches, context.teams, context.eventWeightContext, context.tournamentLifecycles)
-  const captured: SeriesResultDateBatch[] = []
-  replayRatingDates({ context, state, replayMatches: context.authoritativeMatches, onSeriesResultDate: (date) => {
-    assert.equal(state.processedThroughUtcDate, date.utcDate)
-    assert.deepEqual(date.authoritativeMatchIds, state.processedThroughUtcDateMatchIds)
-    captured.push(date)
-  } })
-  const seriesId = 'source-game-series\u0000oracles-elixir\u0000series'
-  assert.deepEqual(captured.map((date) => ({
-    utcDate: date.utcDate, authoritativeMatchIds: date.authoritativeMatchIds,
-    series: date.series.map(({ seriesId, matchIds }) => ({ seriesId, matchIds })),
-  })), [
-    { utcDate: '2026-01-01', authoritativeMatchIds: ['series_game_1'], series: [{ seriesId, matchIds: ['series_game_1'] }] },
-    { utcDate: '2026-01-02', authoritativeMatchIds: ['series_game_2'], series: [{ seriesId, matchIds: ['series_game_2'] }] },
-  ])
-  const root = await temporary()
-  try {
-    const result = await runSeriesResultShadow({ dates: captured, binaryPath: binary!, outputDir: join(root, 'midnight') })
-    assert.equal(result.dates, 2)
-    assert.equal(result.series, 2)
-    assert.equal(result.fieldsCompared, 48)
-    assert.equal(result.mismatches, 0)
-    assert.deepStrictEqual(state, baseline)
-    assert.deepStrictEqual(materializeRankingModel({ context, state }), materializeRankingModel({ context: baselineContext, state: baseline }))
-  } finally { await rm(root, { recursive: true, force: true }) }
-})
+for (const merged of [false, true]) {
+  test(`native CLI preserves real replay parity for ${merged ? 'a merged' : 'an unmerged'} series crossing UTC midnight`, { skip: !binary }, async () => {
+    const teams: Record<string, TeamProfile> = Object.fromEntries(['Alpha', 'Beta'].map((name) => [name, { name, code: name, league: 'LCK', region: 'LCK' }]))
+    const matches: MatchRecord[] = ['2026-01-01T23:50:00Z', '2026-01-02T00:30:00Z'].map((datetimeUtc, index) => ({
+      id: `series_game_${index + 1}`, sourceGameId: `series_game_${index + 1}`,
+      sourceProvider: 'oracles-elixir', dataCompleteness: 'scoreboard-game-stats',
+      date: datetimeUtc.slice(0, 10), datetimeUtc, season: 2026,
+      event: 'LCK 2026 Spring', phase: 'Regular season', region: 'LCK', league: 'LCK', patch: '26.1', bestOf: 3,
+      tier: 'regional-regular', teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', teamAKills: 20, teamBKills: 12,
+      teamAGold: 65000, teamBGold: 59000,
+    }))
+    const replayMatches = merged ? mergeCommunityMatchSources({ oracleMatches: matches, leaguepediaMatches: [] }) : matches
+    const baselineContext = createRatingReplayContext(structuredClone(replayMatches), structuredClone(teams))
+    const baseline = replayRatingDates({ context: baselineContext, replayMatches: baselineContext.authoritativeMatches })
+    const context = createRatingReplayContext(structuredClone(replayMatches), structuredClone(teams))
+    const state = createRatingRunState(context.authoritativeMatches, context.teams, context.eventWeightContext, context.tournamentLifecycles)
+    const captured: SeriesResultDateBatch[] = []
+    replayRatingDates({ context, state, replayMatches: context.authoritativeMatches, onSeriesResultDate: (date) => {
+      assert.equal(state.processedThroughUtcDate, date.utcDate)
+      assert.deepEqual(date.authoritativeMatchIds, state.processedThroughUtcDateMatchIds)
+      captured.push(date)
+    } })
+    const seriesId = 'source-game-series\u0000oracles-elixir\u0000series'
+    assert.deepEqual(captured.map((date) => ({
+      utcDate: date.utcDate, authoritativeMatchIds: date.authoritativeMatchIds,
+      series: date.series.map(({ seriesId, matchIds }) => ({ seriesId, matchIds })),
+    })), merged ? [
+      { utcDate: '2026-01-01', authoritativeMatchIds: ['series_game_1', 'series_game_2'], series: [{ seriesId, matchIds: ['series_game_1', 'series_game_2'] }] },
+    ] : [
+      { utcDate: '2026-01-01', authoritativeMatchIds: ['series_game_1'], series: [{ seriesId, matchIds: ['series_game_1'] }] },
+      { utcDate: '2026-01-02', authoritativeMatchIds: ['series_game_2'], series: [{ seriesId, matchIds: ['series_game_2'] }] },
+    ])
+    const root = await temporary()
+    try {
+      const result = await runSeriesResultShadow({ dates: captured, binaryPath: binary!, outputDir: join(root, 'midnight') })
+      assert.equal(result.dates, merged ? 1 : 2)
+      assert.equal(result.series, merged ? 1 : 2)
+      assert.equal(result.fieldsCompared, merged ? 24 : 48)
+      assert.equal(result.mismatches, 0)
+      assert.deepStrictEqual(state, baseline)
+      assert.deepStrictEqual(materializeRankingModel({ context, state }), materializeRankingModel({ context: baselineContext, state: baseline }))
+      if (merged) assert.ok(materializeRankingModel({ context, state }).standings.find(({ team }) => team === 'Alpha')!.baseRating > 1500)
+    } finally { await rm(root, { recursive: true, force: true }) }
+  })
+}
+
+for (const scenario of crossMidnightReviewCases()) {
+  test(`native replay and season history preserve ${scenario.name}`, { skip: !binary }, async () => {
+    const matches = mergeCommunityMatchSources(structuredClone(scenario.complete))
+    const sameDateMatches = mergeCommunityMatchSources(structuredClone(scenario.sameDate))
+    const scoped = matches.filter((match) => match.season === scenario.season && match.date.startsWith(`${scenario.season}-`))
+    assert.equal(scoped.length, scenario.seriesGameCounts.reduce((sum, count) => sum + count, 0))
+    const resolved = resolveCanonicalSeries(matches)
+    assert.deepEqual(resolved.map(({ date }) => date), scenario.seriesDates)
+    assert.deepEqual(resolved.map(({ games }) => games.length), scenario.seriesGameCounts)
+    assert.ok(resolved.every(({ state }) => state === 'completed'))
+    const root = await temporary()
+    try {
+      for (const [scope, games] of [['global', matches], ['season', scoped]] as const) {
+        const context = createRatingReplayContext(games, structuredClone(crossMidnightTeams))
+        const captured: SeriesResultDateBatch[] = []
+        const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches,
+          onSeriesResultDate: (batch) => captured.push(batch) })
+        const result = await runSeriesResultShadow({ dates: captured, binaryPath: binary!, outputDir: join(root, scope) })
+        assert.equal(result.series, scenario.seriesGameCounts.length)
+        assert.equal(result.fieldsCompared, scenario.seriesGameCounts.length * 24)
+        assert.equal(result.mismatches, 0)
+        const model = materializeRankingModel({ context, state })
+        const baselineContext = createRatingReplayContext(sameDateMatches, structuredClone(crossMidnightTeams))
+        const baselineState = replayRatingDates({ context: baselineContext, replayMatches: baselineContext.authoritativeMatches })
+        const baseline = materializeRankingModel({ context: baselineContext, state: baselineState })
+        assert.deepEqual(model.standings, baseline.standings)
+        for (const standing of model.standings) {
+          const updates = standing.history.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic')
+          assert.equal(updates.length, scenario.seriesGameCounts.length)
+          assert.ok(updates.every((point) => point.delta !== 0))
+          if (scenario.name === 'ordinal-rematch') {
+            assert.deepEqual(updates.map((point) => point.source.officialMatchId),
+              ['synthetic-official-round-1', 'synthetic-official-round-2'])
+          }
+        }
+      }
+    } finally { await rm(root, { recursive: true, force: true }) }
+  })
+}
 
 test('real native CLI rejects invalid complete requests and oversized files', { skip: !binary }, async () => {
   const root = await temporary()

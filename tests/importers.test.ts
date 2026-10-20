@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
+import { mergeCommunityMatchSources, type LolEsportsReferenceEvent } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { canonicalTeamNameFor, teamCodeFor } from '../src/domains/rankings/internal/evidence/teamIdentity.ts'
 import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
 import { importLolEsportsScheduleSnapshot } from '../scripts/rankings/providers/lolEsports.ts'
@@ -1162,7 +1162,32 @@ test('community merge reconciles overlapping Oracle and Leaguepedia MSI series o
   assert.equal(merged.every((match) => match.sourceProvider === 'oracles-elixir'), true)
 })
 
-test('community merge completes a partial Oracle series with the missing Leaguepedia game', () => {
+for (const lastGameDate of ['2026-07-10', '2026-07-11']) {
+  test(`community merge completes a partial Oracle series with the missing Leaguepedia game on ${lastGameDate}`, () => {
+    const merged = mergeCommunityMatchSources(partialOracleSeriesSources(lastGameDate))
+    const resolved = resolveCanonicalSeries(merged)
+    assert.equal(resolved.length, 1)
+    const [series] = resolved
+    assert.equal(merged.length, 3)
+    assert.deepEqual(merged.map((match) => match.sourceProvider).sort(), ['leaguepedia-cargo', 'oracles-elixir', 'oracles-elixir'])
+    assert.equal(merged.every((match) => match.event === 'MSI 2026'), true)
+    assert.equal(series.games.length, 3)
+    assert.equal(series.format, 5)
+    assert.equal(series.state, 'completed')
+    assert.equal(Math.max(series.winsA, series.winsB), 3)
+    assert.equal(Math.min(series.winsA, series.winsB), 0)
+    const standings = buildRankingModel(merged, {}).standings
+    const sameDate = buildRankingModel(mergeCommunityMatchSources(partialOracleSeriesSources('2026-07-10')), {}).standings
+    assert.deepEqual(standings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+      sameDate.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })))
+    const history = standings.find(({ team }) => team === 'LYON')!.history
+    assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit),
+      ['series-member-no-team-update', 'series-member-no-team-update', 'series-atomic'])
+    assert.ok(history.at(-1)!.delta > 0)
+  })
+}
+
+function partialOracleSeriesSources(lastGameDate: string) {
   const seriesId = '2026 Mid-Season Invitational_Bracket Round 3_1'
   const oracleMatches = [1, 2].map((game) => matchFixture({
     id: `oe-lyon-g2-${game}`,
@@ -1187,7 +1212,7 @@ test('community merge completes a partial Oracle series with the missing Leaguep
     id: `lp-${snapshot}-lyon-g2-${game}`,
     sourceProvider: 'leaguepedia-cargo',
     sourceGameId: `${seriesId}_${game}`,
-    date: '2026-07-10',
+    date: game === 3 ? lastGameDate : '2026-07-10',
     event: '2026 Mid-Season Invitational',
     phase: 'Playoffs',
     region: 'International',
@@ -1204,17 +1229,130 @@ test('community merge completes a partial Oracle series with the missing Leaguep
     teamBGold: 55000 + game,
   })))
 
-  const merged = mergeCommunityMatchSources({ oracleMatches, leaguepediaMatches })
-  const [series] = resolveCanonicalSeries(merged)
-  assert.equal(merged.length, 3)
-  assert.deepEqual(merged.map((match) => match.sourceProvider).sort(), ['leaguepedia-cargo', 'oracles-elixir', 'oracles-elixir'])
-  assert.equal(merged.every((match) => match.event === 'MSI 2026'), true)
-  assert.equal(series.games.length, 3)
-  assert.equal(series.format, 5)
-  assert.equal(series.state, 'completed')
-  assert.equal(Math.max(series.winsA, series.winsB), 3)
-  assert.equal(Math.min(series.winsA, series.winsB), 0)
+  return { oracleMatches, leaguepediaMatches }
+}
+
+test('a Bo3 that crosses UTC midnight moves ratings the same as the series on one UTC date', () => {
+  const ratingsWithSecondGameAt = (datetimeUtc: string) => {
+    const leaguepedia = importLeaguepediaSnapshot({
+      matches: [lockInGame(1, '2026-01-24 23:30:00'), lockInGame(2, datetimeUtc)],
+    })
+    const matches = mergeCommunityMatchSources({ oracleMatches: [], leaguepediaMatches: leaguepedia.matches })
+    return buildRankingModel(matches, leaguepedia.teams).standings
+      .map(({ team, baseRating, rating }) => ({ team, baseRating, rating }))
+      .sort((left, right) => left.team.localeCompare(right.team))
+  }
+  const sameDate = ratingsWithSecondGameAt('2026-01-24 23:55:00')
+
+  assert.ok(sameDate.find((standing) => standing.team === 'Team Liquid')!.baseRating > 1500)
+  assert.ok(sameDate.find((standing) => standing.team === 'Shopify Rebellion')!.baseRating < 1500)
+  assert.deepEqual(ratingsWithSecondGameAt('2026-01-25 00:20:00'), sameDate)
 })
+
+for (const matchBestOf of [3, undefined]) {
+  test(`official schedule references keep a cross-midnight Bo3 whole with provider format ${matchBestOf ?? 'unknown'}`, () => {
+    const standingsWithSecondGameAt = (datetimeUtc: string) => {
+      const leaguepedia = importLeaguepediaSnapshot({
+        matches: [lockInGame(1, '2026-01-24 23:30:00'), lockInGame(2, datetimeUtc)]
+          .map((game) => ({ ...game, matchBestOf })),
+      })
+      const matches = mergeCommunityMatchSources({
+        oracleMatches: [], leaguepediaMatches: leaguepedia.matches,
+        lolEsportsReferences: [lockInReference()],
+      })
+      return buildRankingModel(matches, leaguepedia.teams).standings
+        .map(({ team, baseRating, rating }) => ({ team, baseRating, rating }))
+        .sort((left, right) => left.team.localeCompare(right.team))
+    }
+    const sameDate = standingsWithSecondGameAt('2026-01-24 23:55:00')
+    assert.ok(sameDate.find((standing) => standing.team === 'Team Liquid')!.baseRating > 1500)
+    assert.deepEqual(standingsWithSecondGameAt('2026-01-25 00:20:00'), sameDate)
+  })
+}
+
+test('a next-day Bo1 reference does not take the last game of a cross-midnight Bo3', () => {
+  const standingsWithSecondGameAt = (datetimeUtc: string) => {
+    const leaguepedia = importLeaguepediaSnapshot({
+      matches: [
+        { ...lockInGame(1, '2026-01-25 18:00:00'), id: 'LCS 2026 Lock-In_Week 1_2_1', matchBestOf: 1 },
+        { ...lockInGame(2, datetimeUtc), matchBestOf: undefined },
+        { ...lockInGame(1, '2026-01-24 23:30:00'), matchBestOf: undefined },
+      ],
+    })
+    const matches = mergeCommunityMatchSources({
+      oracleMatches: [], leaguepediaMatches: leaguepedia.matches,
+      lolEsportsReferences: [
+        lockInReference(),
+        { ...lockInReference(), matchId: 'next-day-bo1', date: '2026-01-25', startTime: '2026-01-25T18:00:00Z',
+          strategy: { type: 'bestOf', count: 1 }, gameIds: ['next-day-game'] },
+      ],
+    })
+    return buildRankingModel(matches, leaguepedia.teams).standings
+      .map(({ team, baseRating, rating, history }) => ({
+        team, baseRating, rating,
+        history: history.map(({ date, delta, source }) => ({ date, delta, officialMatchId: source.officialMatchId })),
+      }))
+      .sort((left, right) => left.team.localeCompare(right.team))
+  }
+  assert.deepEqual(standingsWithSecondGameAt('2026-01-25 00:20:00'), standingsWithSecondGameAt('2026-01-24 23:55:00'))
+})
+
+test('consecutive Bo3 rematches with ordinal source match IDs keep their own official results', () => {
+  const oracleMatches = [1, 2].flatMap((round) => [1, 2].map((gameNumber) => matchFixture({
+    id: `round-${round}-game-${gameNumber}`, sourceGameId: `opaque-${round}-${gameNumber}`,
+    sourceProvider: 'oracles-elixir', sourceMatchId: `round_${round}`, gameNumber,
+    date: `2026-01-${23 + round}`, datetimeUtc: `2026-01-${23 + round}T18:${gameNumber * 10}:00Z`,
+    bestOf: 3, bestOfBasis: 'provider', teamA: 'Team Liquid', teamB: 'Shopify Rebellion', winner: 'Team Liquid',
+  })))
+  const references = [1, 2].map((round) => ({ ...lockInReference(),
+    matchId: `synthetic-official-round-${round}`, date: `2026-01-${23 + round}`,
+    startTime: `2026-01-${23 + round}T18:00:00Z`,
+  }))
+  for (const ordered of [oracleMatches, [...oracleMatches].reverse()]) {
+    const matches = mergeCommunityMatchSources({ oracleMatches: ordered, leaguepediaMatches: [], lolEsportsReferences: references })
+    const series = resolveCanonicalSeries(matches)
+    assert.equal(series.length, 2)
+    assert.deepEqual(series.map(({ date, state, games }) => ({ date, state, games: games.length })), [
+      { date: '2026-01-24', state: 'completed', games: 2 },
+      { date: '2026-01-25', state: 'completed', games: 2 },
+    ])
+    assert.deepEqual(matches.map(({ sourceMatchId, officialMatchId }) => ({ sourceMatchId, officialMatchId }))
+      .sort((left, right) => left.sourceMatchId!.localeCompare(right.sourceMatchId!)),
+    oracleMatches.map(({ sourceMatchId }) => ({ sourceMatchId, officialMatchId: `synthetic-official-round-${sourceMatchId!.at(-1)}` })))
+    const history = buildRankingModel(matches, {}).standings.find(({ team }) => team === 'Team Liquid')!.history
+    const updates = history.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic')
+    assert.deepEqual(updates.map((point) => point.source.officialMatchId), references.map((reference) => reference.matchId))
+    assert.ok(updates.every((point) => point.delta > 0))
+  }
+})
+
+function lockInReference(): LolEsportsReferenceEvent {
+  return {
+    sourceProvider: 'lol-esports-api', matchId: 'official-lock-in', date: '2026-01-24',
+    startTime: '2026-01-24T23:00:00Z', state: 'completed', strategy: { type: 'bestOf', count: 3 },
+    teams: [{ name: 'Team Liquid', outcome: 'win', gameWins: 2 }, { name: 'Shopify Rebellion', outcome: 'loss', gameWins: 0 }],
+    gameIds: [], games: [],
+  }
+}
+
+function lockInGame(gameNumber: number, datetimeUtc: string) {
+  return {
+    id: `LCS 2026 Lock-In_Week 1_1_${gameNumber}`,
+    date: datetimeUtc.slice(0, 10),
+    datetimeUtc,
+    event: 'LCS 2026 Lock-In',
+    patch: '26.1',
+    matchBestOf: 3,
+    teamA: 'Team Liquid',
+    teamB: 'Shopify Rebellion',
+    winner: 'Team Liquid',
+    loser: 'Shopify Rebellion',
+    teamAKills: 20,
+    teamBKills: 9,
+    teamAGold: 62000,
+    teamBGold: 54000,
+  }
+}
 
 test('team code cleanup uses known source abbreviations for major teams', () => {
   const identities = [

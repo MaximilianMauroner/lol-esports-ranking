@@ -49,6 +49,19 @@ export function resolveCanonicalSeries(matches: readonly MatchRecord[]): Canonic
     .sort(compareCanonicalSeries)
 }
 
+export function withSeriesStartDates(matches: readonly MatchRecord[]): MatchRecord[] {
+  const normalized = new Map<MatchRecord, MatchRecord>()
+  for (const series of resolveCanonicalSeries(matches)) {
+    const date = series.games.map((game) => game.date).sort(compareCodeUnits)[0]!
+    const calendarAligned = series.games.every((game) => game.season === Number(game.date.slice(0, 4)))
+    for (const game of series.games) {
+      const season = calendarAligned ? Number(date.slice(0, 4)) : game.season
+      normalized.set(game, date === game.date && season === game.season ? game : { ...game, date, season })
+    }
+  }
+  return matches.map((match) => normalized.get(match)!)
+}
+
 export function canonicalSeriesForMatches(matches: readonly MatchRecord[]) {
   const byMatchId = new Map<string, CanonicalSeries>()
   for (const series of resolveCanonicalSeries(matches)) {
@@ -123,13 +136,17 @@ function canonicalSeriesId(match: MatchRecord) {
   return fallbackBase
 }
 
-function sourceMatchSeriesKey(match: MatchRecord) {
+export function sourceMatchSeriesKey(match: MatchRecord) {
   if (!match.sourceMatchId) return undefined
   const teams = [canonicalTeamNameFor(match.teamA), canonicalTeamNameFor(match.teamB)]
     .sort((left, right) => compareCodeUnits(left, right))
-  const gameAlias = /^(?:.+[_-]game[_-]?[1-5]|.+_.+_\d+_[1-5])$/i.test(match.sourceMatchId)
-  const sourceId = gameAlias ? sourceSeriesId(match.sourceMatchId) : match.sourceMatchId
+  const sourceId = sourceMatchSeriesId(match.sourceMatchId)
   return joinKey('source-match', sourceId, ...teams)
+}
+
+export function sourceMatchSeriesId(value: string) {
+  const gameAlias = /^(?:.+[_-]game[_-]?[1-5]|.+_.+_\d+_[1-5])$/i.test(value)
+  return gameAlias ? sourceSeriesId(value) : value
 }
 
 function sourceSeriesId(value: string) {
