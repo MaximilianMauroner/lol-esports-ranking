@@ -30,6 +30,7 @@ export function startLeaseHeartbeat(options: {
   clearIntervalFn: (timer: unknown) => void
 }): { error?: Error; runExclusive<T>(operation: () => Promise<T>): Promise<T>; stop(): Promise<void> }
 
+/** Timed-out process groups keep their SIGKILL deadline after the direct child exits. */
 export function runChildProcess(
   command: string,
   args: string[],

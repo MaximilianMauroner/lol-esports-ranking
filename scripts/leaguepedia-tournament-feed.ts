@@ -50,7 +50,6 @@ export async function collectLeaguepediaTournamentFeed(options: {
   pageTimeoutMs?: number
 } = {}): Promise<TournamentFeed> {
   const now = options.now ?? new Date()
-  const fetcher = options.fetcher ?? fetch
   const pageTimeoutMs = options.pageTimeoutMs ?? 30_000
   const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
   const coverageStart = new Date(dayStart - DAYS_BACK * DAY_MS).toISOString()
@@ -74,13 +73,14 @@ export async function collectLeaguepediaTournamentFeed(options: {
       offset: String(page * PAGE_SIZE),
       format: 'json',
     })) url.searchParams.set(key, value)
-    // fetchWithRetry stops its own deadline once headers arrive; this signal also bounds the body read.
-    const deadline = AbortSignal.timeout(pageTimeoutMs)
     const response = await fetchWithRetry(url, { headers: { 'user-agent': USER_AGENT } }, {
-      fetcher: (input, init) => fetcher(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline }),
+      fetcher: options.fetcher,
       maxAttempts: 3, maxElapsedMs: pageTimeoutMs,
     })
-    if (!response.ok) throw new Error(`Leaguepedia returned HTTP ${response.status}`)
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {})
+      throw new Error(`Leaguepedia returned HTTP ${response.status}`)
+    }
     const body: unknown = await response.json()
     if (!Array.isArray(body)) throw new Error('Leaguepedia returned an unexpected schedule response')
     const pageRows = body.filter(isRow)

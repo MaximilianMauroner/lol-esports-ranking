@@ -38,7 +38,10 @@ export async function collectTournamentFeed(options: {
       headers: { 'x-api-key': PUBLIC_SITE_KEY, 'user-agent': 'lol-esports-power-index-tournament-reference/0.1' },
       signal: AbortSignal.timeout(15_000),
     }, { fetcher: options.fetcher, telemetry, maxAttempts: 3, maxElapsedMs: 30_000 })
-    if (!response.ok) throw new Error(`HTTP ${response.status} from ${path}`)
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {})
+      throw new Error(`HTTP ${response.status} from ${path}`)
+    }
     const body: unknown = await response.json()
     const parsed = record(body)
     if (!parsed) throw new Error(`Malformed ${path} response`)

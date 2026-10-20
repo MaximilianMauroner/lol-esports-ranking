@@ -124,7 +124,10 @@ async function persistedJson(url) {
       'user-agent': userAgent,
     },
   }, { telemetry: fetchTelemetry, onFailure: writeFailureTelemetry })
-  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {})
+    throw new Error(`HTTP ${response.status} from ${url}`)
+  }
   try {
     return await response.json()
   } catch (error) {

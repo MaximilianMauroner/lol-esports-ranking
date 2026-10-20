@@ -465,6 +465,7 @@ async function tryServeBucketFile(response, relativePath, {
   if (object.etag) response.setHeader('ETag', object.etag)
   if (object.lastModified) response.setHeader('Last-Modified', object.lastModified.toUTCString())
   if (headOnly) {
+    destroyBody(object.body)
     response.end()
     return true
   }

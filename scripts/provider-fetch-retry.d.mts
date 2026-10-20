@@ -4,6 +4,7 @@ export type ProviderFetchTelemetry = {
   attempts: Array<{ attempt: number; startedAtMs: number; finishedAtMs: number; status: number | null; retryable: boolean; reason?: string; error?: string }>
 }
 export class ProviderFetchError extends Error { telemetry?: ReturnType<typeof snapshotProviderFetchTelemetry>; status?: number }
+/** The caller signal and elapsed deadline also cover the returned response body. */
 export function fetchWithRetry(
   input: URL | string | Request,
   init?: RequestInit,
