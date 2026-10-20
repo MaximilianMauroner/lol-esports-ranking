@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
 import { displayRegionPowerScore, type RegionStrength } from '../domains/rankings/read'
-import { formatRating } from '../shared/display'
+import { formatRating, formatRecord } from '../shared/display'
 import { TeamMark } from './TeamMark'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card'
 
@@ -225,7 +225,7 @@ export function regionDepthLayout(regions: RegionDepthInput[], availableWidth: n
       region: region.region,
       rank: region.rank,
       score,
-      detail: `${formatRating(score)} · ${Math.round(region.internationalWins)}–${Math.round(region.internationalLosses)} intl`,
+      detail: `${formatRating(score)} · ${formatRecord(region.internationalWins, region.internationalLosses)} intl`,
       labelY: stacked ? rowTop + 13 : dotY - 2,
       detailY: dotY + 12,
       dotY,

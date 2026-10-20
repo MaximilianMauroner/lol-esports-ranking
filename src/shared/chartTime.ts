@@ -1,16 +1,17 @@
-const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
+const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+const monthDay = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 export const invalidDateLabel = 'Unknown date'
 
-export function formatChartTimestamp(value: unknown, formatter: Intl.DateTimeFormat = fullDate) {
+export function formatChartTimestamp(value: unknown, format: 'full-date' | 'month-day' = 'full-date') {
   const timestamp = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(timestamp)) return invalidDateLabel
   const date = new Date(timestamp)
   if (!Number.isFinite(date.getTime())) return invalidDateLabel
-  return formatter.format(date)
+  return (format === 'month-day' ? monthDay : fullDate).format(date)
 }
 
 export function formatChartTooltipTimestamp(payload: unknown) {
   if (!Array.isArray(payload)) return invalidDateLabel
-  return formatChartTimestamp(payload[0]?.payload?.t, fullDate)
+  return formatChartTimestamp(payload[0]?.payload?.t)
 }

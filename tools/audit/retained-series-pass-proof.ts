@@ -20,10 +20,10 @@ const PINNED = {
   ],
   preparedMatchesTeamsSha256: 'cf8819316a4679edb8ad545095440dc8ed6687fcea52bd40ddbcfe658a37d6c2',
   importer: { importerVersion: 'community-source-import-v1', identityTaxonomyHash: 'fnv1a64-80e6a738dbc9d2a4', rawLedgerPrefixHash: 'fnv1a64-317f66c498134811' },
-  sourcePipelineVersion: 'canonical-identity-stat-dedupe-clock-corroboration-feasible-series-player-performance-home-league-code-unit-order-v23',
-  modelVersion: 'transparent-power-index-v0.2.0', modelConfigHash: 'fnv1a-5eebb6ce',
-  checkpointSha256: '3decc95c896b509f38cfb13ed7f18e6dd2cd66f0b196f1852fdbaade7a65d45a',
-  rankingOutputSha256: '5ac9c232a264ee88c7a27892132a63d92ab619ce64a94de04c4d615a0a1346fc',
+  sourcePipelineVersion: 'canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-v24',
+  modelVersion: 'transparent-power-index-v0.2.0', modelConfigHash: 'fnv1a-61a3bd86',
+  checkpointSha256: '55cc124dadff273fd1b812821b3d51408a004f0fc98b61975310dc3d1e20e8e1',
+  rankingOutputSha256: '5f39096d33145b093e6d24c686920242815ea66d34c534e831c04e9a50a18264',
 }
 
 async function binaryIdentity(path: string) {
@@ -115,8 +115,8 @@ export async function verifyRetainedSeriesPassShadow({ oracleCsvPath, leaguepedi
   assert.deepEqual(identitiesAfter, identitiesBefore, 'Proof identities changed during execution')
   const checkpointSha256 = sha256(stableJson(baseline.checkpoint))
   const rankingSha256 = sha256(stableJson(baseline.output))
-  assert.equal(checkpointSha256, PINNED.checkpointSha256, 'Unchanged Node checkpoint differs from first-unit proof')
-  assert.equal(rankingSha256, PINNED.rankingOutputSha256, 'Unchanged Node ranking output differs from first-unit proof')
+  assert.equal(checkpointSha256, PINNED.checkpointSha256, 'Node checkpoint differs from independent v24 reference')
+  assert.equal(rankingSha256, PINNED.rankingOutputSha256, 'Node ranking output differs from independent v24 reference')
   const captureBytes = JSON.stringify(captures, (_key, value: unknown) => typeof value === 'number' ? { binary64: numberBits(value) } : value)
   await writeFile(join(outputDir, 'captures.json'), captureBytes, { flag: 'wx' })
   const proof = {
@@ -137,8 +137,8 @@ export async function verifyRetainedSeriesPassShadow({ oracleCsvPath, leaguepedi
       firstDate: captures[0]?.frame.utcDate, lastDate: captures.at(-1)?.frame.utcDate,
       ...native,
     },
-    checkpoint: { exact: true, historicalBaselineMatched: true, baselineSha256: sha256(stableJson(baseline.checkpoint)), observedSha256: sha256(stableJson(observed.checkpoint)) },
-    rankingOutput: { exact: true, historicalBaselineMatched: true, baselineSha256: sha256(stableJson(baseline.output)), observedSha256: sha256(stableJson(observed.output)) },
+    checkpoint: { exact: true, independentNodeReferenceMatched: true, baselineSha256: sha256(stableJson(baseline.checkpoint)), observedSha256: sha256(stableJson(observed.checkpoint)) },
+    rankingOutput: { exact: true, independentNodeReferenceMatched: true, baselineSha256: sha256(stableJson(baseline.output)), observedSha256: sha256(stableJson(observed.output)) },
     captureSha256: sha256(captureBytes),
     syntheticSeries: 0,
     scope: 'Native numeric series state pass on independent complete-date frames. Node retains date preparation, predictions, full histories and ranks, trackers, previousMatch, date commit, replay, checkpoints, materialization and publication.',

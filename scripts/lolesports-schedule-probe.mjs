@@ -117,6 +117,7 @@ async function persistedJson(path, { fetcher, baseUrl, locale, pageToken, id, re
   }, { fetcher, ...retryOptions })
   if (!response.ok) {
     const retryAfter = response.headers?.get?.('retry-after')
+    await response.body?.cancel().catch(() => {})
     throw new Error(`HTTP ${response.status} from ${path}${retryAfter ? `; retry-after=${retryAfter}` : ''}`)
   }
   return response.json()

@@ -2,12 +2,18 @@ use super::*;
 use std::io::Read;
 use std::os::unix::fs::symlink;
 
+fn real_tempdir() -> (tempfile::TempDir, std::path::PathBuf) {
+    let fixture = tempfile::tempdir().unwrap();
+    let base = fixture.path().canonicalize().unwrap();
+    (fixture, base)
+}
+
 #[test]
 fn pinned_directory_survives_path_replacement() {
-    let fixture = tempfile::tempdir().unwrap();
-    let original = fixture.path().join("original");
-    let moved = fixture.path().join("moved");
-    let external = fixture.path().join("external");
+    let (_fixture, base) = real_tempdir();
+    let original = base.join("original");
+    let moved = base.join("moved");
+    let external = base.join("external");
     std::fs::create_dir(&original).unwrap();
     std::fs::create_dir(&external).unwrap();
     std::fs::write(original.join("ranking-summary.json"), b"original").unwrap();
@@ -21,17 +27,19 @@ fn pinned_directory_survives_path_replacement() {
     assert_eq!(bytes, "original");
     assert_eq!(opened.metadata.len(), 8);
     assert!(LocalRoot::open(&original).is_err());
+    std::fs::create_dir(external.join("nested")).unwrap();
+    assert!(LocalRoot::open(&original.join("nested")).is_err());
 }
 
 #[test]
 fn file_metadata_and_bytes_remain_coupled_after_replacement() {
-    let fixture = tempfile::tempdir().unwrap();
-    let path = fixture.path().join("ranking-summary.json");
+    let (_fixture, base) = real_tempdir();
+    let path = base.join("ranking-summary.json");
     std::fs::write(&path, b"old").unwrap();
-    let root = LocalRoot::open(fixture.path()).unwrap();
+    let root = LocalRoot::open(&base).unwrap();
     let mut opened = root.open_file(&DataPath::summary()).unwrap();
-    std::fs::write(fixture.path().join("replacement"), b"replacement bytes").unwrap();
-    std::fs::rename(fixture.path().join("replacement"), &path).unwrap();
+    std::fs::write(base.join("replacement"), b"replacement bytes").unwrap();
+    std::fs::rename(base.join("replacement"), &path).unwrap();
     let mut bytes = Vec::new();
     opened.file.read_to_end(&mut bytes).unwrap();
     assert_eq!(bytes, b"old");
@@ -44,11 +52,11 @@ fn file_metadata_and_bytes_remain_coupled_after_replacement() {
 
 #[test]
 fn intermediate_symlinks_and_nonregular_leaves_are_refused() {
-    let fixture = tempfile::tempdir().unwrap();
-    std::fs::create_dir(fixture.path().join("inside")).unwrap();
-    std::fs::write(fixture.path().join("inside/file.json"), b"secret").unwrap();
-    symlink("inside", fixture.path().join("link")).unwrap();
-    let root = LocalRoot::open(fixture.path()).unwrap();
+    let (_fixture, base) = real_tempdir();
+    std::fs::create_dir(base.join("inside")).unwrap();
+    std::fs::write(base.join("inside/file.json"), b"secret").unwrap();
+    symlink("inside", base.join("link")).unwrap();
+    let root = LocalRoot::open(&base).unwrap();
     for request in ["/data/link/file.json", "/data/inside"] {
         let target = RequestTarget::parse_raw(request).unwrap();
         assert!(root.open_file(&DataPath::parse(&target).unwrap()).is_err());
@@ -84,11 +92,11 @@ fn cancelled_open_jobs_keep_admission_until_the_blocking_work_finishes() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let fixture = tempfile::tempdir().unwrap();
-        std::fs::write(fixture.path().join("ranking-summary.json"), b"{}").unwrap();
+        let (_fixture, base) = real_tempdir();
+        std::fs::write(base.join("ranking-summary.json"), b"{}").unwrap();
         let data = Arc::new(
             LocalData::open(&LocalDataOptions {
-                data_root: fixture.path().into(),
+                data_root: base,
                 ..LocalDataOptions::default()
             })
             .unwrap(),

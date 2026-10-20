@@ -169,6 +169,19 @@ test('source ownership checking succeeds without Git metadata', (t) => {
   assert.equal(checkLayout(nested).blocked, true)
 })
 
+test('tracked-file hygiene detects violations through a symlinked repository root', (t) => {
+  const { root } = fixture(t, { 'src/shared/report.md': 'Planted narrative output' })
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '.'])
+  const linkedRoot = `${root}-link`
+  symlinkSync(root, linkedRoot, 'dir')
+  t.after(() => rmSync(linkedRoot, { force: true }))
+  assert.deepEqual(checkLayout(linkedRoot), {
+    blocked: false,
+    errors: ['src/shared/report.md: Narrative output must stay in ignored agent artifacts'],
+  })
+})
+
 test('tracked-file hygiene accepts source fixtures and assets and rejects forced generated output', (t) => {
   const { root, write } = fixture(t, {
     'tests/fixtures/input.csv': 'team,score\nA,1\n',
@@ -200,6 +213,65 @@ test('tracked-file hygiene accepts source fixtures and assets and rejects forced
   assert.match(errors, /reports\/result\.csv/)
   assert.match(errors, /tools\/audit\/dist\/result\.json/)
   assert.match(errors, /src\/browser\/\.cache\/result\.html/)
+})
+
+test('tracked-file hygiene rejects force-added ignored paths with spaces and newlines', (t) => {
+  const path = 'src/shared/private file\nname.local'
+  const { root } = fixture(t, {
+    '.gitignore': '*.local\n',
+    [path]: 'private',
+  })
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '-f', path])
+  const result = checkLayout(root)
+  assert.equal(result.blocked, false)
+  assert.equal(result.errors.length, 1)
+  assert.ok(result.errors[0].startsWith(`${path}:`))
+  assert.match(result.errors[0], /\.gitignore/)
+})
+
+test('tracked-file hygiene rejects staged paths when a new ignore rule applies', (t) => {
+  const { root, write } = fixture(t, { 'src/shared/private.local': 'private' })
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '.'])
+  assert.deepEqual(checkLayout(root), { blocked: false, errors: [] })
+  write('.gitignore', '*.local\n')
+  const result = checkLayout(root)
+  assert.equal(result.blocked, false)
+  assert.match(result.errors.join('\n'), /src\/shared\/private\.local:.*\.gitignore/)
+  const cli = spawnSync(process.execPath, [resolve('tools/dev/check-layout.mjs'), root], { cwd: root, encoding: 'utf8' })
+  assert.equal(cli.status, 1, cli.stderr)
+  assert.match(cli.stderr, /src\/shared\/private\.local/)
+})
+
+test('tracked-file hygiene follows nested ignore rules and preserves negated fixtures', (t) => {
+  const { root, write } = fixture(t, {
+    'tests/fixtures/.gitignore': '*.local\n!retained.local\n',
+    'tests/fixtures/retained.local': 'fixture',
+    'src/shared/permitted.local': 'source',
+  })
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '.'])
+  assert.deepEqual(checkLayout(root), { blocked: false, errors: [] })
+  write('tests/fixtures/private.local', 'private')
+  execFileSync('git', ['-C', root, 'add', '-f', 'tests/fixtures/private.local'])
+  const result = checkLayout(root)
+  assert.equal(result.blocked, false)
+  assert.equal(result.errors.length, 1)
+  assert.match(result.errors[0], /^tests\/fixtures\/private\.local:.*\.gitignore/)
+})
+
+test('tracked-file hygiene ignores machine-local exclude rules for tracked paths', (t) => {
+  const { root, write } = fixture(t, {
+    'src/shared/global.local': 'source',
+    'src/shared/info.local': 'source',
+  })
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '.'])
+  write('.git/local-excludes', 'global.local\n')
+  write('.git/info/exclude', 'info.local\n')
+  execFileSync('git', ['-C', root, 'config', 'core.excludesFile', join(root, '.git/local-excludes')])
+  assert.deepEqual(checkLayout(root), { blocked: false, errors: [] })
 })
 
 test('tracked-file hygiene rejects narrative output inside source zones', (t) => {

@@ -96,7 +96,7 @@ test('dependency graph covers global, season/checkpoint, team/player/tournament,
   assert.doesNotThrow(() => assertArtifactDependencyPlanMatchesSemanticChanges(verifiedPlan, previous, current))
 })
 
-test('early corrections rewrite every subsequent inventoried page while post-checkpoint appends skip closed checkpoint scopes', () => {
+test('early corrections and same-day insertions rewrite dependent pages and checkpoints while latest appends skip closed scopes', () => {
   const before = match({ id: 'early', sourceMatchId: 'series-early', date: '2026-01-02' })
   const pages = Array.from({ length: 30 }, (_, index) => ({
     path: `matches/pages/global-${index + 1}.json`,
@@ -122,8 +122,15 @@ test('early corrections rewrite every subsequent inventoried page while post-che
     }],
     teamHistoryPaths: {}, tournamentMovementPaths: {},
   }
-  const correction = affectedPublicArtifacts({ changes: [{ before, after: { ...before, winner: 'Beta' }, kind: 'historical-correction' }], inventory })
-  assert.deepEqual(correction.logicalPaths.filter((path) => path.startsWith('matches/pages/global-')), pages.slice(1).map((page) => page.path).toSorted())
+  for (const change of [
+    { before, after: { ...before, winner: 'Beta' }, kind: 'historical-correction' as const },
+    { after: before, kind: 'same-day-insertion' as const },
+  ]) {
+    const plan = affectedPublicArtifacts({ changes: [change], inventory })
+    assert.deepEqual(plan.logicalPaths.filter((path) => path.startsWith('matches/pages/global-')), pages.slice(1).map((page) => page.path).toSorted())
+    assert.ok(plan.logicalPaths.includes('scopes/closed.json'))
+    assert.ok(plan.logicalPaths.includes('scopes/ongoing.json'), 'later checkpoint consumes the changed January rating state')
+  }
 
   const appended = match({ id: 'late', sourceMatchId: 'series-late', date: '2026-02-01' })
   const append = affectedPublicArtifacts({ changes: [{ after: appended, kind: 'latest-append' }], inventory })

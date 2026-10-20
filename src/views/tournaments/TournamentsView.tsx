@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { currentHashQuery, hashParam, writeNavigationHash } from '../../browser/navigation'
 import { FORECASTS_ENABLED, REFRESH_MS, useTournamentResources, type ForecastArtifacts } from '../../browser/tournaments/resources'
 import { worldsFeedEventKey } from '../../browser/tournaments/worldsArtifacts'
+import { TeamMark } from '../../components/TeamMark'
 import { Alert } from '../../components/ui/alert'
+import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent } from '../../components/ui/card'
 import { LoadingState } from '../../components/ui/loading'
 import { Select } from '../../components/ui/select'
 import { forecastTournamentSeries, pinnedForecast, scoreConditionedSeriesOdds, type ForecastReceipt, type TournamentForecast } from '../../domains/tournaments/forecast'
-import { formatTournamentTime, groupTournamentSeries, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../../domains/tournaments/read'
+import { formatTournamentTime, groupTournamentSeries, seriesWinner, type TournamentEvent, type TournamentFeed, type TournamentSeries } from '../../domains/tournaments/read'
 import { findSwissEvent } from '../../domains/tournaments/simulation'
 import { ConditionalPowerPreview } from './ConditionalPowerPreview'
 import { SwissPreview } from './SwissPreview'
@@ -90,6 +92,7 @@ export function TournamentsView() {
       ) : (
         <>
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">{selected.label}</h2>
+          {!FORECASTS_ENABLED ? <p className="text-sm text-muted-foreground">Match forecasts are not enabled for this schedule.</p> : null}
           {FORECASTS_ENABLED && selected.competition === 'worlds' ? <WorldsTournamentPanel
             key={JSON.stringify([worldsFeedEventKey(selected), forecastArtifacts.basis?.snapshotId, forecastArtifacts.basis?.model.version,
               forecastArtifacts.basis?.model.configHash, forecastArtifacts.basis?.ratingDataAsOf, forecastArtifacts.basis?.ratingPublishedAt, forecastArtifacts.basis?.identityMap.revision])}
@@ -144,6 +147,8 @@ function SeriesList({ series, timezone, now, forecasts }: { series: TournamentSe
 
 function SeriesRow({ series, timezone, now, forecasts }: { series: TournamentSeries; timezone: string; now: number; forecasts: ForecastArtifacts | null }) {
   const [first, second] = series.teams
+  const winner = seriesWinner(series)
+  const winningTeam = winner !== null ? series.teams[winner] : undefined
   const scheduledStartPassed = !series.startTime || now >= Date.parse(series.startTime)
   const forecast = useMemo<TournamentForecast | ForecastReceipt | null>(() => {
     if (!forecasts) return null
@@ -157,17 +162,25 @@ function SeriesRow({ series, timezone, now, forecasts }: { series: TournamentSer
   const receipt = forecast?.status === 'ready' && 'receiptKey' in forecast ? forecast : null
   const conditional = receipt && (series.status === 'live' || series.status === 'completed') ? scoreConditionedSeriesOdds(receipt, series) : null
   const scored = first?.gameWins != null || second?.gameWins != null
-  return <li className="grid gap-x-4 gap-y-0.5 px-3 py-2 md:grid-cols-[8.5rem_6.5rem_minmax(0,1fr)_auto] md:items-baseline">
+  return <li className="grid gap-x-4 gap-y-0.5 px-3 py-2 md:grid-cols-[8.5rem_6.5rem_minmax(0,1fr)_minmax(0,1fr)] md:items-baseline">
     <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground md:contents">
       <span className="font-mono text-foreground tabular-nums">{series.startTime ? formatClock(series.startTime, timezone) : 'Time not supplied'}</span>
       <span>{series.stage ?? 'Stage not supplied'}</span>
     </div>
-    <p className="min-w-0 text-sm font-semibold text-[var(--text-strong)]">
-      {first?.name ?? 'TBD'} {scored ? <span className="font-mono tabular-nums">{score(first?.gameWins)}–{score(second?.gameWins)}</span> : <span className="font-normal text-[var(--faint)]">vs</span>} {second?.name ?? 'TBD'}
-    </p>
-    <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground md:justify-end">
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="flex shrink-0 gap-1" aria-hidden="true">
+        {[first, second].map((team, index) => team?.name
+          ? <TeamMark key={index} team={team.name} code={team.code ?? undefined} fallback="initial" className="size-5" />
+          : <span key={index} className="size-5 shrink-0 rounded-sm border border-dashed border-border" />)}
+      </span>
+      <p className="min-w-0 text-sm text-[var(--text-strong)]">
+        <span className={winner === 0 && winningTeam?.name ? 'font-bold' : undefined}>{first?.name ?? 'TBD'}</span> {scored ? <span className="font-mono whitespace-nowrap tabular-nums">{score(first?.gameWins)}–{score(second?.gameWins)}</span> : <span className="text-[var(--faint)]">vs</span>} <span className={winner === 1 && winningTeam?.name ? 'font-bold' : undefined}>{second?.name ?? 'TBD'}</span>
+      </p>
+    </div>
+    <p className="flex min-w-0 flex-wrap gap-x-3 text-xs text-muted-foreground md:justify-end">
       <span>{series.bestOf ? `Best of ${series.bestOf}` : 'Format not supplied'}</span>
-      <span>{series.status === 'unknown' ? `Source state: ${series.sourceState || 'unknown'}` : STATUS_LABELS[series.status]}</span>
+      {series.status === 'live' ? <Badge variant="live">Live</Badge> : <span>{series.status === 'unknown' ? `Source state: ${series.sourceState || 'unknown'}` : STATUS_LABELS[series.status]}</span>}
+      {winningTeam?.name ? <span className="min-w-0 font-semibold text-[var(--text-strong)]">Winner: {winningTeam.name}</span> : null}
       {series.vodUrls.map((url) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="underline">Watch VOD</a>)}
     </p>
     {forecasts ? <div className="grid min-w-0 gap-1 md:col-span-2 md:col-start-3">

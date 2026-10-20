@@ -35,6 +35,7 @@ const response = await fetchWithRetry(url, {
 })
 
 if (!response.ok) {
+  await response.body?.cancel().catch(() => {})
   throw new Error(`HTTP ${response.status} from ${url}`)
 }
 

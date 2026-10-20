@@ -26,19 +26,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Compare the synthetic PR merge to its first parent. Missing parents fail open.
           fetch-depth: 2
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
 
       - name: Set up Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -68,14 +68,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: false
       - name: Set up Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -84,7 +84,7 @@ jobs:
       - name: Install Rust
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2.9.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: worker -> target
           cmd-format: rustup run 1.98.0 {0}
@@ -141,13 +141,13 @@ jobs:
           RANKING_RUST_TEST_BINARY: ${{ github.workspace }}/worker/target/release/ranking-refresh
         run: pnpm exec tsx --tsconfig tsconfig.app.json --test tests/downloadLocalData.test.ts tests/rustProviderFetchParity.test.ts
       - name: Set up Go for isolated storage acceptance
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.24.2'
           cache: false
       - name: Cache pinned MinIO and Go build inputs
         id: minio-cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/go/bin/minio
@@ -179,7 +179,7 @@ jobs:
           curl -fsS http://127.0.0.1:9000/minio/health/ready
           pnpm exec tsx --tsconfig tsconfig.app.json --test tests/rustStorageMinio.test.ts
       - name: Set up Docker builder
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         with:
           # Override the action's insecure entitlement defaults while keeping GC enabled.
           buildkitd-flags: --oci-worker-gc=true
@@ -189,7 +189,7 @@ jobs:
           mkdir "$RUNNER_TEMP/worker-image"
           git archive HEAD Dockerfile.refresh Dockerfile.refresh.dockerignore worker src/domains/rankings/internal/published/referenceFields.json | tar -x -C "$RUNNER_TEMP/worker-image"
       - name: Build worker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ runner.temp }}/worker-image
           file: ${{ runner.temp }}/worker-image/Dockerfile.refresh
@@ -220,9 +220,9 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Docker builder
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
         with:
           buildkitd-flags: --oci-worker-gc=true
       - name: Prepare tracked source
@@ -230,7 +230,7 @@ jobs:
           mkdir "$RUNNER_TEMP/web-image"
           git archive HEAD | tar -x -C "$RUNNER_TEMP/web-image"
       - name: Build web image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ runner.temp }}/web-image
           file: ${{ runner.temp }}/web-image/worker/Dockerfile.web

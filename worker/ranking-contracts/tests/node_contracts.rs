@@ -151,8 +151,11 @@ fn node_semantic_artifact_contracts() {
         assert_eq!(text.len() as u64, entry["bytes"].as_u64().unwrap());
         let compressed = gzip(text.as_bytes()).unwrap();
         assert_eq!(compressed, gzip(text.as_bytes()).unwrap());
-        assert_eq!(gunzip(&compressed).unwrap(), text.as_bytes());
-        assert!(gunzip(b"invalid gzip").is_err());
+        assert_eq!(
+            gunzip(&compressed, text.len() as u64).unwrap(),
+            text.as_bytes()
+        );
+        assert!(gunzip(b"invalid gzip", 1).is_err());
     }
 }
 

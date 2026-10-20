@@ -1,5 +1,7 @@
-import { useCallback, useRef, useState, type MouseEvent } from 'react'
+import { Suspense, useCallback, useRef, useState, type MouseEvent } from 'react'
 import { hashForModeAndScope, readScopeFromHash, writeNavigationHash } from '../../browser/navigation'
+import { RouteErrorBoundary } from '../../components/RouteErrorBoundary'
+import { LoadingState } from '../../components/ui/loading'
 import { currentSeasonScope } from '../../domains/rankings/read'
 import { AppNavigation, ModeHeader } from '../AppShell'
 import { TournamentsView } from './routeLoading'
@@ -16,7 +18,11 @@ export function TournamentRoute() {
     <AppNavigation mode="tournaments" scope={scope} onGoHome={goHome} />
     <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 pb-6 max-sm:pb-[calc(var(--tabbar-h)+24px+env(safe-area-inset-bottom))]">
       <ModeHeader mode="tournaments" />
-      <TournamentsView />
+      <RouteErrorBoundary key="tournaments">
+        <Suspense fallback={<LoadingState presentation="page" layout="schedule" label="Loading Tournaments" />}>
+          <TournamentsView />
+        </Suspense>
+      </RouteErrorBoundary>
     </main>
   </div>
 }

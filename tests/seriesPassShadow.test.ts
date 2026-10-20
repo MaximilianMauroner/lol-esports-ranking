@@ -4,11 +4,15 @@ import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promi
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/domains/rankings/build.ts'
+import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
+import { resolveCanonicalSeries } from '../src/domains/rankings/internal/evidence/seriesResolver.ts'
+import type { MatchRecord } from '../src/domains/rankings/types.ts'
 import {
   compareSeriesPassResponse, encodeSeriesPassRequest, MAX_BATCH_BYTES, numberBits, readBounded, runSeriesPassShadow,
   seriesPassDateResponseBytes, sha256,
 } from '../tools/audit/series-pass-shadow.ts'
 import { game, observe, profiles, roster, sparseDate, variedGames } from './seriesPassFixtures.ts'
+import { crossMidnightReviewCases, crossMidnightTeams } from './fixtures/crossMidnightReviewCases.ts'
 
 const binary = process.env.RANKING_COMPUTE_TEST_BINARY
 const artifactRoot = resolve('.agents/artifacts/series-pass-tests')
@@ -134,6 +138,106 @@ test('native series IDs may repeat across UTC midnight and signed zero survives 
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+for (const merged of [false, true]) {
+  test(`native CLI preserves real replay parity for ${merged ? 'a merged' : 'an unmerged'} series crossing UTC midnight`, { skip: !binary }, async () => {
+    const teams = crossMidnightTeams
+    const matches: MatchRecord[] = ['2026-01-01T23:50:00Z', '2026-01-02T00:30:00Z'].map((datetimeUtc, index) => ({
+      id: `series_game_${index + 1}`, sourceGameId: `series_game_${index + 1}`,
+      sourceProvider: 'oracles-elixir', dataCompleteness: 'scoreboard-game-stats',
+      date: datetimeUtc.slice(0, 10), datetimeUtc, season: 2026,
+      event: 'LCK 2026 Spring', phase: 'Regular season', region: 'LCK', league: 'LCK', patch: '26.1', bestOf: 3,
+      tier: 'regional-regular', teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', teamAKills: 20, teamBKills: 12,
+      teamAGold: 65000, teamBGold: 59000,
+    }))
+    const replayMatches = merged ? mergeCommunityMatchSources({ oracleMatches: matches, leaguepediaMatches: [] }) : matches
+    const baselineContext = createRatingReplayContext(structuredClone(replayMatches), structuredClone(teams))
+    const baseline = replayRatingDates({ context: baselineContext, replayMatches: baselineContext.authoritativeMatches })
+    const { context, state, captures } = observe(replayMatches, undefined, teams)
+    const seriesId = 'source-game-series\u0000oracles-elixir\u0000series'
+    assert.deepEqual(captures.map(({ frame: date }) => ({
+      utcDate: date.utcDate, authoritativeMatchIds: date.authoritativeMatchIds,
+      series: date.series.map(({ seriesId, members }) => ({ seriesId, matchIds: members.map(({ matchId }) => matchId) })),
+    })), merged ? [
+      { utcDate: '2026-01-01', authoritativeMatchIds: ['series_game_1', 'series_game_2'], series: [{ seriesId, matchIds: ['series_game_1', 'series_game_2'] }] },
+    ] : [
+      { utcDate: '2026-01-01', authoritativeMatchIds: ['series_game_1'], series: [{ seriesId, matchIds: ['series_game_1'] }] },
+      { utcDate: '2026-01-02', authoritativeMatchIds: ['series_game_2'], series: [{ seriesId, matchIds: ['series_game_2'] }] },
+    ])
+    const root = await temporary()
+    try {
+      const result = await runSeriesPassShadow({ captures, binaryPath: binary!, outputDir: join(root, 'midnight') })
+      assert.equal(result.dates, merged ? 1 : 2)
+      assert.equal(result.series, merged ? 1 : 2)
+      assert.equal(result.seriesResultFields, merged ? 24 : 48)
+      assert.equal(result.mismatches, 0)
+      assert.deepStrictEqual(state, baseline)
+      assert.deepStrictEqual(materializeRankingModel({ context, state }), materializeRankingModel({ context: baselineContext, state: baseline }))
+      if (merged) assert.ok(materializeRankingModel({ context, state }).standings.find(({ team }) => team === 'Alpha')!.baseRating > 1500)
+    } finally { await rm(root, { recursive: true, force: true }) }
+  })
+}
+
+for (const scenario of crossMidnightReviewCases()) {
+  test(`native replay and season history preserve ${scenario.name}`, { skip: !binary }, async () => {
+    const matches = mergeCommunityMatchSources(structuredClone(scenario.complete))
+    const sameDateMatches = mergeCommunityMatchSources(structuredClone(scenario.sameDate))
+    const scoped = matches.filter((match) => match.season === scenario.season && match.date.startsWith(`${scenario.season}-`))
+    assert.equal(scoped.length, scenario.seriesGameCounts.reduce((sum, count) => sum + count, 0))
+    const resolved = resolveCanonicalSeries(matches)
+    assert.deepEqual(resolved.map(({ date }) => date), scenario.seriesDates)
+    assert.deepEqual(resolved.map(({ games }) => games.length), scenario.seriesGameCounts)
+    assert.ok(resolved.every(({ state }) => state === 'completed'))
+    const root = await temporary()
+    try {
+      for (const [scope, games] of [['global', matches], ['season', scoped]] as const) {
+        const { context, state, captures } = observe(games, undefined, crossMidnightTeams)
+        const result = await runSeriesPassShadow({ captures, binaryPath: binary!, outputDir: join(root, scope) })
+        assert.equal(result.members, games.length)
+        assert.equal(result.series, scenario.seriesGameCounts.length)
+        assert.equal(result.seriesResultFields, scenario.seriesGameCounts.length * 24)
+        assert.equal(result.mismatches, 0)
+        const model = materializeRankingModel({ context, state })
+        const unobservedContext = createRatingReplayContext(structuredClone(games), structuredClone(crossMidnightTeams))
+        const unobservedState = replayRatingDates({ context: unobservedContext, replayMatches: unobservedContext.authoritativeMatches })
+        assert.deepStrictEqual(state, unobservedState)
+        assert.deepStrictEqual(model, materializeRankingModel({ context: unobservedContext, state: unobservedState }))
+        const baselineContext = createRatingReplayContext(sameDateMatches, structuredClone(crossMidnightTeams))
+        const baselineState = replayRatingDates({ context: baselineContext, replayMatches: baselineContext.authoritativeMatches })
+        const baseline = materializeRankingModel({ context: baselineContext, state: baselineState })
+        assert.deepEqual(model.standings, baseline.standings)
+        for (const standing of model.standings) {
+          const updates = standing.history.filter((point) => point.ratingUpdate.updateUnit === 'series-atomic')
+          assert.equal(updates.length, scenario.seriesGameCounts.length)
+          assert.ok(updates.every((point) => point.delta !== 0))
+          if (scenario.name === 'ordinal-rematch') {
+            assert.deepEqual(updates.map((point) => point.source.officialMatchId),
+              ['synthetic-official-round-1', 'synthetic-official-round-2'])
+          }
+        }
+        console.log(JSON.stringify({ scenario: scenario.name, scope, ...result }))
+      }
+    } finally { await rm(root, { recursive: true, force: true }) }
+  })
+}
+
+test('a normalized series can start with an untimed source member before its timestamped members', { skip: !binary }, async () => {
+  const root = await temporary()
+  try {
+    const matches = mergeCommunityMatchSources({ oracleMatches: [
+      game('untimed-1', { sourceMatchId: 'untimed', bestOf: 3, gameNumber: 1, datetimeUtc: undefined }),
+      game('untimed-2', { sourceMatchId: 'untimed', bestOf: 3, gameNumber: 2,
+        date: '2026-01-02', datetimeUtc: '2026-01-02T00:30:00Z' }),
+    ], leaguepediaMatches: [] })
+    const { captures } = observe(matches)
+    assert.equal(captures.length, 1)
+    assert.equal(captures[0].frame.utcDate, '2026-01-01')
+    assert.deepEqual(captures[0].frame.series[0].members.map(({ ordering }) => ordering.datetimeUtc), ['2026-01-02T00:30:00Z', null])
+    const result = await runSeriesPassShadow({ captures, binaryPath: binary!, outputDir: join(root, 'untimed') })
+    assert.equal(result.members, 2)
+    assert.equal(result.mismatches, 0)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test('sparse maps preserve absence and ordered insertions while local execution advances on a skipped live delta', { skip: !binary }, async () => {
   const root = await temporary()
   try {
@@ -240,6 +344,12 @@ test('native rejects malformed frames, impossible membership and overflowing cou
       (v: typeof original) => { v.dates[0].series[0].wins[0] = 0 },
       (v: typeof original) => { v.dates[0].series[0].state = 'completed' },
       (v: typeof original) => { v.dates[0].series[0].members[0].ordering.datetimeUtc = '2026-01-02T00:00:00Z' },
+      (v: typeof original) => { for (const member of v.dates[2].series[0].members) {
+        member.ordering.datetimeUtc = member.ordering.datetimeUtc.replace('2026-01-02', '2026-01-03')
+      } },
+      (v: typeof original) => { v.dates[2].series[0].members[0].ordering.datetimeUtc = '2026-01-01T23:50:00Z' },
+      (v: typeof original) => { v.dates[0].series[0].members[0].ordering.datetimeUtc = '2025-12-31T12:00:00+01:00' },
+      (v: typeof original) => { v.dates[0].series[0].members[0].ordering.datetimeUtc = '2025-02-30T12:00:00Z' },
       (v: typeof original) => { v.dates[0].series[0].members[0].ordering.datetimeUtc = 'bad' },
       (v: typeof original) => { v.dates[0].series[0].members[0].ordering.gameNumber = numberBits(0.5) },
       (v: typeof original) => { v.dates[0].series[0].members[0].winner = 2 },

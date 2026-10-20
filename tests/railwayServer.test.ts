@@ -226,6 +226,57 @@ test('Railway server prefers refreshed bucket data over its bundled snapshot', a
   }
 })
 
+test('Railway HEAD releases a bucket response that stalls after headers', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-head-'))
+  const distDir = join(tempDir, 'dist')
+  const dataDir = join(tempDir, 'data')
+  await mkdir(distDir, { recursive: true })
+  await mkdir(dataDir, { recursive: true })
+  let releaseBody: (() => void) | undefined
+  const bodyReleased = new Promise<void>((resolve) => { releaseBody = resolve })
+  let objectReads = 0
+  const bucket = createServer((request, response) => {
+    if (request.url?.split('?')[0] === '/test-bucket/rankings/data/scopes/head.json') {
+      objectReads += 1
+      response.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000', etag: '"head-fixture"' })
+      response.write('{"standings":')
+      response.on('close', () => releaseBody?.())
+      if (request.method === 'HEAD') response.end()
+      return
+    }
+    response.writeHead(404)
+    response.end()
+  })
+  await new Promise<void>((resolve) => bucket.listen(0, '127.0.0.1', resolve))
+  const server = await startRailwayServer(distDir, dataDir, {
+    RANKING_BUCKET_NAME: 'test-bucket',
+    RANKING_BUCKET_ENDPOINT: `http://127.0.0.1:${(bucket.address() as AddressInfo).port}`,
+    RANKING_BUCKET_ACCESS_KEY_ID: 'test',
+    RANKING_BUCKET_SECRET_ACCESS_KEY: 'test',
+    RANKING_BUCKET_FORCE_PATH_STYLE: 'true',
+  })
+  let guard: ReturnType<typeof setTimeout> | undefined
+  try {
+    const response = await httpRequest(server.port, '/data/scopes/head.json', { method: 'HEAD' })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.headers['content-length'], '1000')
+    assert.equal(response.headers.etag, '"head-fixture"')
+    assert.equal(response.body, '')
+    assert.equal(objectReads, 1)
+    const released = await Promise.race([
+      bodyReleased.then(() => true),
+      new Promise<boolean>((resolve) => { guard = setTimeout(() => resolve(false), 1_000) }),
+    ])
+    assert.equal(released, true, 'HEAD must release the bucket body without waiting for its payload')
+  } finally {
+    clearTimeout(guard)
+    await server.close()
+    bucket.closeAllConnections()
+    await new Promise<void>((resolve, reject) => bucket.close((error) => error ? reject(error) : resolve()))
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('Railway server reuses its verified root cache and invalidates it when the active ETag changes', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'lol-ranking-server-cache-'))
   const distDir = join(tempDir, 'dist')

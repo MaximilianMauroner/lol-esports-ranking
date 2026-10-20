@@ -11,7 +11,7 @@ import { prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 
 const binary = process.env.RANKING_RUST_TEST_BINARY
 
-test('malformed event-detail JSON has stable warnings without retries and later details continue', async (context) => {
+test('event-detail JSON and body failures have stable warnings without retries and later details continue', async (context) => {
   const root = await mkdtemp(join(tmpdir(), 'lolesports-json-parity-'))
   try {
     for (const scenario of [
@@ -19,6 +19,7 @@ test('malformed event-detail JSON has stable warnings without retries and later 
       { name: 'truncated', body: '{"data":', continue: false },
       { name: 'invalid token', body: '{"data":undefined}', continue: false },
       { name: 'later valid detail', body: '{"data":', continue: true },
+      { name: 'malformed gzip before later valid detail', body: 'invalid gzip body', continue: true, compressed: true },
     ]) {
       await context.test(scenario.name, async (caseContext) => {
         const requests: string[] = []
@@ -27,6 +28,10 @@ test('malformed event-detail JSON has stable warnings without retries and later 
         const server = createServer((request, response) => {
           const url = new URL(request.url ?? '/', 'http://fixture.invalid')
           requests.push(url.pathname + (url.searchParams.has('id') ? `:${url.searchParams.get('id')}` : ''))
+          if (url.pathname === '/getEventDetails' && url.searchParams.get('id') === 'bad' && scenario.compressed) {
+            response.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip', connection: 'close' }).end(scenario.body)
+            return
+          }
           response.writeHead(200, { 'content-type': 'application/json', connection: 'close' })
           response.end(url.pathname === '/getSchedule'
             ? JSON.stringify({ data: { schedule: { pages: {}, events } } })
@@ -54,7 +59,14 @@ test('malformed event-detail JSON has stable warnings without retries and later 
               assert.equal(artifact.fetchTelemetry.requests, scenario.continue ? 3 : 2)
               assert.equal(artifact.fetchTelemetry.retryCount, 0)
               assert.deepEqual(artifact.fetchTelemetry.retries, [])
-              assert.deepEqual(artifact.warnings.slice(1), ['LoL Esports getEventDetails failed for bad: Invalid JSON response'])
+              assert.deepEqual(artifact.warnings.slice(1), [`LoL Esports getEventDetails failed for bad: ${scenario.compressed ? 'terminated' : 'Invalid JSON response'}`])
+              if (scenario.compressed) {
+                assert.deepEqual(normalize(artifact.fetchTelemetry.attempts), [
+                  { attempt: 1, status: 200, retryable: false },
+                  { attempt: 1, status: 200, retryable: false, reason: 'body-error', error: 'terminated' },
+                  { attempt: 1, status: 200, retryable: false },
+                ])
+              }
               assert.deepEqual(artifact.eventDetails, scenario.continue ? [{ id: 'good', event: { id: 'good', games: [{ id: 'game-good' }] } }] : [])
               assert.deepEqual(requests.slice(before), ['/getSchedule', '/getEventDetails:bad', ...(scenario.continue ? ['/getEventDetails:good'] : [])])
               const normalized = normalize(artifact)
@@ -247,7 +259,7 @@ test('native fetch preserves optional and required failure receipts and network 
   }
 })
 
-test('native fetch preserves malformed compressed body failures without retries or child artifacts', { skip: !binary }, async () => {
+test('native fetch preserves malformed compressed body failure receipts without retries', { skip: !binary }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'rust-fetch-body-failure-parity-'))
   let requests = 0
   const server = createServer((_request, response) => {
@@ -262,6 +274,7 @@ test('native fetch preserves malformed compressed body failures without retries 
     for (const provider of ['oracle', 'leaguepedia', 'lolesports'] as const) {
       for (const required of [false, true]) {
         const manifests: unknown[] = []
+        const receipts: unknown[] = []
         for (const worker of ['node', 'rust'] as const) {
           const directory = join(root, `${provider}-${required}-${worker}`)
           const flags = ['--start', '2026-01-01', '--end', '2026-01-03', '--out-dir', directory,
@@ -279,16 +292,35 @@ test('native fetch preserves malformed compressed body failures without retries 
           const manifest: {
             sources: Record<string, { status: string; failures: Array<{ error: string }> }>;
             fetchTelemetry: { requests: number; retryCount: number };
+            files: { oracleCsv: string[]; leaguepediaJson: string[]; lolEsportsJson: string[] };
           } = JSON.parse(manifestText)
           assert.equal(manifest.sources[provider].status, 'failed')
           if (provider === 'oracle') assert.equal(manifest.sources[provider].failures[0].error, 'terminated')
-          assert.deepEqual(manifest.fetchTelemetry, { requests: provider === 'oracle' ? 1 : 0, retryCount: 0 })
+          assert.deepEqual(manifest.fetchTelemetry, { requests: 1, retryCount: 0 }, `${provider} ${required} ${worker}`)
+          assert.deepEqual(manifest.files, { oracleCsv: [], leaguepediaJson: [], lolEsportsJson: [] })
           const artifactPath = provider === 'oracle' ? join(directory, 'oracles-elixir', 'oracle.csv')
             : join(directory, provider, `${provider === 'leaguepedia' ? 'scoreboard-games' : 'schedule'}-2026-01-01_to_2026-01-03.json`)
-          await assert.rejects(readFile(artifactPath), { code: 'ENOENT' })
+          if (provider === 'oracle') {
+            await assert.rejects(readFile(artifactPath), { code: 'ENOENT' })
+          } else {
+            const receipt = JSON.parse(await readFile(artifactPath, 'utf8'))
+            assert.equal(receipt.status, 'failed')
+            assert.deepEqual(normalize(receipt.fetchTelemetry), {
+              requests: 1, retryCount: 0, retries: [],
+              attempts: [{ attempt: 1, status: 200, retryable: false, reason: 'body-error', error: 'terminated' }],
+            })
+            if (provider === 'leaguepedia') assert.deepEqual(receipt.matches, [])
+            else {
+              assert.deepEqual(receipt.events, [])
+              assert.deepEqual(receipt.schedulePages, [])
+              assert.deepEqual(receipt.eventDetails, [])
+            }
+            receipts.push(normalize(receipt))
+          }
           manifests.push(normalize(JSON.parse(manifestText.replaceAll(directory, '<output>'))))
         }
         assert.deepEqual(manifests[1], manifests[0])
+        if (provider !== 'oracle') assert.deepEqual(receipts[1], receipts[0])
       }
     }
   } finally {

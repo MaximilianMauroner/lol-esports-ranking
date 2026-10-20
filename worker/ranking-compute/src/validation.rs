@@ -261,6 +261,7 @@ pub(crate) fn validate(request: &Request) -> Result<()> {
                 return Err("canonical series teams are not ordered or distinct".into());
             }
             let mut wins = [0_u32; 2];
+            let mut date_anchored = false;
             for (position, member) in series.members.iter().enumerate() {
                 identity(&member.match_id)?;
                 identity(&member.id)?;
@@ -289,11 +290,13 @@ pub(crate) fn validate(request: &Request) -> Result<()> {
                 if let Some(time) = &member.ordering.datetime_utc {
                     let parsed = DateTime::parse_from_rfc3339(time)
                         .map_err(|_| "invalid member UTC time")?;
-                    if parsed.offset().local_minus_utc() != 0
-                        || parsed.format("%Y-%m-%d").to_string() != frame.utc_date
-                    {
-                        return Err("member time is outside its UTC date".into());
+                    let date = parsed.format("%Y-%m-%d").to_string();
+                    if parsed.offset().local_minus_utc() != 0 || date < frame.utc_date {
+                        return Err("member time precedes its UTC date or is not UTC".into());
                     }
+                    date_anchored |= date == frame.utc_date;
+                } else {
+                    date_anchored = true;
                 }
                 count(Some(member.ordering.game_number), true, 0)?;
                 if member.ordering.game_number.0 < 1.0
@@ -336,6 +339,9 @@ pub(crate) fn validate(request: &Request) -> Result<()> {
                 text(&member.patch)?;
                 text(&member.event)?;
                 text(&member.tier)?;
+            }
+            if !date_anchored {
+                return Err("series has no member on its UTC date".into());
             }
             if wins != series.wins {
                 return Err("series wins differ from member winners".into());

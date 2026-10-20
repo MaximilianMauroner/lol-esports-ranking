@@ -1,8 +1,10 @@
 use crate::{Result, now_ms};
+use ranking_contracts::limits::DOCUMENT_LIMIT;
 use reqwest::{Url, blocking::Client};
 use serde_json::{Value, json};
 use std::{
     borrow::Cow,
+    io::{self, Read},
     time::{Duration, Instant},
 };
 
@@ -19,6 +21,7 @@ pub struct Policy {
     pub attempts: u32,
     pub base_delay_ms: u64,
     pub leaguepedia: bool,
+    pub body_limit: u64,
 }
 impl Default for Policy {
     fn default() -> Self {
@@ -26,6 +29,7 @@ impl Default for Policy {
             attempts: 5,
             base_delay_ms: 500,
             leaguepedia: false,
+            body_limit: DOCUMENT_LIMIT,
         }
     }
 }
@@ -115,10 +119,17 @@ impl Http {
                     // Leaguepedia inspects bodies for rate limits. Other providers
                     // classify failures from headers even when a body never arrives.
                     let body = if policy.leaguepedia || (200..=299).contains(&status) {
-                        response.bytes().map(|body| body.to_vec())
+                        read_body(response, policy.body_limit)
                     } else {
                         Ok(Vec::new())
                     };
+                    if let Err(error) = &body
+                        && error.kind() == io::ErrorKind::FileTooLarge
+                    {
+                        self.terminal_failure = true;
+                        self.attempts.push(json!({"attempt":attempt,"startedAtMs":attempt_start,"finishedAtMs":now_ms(),"status":status,"retryable":false,"reason":"body-limit"}));
+                        return Err(error.to_string().into());
+                    }
                     let reason = if policy.leaguepedia
                         && body
                             .as_ref()
@@ -132,15 +143,36 @@ impl Http {
                     if let Some(reason) = &reason {
                         entry["reason"] = json!(reason);
                     }
-                    self.attempts.push(entry);
                     let Some(reason) = reason else {
                         if !(200..=299).contains(&status) {
+                            self.attempts.push(entry);
                             self.terminal_failure = true;
                             return Err(format!("HTTP {status} from {url}").into());
                         }
-                        let body = body.map_err(|_| "terminated")?;
-                        return Ok(Response { body, content_type });
+                        let body = body.map_err(|error| {
+                            self.terminal_failure = true;
+                            let timeout = error.kind() == io::ErrorKind::TimedOut
+                                || error
+                                    .get_ref()
+                                    .and_then(|error| error.downcast_ref::<reqwest::Error>())
+                                    .is_some_and(reqwest::Error::is_timeout);
+                            let message = if timeout {
+                                "Provider request exceeded maxElapsedMs"
+                            } else {
+                                "terminated"
+                            };
+                            entry["reason"] =
+                                json!(if timeout { "max-elapsed" } else { "body-error" });
+                            entry["error"] = json!(message);
+                            message
+                        });
+                        self.attempts.push(entry);
+                        return Ok(Response {
+                            body: body?,
+                            content_type,
+                        });
                     };
+                    self.attempts.push(entry);
                     last_error = format!("Provider request exhausted retries: {reason}");
                     (
                         reason,
@@ -195,6 +227,27 @@ impl Http {
     }
 }
 
+fn read_body(response: reqwest::blocking::Response, limit: u64) -> io::Result<Vec<u8>> {
+    let exceeded = || {
+        io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            "Provider response body exceeds byte limit",
+        )
+    };
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit)
+    {
+        return Err(exceeded());
+    }
+    let mut body = Vec::new();
+    response.take(limit + 1).read_to_end(&mut body)?;
+    if body.len() as u64 > limit {
+        return Err(exceeded());
+    }
+    Ok(body)
+}
+
 fn retry_after_ms(value: &str, now: u64) -> Option<u64> {
     let value = value.trim();
     if value.is_empty() {
@@ -223,6 +276,297 @@ fn retry_delay(attempt: u32, base: u64, retry_after: Option<u64>, random: f64) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ranking_contracts::limits::DOCUMENT_LIMIT;
+    use std::io::{Read, Write};
+
+    fn serve(status: u16, headers: &str, body: Vec<u8>) -> (Url, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/fixture",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let headers = headers.to_owned();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            let _ = stream.write_all(
+                format!("HTTP/1.1 {status} Fixture\r\nConnection: close\r\n{headers}\r\n")
+                    .as_bytes(),
+            );
+            let _ = stream.write_all(&body);
+        });
+        (url, server)
+    }
+
+    #[test]
+    fn provider_http_bodies_are_bounded() {
+        let oversized = vec![b'x'; DOCUMENT_LIMIT as usize + 1];
+        let chunked = [
+            format!("{:x}\r\n", oversized.len()).into_bytes(),
+            oversized.clone(),
+            b"\r\n0\r\n\r\n".to_vec(),
+        ]
+        .concat();
+        let compressed = ranking_contracts::gzip(&oversized).unwrap();
+        for (headers, body) in [
+            ("Transfer-Encoding: chunked\r\n".to_owned(), chunked),
+            (
+                format!("Content-Length: {}\r\n", oversized.len()),
+                Vec::new(),
+            ),
+            (String::new(), oversized),
+            (
+                format!(
+                    "Content-Encoding: gzip\r\nContent-Length: {}\r\n",
+                    compressed.len()
+                ),
+                compressed,
+            ),
+        ] {
+            let (url, server) = serve(200, &headers, body);
+            let mut http = Http {
+                client: Client::builder().no_proxy().build().unwrap(),
+                ..Http::default()
+            };
+            let result = http.get(url, &[], &Policy::default());
+            server.join().unwrap();
+            let error = result.err().expect("oversized provider body was accepted");
+            assert!(error.to_string().contains("limit"), "{error}");
+            assert_eq!(http.requests, 1);
+            assert!(http.terminal_failure);
+        }
+    }
+
+    #[test]
+    fn provider_http_accepts_the_exact_document_limit() {
+        let body = vec![b'x'; DOCUMENT_LIMIT as usize];
+        let (url, server) = serve(
+            200,
+            &format!("Content-Length: {}\r\n", body.len()),
+            body.clone(),
+        );
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let response = http.get(url, &[], &Policy::default()).unwrap();
+        server.join().unwrap();
+        assert_eq!(response.body, body);
+    }
+
+    #[test]
+    fn oversized_leaguepedia_rate_limit_bodies_do_not_retry() {
+        let (url, server) = serve(429, "", vec![b'x'; 65_537]);
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let policy = Policy {
+            leaguepedia: true,
+            body_limit: 32,
+            base_delay_ms: 0,
+            ..Policy::default()
+        };
+        let result = http.get(url, &[], &policy);
+        server.join().unwrap();
+        let error = result
+            .err()
+            .expect("oversized rate limit body was accepted");
+        assert!(error.to_string().contains("limit"), "{error}");
+        assert_eq!(http.requests, 1);
+        assert!(http.retries.is_empty());
+        assert!(http.terminal_failure);
+    }
+
+    #[test]
+    fn oracle_csv_downloads_can_exceed_the_document_limit() {
+        let mut body = b"gameid,date\n".to_vec();
+        body.resize(DOCUMENT_LIMIT as usize + 1, b'x');
+        let size = body.len() as u64;
+        let (url, server) = serve(200, &format!("Content-Length: {size}\r\n"), body);
+        let directory = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!(
+                "oracle-body-{}-{}",
+                std::process::id(),
+                crate::now_ms()
+            ));
+        let options = crate::Options::parse(&["--oracle-csv-url".into(), url.into()]);
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let outcome = crate::oracle::download(
+            &mut http,
+            &options,
+            &directory,
+            "2026-01-01",
+            "2026-12-31",
+            &mut Vec::new(),
+        )
+        .unwrap();
+        server.join().unwrap();
+        let length = std::fs::metadata(directory.join("oracles-elixir-1.csv"))
+            .unwrap()
+            .len();
+        std::fs::remove_dir_all(directory).unwrap();
+        assert!(outcome.failures.is_empty());
+        assert_eq!(outcome.files.len(), 1);
+        assert_eq!(length, size);
+    }
+
+    #[test]
+    fn drive_file_names_cannot_escape_the_download_directory() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!(
+                "oracle-paths-{}-{}",
+                std::process::id(),
+                crate::now_ms()
+            ));
+        let directory = root.join("downloads/nested");
+        std::fs::create_dir_all(&directory).unwrap();
+        let escaped = root.join("escape.csv");
+        let absolute = root.join("absolute.csv");
+        for path in [&escaped, &absolute] {
+            std::fs::write(path, b"preserve existing file").unwrap();
+        }
+        let names = [
+            "../../escape.csv".to_owned(),
+            absolute.to_str().unwrap().to_owned(),
+            "subdirectory/child.csv".to_owned(),
+            "./dot.csv".to_owned(),
+            "subdirectory/../child.csv".to_owned(),
+            "2027_invalid/child.csv".to_owned(),
+            "subdirectory\\child.csv".to_owned(),
+            "2026_valid.csv".to_owned(),
+        ];
+        let html = names
+            .iter()
+            .enumerate()
+            .map(|(id, name)| format!(
+                r#"https://drive.google.com/file/d/{id}/view?usp=drive_web<div class="flip-entry-title">{name}</div>"#
+            ))
+            .collect::<String>();
+        let mut http = Http {
+            client: Client::builder().no_proxy().build().unwrap(),
+            ..Http::default()
+        };
+        let (folder_url, folder_server) =
+            serve(200, "Content-Type: text/html\r\n", html.into_bytes());
+        let response = http.get(folder_url, &[], &Policy::default()).unwrap();
+        folder_server.join().unwrap();
+        let mut warnings = Vec::new();
+        let mut failures = Vec::new();
+        let sources =
+            crate::oracle::drive_sources(&response.text(), &mut warnings, &mut failures).unwrap();
+        assert_eq!(
+            sources,
+            vec![(
+                "2026_valid.csv".into(),
+                "https://drive.google.com/uc?export=download&id=7".into()
+            )]
+        );
+        let csv = b"gameid,date\ngame,2026-01-01\n".to_vec();
+        let (mut url, server) = serve(200, "Content-Type: text/csv\r\n", csv.clone());
+        url.set_path(&sources[0].0);
+        let options = crate::Options::parse(&["--oracle-csv-url".into(), url.into()]);
+        let outcome = crate::oracle::download(
+            &mut http,
+            &options,
+            &directory,
+            "2026-01-01",
+            "2026-12-31",
+            &mut warnings,
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert!(outcome.failures.is_empty());
+        assert_eq!(
+            std::fs::read(directory.join("2026_valid.csv")).unwrap(),
+            csv
+        );
+        let observed = (
+            outcome.files,
+            failures.len(),
+            http.requests,
+            std::fs::read(&escaped).unwrap(),
+            std::fs::read(&absolute).unwrap(),
+        );
+        std::fs::remove_dir_all(root).unwrap();
+        assert_eq!(observed.0, vec![directory.join("2026_valid.csv")]);
+        assert_eq!(observed.1, names.len() - 1);
+        assert_eq!(observed.2, 2, "invalid names must not be downloaded");
+        assert_eq!(observed.3, b"preserve existing file");
+        assert_eq!(observed.4, b"preserve existing file");
+    }
+
+    #[test]
+    fn direct_oracle_urls_keep_safe_fallback_names() {
+        for (segment, expected) in [
+            ("season.CSV", "oracles-elixir-1.csv"),
+            ("season.Csv", "oracles-elixir-1.csv"),
+            ("season.json", "oracles-elixir-1.csv"),
+            ("download", "oracles-elixir-1.csv"),
+            ("season.csv", "season.csv"),
+        ] {
+            let body = b"gameid,date\ngame,2026-01-01\n".to_vec();
+            let (mut url, server) = serve(200, "Content-Type: text/csv\r\n", body.clone());
+            url.set_path(segment);
+            let directory = std::env::current_dir()
+                .unwrap()
+                .join("target")
+                .join(format!(
+                    "oracle-direct-{}-{}",
+                    std::process::id(),
+                    crate::now_ms()
+                ));
+            let options = crate::Options::parse(&["--oracle-csv-url".into(), url.into()]);
+            let mut http = Http {
+                client: Client::builder().no_proxy().build().unwrap(),
+                ..Http::default()
+            };
+            let outcome = crate::oracle::download(
+                &mut http,
+                &options,
+                &directory,
+                "2026-01-01",
+                "2026-12-31",
+                &mut Vec::new(),
+            )
+            .unwrap();
+            if http.requests > 0 {
+                server.join().unwrap();
+            }
+            let downloaded = std::fs::read(directory.join(expected));
+            if directory.exists() {
+                std::fs::remove_dir_all(&directory).unwrap();
+            }
+            assert!(
+                outcome.failures.is_empty(),
+                "{segment}: {:?}",
+                outcome.failures
+            );
+            assert_eq!(outcome.files, vec![directory.join(expected)]);
+            assert_eq!(downloaded.unwrap(), body);
+        }
+    }
+
     #[test]
     fn retry_after_preserves_budget_and_server_minimum() {
         assert_eq!(retry_after_ms("1.2345", 0), Some(1235));

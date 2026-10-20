@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import test from 'node:test'
 import { Readable } from 'node:stream'
 import { defaultRunChild, isDailyAuditDue, publishRefreshRolloutEvidence, runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
@@ -411,6 +413,63 @@ test('timeout waits for child-tree exit before rejecting and permitting lease re
   assert.equal(settled, true)
 })
 
+for (const childBehavior of ['exit', 'ignore']) {
+  test(`timeout kills a SIGTERM-resistant grandchild when the direct child will ${childBehavior}`, {
+    skip: process.platform === 'win32',
+    timeout: 10_000,
+  }, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'refresh-timeout-tree-'))
+    const pidPath = join(root, 'grandchild.pid')
+    let child: ChildProcess | undefined
+    let triggerTimeout: (() => void) | undefined
+    const running = runChildProcess(process.execPath, [resolve('tests/fixtures/refreshTimeoutProcessTree.mjs'), childBehavior, pidPath], 30_000, process.env, {
+      spawn: (command: string, args: string[], options: SpawnOptions) => {
+        child = spawn(command, args, options)
+        return child
+      },
+      setTimeout: (callback: () => void, timeoutMs: number) => {
+        if (timeoutMs === 30_000) triggerTimeout = callback
+        return setTimeout(callback, timeoutMs === 5_000 ? 100 : timeoutMs)
+      },
+    })
+    const outcome = running.then(() => undefined, (error: Error) => error)
+    try {
+      let grandchildPid: number | undefined
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const text = await readFile(pidPath, 'utf8').catch(() => undefined)
+        if (text) {
+          grandchildPid = Number(text)
+          break
+        }
+        await delay(10)
+      }
+      assert.ok(grandchildPid, 'The grandchild must install its SIGTERM handler before the timeout')
+      assert.ok(triggerTimeout)
+      triggerTimeout()
+      assert.match((await outcome)?.message ?? '', /Refresh job exceeded/)
+      let alive = true
+      for (let attempt = 0; attempt < 100 && alive; attempt += 1) {
+        try {
+          process.kill(grandchildPid, 0)
+          await delay(10)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+          alive = false
+        }
+      }
+      assert.equal(alive, false, 'SIGKILL must reach descendants after the direct child exits')
+    } finally {
+      if (child?.pid) {
+        try { process.kill(-child.pid, 'SIGKILL') } catch (error) {
+          assert.equal((error as NodeJS.ErrnoException).code, 'ESRCH')
+        }
+      }
+      await outcome
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+}
+
 test('published child telemetry remains canonical in result, trigger state, and stable log', async () => {
   const root = await mkdtemp(join(tmpdir(), 'refresh-canonical-parent-'))
   const metricsPath = join(root, 'metrics.json')
@@ -748,16 +807,46 @@ async function runRefreshChildCase(kind: 'unchanged' | 'stale-source' | 'error',
     RANKING_BUCKET_RESTORE_RAW: 'false',
     RANKING_BUCKET_UPLOAD_ENABLED: 'false',
   }
+  const output = join(paths.root, 'ranking-snapshot.full.json')
+  const publicDataDir = join(paths.root, 'public')
   const args = [
     '--raw-dir', paths.raw,
     '--manifest', paths.manifest,
     '--state', paths.refreshState,
     '--staging-dir', paths.staging,
-    '--skip-crunch',
+    '--output', output,
+    '--public-data-dir', publicDataDir,
+    '--reconciliation-output', paths.reconciliation,
     '--end', '2026-07-22',
   ]
-  await refreshDataIfChanged(args, { run: fakeRun, env })
-  if (kind === 'unchanged') await refreshDataIfChanged(args, { run: fakeRun, env })
+  if (kind === 'unchanged') {
+    const baseline = await refreshDataIfChanged(args, {
+      env: {
+        ...env,
+        RANKING_REFRESH_RUN_ID: `${context.runId}-baseline`,
+        RANKING_REFRESH_METRICS_PATH: join(paths.root, 'baseline-metrics.json'),
+      },
+      bucketConfig: { enabled: false },
+      run: async (command: string, childArgs: string[]) => {
+        if (childArgs.includes('scripts/download-local-data.mjs')) return fakeRun(command, childArgs)
+        assert.equal(command, 'pnpm')
+        assert.deepEqual(childArgs, [
+          'exec', 'tsx', 'scripts/build-static-snapshot.ts',
+          '--output', output,
+          '--public-data-dir', publicDataDir,
+          '--manifest', paths.manifest,
+          '--reconciliation-output', paths.reconciliation,
+        ])
+        await mkdir(publicDataDir, { recursive: true })
+        const artifact = JSON.stringify({ syntheticFixture: 'unchanged-metrics-baseline' })
+        await writeFile(output, artifact)
+        await writeFile(join(publicDataDir, 'ranking-summary.json'), artifact)
+      },
+    })
+    assert.equal(baseline.changed, true)
+    await assert.rejects(readFile(paths.reconciliation), { code: 'ENOENT' })
+  }
+  await refreshDataIfChanged([...args, '--skip-crunch'], { run: fakeRun, env })
 }
 
 function downloaderSource(

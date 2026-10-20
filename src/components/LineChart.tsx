@@ -61,7 +61,6 @@ export type LineChartProps = {
   persistentTooltip?: boolean
 }
 
-const tickDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
 /** Longer than a normal break between matches; shorter than an off-season. */
 const SEGMENT_GAP_MS = 21 * 86_400_000
 /** Direct labels help from two lines; past six the right edge gets crowded. */
@@ -69,7 +68,6 @@ const MAX_DIRECT_LABELS = 6
 const DIRECT_LABEL_WIDTH = 52
 const DIRECT_LABEL_MIN_GAP_PX = 13
 const CHART_VERTICAL_CHROME_PX = 92
-const fullDate = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
 
 export function LineChart({
   series,
@@ -164,7 +162,7 @@ export function LineChart({
             tickLine={false}
             axisLine={false}
             minTickGap={28}
-            tickFormatter={(value) => formatChartTimestamp(value, tickDate)}
+            tickFormatter={(value) => formatChartTimestamp(value, 'month-day')}
           />
           <YAxis
             type="number"
@@ -243,7 +241,7 @@ function summarizeSeries(series: ChartSeries) {
 }
 
 function formatPointSummary(point: ChartSeries['points'][number], formatValue: (value: number) => string) {
-  return `${formatValue(point.y)} on ${formatChartTimestamp(point.t, fullDate)}`
+  return `${formatValue(point.y)} on ${formatChartTimestamp(point.t)}`
 }
 
 function buildChartData(series: ChartSeries[]) {

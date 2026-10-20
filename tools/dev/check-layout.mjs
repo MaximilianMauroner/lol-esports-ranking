@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -23,15 +24,17 @@ export function trackedPathError(path) {
 
 export function checkLayout(root = process.cwd()) {
   let files
+  let ignoredFiles
   try {
     const top = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-    if (resolve(top) !== resolve(root)) return { blocked: true, errors: ['BLOCKED: tracked-file hygiene requires Git metadata at the source root'] }
+    if (realpathSync(top) !== realpathSync(root)) return { blocked: true, errors: ['BLOCKED: tracked-file hygiene requires Git metadata at the source root'] }
     files = execFileSync('git', ['-C', root, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).split('\0').filter(Boolean)
+    ignoredFiles = new Set(execFileSync('git', ['-C', root, 'ls-files', '--cached', '--ignored', '--exclude-per-directory=.gitignore', '-z'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).split('\0').filter(Boolean))
   } catch {
     return { blocked: true, errors: ['BLOCKED: tracked-file hygiene requires Git metadata'] }
   }
   return { blocked: false, errors: files.flatMap(path => {
-    const error = trackedPathError(path)
+    const error = trackedPathError(path) ?? (ignoredFiles.has(path) ? 'Tracked file matches .gitignore' : undefined)
     return error ? [`${path}: ${error}`] : []
   }) }
 }

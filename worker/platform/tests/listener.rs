@@ -5,7 +5,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 async fn library_consumer_owns_a_real_listener_and_joins_shutdown() {
     let root = tempfile::tempdir().unwrap();
     let server = LocalDataServer::bind(LocalDataOptions {
-        data_root: root.path().into(),
+        data_root: root.path().canonicalize().unwrap(),
         listen: "127.0.0.1:0".parse().unwrap(),
         ..LocalDataOptions::default()
     })
@@ -39,7 +39,7 @@ async fn a_slow_body_cannot_keep_a_connection_beyond_its_delivery_deadline() {
         .set_len(size)
         .unwrap();
     let server = LocalDataServer::bind(LocalDataOptions {
-        data_root: root.path().into(),
+        data_root: root.path().canonicalize().unwrap(),
         listen: "127.0.0.1:0".parse().unwrap(),
         ..LocalDataOptions::default()
     })
