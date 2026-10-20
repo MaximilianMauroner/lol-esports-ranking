@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, env, io::Read, time::Duration};
 
 pub struct Bucket {
     client: Client,
+    request_timeout: Duration,
     endpoint: Url,
     bucket: String,
     region: String,
@@ -52,6 +53,7 @@ impl Bucket {
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .map_err(|_| "Cannot create S3 client")?,
+            request_timeout: Duration::from_secs(120),
             endpoint,
             bucket: required(&["RANKING_BUCKET_NAME", "S3_BUCKET", "BUCKET"])?,
             region: optional(&[
@@ -279,6 +281,7 @@ mod tests {
                 .no_zstd()
                 .build()
                 .unwrap(),
+            request_timeout: Duration::from_secs(120),
             endpoint,
             bucket: "fixture".into(),
             region: "auto".into(),
@@ -288,6 +291,60 @@ mod tests {
             path_style: true,
         };
         (bucket, server)
+    }
+
+    #[test]
+    fn s3_body_reads_keep_the_total_request_deadline() {
+        let timeout = Duration::from_millis(250);
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = Url::parse(&format!("http://{}/", listener.local_addr().unwrap())).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream.set_nodelay(true).unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+                let count = stream.read(&mut buffer).unwrap();
+                assert!(count > 0);
+                request.extend_from_slice(&buffer[..count]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 20\r\n\r\n")
+                .unwrap();
+            for _ in 0..20 {
+                if stream.write_all(b"x").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let bucket = Bucket {
+            client: Client::builder()
+                .no_proxy()
+                .timeout(timeout)
+                .build()
+                .unwrap(),
+            request_timeout: timeout,
+            endpoint,
+            bucket: "fixture".into(),
+            region: "auto".into(),
+            access: "fixture-access".into(),
+            secret: "fixture-secret".into(),
+            prefix: "rankings".into(),
+            path_style: true,
+        };
+        let result = bucket.request(Method::GET, "objects/fixture", BTreeMap::new(), vec![]);
+        server.join().unwrap();
+        let error = result
+            .err()
+            .expect("S3 body exceeded the total request deadline");
+        assert_eq!(error, "S3 response body failed");
     }
 
     #[test]
