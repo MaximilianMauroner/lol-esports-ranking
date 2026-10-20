@@ -3,11 +3,16 @@ import { existsSync } from 'node:fs'
 import test from 'node:test'
 import { chromium } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
+import { eventAddress } from '../src/browser/tournaments/eventAddress'
 
 const at = '2026-09-27T12:00:00.000Z'
 const tournamentPath = '/tournament-data/feed.json'
 const healthPath = `${tournamentPath}.health.json`
 const longWinner = 'Northern Lights International Esports Club'
+const worldsId = '2026 Season World Championship/Main Event'
+const worldsAddress = eventAddress({ id: worldsId, competition: 'worlds', season: '2026' })
+const lcsAddress = eventAddress({ id: 'lcs:2026:fixture-lcs', competition: 'lcs', season: '2026' })
+const missingLink = 'This competition link is not in the current schedule. Choose a competition.'
 const disabledForecasts = 'Match forecasts are not enabled for this schedule.'
 
 function team(id: string, name: string | null, gameWins: number | null = null, outcome: string | null = null) {
@@ -35,8 +40,8 @@ function fixtureFeed() {
           series('unknown', 'lcs:2026:fixture-lcs', [team('forest', 'Forest Owls', 3), team('desert', 'Desert Hawks', 1)], 'unknown', 'result-missing'),
           { ...series('tbd', 'lcs:2026:fixture-lcs', [team('island', 'Island Otters'), team('tbd', null)], 'upcoming', 'unstarted'), startTime: '2026-10-15T13:00:00.000Z' },
         ] },
-      { id: 'worlds:2026', sourceTournamentId: 'fixture-worlds', competition: 'worlds', label: 'Worlds 2026', season: '2026',
-        series: [series('worlds-series', 'worlds:2026', [team('gamma', 'Gamma'), team('delta', 'Delta')], 'upcoming', 'unstarted')] },
+      { id: worldsId, sourceTournamentId: worldsId, competition: 'worlds', label: 'Worlds 2026', season: '2026',
+        series: [series('worlds-series', worldsId, [team('gamma', 'Gamma'), team('delta', 'Delta')], 'upcoming', 'unstarted')] },
     ],
   }
 }
@@ -83,6 +88,8 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     const executablePath = chromium.executablePath()
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, timezoneId: 'Europe/Vienna' })
+    const pageErrors: string[] = []
+    page.on('pageerror', (error) => pageErrors.push(error.message))
     const externalRequests: string[] = []
     page.on('request', (request) => { if (!request.url().startsWith(base)) externalRequests.push(request.url()) })
     await page.clock.install({ time: new Date(at) })
@@ -90,10 +97,10 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
       if (!localStorage.getItem('tournament-feed')) localStorage.setItem('tournament-feed', JSON.stringify(cached))
     }, { ...feed, events: feed.events.slice(0, 1) })
 
-    await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
+    await page.goto(`${base}/#tournaments?event=${worldsAddress}&view=schedule&scope=season%3A2026&scenario=kept`)
     await waitForPendingFeed(pendingFeed)
     assert.equal(await page.getByRole('heading', { name: 'LCS 2026', exact: true }).count(), 0, 'A cache without the addressed event must not substitute another competition')
-    assert.match(page.url(), /event=worlds%3A2026/)
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('event'), worldsAddress)
     await page.getByText('Loading tournament schedule', { exact: true }).waitFor()
     pendingFeed.splice(0).forEach((respond) => respond())
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
@@ -113,15 +120,35 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     pendingHealth.splice(0).forEach((respond) => respond())
     assert.match(await page.locator('body').innerText(), /Gamma.*Delta/)
     assert.match(await page.locator('body').innerText(), /Test fixture data\. Not official/)
-    assert.equal(await page.getByRole('link', { name: 'Leaguepedia' }).getAttribute('href'), 'https://lol.fandom.com/wiki/fixture-worlds')
+    assert.equal(await page.getByRole('link', { name: 'Leaguepedia' }).getAttribute('href'), 'https://lol.fandom.com/wiki/2026_Season_World_Championship/Main_Event')
     assert.equal(await page.getByRole('link', { name: 'CC BY-SA 3.0' }).getAttribute('href'), 'https://creativecommons.org/licenses/by-sa/3.0/')
     assert.ok(dataRequests.includes(tournamentPath))
     assert.ok(dataRequests.every((path) => path === tournamentPath || path === healthPath), `Unexpected data requests: ${dataRequests}`)
     assert.deepEqual(externalRequests, [])
 
+    const historyLength = await page.evaluate(() => history.length)
+    await page.evaluate((id) => {
+      const query = new URLSearchParams(location.hash.split('?')[1])
+      query.set('event', id)
+      history.replaceState(null, '', `#tournaments?${query}`)
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    }, worldsId)
+    await page.waitForURL((url) => new URLSearchParams(url.hash.split('?')[1]).get('event') === worldsAddress)
+    assert.equal(await page.evaluate(() => history.length), historyLength, 'Legacy normalization replaces the entry')
+    assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
+    holdNextFeed = true
+    await page.reload()
+    await waitForPendingFeed(pendingFeed)
+    await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
+    assert.equal(await page.getByText('Loading tournament schedule', { exact: true }).count(), 0, 'A cached address resolves before the fresh response')
+    pendingFeed.splice(0).forEach((respond) => respond())
+
     await page.locator('#tournament-event').selectOption('lcs:2026:fixture-lcs')
     await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
-    assert.match(page.url(), /event=lcs%3A2026%3Afixture-lcs/)
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('event'), lcsAddress)
+    for (const [key, value] of [['view', 'schedule'], ['scope', 'season:2026'], ['scenario', 'kept']]) {
+      assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get(key), value)
+    }
     assert.match(await page.locator('body').innerText(), /Alpha.*Beta/)
     const live = page.locator('section[aria-label="live"]')
     await live.getByText('Alpha 1–0 Beta', { exact: true }).waitFor()
@@ -154,7 +181,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.match(await page.locator('#main-content p').last().innerText(), /Live means the start time has passed and no result is in yet/)
     await page.goBack()
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
-    assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
+    assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
     await page.goForward()
     await page.getByRole('heading', { name: 'LCS 2026' }).waitFor()
     assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
@@ -195,7 +222,8 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     feed.fetchedAt = '2026-09-27T12:06:00.000Z'
     health.checkedAt = feed.fetchedAt
     await page.clock.fastForward(60_000)
-    await page.getByText('No tournaments in the schedule window.').waitFor()
+    await page.getByText(missingLink, { exact: true }).waitFor()
+    assert.equal(await page.getByRole('heading', { name: 'LCS 2026', exact: true }).count(), 0)
     assert.equal(await page.locator('#tournament-event').inputValue(), '')
     feed.events = originalEvents
     feed.fetchedAt = '2026-09-27T12:07:00.000Z'
@@ -205,10 +233,10 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
 
     feed.events[0]!.series.push({ ...series('far-lcs', 'lcs:2026:fixture-lcs', [team('alpha', 'Alpha'), team('beta', 'Beta')], 'upcoming', 'unstarted'), startTime: '2026-10-15T13:00:00.000Z' })
-    feed.events[1]!.series.push(series('worlds-other', 'worlds:2026', [team('epsilon', 'Epsilon'), team('zeta', 'Zeta')], 'upcoming', 'unstarted'))
+    feed.events[1]!.series.push(series('worlds-other', worldsId, [team('epsilon', 'Epsilon'), team('zeta', 'Zeta')], 'upcoming', 'unstarted'))
     await page.goto(`${base}/#tournaments`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
-    assert.equal(await page.locator('#tournament-event').inputValue(), 'worlds:2026')
+    assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
     assert.equal(await page.getByRole('button', { name: 'Bracket', exact: true }).getAttribute('aria-pressed'), 'true', 'The bracket is the default view')
     assert.equal(await page.getByText(disabledForecasts, { exact: true }).count(), 0, 'The disabled schedule message is absent from the bracket')
     const gamma = page.getByRole('button', { name: 'Gamma' })
@@ -236,12 +264,12 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.match(page.url(), /view=schedule/)
     await page.locator('section[aria-label="upcoming"]').waitFor()
 
-    await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
+    await page.goto(`${base}/#tournaments?event=${worldsAddress}&view=schedule&scope=season%3A2026&scenario=kept`)
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     holdNextFeed = true
     await page.getByRole('button', { name: 'Refresh' }).click()
     await waitForPendingFeed(pendingFeed)
-    feed.events[1]!.series[0] = series('worlds-series', 'worlds:2026', [team('gamma', 'Gamma', 3, 'win'), team('delta', 'Delta', 1, 'loss')], 'completed', 'completed')
+    feed.events[1]!.series[0] = series('worlds-series', worldsId, [team('gamma', 'Gamma', 3, 'win'), team('delta', 'Delta', 1, 'loss')], 'completed', 'completed')
     feed.fetchedAt = '2026-09-27T12:08:00.000Z'
     health.checkedAt = feed.fetchedAt
     await page.getByRole('button', { name: 'Refresh' }).click()
@@ -311,7 +339,43 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await waitForPendingFeed(pendingFeed)
     assert.equal(await page.getByText('Loading tournament schedule', { exact: true }).count(), 0, 'A return visit shows the last schedule while the feed request is held')
     pendingFeed.splice(0).forEach((respond) => respond())
+
+    const unavailableHash = '#tournaments?event=missing-event&view=swiss&scope=season%3A2026&scenario=kept'
+    await page.goto(`${base}/${unavailableHash}`)
+    await page.getByText(missingLink, { exact: true }).waitFor()
+    assert.equal(new URL(page.url()).hash, unavailableHash)
+    assert.equal(await page.locator('#tournament-event').inputValue(), '')
+    assert.equal(await page.getByRole('heading', { name: /LCS 2026|Worlds 2026/ }).count(), 0)
+    assert.equal(await page.getByRole('group', { name: 'View', exact: true }).count(), 0)
+    await page.locator('#tournament-event').selectOption('lcs:2026:fixture-lcs')
+    await page.getByRole('heading', { name: 'LCS 2026', exact: true }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
+    const recoveredQuery = new URLSearchParams(new URL(page.url()).hash.split('?')[1])
+    assert.equal(recoveredQuery.get('event'), lcsAddress)
+    assert.equal(recoveredQuery.get('view'), 'swiss')
+    assert.equal(recoveredQuery.get('scope'), 'season:2026')
+    assert.equal(recoveredQuery.get('scenario'), 'kept')
+
+    await page.goto(`${base}/#tournaments?event=${worldsAddress}&view=schedule`)
+    await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
+    feed.events.push({ ...feed.events[1]!, id: worldsAddress, sourceTournamentId: 'address-overlap', label: 'Overlapping identity', series: [] })
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    const ambiguousNotice = 'This competition link matches more than one event.'
+    await page.getByText(ambiguousNotice, { exact: true }).waitFor()
+    const ambiguousUrl = page.url()
+    assert.equal(await page.locator('#tournament-event').inputValue(), '')
+    assert.equal(await page.getByRole('heading', { name: /LCS 2026|Worlds 2026|Overlapping identity/ }).count(), 0)
+    holdNextFeed = true
+    await page.reload()
+    await waitForPendingFeed(pendingFeed)
+    await page.getByText('Loading tournament schedule', { exact: true }).waitFor()
+    assert.equal(await page.locator('#tournament-event').count(), 0, 'An ambiguous cache cannot admit a substituted event')
+    pendingFeed.splice(0).forEach((respond) => respond())
+    await page.getByText(ambiguousNotice, { exact: true }).waitFor()
+    assert.equal(page.url(), ambiguousUrl)
+    assert.equal(await page.locator('#tournament-event').inputValue(), '')
     assert.deepEqual(externalRequests, [])
+    assert.deepEqual(pageErrors, [])
   } finally {
     pendingHealth.splice(0).forEach((respond) => respond())
     pendingFeed.splice(0).forEach((respond) => respond())

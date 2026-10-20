@@ -3,6 +3,7 @@ import type { ConditionalPowerResultLedger } from '../../domains/tournaments/for
 import { emptyForecastLedger, type ForecastBasis, type ForecastLedger } from '../../domains/tournaments/forecast'
 import { isTournamentFeed, type TournamentFeed } from '../../domains/tournaments/read'
 import { hashParam } from '../navigation'
+import { resolveEventLink } from './eventAddress'
 import { cacheTournamentFeed, readCachedTournamentFeed } from './tournamentFeedCache'
 import { loadTournamentForecastArtifacts, loadTournamentForecastLedger } from './tournamentForecastArtifacts'
 
@@ -18,7 +19,8 @@ export function useTournamentResources() {
   const [state, setState] = useState<FeedState>(() => {
     const cached = readCachedTournamentFeed()
     const requestedEvent = hashParam('event')
-    return cached && (!requestedEvent || cached.events.some((event) => event.id === requestedEvent))
+    const link = resolveEventLink(cached?.events ?? [], requestedEvent)
+    return cached && (link.kind === 'absent' || link.kind === 'resolved')
       ? { status: 'ready', feed: cached, health: null, healthPending: true }
       : { status: 'loading' }
   })
