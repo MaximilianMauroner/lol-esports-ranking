@@ -237,7 +237,10 @@ async function downloadCsv(url, outputPath) {
       'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)',
     },
   }, { telemetry: fetchTelemetry, onFailure: writeDownloaderFailureTelemetry })
-  if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
+  if (!response.ok) {
+    await response.body?.cancel()
+    throw new Error(`HTTP ${response.status} from ${url}`)
+  }
 
   const contentType = response.headers.get('content-type') ?? ''
   const body = Buffer.from(await response.arrayBuffer())
@@ -254,7 +257,10 @@ async function discoverOracleDriveCsvs(folderId) {
       'user-agent': args.userAgent ?? 'lol-esports-power-index-local/0.1 (public data research)',
     },
   }, { telemetry: fetchTelemetry, onFailure: writeDownloaderFailureTelemetry })
-  if (!response.ok) throw new Error(`HTTP ${response.status} from Oracle Google Drive folder`)
+  if (!response.ok) {
+    await response.body?.cancel()
+    throw new Error(`HTTP ${response.status} from Oracle Google Drive folder`)
+  }
 
   const html = await response.text()
   return Array.from(html.matchAll(/https:\/\/drive\.google\.com\/file\/d\/([^/]+)\/view\?usp=drive_web[\s\S]*?<div class="flip-entry-title">([^<]+)<\/div>/g))

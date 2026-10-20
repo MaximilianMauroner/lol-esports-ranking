@@ -77,6 +77,7 @@ async function cargoExportQuery(params) {
     },
   })
   if (!response.ok) {
+    await response.body?.cancel()
     throw new Error(`HTTP ${response.status} from Leaguepedia CargoExport`)
   }
   return parseCsv(await response.text())

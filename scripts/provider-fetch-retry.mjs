@@ -97,7 +97,7 @@ export async function fetchWithRetry(input, init = {}, options = {}) {
         ...(retryReason ? { reason: retryReason } : {}),
       })
       if (!retryReason) {
-        response = responseWithBodyCleanup(response, releaseDeadline, attemptTimeout)
+        response = responseWithBodyCleanup(response, releaseDeadline, attemptTimeout, attemptController.signal)
         const terminal = snapshotProviderFetchTelemetry(telemetry, now() - startedAt)
         RESPONSE_TELEMETRY.set(response, terminal)
         if (!response.ok) await notifyFailureSafely(terminal, response)
@@ -211,34 +211,65 @@ export function retryDelayMs({ attempt, baseDelayMs = 500, maxDelayMs = 30_000, 
 
 export function providerFetchTelemetryFor(response) { return RESPONSE_TELEMETRY.get(response) }
 
-function responseWithBodyCleanup(response, cleanup, deadline) {
+function responseWithBodyCleanup(response, cleanup, deadline, signal) {
   if (!response.body) {
     cleanup()
     return response
   }
   const reader = response.body.getReader()
-  void reader.closed.catch(cleanup)
+  let finished = false
+  let bodyController
+  const finish = () => {
+    if (finished) return
+    finished = true
+    signal.removeEventListener('abort', abort)
+    cleanup()
+  }
+  const fail = (error) => {
+    if (finished) return
+    bodyController.error(error)
+    finish()
+    void reader.cancel(error).catch(() => {})
+  }
+  const abort = () => fail(signal.reason)
   const body = new ReadableStream({
+    start(controller) {
+      bodyController = controller
+      signal.addEventListener('abort', abort, { once: true })
+      if (signal.aborted) abort()
+    },
     async pull(controller) {
       deadline?.ref?.()
       try {
         const { done, value } = await reader.read()
+        if (finished) return
         if (done) {
-          cleanup()
+          finish()
           controller.close()
         } else controller.enqueue(value)
       } catch (error) {
-        cleanup()
-        controller.error(error)
+        fail(error)
+      } finally {
+        deadline?.unref?.()
       }
     },
-    cancel(reason) { return reader.cancel(reason).finally(cleanup) },
+    cancel(reason) {
+      finish()
+      return reader.cancel(reason)
+    },
   }, { highWaterMark: 0 })
+  void reader.closed.catch(fail)
   deadline?.unref?.()
-  const result = new Response(body, response)
+  return responseWithMetadata(new Response(body, response), response)
+}
+
+function responseWithMetadata(result, response) {
   for (const key of ['url', 'redirected', 'type']) {
     Object.defineProperty(result, key, { value: response[key] })
   }
+  Object.defineProperty(result, 'clone', {
+    value() { return responseWithMetadata(Response.prototype.clone.call(this), response) },
+  })
   return result
 }
 
