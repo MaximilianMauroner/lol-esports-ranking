@@ -92,7 +92,7 @@ test('warm-up rows train prior state but cannot enter game, control, series or a
   const matches = [{ ...sampleMatches[0], date: '2024-12-01' }, { ...sampleMatches[1], date: '2025-01-02' }]
   const context = createRatingReplayContext(matches, { ...teams })
   const state = replayRatingDates({ context, replayMatches: matches })
-  const exported = buildEvaluationData(matches, state.predictions, { sourceIdentity: 'fixture', scoreStart: '2025-01-01' })
+  const exported = buildEvaluationData({ matches, teams: context.teams, tournamentLifecycles: null }, state.predictions, { sourceIdentity: 'fixture', scoreStart: '2025-01-01' })
   assert.equal(exported.rows.length, 1)
   assert.equal(exported.audit.warmupGames, 1)
   assert.equal(exported.audit.normalizedGames, 1)
