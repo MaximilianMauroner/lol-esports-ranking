@@ -169,6 +169,19 @@ test('source ownership checking succeeds without Git metadata', (t) => {
   assert.equal(checkLayout(nested).blocked, true)
 })
 
+test('tracked-file hygiene detects violations through a symlinked repository root', (t) => {
+  const { root } = fixture(t, { 'src/shared/report.md': 'Planted narrative output' })
+  execFileSync('git', ['init', '-q', root])
+  execFileSync('git', ['-C', root, 'add', '.'])
+  const linkedRoot = `${root}-link`
+  symlinkSync(root, linkedRoot, 'dir')
+  t.after(() => rmSync(linkedRoot, { force: true }))
+  assert.deepEqual(checkLayout(linkedRoot), {
+    blocked: false,
+    errors: ['src/shared/report.md: Narrative output must stay in ignored agent artifacts'],
+  })
+})
+
 test('tracked-file hygiene accepts source fixtures and assets and rejects forced generated output', (t) => {
   const { root, write } = fixture(t, {
     'tests/fixtures/input.csv': 'team,score\nA,1\n',

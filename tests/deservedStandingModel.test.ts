@@ -46,6 +46,38 @@ test('buildDeservedStandingModel prices wins above expectation through reference
   assert.ok(upsetAlpha.dss > favoredAlpha.dss)
 })
 
+test('buildDeservedStandingModel credits a Bo2 draw as half a win against expectation', () => {
+  const model = buildDeservedStandingModel([
+    matchFixture({ id: 'draw-1', bestOf: 2, winner: 'Alpha' }),
+    matchFixture({ id: 'draw-2', bestOf: 2, winner: 'Beta' }),
+  ])
+
+  for (const team of model.teams) {
+    assert.equal(team.seriesCount, 1)
+    assert.equal(team.wins, 0)
+    assert.equal(team.losses, 0)
+    assert.equal(team.expectedWins, 0.5)
+    assert.equal(team.winsAboveExpectation, 0)
+  }
+})
+
+test('buildDeservedStandingModel totals wins, losses, and draws against expectation', () => {
+  const model = buildDeservedStandingModel([
+    matchFixture({ id: 'draw-1', bestOf: 2, winner: 'Alpha' }),
+    matchFixture({ id: 'draw-2', bestOf: 2, winner: 'Beta' }),
+    matchFixture({ id: 'win', date: '2026-01-02', winner: 'Alpha' }),
+    matchFixture({ id: 'loss', date: '2026-01-03', winner: 'Beta' }),
+  ])
+
+  for (const team of model.teams) {
+    assert.equal(team.seriesCount, 3)
+    assert.equal(team.wins, 1)
+    assert.equal(team.losses, 1)
+    assert.equal(team.expectedWins, 1.5)
+    assert.equal(team.winsAboveExpectation, 0)
+  }
+})
+
 test('buildDeservedStandingModel applies roster validity to current-roster resume and schedule components', () => {
   const matches = [matchFixture({ id: 'alpha-win', winner: 'Alpha' })]
   const fullCredit = buildDeservedStandingModel(matches)

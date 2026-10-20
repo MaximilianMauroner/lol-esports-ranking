@@ -1,5 +1,6 @@
 import type { FactorBreakdown } from '../../domains/rankings/types'
 import type { RankingSummaryStanding, TeamHistorySeries } from '../../domains/rankings/types'
+import { formatChartTimestamp } from '../../shared/chartTime'
 
 /** Plain-language labels for the model factor that most explains a rating. */
 export const FACTOR_LABELS: Record<keyof FactorBreakdown, string> = {
@@ -27,11 +28,9 @@ export type TrajectoryInsight = {
   summary: string
 }
 
-const monthDay = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
-
 function fmtDate(value: string) {
   const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? monthDay.format(new Date(parsed)) : value
+  return Number.isFinite(parsed) ? formatChartTimestamp(parsed, 'month-day') : value
 }
 
 function signed(value: number) {

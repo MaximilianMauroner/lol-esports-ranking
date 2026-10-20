@@ -23,8 +23,9 @@ import {
 } from './implementationEvidenceTestFixtures.ts'
 
 const exec = promisify(execFile)
+const linuxDescriptors = { skip: process.platform !== 'linux' && 'implementation evidence resolves descriptors through Linux /proc' }
 
-test('fixture construction supports source archives and preserves tracked-file filtering when Git exists', async () => {
+test('fixture construction supports source archives and preserves tracked-file filtering when Git exists', linuxDescriptors, async () => {
   const sourceRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
   const archiveRoot = await mkdtemp(join(tmpdir(), 'implementation-evidence-archive-'))
   let fixture: Awaited<ReturnType<typeof createImplementationRepositoryFixture>> | undefined
@@ -72,7 +73,7 @@ test('fixture construction supports source archives and preserves tracked-file f
   }
 })
 
-test('native implementation evidence generation is deterministic, exact, and commit-bound', async () => {
+test('native implementation evidence generation is deterministic, exact, and commit-bound', linuxDescriptors, async () => {
   const fixture = await createImplementationRepositoryFixture()
   try {
     const first = await generatePassingImplementationEvidence(fixture.root, fixture.commit)
@@ -95,7 +96,7 @@ test('native implementation evidence generation is deterministic, exact, and com
   }
 })
 
-test('generation rejects modified or uncommitted contract sources and arbitrary command claims', async () => {
+test('generation rejects modified or uncommitted contract sources and arbitrary command claims', linuxDescriptors, async () => {
   const fixture = await createImplementationRepositoryFixture()
   try {
     const values = await generateNativeImplementationEvidence(fixture.root, fixture.commit)
@@ -122,7 +123,7 @@ test('generation rejects modified or uncommitted contract sources and arbitrary 
   }
 })
 
-test('local authority is canonical, create-only, reusable, and rejects conflicting manifests', async () => {
+test('local authority is canonical, create-only, reusable, and rejects conflicting manifests', linuxDescriptors, async () => {
   const fixture = await createImplementationRepositoryFixture()
   const authority = join(fixture.root, '.rollout-evidence')
   try {
@@ -159,7 +160,7 @@ test('local authority is canonical, create-only, reusable, and rejects conflicti
   }
 })
 
-test('resolution rejects fake-runner proof, dirty worktrees, and evidence from an older HEAD', async () => {
+test('resolution rejects fake-runner proof, dirty worktrees, and evidence from an older HEAD', linuxDescriptors, async () => {
   const fixture = await createImplementationRepositoryFixture()
   const authority = join(fixture.root, '.rollout-evidence')
   try {
@@ -192,7 +193,7 @@ test('resolution rejects fake-runner proof, dirty worktrees, and evidence from a
   }
 })
 
-test('local authority rejects relative roots, symlinks, noncanonical JSON, and digest mismatches', async () => {
+test('local authority rejects relative roots, symlinks, noncanonical JSON, and digest mismatches', linuxDescriptors, async () => {
   const fixture = await createImplementationRepositoryFixture()
   const authority = join(fixture.root, '.rollout-evidence')
   try {
@@ -262,7 +263,7 @@ test('local authority rejects relative roots, symlinks, noncanonical JSON, and d
   }
 })
 
-test('descriptor-relative create cannot be redirected by an ancestor swap', async () => {
+test('descriptor-relative create cannot be redirected by an ancestor swap', linuxDescriptors, async () => {
   const fixture = await createImplementationRepositoryFixture()
   const authority = join(fixture.root, '.rollout-evidence')
   const external = `${fixture.root}-external`

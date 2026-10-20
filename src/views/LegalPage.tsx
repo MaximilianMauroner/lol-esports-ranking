@@ -72,7 +72,7 @@ function PrivacyPolicy() {
         <p><EmailLink /></p>
       </Section>
       <Section title="Website requests and hosting">
-        <p>When you open the site, technical request data such as IP address, requested URL, time, browser headers, and request identifiers is transmitted to Railway, the hosting provider. It is processed to deliver and secure the site under GDPR Article 6(1)(f). The operator does not run visitor analytics or advertising and does not set cookies or use browser storage.</p>
+        <p>When you open the site, technical request data such as IP address, requested URL, time, browser headers, and request identifiers is transmitted to Railway, the hosting provider. It is processed to deliver and secure the site under GDPR Article 6(1)(f). The site stores a copy of the public tournament feed in your browser's local storage to show it faster on return visits. This copy contains no personal data. To remove this copy, clear this site's data in your browser settings. The site does not use cookies, analytics, or advertising.</p>
         <p className="mt-3">Operational and security logs are retained only for the period configured by the hosting provider or as needed to investigate abuse and faults. Railway primarily processes data in the United States and provides transfer safeguards through the EU-U.S. Data Privacy Framework or EU Standard Contractual Clauses. See Railway's <ExternalLink href="https://railway.com/legal/privacy">privacy policy</ExternalLink> and <ExternalLink href="https://railway.com/legal/dpa">data-processing terms</ExternalLink>.</p>
       </Section>
       <Section title="Professional esports data">

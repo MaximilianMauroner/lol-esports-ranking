@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { deriveTrajectoryInsight, FACTOR_LABELS } from '../src/views/rankings/trajectory.ts'
 import type { RankingSummaryStanding, TeamHistorySeries } from '../src/domains/rankings/internal/projections/snapshot.ts'
 
@@ -100,4 +101,19 @@ test('leads with the slide when a team has fallen off its peak', () => {
   )
   assert.ok(insight)
   assert.match(insight.summary, /Down 80 from/)
+})
+
+test('trajectory peak and trough summaries keep calendar days west of UTC', () => {
+  const output = execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
+    import { deriveTrajectoryInsight } from './src/views/rankings/trajectory.ts'
+    const standing = ${JSON.stringify(standing({ form: [] }))}
+    const climb = ${JSON.stringify(series([['2026-06-01', 1400, 1], ['2026-06-30', 1600, 1]]))}
+    const slide = ${JSON.stringify(series([['2026-05-01', 1500, 1], ['2026-06-01', 1680, 1], ['2026-06-30', 1600, 1]]))}
+    console.log(JSON.stringify([climb, slide].map(series => deriveTrajectoryInsight(standing, series).summary)))
+  `], { cwd: new URL('..', import.meta.url), env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' })
+
+  assert.deepEqual(JSON.parse(output), [
+    'Up 200 from the low of 1400 on Jun 1 to 1600 (#1) on Jun 30.',
+    'Down 80 from the peak of 1680 on Jun 1 to 1600 (#1) on Jun 30.',
+  ])
 })

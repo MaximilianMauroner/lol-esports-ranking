@@ -7,6 +7,7 @@ import { appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, pinP
 import type { TournamentFeed } from '../src/domains/tournaments/internal/tournamentFeed'
 import { conditionalPowerReceiptFixture } from './fixtures/conditionalPowerFixtures'
 import { conditionalPowerResultArtifact } from '../scripts/tournament-forecast-receipts'
+import { closedSelectKeysChangeValue } from './fixtures/nativeSelect'
 
 test('offline numeric result component follows legal outcomes, keeps frozen odds and closes at live play', { timeout: 60_000 }, async () => {
   const fixture = conditionalPowerReceiptFixture()
@@ -80,9 +81,14 @@ test('offline numeric result component follows legal outcomes, keeps frozen odds
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Component overflow at ${width}px`)
     }
     await preview.getByLabel('Winner', { exact: true }).focus()
-    await page.keyboard.press('Home')
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Home')
+    if (closedSelectKeysChangeValue) {
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Tab')
+      await page.keyboard.press('Home')
+    } else {
+      await preview.getByLabel('Winner', { exact: true }).selectOption('home')
+      await preview.getByLabel('Series score (winner first)').selectOption('0')
+    }
     assert.equal(await preview.getByLabel('Winner', { exact: true }).inputValue(), 'home')
     assert.equal(await preview.getByLabel('Series score (winner first)').inputValue(), '0')
     await preview.getByText('Inputs held fixed and excluded', { exact: true }).click()

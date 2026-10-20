@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
-import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, cp, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -88,6 +88,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
   ]
   const restoreStarted = monotonicNow()
+  const localRefreshStateMissing = await lstat(statePath).then(() => false, (error) => error.code === 'ENOENT')
+  const previousState = await readJsonIfExists(statePath)
   const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
@@ -184,7 +186,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       providerRequests: finiteOrNull(currentStagingManifest?.fetchTelemetry?.requests),
       providerRetries: finiteOrNull(currentStagingManifest?.fetchTelemetry?.retryCount),
     })
-    const previousState = await readJsonIfExists(statePath)
     if (!manifestHasCurrentMatchSourceFiles(currentStagingManifest)) {
       const attemptedAt = new Date(wallNow()).toISOString()
       const providerResult = sourceProviderResult(currentStagingManifest)
@@ -359,7 +360,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       durationMs: monotonicNow() - hashingStarted,
       output: { fileCount: fingerprint.files.length },
     })
-    const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
+    const repairRequired = Boolean(previousState?.pendingPublication)
+    const changed = force || repairRequired || previousState?.publishedFingerprint !== fingerprint.fingerprint
 
     if (!changed) {
       const state = {
@@ -426,6 +428,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       status: 'refreshed',
       refreshedAt: new Date().toISOString(),
       fingerprint: fingerprint.fingerprint,
+      publishedFingerprint: previousState?.publishedFingerprint,
+      pendingPublication: previousState?.pendingPublication,
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
       downloadStart: start,
@@ -449,6 +453,12 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           },
     }
     refreshState = state
+    if (!skipCrunch) {
+      state.pendingPublication = state.pendingPublication === 'bucket' || (bucketUploadEnabled && (bucketConfig.enabled || bucketRequired))
+        ? 'bucket'
+        : 'local'
+      await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
+    }
 
     const refreshMode = metrics.snapshot().mode
     const incrementalEnabled = Boolean(env.RANKING_REFRESH_FENCING_TOKEN)
@@ -500,6 +510,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
     if (!skipCrunch && incrementalEnabled) {
       const checkpointRestoreStarted = monotonicNow()
+      let verifiedColdRestore = false
       if (bucketConfig.enabled && bucketClient) {
         try {
           let [activeState, activePublic] = await Promise.all([
@@ -508,6 +519,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           ])
           if (activeState.found && activePublic.found
             && activeState.manifest.generationId === activePublic.active.generationId) {
+            verifiedColdRestore = localRefreshStateMissing && restoreResult.restored
+              && Boolean(activePublic.publication)
+              && restoreResult.generationId === activeState.manifest.generationId
+              && restoreResult.sourceReceiptDigest === activeState.manifest.sourceReceiptDigest
             restoredIncremental = {
               stateManifest: activeState.manifest,
               canonicalLedger: activeState.canonicalLedger,
@@ -545,7 +560,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       const incrementalBuildOptions = {
         mode: metrics.snapshot().mode,
         cause: metrics.snapshot().cause,
-        enabled: true,
+        enabled: !repairRequired && (Boolean(previousState?.publishedFingerprint) || verifiedColdRestore),
         manifestPath,
         output,
         publicDataDir,
@@ -674,6 +689,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
 
     if (incrementalBuild?.action === 'no-change') {
+      delete state.pendingPublication
+      state.publishedFingerprint = fingerprint.fingerprint
       state.crunch = { skipped: true, reason: 'canonical-ledger-unchanged' }
       state.publish = { skipped: true, reason: 'canonical-ledger-unchanged' }
       terminalResult = 'unchanged'
@@ -884,7 +901,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
             if (name === 'promotion' && stage.output?.promotedAt) completedPromotionAt = stage.output.promotedAt
             if (name === 'promotion' && stage.output?.etag) completedPromotionEtag = stage.output.etag
           },
-          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, refreshTelemetry, storage }) => {
+          refreshStateForUpload: ({ bucket, prefix, artifactCount, uploadedCount, uploadedBytes, unchangedCount, unchangedBytes, skipped, promotion, refreshTelemetry, storage }) => {
             state.bucket = {
               enabled: true,
               bucket,
@@ -898,7 +915,9 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               ...(storage ? { storage } : {}),
             }
             state.lastRun = refreshTelemetry
-            return state
+            return promotion?.completed
+              ? { ...state, publishedFingerprint: fingerprint.fingerprint, pendingPublication: undefined }
+              : state
           },
         })
         publishedBucket = bucketPublish
@@ -964,6 +983,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
 
     state.lastRun ??= completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
+    if (!skipCrunch && (state.pendingPublication === 'local' || publishedBucket)) delete state.pendingPublication
+    if (!skipCrunch && !state.pendingPublication) state.publishedFingerprint = fingerprint.fingerprint
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {
@@ -1342,6 +1363,8 @@ function createStaleSourceState({
     refreshedAt: new Date().toISOString(),
     previousFingerprint: previousState?.fingerprint,
     fingerprint: previousState?.fingerprint,
+    publishedFingerprint: previousState?.publishedFingerprint,
+    pendingPublication: previousState?.pendingPublication,
     healthFingerprint,
     downloadStart: start,
     downloadEnd: end,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { access, cp, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -9,12 +9,17 @@ import { buildRankingIncrementally, mergePartialPlayerDirectoryArtifact, type In
 import { createGenerationManifest, prepareSemanticArtifact } from '../scripts/public-artifact-storage.mjs'
 import { prepareStateCheckpoint, prepareStateObject, stateObjectReferenceFor } from '../scripts/incremental-state-storage.mjs'
 import type { RankingSourceImport } from '../scripts/rankings/source-input.ts'
+import { importLeaguepediaSnapshot } from '../scripts/rankings/providers/leaguepedia.ts'
+import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { normalizeRankingRefreshOutcome } from '../scripts/ranking-refresh-outcome-contract.mjs'
 import { buildStaticSnapshot } from '../scripts/build-static-snapshot.ts'
 import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 import { buildPlayerModel } from '../src/domains/rankings/internal/replay/model.ts'
 import { runRefreshOnce } from '../scripts/refresh-once.mjs'
 import { parseCanonicalMatchLedger } from '../src/lib/incremental/changeClassifier.ts'
+import { materializePublicArtifactPatch } from '../scripts/public-artifact-materialization.mjs'
+import { artifactReferences, assertReferenceClosure } from '../src/domains/rankings/internal/published/logicalReferences.mjs'
+import { crossMidnightReviewCases } from './fixtures/crossMidnightReviewCases.ts'
 
 test('partial player directory preserves valid unaffected season players and diagnostics', () => {
   const merged = mergePartialPlayerDirectoryArtifact({
@@ -363,6 +368,236 @@ test('append, same-day insertion, and historical correction use whole-date repla
       const full = await run(root, `${name}-full`, source, { mode: 'gated', cause: 'daily-audit', enabled: false })
       assert.deepEqual(semanticMap(incremental), semanticMap(full), name)
       await assert.rejects(access(join(root, `${name}-incremental-full.json`)), name)
+    }
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+for (const officialSchedule of [false, true]) {
+  test(`a series game that arrives after midnight and after the last refresh still completes its series incrementally${officialSchedule ? ' with official schedule references' : ''}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'incremental-cross-midnight-'))
+    try {
+      const seriesGame = (gameNumber: number, datetimeUtc: string) => match(`m5-${gameNumber}`, datetimeUtc.slice(0, 10), 'Event C', {
+        sourceMatchId: 'series-m5', gameNumber, bestOf: 3, bestOfBasis: 'official', datetimeUtc,
+        ...(officialSchedule ? {
+          sourceProvider: 'leaguepedia-cargo', sourceMatchId: undefined, sourceGameId: `Event C_Week 1_1_${gameNumber}`,
+          bestOf: 1, bestOfBasis: 'fallback',
+        } as const : {}),
+      })
+      const mergedSource = (matches: MatchRecord[]) => fixtureSource(mergeCommunityMatchSources({
+        oracleMatches: matches, leaguepediaMatches: [],
+        lolEsportsReferences: officialSchedule ? [{
+          sourceProvider: 'lol-esports-api', matchId: 'official-m5', date: '2026-01-05', startTime: '2026-01-05T23:00:00Z',
+          strategy: { type: 'bestOf', count: 3 }, teams: [{ name: 'Alpha' }, { name: 'Beta' }], gameIds: [], games: [],
+        }] : [],
+      }))
+      const firstGame = seriesGame(1, '2026-01-05T23:30:00.000Z')
+      const base = await run(root, 'base', mergedSource([...baseMatches(), firstGame]), { mode: 'gated', cause: 'daily-audit', enabled: true })
+      const source = mergedSource([...baseMatches(), firstGame, seriesGame(2, '2026-01-06T00:20:00.000Z')])
+
+      const incremental = await run(root, 'incremental', source, { mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreFrom(base) })
+      const full = await run(root, 'full', source, { mode: 'gated', cause: 'daily-audit', enabled: false })
+
+      assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+      assert.deepEqual(semanticMap(incremental), semanticMap(full))
+      if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
+      const standings = full.build.snapshot.snapshots[full.build.snapshot.defaultSnapshotKey]!.standings
+      const seriesHistory = standings.find((standing) => standing.team === 'Alpha')!.history.filter((point) => point.event === 'Event C')
+      assert.deepEqual(seriesHistory.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
+      assert.ok(seriesHistory.at(-1)!.delta > 0)
+      const sameDateSource = mergedSource([...baseMatches(), firstGame, seriesGame(2, '2026-01-05T23:55:00.000Z')])
+      const sameDate = await run(root, 'same-date', sameDateSource, { mode: 'gated', cause: 'daily-audit', enabled: false })
+      if (sameDate.action !== 'publish-full' || !('snapshot' in sameDate.build)) throw new Error('full snapshot required')
+      const sameDateStandings = sameDate.build.snapshot.snapshots[sameDate.build.snapshot.defaultSnapshotKey]!.standings
+      assert.deepEqual(
+        standings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+        sameDateStandings.map(({ team, baseRating, rating }) => ({ team, baseRating, rating })),
+      )
+    } finally {
+      if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+    }
+  })
+}
+
+test('a late cross-midnight Leaguepedia gap fill replays the complete Oracle series after a checkpoint', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-gap-fill-'))
+  try {
+    const games = [1, 2, 3].map((gameNumber) => match(`gap-${gameNumber}`, gameNumber === 3 ? '2026-01-06' : '2026-01-05', 'Event C', {
+      sourceMatchId: undefined, gameNumber, bestOf: 5, bestOfBasis: 'provider',
+      datetimeUtc: gameNumber === 3 ? '2026-01-06T00:20:00Z' : `2026-01-05T23:${gameNumber * 10}:00Z`,
+      teamAKills: 10 + gameNumber, teamAGold: 60_000 + gameNumber,
+    }))
+    const source = (complete: boolean) => fixtureSource(mergeCommunityMatchSources({
+      oracleMatches: [...baseMatches(), ...games.slice(0, 2)],
+      leaguepediaMatches: games.slice(0, complete ? 3 : 2).map((game, index) => ({
+        ...game, id: `lp-gap-${index + 1}`, sourceProvider: 'leaguepedia-cargo', sourceGameId: `Event C_Round 1_1_${index + 1}`,
+      })),
+    }))
+    const base = await run(root, 'base', source(false), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(base)
+    assert.ok(restored.checkpoints.some((entry) => entry.candidate.boundary.date === '2026-01-05'))
+    const incremental = await run(root, 'incremental', source(true), { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    const full = await run(root, 'full', source(true), { mode: 'gated', cause: 'daily-audit', enabled: false })
+    assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+    assert.deepEqual(semanticMap(incremental), semanticMap(full))
+    assert.ok(incremental.metrics.selectedBoundary! < '2026-01-05')
+    if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
+    const history = full.build.snapshot.snapshots[full.build.snapshot.defaultSnapshotKey]!.standings
+      .find(({ team }) => team === 'Alpha')!.history.filter((point) => point.event === 'Event C')
+    assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit),
+      ['series-member-no-team-update', 'series-member-no-team-update', 'series-atomic'])
+    assert.ok(history.at(-1)!.delta > 0)
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a late New Year game restores complete season artifacts from a checkpoint', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-new-year-'))
+  try {
+    const earlier = [match('prior-year', '2024-12-31', 'Earlier Event'),
+      ...[26, 27, 28, 29, 30].map((day) => match(`dec-${day}`, `2025-12-${day}`, 'Earlier Event'))]
+    const imported = importLeaguepediaSnapshot({ source: 'synthetic calendar rollover fixture', matches: [
+      '2025-12-31T23:30:00Z', '2026-01-01T00:30:00Z',
+    ].map((datetimeUtc, index) => ({
+      id: `LCK 2025 Winter_Bracket_1_${index + 1}`,
+      date: datetimeUtc.slice(0, 10), datetimeUtc, event: 'LCK 2025 Winter',
+      teamA: 'Alpha', teamB: 'Beta', winner: 'Alpha', matchBestOf: 3,
+      teamAKills: 20 + index, teamBKills: 10, teamAGold: 60000 + index, teamBGold: 55000,
+    })) })
+    const source = (complete: boolean) => fixtureSource(mergeCommunityMatchSources({
+      oracleMatches: earlier, leaguepediaMatches: imported.matches.slice(0, complete ? 2 : 1).map((game) => ({
+        ...game, teamAHomeLeague: 'LCK', teamBHomeLeague: 'LCK', teamARegion: 'LCK', teamBRegion: 'LCK',
+      })),
+    }))
+    const base = await run(root, 'base', source(false), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    const restored = restoreFrom(base)
+    assert.ok(restored.checkpoints.some((entry) => entry.candidate.boundary.date === '2025-12-31'))
+    const incremental = await run(root, 'incremental', source(true), { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+    const full = await run(root, 'full', source(true), { mode: 'gated', cause: 'daily-audit', enabled: false })
+    assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+    assert.deepEqual(semanticMap(incremental), semanticMap(full))
+    assert.ok(incremental.metrics.selectedBoundary! < '2025-12-31')
+    if (full.action !== 'publish-full' || !('snapshot' in full.build)) throw new Error('full snapshot required')
+    const snapshot = full.build.snapshot
+    const scopes = Object.values(snapshot.snapshots).filter(({ filter }) => filter.season === '2025' && filter.event === 'All' && filter.region === 'All')
+    assert.equal(scopes.length, 1)
+    for (const scope of scopes) {
+      assert.equal(scope.matchCount, 7)
+      const history = scope.standings.find(({ team }) => team === 'Alpha')!.history.filter((point) => point.date === '2025-12-31')
+      assert.deepEqual(history.map((point) => point.ratingUpdate.updateUnit), ['series-member-no-team-update', 'series-atomic'])
+      assert.ok(history.at(-1)!.delta > 0)
+    }
+    assert.deepEqual(snapshot.filterOptions.seasons, ['All', '2025', '2024'])
+  } finally {
+    if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+  }
+})
+
+for (const { laterDays, demacia } of [
+  { laterDays: [2], demacia: false }, { laterDays: [2, 3], demacia: false }, { laterDays: [2, 3], demacia: true },
+]) {
+  test(`a late New Year game refreshes published 2026 ratings and history with ${laterDays.length} later game${laterDays.length === 1 ? '' : 's'}${demacia ? ' and Demacia lead-in' : ''}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'incremental-new-year-dependent-'))
+    try {
+      const scenario = crossMidnightReviewCases().find(({ name }) => name === 'new-year')!
+      const earlier = ['2024-12-31', ...[26, 27, 28, 29, 30].map((day) => `2025-12-${day}`)]
+        .map((date) => match(`earlier-${date}`, date, 'Earlier Event', { teamAKills: 20, teamBKills: 10 }))
+      const later = laterDays.map((day) => match(`independent-jan${day}`, `2026-01-0${day}`, 'Independent January event', {
+        teamAKills: 20, teamBKills: 10,
+      }))
+      const source = (sources: typeof scenario.complete) => fixtureSource(mergeCommunityMatchSources({
+        ...structuredClone(sources), oracleMatches: [...earlier, ...sources.oracleMatches, ...later],
+        leaguepediaMatches: sources.leaguepediaMatches.map((game) => ({
+          ...game, ...(demacia ? { event: 'Demacia Cup 2025' } : {}),
+        })),
+      }))
+      const baseline = await run(root, 'baseline', source(scenario.partial), { mode: 'gated', cause: 'daily-audit', enabled: true })
+      const restored = restoreFrom(baseline)
+      const incremental = await run(root, 'incremental', source(scenario.complete), {
+        mode: 'gated', cause: 'pending-match', enabled: true, restored,
+      })
+      const full = await run(root, 'full', source(scenario.complete), { mode: 'gated', cause: 'daily-audit', enabled: false })
+      assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+      assert.equal(incremental.metrics.classification, 'same-day-insertion')
+      assert.equal(incremental.metrics.selectedBoundary, '2025-12-30')
+      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || baseline.action !== 'publish-full') {
+        throw new Error('baseline, incremental patch, and full publication required')
+      }
+      const published = join(root, 'published')
+      await cp(baseline.build.publicDataDir, published, { recursive: true })
+      await materializePublicArtifactPatch(published, incremental.patch)
+      const scopePath = 'scopes/season-2026.json'
+      const actual = JSON.parse(await readFile(join(published, scopePath), 'utf8'))
+      const expected = JSON.parse(await readFile(join(full.build.publicDataDir, scopePath), 'utf8'))
+      const alphaRating = (scope: { standings: { team: string; rating: number }[] }) => scope.standings.find(({ team }) => team === 'Alpha')!.rating
+      assert.equal(alphaRating(actual), alphaRating(expected), 'published 2026 Alpha rating must include the completed December series')
+      if (laterDays.length === 1) assert.equal(alphaRating(actual), 1969)
+      await assertPublishedArtifactBytes(baseline, incremental, full, published)
+      for (const path of ['/data/scopes/season-2026.json', '/data/matches/pages/season-2026-2026000001.json',
+        ...(laterDays.length > 1 ? ['/data/history/team-series/2026__All__All.json'] : [])]) {
+        assert.ok(incremental.metrics.changedPaths.includes(path), `regenerated ${path}`)
+      }
+      for (const path of ['/data/scopes/season-2024.json', '/data/history/team-series/2024__All__All.json',
+        '/data/matches/pages/season-2024-2024000001.json']) {
+        assert.ok(incremental.metrics.reusedPaths.includes(path), `retained ${path}`)
+      }
+    } finally {
+      if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
+    }
+  })
+}
+
+test('an April same-day insertion refreshes later scopes while retaining earlier checkpoints and movement', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-historical-insertion-'))
+  try {
+    const matches = [
+      match('prior-year', '2024-12-31', 'Earlier Event'),
+      ...[1, 2, 3].map((day) => match(`march-${day}`, `2025-03-0${day}`, 'March event')),
+      ...[9, 10].map((day) => match(`fst-${day}`, `2025-03-${String(day).padStart(2, '0')}`, 'First Stand 2025', {
+        league: 'FST', region: 'International', tier: 'minor-international',
+      })),
+      ...[4, 5].map((day) => match(`april-${day}`, `2025-04-0${day}`, day === 4 ? 'Pre-insertion event' : 'Spring')),
+      ...[2, 3].map((day) => match(`january-${day}`, `2026-01-0${day}`, 'January event')),
+      ...[1, 2].map((day) => match(`august-${day}`, `2025-08-0${day}`, 'Summer')),
+    ]
+    const baseline = await run(root, 'baseline', fixtureSource(structuredClone(matches)), { mode: 'gated', cause: 'daily-audit', enabled: true })
+    for (const scenario of [
+      { name: 'historical', addition: match('late-april', '2025-04-05', 'Spring', { datetimeUtc: '2025-04-05T18:00:00Z' }), kind: 'same-day-insertion' },
+      { name: 'append', addition: match('latest-january', '2026-01-04', 'January event'), kind: 'latest-append' },
+    ]) {
+      const complete = [...matches, scenario.addition]
+      const restored = restoreFrom(baseline)
+      assert.ok(restored.checkpoints.some(({ candidate }) => candidate.boundary.date < '2025-04-05'), JSON.stringify(restored.stateManifest.checkpoints.map(({ boundary }) => boundary)))
+      const incremental = await run(root, scenario.name, fixtureSource(structuredClone(complete)), {
+        mode: 'gated', cause: 'pending-match', enabled: true, restored,
+      })
+      const full = await run(root, `${scenario.name}-full`, fixtureSource(structuredClone(complete)), {
+        mode: 'gated', cause: 'daily-audit', enabled: false,
+      })
+      assert.equal(incremental.action, 'publish-incremental', incremental.metrics.fallbackReason)
+      assert.equal(incremental.metrics.classification, scenario.kind)
+      if (incremental.action !== 'publish-incremental' || full.action !== 'publish-full' || baseline.action !== 'publish-full') {
+        throw new Error('baseline, incremental patch, and full publication required')
+      }
+      const published = join(root, `${scenario.name}-published`)
+      await cp(baseline.build.publicDataDir, published, { recursive: true })
+      await materializePublicArtifactPatch(published, incremental.patch)
+      await assertPublishedArtifactBytes(baseline, incremental, full, published)
+      const paths = incremental.patch.expectedLogicalPaths
+      const earlier = paths.filter((path) => /season-2024|2024__All|split-1/.test(path))
+      assert.ok(earlier.length > 0)
+      for (const path of earlier) assert.ok(incremental.metrics.reusedPaths.includes(path), `retained ${path}`)
+      const movementPath = paths.find((path) => path.includes('/tournament-moves/') && path.includes('first-stand'))!
+      assert.ok(movementPath, 'synthetic First Stand movement is published')
+      assert.ok(incremental.metrics.reusedPaths.includes(movementPath))
+      const unchanged = await run(root, `${scenario.name}-unchanged`, fixtureSource(structuredClone(complete)), {
+        mode: 'gated', cause: 'pending-match', enabled: true, restored: restoreIncremental(restored, incremental),
+      })
+      assert.equal(unchanged.action, 'no-change')
+      assert.equal(unchanged.metrics.replayedMatchCount, 0)
+      await assert.rejects(access(join(root, `${scenario.name}-unchanged-full.json`)))
     }
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
@@ -833,6 +1068,27 @@ test('match-page contraction removes obsolete trailing page objects', async () =
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
 })
+
+async function assertPublishedArtifactBytes(
+  baseline: IncrementalRankingBuildResult,
+  incremental: Extract<IncrementalRankingBuildResult, { action: 'publish-incremental' }>,
+  full: Extract<IncrementalRankingBuildResult, { action: 'publish-full' }>,
+  published: string,
+) {
+  if (baseline.action !== 'publish-full') throw new Error('full baseline required')
+  for (const build of [baseline.build, full.build]) {
+    const edges = new Map(build.publicPlan.writes.map((write) => [`/data/${write.relativePath}`, artifactReferences(write.value as Record<string, unknown>)]))
+    assertReferenceClosure(edges, new Set(edges.keys()))
+  }
+  assert.deepEqual(incremental.patch.expectedLogicalPaths.toSorted(), full.build.publicPlan.writes.map((write) => `/data/${write.relativePath}`).sort())
+  for (const write of full.build.publicPlan.writes) {
+    const path = write.relativePath
+    const actual = prepareSemanticArtifact(JSON.parse(await readFile(join(published, path), 'utf8')))
+    const expected = prepareSemanticArtifact(JSON.parse(await readFile(join(full.build.publicDataDir, path), 'utf8')))
+    assert.ok(actual.canonicalBytes.equals(expected.canonicalBytes), `canonical publication bytes for ${path}`)
+    assert.ok(actual.compressed.equals(expected.compressed), `gzip publication bytes for ${path}`)
+  }
+}
 
 function run(
   root: string,

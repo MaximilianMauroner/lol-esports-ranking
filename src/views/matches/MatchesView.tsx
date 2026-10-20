@@ -14,7 +14,7 @@ import { canUseBackgroundPrefetch, scheduleIdleWork } from '../../browser/rankin
 import { Panel, PanelBody, PanelFooter, PanelHeader } from '../../components/ui/panel'
 import { Select } from '../../components/ui/select'
 import { LoadingState } from '../../components/ui/loading'
-import { hashInt, hashParam, useHashSync } from '../../browser/navigation'
+import { currentHashQuery, hashInt, hashParam, useHashSync } from '../../browser/navigation'
 import { compatibleMatchEvents, matchEventFilterLabels } from '../../domains/rankings/read'
 import { groupedMatchEvents } from '../../domains/rankings/read'
 import { SeriesCards, SeriesTable, type MatchSeries } from './SeriesLedger'
@@ -41,8 +41,13 @@ type ViewState = {
   page: number
 }
 
-export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; onRequestPages: (pages: number[]) => void }) {
-  const [view, setView] = useState<ViewState>(readViewState)
+export function MatchesView({ hashQuery, state, onRequestPages, searchRef, archiveYears = [], archiveYear, onYearChange }: { hashQuery: URLSearchParams; archiveYears?: string[]; archiveYear?: string; onYearChange?: (year: string) => void; searchRef?: RefObject<HTMLInputElement | null>; state: MatchHistoryState; onRequestPages: (pages: number[]) => void }) {
+  const [view, setView] = useState<ViewState>(() => readViewState(currentHashQuery()))
+  const [appliedQuery, setAppliedQuery] = useState(hashQuery)
+  if (hashQuery !== appliedQuery) {
+    setAppliedQuery(hashQuery)
+    setView(readViewState(hashQuery))
+  }
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [resultsHeight, setResultsHeight] = useState(0)
   const resultsRef = useRef<HTMLDivElement | null>(null)
@@ -66,7 +71,8 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
   const page = catalog ? Math.min(requestedPage, pageCount) : view.page
   // Bind an addressed page only once its catalog is available. Later scope or
   // year changes reset it, and a smaller catalog permanently clamps it.
-  if (catalog && (view.scopeKey !== scopeKey || view.page !== page)) setView({ ...view, scopeKey, page })
+  // The query guard preserves the address update queued above in this render.
+  if (catalog && hashQuery === appliedQuery && (view.scopeKey !== scopeKey || view.page !== page)) setView({ ...view, scopeKey, page })
   const pageStart = (page - 1) * view.pageSize
   const visibleRefs = filtered.slice(pageStart, pageStart + view.pageSize)
   const neededPages = useMemo(() => [...new Set(visibleRefs.map((entry) => entry.page))], [visibleRefs])
@@ -232,7 +238,10 @@ export function MatchesView({ state, onRequestPages, searchRef, archiveYears = [
             ) : null}
             {pageLoading ? <LoadingState presentation="rows" className="m-4" label="Loading matches" /> : null}
             {pageFailure?.status === 'error' || pageFailure?.status === 'missing' ? (
-              <Alert className="m-4 w-auto">{pageFailure.message}</Alert>
+              <Alert className="m-4 w-auto">
+                {pageFailure.message}
+                {pageFailure.status === 'error' ? <Button type="button" variant="outline" className="mt-2 w-fit" onClick={() => onRequestPages(neededPages)}>Retry</Button> : null}
+              </Alert>
             ) : null}
           </>
         )}
@@ -270,13 +279,13 @@ function groupMatchSeries(matches: PublicMatchHistoryEntry[]): MatchSeries[] {
 function matchesFilters(match: PublicMatchHistorySeriesRef, view: ViewState) { const search = view.search.trim().toLocaleLowerCase(); return (!search || `${match.teamA.name} ${match.teamA.code} ${match.teamB.name} ${match.teamB.code}`.toLocaleLowerCase().includes(search)) && (view.league === 'All' || match.league === view.league) && (view.event === 'All' || match.event === view.event) }
 function unique(values: string[]) { return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right)) }
 function scopeForFilter(filter: { season: string; checkpoint?: string }) { return filter.season === 'All' ? 'all' : `season:${filter.season}${filter.checkpoint ? `:checkpoint:${filter.checkpoint}` : ''}` }
-function readViewState(): ViewState {
-  const size = hashInt('size', PAGE_SIZES[0])
+function readViewState(query: URLSearchParams): ViewState {
+  const size = hashInt('size', PAGE_SIZES[0], query)
   return {
-    search: hashParam('team') ?? '',
-    league: hashParam('league') ?? 'All',
-    event: hashParam('event') ?? 'All',
+    search: hashParam('team', query) ?? '',
+    league: hashParam('league', query) ?? 'All',
+    event: hashParam('event', query) ?? 'All',
     pageSize: PAGE_SIZES.includes(size as typeof PAGE_SIZES[number]) ? size : PAGE_SIZES[0],
-    page: hashInt('page', 1),
+    page: hashInt('page', 1, query),
   }
 }
