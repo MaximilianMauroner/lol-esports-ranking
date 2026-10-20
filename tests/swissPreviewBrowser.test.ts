@@ -8,6 +8,7 @@ import { createStaticRankingData } from '../src/domains/rankings/internal/projec
 import { encodeChoices, fillDraw, resolveScenario, seedBaseline, type DrawnRound, type SwissBaseline } from '../src/domains/tournaments/internal/swissScenario'
 import { worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
 import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types'
+import { closedSelectKeysChangeValue } from './fixtures/nativeSelect'
 
 const at = '2026-10-20T12:00:00.000Z'
 const mainId = '2026 Season World Championship/Main Event'
@@ -192,9 +193,10 @@ test('Swiss preview builds, compares, shares and resets scenarios without changi
     const before = await swap.inputValue()
     await swap.focus()
     const atLast = await swap.evaluate((select: HTMLSelectElement) => [...select.options].filter((option) => !option.disabled).at(-1)?.value === select.value)
-    await page.keyboard.press(atLast ? 'ArrowUp' : 'ArrowDown')
+    if (closedSelectKeysChangeValue) await page.keyboard.press(atLast ? 'ArrowUp' : 'ArrowDown')
+    else await swap.selectOption(await swap.evaluate((select: HTMLSelectElement) => [...select.options].find((option) => !option.disabled && option.value !== select.value)?.value ?? select.value))
     const choice = await swap.inputValue()
-    assert.notEqual(choice, before, 'the arrow key chooses another valid opponent')
+    assert.notEqual(choice, before, 'the opponent select chooses another valid opponent')
     await roundTwo.getByRole('group', { name: `Round 2: ${leader} against ${teamName(choice)}`, exact: true }).waitFor()
     assert.equal(await isFocused(swap), true, 'focus stays on the opponent select after a swap')
     await roundTwo.getByRole('button', { name: 'Clear draw' }).click()
