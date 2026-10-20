@@ -51,7 +51,7 @@ pub fn download(
             let name = parsed
                 .path_segments()
                 .and_then(Iterator::last)
-                .filter(|v| v.contains('.'))
+                .filter(|name| plain_csv_name(name))
                 .map(str::to_owned)
                 .unwrap_or(format!("oracles-elixir-{}.csv", index + 1));
             sources.push((name, url.into()));
@@ -89,6 +89,14 @@ pub fn download(
             if name.ends_with(".csv") {
                 let mut url = Url::parse("https://drive.google.com/uc?export=download")?;
                 url.query_pairs_mut().append_pair("id", &entry[1]);
+                if !plain_csv_name(&name) {
+                    let message = "Oracle source name must be a plain CSV file name";
+                    failures.push(json!({"source":name,"url":url.as_str(),"error":message}));
+                    warnings.push(format!(
+                        "Oracle source {name} was not downloaded: {message}"
+                    ));
+                    continue;
+                }
                 sources.push((name, url.into()));
             }
         }
@@ -98,20 +106,7 @@ pub fn download(
     }
     let original_count = sources.len();
     let year = regex::Regex::new(r"^(\d{4})_")?;
-    sources.retain(|(name, url)| {
-        let mut components = Path::new(name).components();
-        if !name.ends_with(".csv")
-            || name.contains('\\')
-            || !matches!(components.next(), Some(Component::Normal(_)))
-            || components.next().is_some()
-        {
-            let message = "Oracle source name must be a plain CSV file name";
-            failures.push(json!({"source":name,"url":url,"error":message}));
-            warnings.push(format!(
-                "Oracle source {name} was not downloaded: {message}"
-            ));
-            return false;
-        }
+    sources.retain(|(name, _)| {
         year.captures(name)
             .is_none_or(|v| v[1] >= start[..4] && v[1] <= end[..4])
     });
@@ -176,6 +171,14 @@ pub fn download(
         folder_url,
         discovered_count: original_count,
     })
+}
+
+fn plain_csv_name(name: &str) -> bool {
+    let mut components = Path::new(name).components();
+    name.ends_with(".csv")
+        && !name.contains('\\')
+        && matches!(components.next(), Some(Component::Normal(_)))
+        && components.next().is_none()
 }
 
 fn discovery_failure_message(message: &str) -> String {
