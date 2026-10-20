@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { runRefreshOnce } from '../scripts/refresh-once.mjs'
 
 const refreshScript: string = '../scripts/refresh-data-if-changed.mjs'
 const { refreshDataIfChanged } = await import(refreshScript) as {
@@ -53,6 +54,64 @@ for (const failure of ['different source', 'forced same source'] as const) {
   })
 }
 
+for (const interveningRun of ['stale source', 'probe failure', 'skip crunch', 'skip upload', 'abrupt exit'] as const) {
+  test(`pending bucket repair survives ${interveningRun}`, async () => {
+    const fixture = await mutablePublicationFixture()
+    try {
+      await fixture.refresh()
+      fixture.source = 'B'
+      fixture.failPublication = true
+      await assert.rejects(fixture.refresh(), /Partial mutable publication/)
+      fixture.source = 'A'
+      fixture.failPublication = false
+
+      if (interveningRun === 'stale source') {
+        fixture.providerOutage = true
+        assert.equal((await fixture.refresh()).status, 'stale-source')
+        fixture.providerOutage = false
+      } else if (interveningRun === 'probe failure') {
+        await fixture.failProbe()
+      } else if (interveningRun === 'abrupt exit') {
+        await writeFile(fixture.statePath, fixture.beforeMutationState)
+      } else {
+        await fixture.refresh([interveningRun === 'skip crunch' ? '--skip-crunch' : '--skip-bucket-upload'])
+      }
+      assert.deepEqual(await fixture.artifacts(), { scope: 'B-2', summary: 'A-1' })
+      assert.equal(fixture.publications, 2)
+
+      assert.equal((await fixture.refresh()).changed, true)
+      const revision = `A-${fixture.builds}`
+      assert.deepEqual(await fixture.artifacts(), { scope: revision, summary: revision })
+      assert.equal(fixture.publications, 3)
+      assert.equal((await fixture.refresh()).changed, false)
+      assert.equal(fixture.publications, 3)
+    } finally {
+      await fixture.cleanup()
+    }
+  })
+}
+
+test('local publication repairs an incomplete build without bucket access', async () => {
+  const fixture = await mutablePublicationFixture()
+  try {
+    await fixture.refresh(['--skip-bucket-upload'])
+    fixture.source = 'B'
+    fixture.failBuild = true
+    await assert.rejects(fixture.refresh(['--skip-bucket-upload']), /Partial local build/)
+    assert.deepEqual(await fixture.localArtifacts(), { scope: 'B-2', summary: 'A-1' })
+
+    fixture.source = 'A'
+    fixture.failBuild = false
+    assert.equal((await fixture.refresh(['--skip-bucket-upload'])).changed, true)
+    assert.deepEqual(await fixture.localArtifacts(), { scope: 'A-3', summary: 'A-3' })
+    assert.equal((await fixture.refresh(['--skip-bucket-upload'])).changed, false)
+    assert.equal(fixture.builds, 3)
+    assert.equal(fixture.publications, 0)
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
 async function mutablePublicationFixture() {
   const root = await mkdtemp(join(tmpdir(), 'refresh-mutable-publication-'))
   const rawDir = join(root, 'raw')
@@ -74,7 +133,16 @@ async function mutablePublicationFixture() {
     builds: 0,
     publications: 0,
     failPublication: false,
+    failBuild: false,
+    providerOutage: false,
+    beforeMutationState: '',
     statePath,
+    async localArtifacts() {
+      return {
+        scope: await readFile(join(publicDataDir, 'scope.json'), 'utf8'),
+        summary: JSON.parse(await readFile(join(publicDataDir, 'ranking-summary.json'), 'utf8')),
+      }
+    },
     async artifacts() {
       return {
         scope: await readFile(join(bucketDir, 'scope.json'), 'utf8'),
@@ -95,17 +163,19 @@ async function mutablePublicationFixture() {
               schemaVersion: 1,
               start: '2026-01-01',
               end: '2026-06-29',
-              files: { leaguepediaJson: [sourcePath], oracleCsv: [] },
-              sources: { leaguepedia: { status: 'downloaded', downloadedCount: 1 } },
+              files: { leaguepediaJson: fixture.providerOutage ? [] : [sourcePath], oracleCsv: [] },
+              sources: { leaguepedia: { status: fixture.providerOutage ? 'failed' : 'downloaded', downloadedCount: fixture.providerOutage ? 0 : 1 } },
               warnings: [],
             }))
             return
           }
           assert.equal(command, 'pnpm')
           assert.ok(commandArgs.includes('scripts/build-static-snapshot.ts'))
+          fixture.beforeMutationState = await readFile(statePath, 'utf8')
           fixture.builds += 1
           await mkdir(publicDataDir, { recursive: true })
           await writeFile(join(publicDataDir, 'scope.json'), `${fixture.source}-${fixture.builds}`)
+          if (fixture.failBuild) throw new Error('Partial local build')
           await writeFile(join(publicDataDir, 'ranking-summary.json'), JSON.stringify(`${fixture.source}-${fixture.builds}`))
         },
         uploadRankingArtifacts: async () => {
@@ -120,6 +190,28 @@ async function mutablePublicationFixture() {
           }
         },
       })
+    },
+    async failProbe() {
+      await assert.rejects(runRefreshOnce({
+        env: {
+          RANKING_REFRESH_MODE: 'gated',
+          RANKING_REFRESH_STATE: statePath,
+          RANKING_TRIGGER_STATE: join(root, 'trigger-state.json'),
+          RANKING_REFRESH_METRICS_PATH: join(root, 'probe-metrics.json'),
+        },
+        bucketConfig: { enabled: true, bucket: 'fixture', prefix: 'rankings' },
+        bucketClient: { send: async () => { throw new Error('Unexpected bucket request') } },
+        acquireLease: async () => ({ acquired: true, lease: { owner: 'probe', fencingToken: 1 }, etag: 'lease' }),
+        assertLease: async () => ({ live: true }),
+        releaseLease: async () => ({ released: true }),
+        readBucketJson: async () => ({ found: false }),
+        writeBucketJson: async () => ({ written: true, etag: 'state' }),
+        fetchProbe: async () => { throw new Error('Probe failure') },
+        sendAlert: async () => undefined,
+        setInterval: () => ({ unref() {} }),
+        clearInterval: () => undefined,
+        logger: { log() {}, warn() {}, error() {} },
+      }), /Probe failure/)
     },
     cleanup: () => rm(root, { recursive: true, force: true }),
   }

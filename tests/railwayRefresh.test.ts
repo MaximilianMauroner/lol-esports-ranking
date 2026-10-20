@@ -1689,6 +1689,8 @@ test('refresh fallback persists distinct restored generation and run lineage', a
       manifestBytes: publicManifestBytes.byteLength, manifestEtag: publicWrite.ETag,
       stateManifestKey: stateAuthority.authority.key, stateManifestDigest: stateAuthority.authority.digest,
     }) }))
+    await mkdir(rawDir, { recursive: true })
+    await writeFile(join(rawDir, 'refresh-state.json'), JSON.stringify({ publishedFingerprint: 'previous-source' }))
     let persistedLineage: unknown
     const result = await refreshDataIfChanged([
       '--raw-dir', rawDir, '--manifest', join(rawDir, 'manifest.json'), '--state', join(rawDir, 'refresh-state.json'),
