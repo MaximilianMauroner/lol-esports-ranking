@@ -1,4 +1,4 @@
-import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import { forecastSourceUnavailable, forecastTournamentSeries, type WorldsForecastInput, type ForecastReady } from './tournamentForecast.ts'
 import type { TournamentSeries } from './tournamentFeed.ts'
 import type { ObservationEvidence } from './worldsObservedRules.ts'
 
@@ -139,10 +139,13 @@ export type PlayInForecastResult = Unsupported | {
  * Enumerates the at most 64 winner paths on a supplied draw. Observed winners stay fixed.
  * Hypothetical provider rows remain local; no receipts or source artifacts are created.
  */
-export function forecastWorlds2026PlayIn(input: Worlds2026PlayInInput, basis: ForecastBasis): PlayInForecastResult {
+export function forecastWorlds2026PlayIn(input: Worlds2026PlayInInput, forecastInput: WorldsForecastInput): PlayInForecastResult {
+  const { basis, seriesSource } = forecastInput
   const state = replayWorlds2026PlayIn(input)
   if (state.status === 'unsupported') return state
-  if (!state.resolvedMatches.r4 && (!validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)
+  const sourceError = forecastSourceUnavailable(seriesSource)
+  if (!state.resolvedMatches.r4 && sourceError) return unsupported('model-unavailable', sourceError.detail)
+  if (!state.resolvedMatches.r4 && (!basis || !validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)
     || Date.parse(basis.ratingDataAsOf) > Date.parse(basis.ratingPublishedAt)
     || Date.parse(basis.ratingPublishedAt) > Date.parse(input.asOf))) {
     return unsupported('model-unavailable', 'The frozen snapshot must satisfy data cutoff ≤ publication ≤ event-state information cutoff.')
@@ -176,7 +179,7 @@ export function forecastWorlds2026PlayIn(input: Worlds2026PlayInInput, basis: Fo
     let forecast = matchups.get(key)
     if (!forecast) {
       const result = forecastTournamentSeries(hypotheticalSeries(input, definition.id, pair), basis, {
-        sideAssumption: 'neutral', sideBasis: 'Hypothetical neutral-side Bo5; RoFS/RoDS and pick choices are not modeled.',
+        seriesSource, sideAssumption: 'neutral', sideBasis: 'Hypothetical neutral-side Bo5; RoFS/RoDS and pick choices are not modeled.',
       })
       if (result.status === 'unavailable') return unsupported('model-unavailable', `${pair.join(' vs ')}: ${result.reason}: ${result.detail}`)
       const probabilities = [result.homeGameWinProbability, result.awayGameWinProbability,

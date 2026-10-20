@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { runWorldsSimulation } from '../src/domains/tournaments/simulation'
 import { startWorldsWorker } from '../src/browser/tournaments/worldsWorkerClient'
 import type { WorldsWorkerMessage } from '../src/browser/tournaments/worldsSimulationWorker'
 import { historicalWorldsFixture, worldsBasis, worldsFixture } from './fixtures/worldsFixtures'
@@ -18,7 +19,7 @@ test('cancel invalidates saved old handlers before terminating the owned worker'
   const received: WorldsWorkerMessage[] = []
   const worker = { onmessage: null as ((event: MessageEvent<WorldsWorkerMessage>) => void) | null,
     onerror: null as ((event: ErrorEvent) => void) | null, terminated: false, postMessage() {}, terminate() { this.terminated = true } }
-  const stop = startWorldsWorker(worldsFixture(), worldsBasis(), { seed: 47, trials: 10_000 }, (message) => received.push(message), () => worker)
+  const stop = startWorldsWorker(worldsFixture(), { seriesSource: 'lolesports-persisted-site-api', basis: worldsBasis() }, { seed: 47, trials: 10_000 }, (message) => received.push(message), () => worker)
   const queued = worker.onmessage!
   const queuedError = worker.onerror!
   queued({ data: { type: 'progress', completed: 100, total: 10_000 } } as MessageEvent<WorldsWorkerMessage>)
@@ -250,4 +251,33 @@ test('historical reconciliation preserves bounded windows and unrelated stages b
     await loadWorldsArtifact(event, true, new AbortController().signal)
     assert.equal(state.group.games.length, 12, 'Observations outside the bounded schedule window remain retained.')
   } finally { globalThis.fetch = fetchBefore }
+})
+
+test('worker cache cannot reuse official probability results for a different source', async () => {
+  const input = worldsFixture('play-in')
+  const basis = worldsBasis()
+  const options = { seed: 34567, trials: 1 }
+  const official = { seriesSource: 'lolesports-persisted-site-api' as const, basis }
+  const result = await runWorldsSimulation(input, official, options)
+  assert.equal(result.status, 'supported')
+  let created = 0
+  function factory() {
+    created++
+    return { onmessage: null as ((event: MessageEvent<WorldsWorkerMessage>) => void) | null,
+      onerror: null, postMessage() {}, terminate() {} }
+  }
+  const worker = factory()
+  const stop = startWorldsWorker(input, official, options, () => {}, () => worker)
+  assert.ok(worker.onmessage)
+  worker.onmessage({ data: { type: 'result', result } } as MessageEvent<WorldsWorkerMessage>)
+  stop()
+  const cached: WorldsWorkerMessage[] = []
+  const stopCached = startWorldsWorker(input, official, options, (message) => cached.push(message), factory)
+  await new Promise<void>((resolve) => queueMicrotask(resolve))
+  assert.equal(created, 1)
+  assert.equal(cached.length, 1)
+  stopCached()
+  const stopOther = startWorldsWorker(input, { ...official, seriesSource: 'leaguepedia-cargo' }, options, () => {}, factory)
+  assert.equal(created, 2)
+  stopOther()
 })

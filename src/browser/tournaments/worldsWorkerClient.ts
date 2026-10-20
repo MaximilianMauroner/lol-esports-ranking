@@ -1,4 +1,4 @@
-import type { ForecastBasis } from '../../domains/tournaments/forecast'
+import type { WorldsForecastInput } from '../../domains/tournaments/forecast'
 import type { WorldsJourneyInput } from './worldsArtifacts'
 import type { SimulationOptions } from '../../domains/tournaments/simulation'
 import type { WorldsWorkerMessage, WorldsWorkerRequest } from './worldsSimulationWorker'
@@ -9,11 +9,11 @@ type SimulationWorker = Pick<Worker, 'postMessage' | 'terminate'> & {
 }
 const baselines = new Map<string, WorldsWorkerMessage>()
 /** Old handlers are invalidated before termination, so even queued messages cannot publish. */
-export function startWorldsWorker(input: WorldsJourneyInput, basis: ForecastBasis | null, options: SimulationOptions,
+export function startWorldsWorker(input: WorldsJourneyInput, forecast: WorldsForecastInput, options: SimulationOptions,
   onMessage: (message: WorldsWorkerMessage) => void,
   createWorker: () => SimulationWorker = () => new Worker(new URL('./worldsSimulationWorker.ts', import.meta.url), { type: 'module' })) {
   let active = true
-  const key = JSON.stringify([input, basis, options])
+  const key = JSON.stringify([input, forecast, options])
   const cached = baselines.get(key)
   if (cached) {
     queueMicrotask(() => { if (active) onMessage(cached) })
@@ -29,7 +29,7 @@ export function startWorldsWorker(input: WorldsJourneyInput, basis: ForecastBasi
     onMessage(event.data)
   }
   worker.onerror = (event) => { if (active) onMessage({ type: 'error', detail: event.message || 'Worlds computation failed.' }) }
-  const request: WorldsWorkerRequest = { input, basis, options }
+  const request: WorldsWorkerRequest = { input, forecast, options }
   worker.postMessage(request)
   return () => { active = false; worker.onmessage = null; worker.onerror = null; worker.terminate() }
 }

@@ -3,7 +3,7 @@ import { Alert } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import type { ForecastBasis } from '../../domains/tournaments/forecast'
+import type { WorldsForecastInput } from '../../domains/tournaments/forecast'
 import type { TournamentEvent } from '../../domains/tournaments/read'
 import { loadWorldsArtifact, type WorldsArtifact } from '../../browser/tournaments/worldsArtifacts'
 import { WORLD_FINISHES, WORLD_STAGES, worldsSamplingInterval, type WorldStage, type WorldsReport, type WorldsSimulationResult } from '../../domains/tournaments/simulation'
@@ -14,7 +14,8 @@ const STAGE_LABELS: Record<WorldStage, string> = { swiss: 'Swiss', knockout: 'Kn
 const OPTIONS = { seed: 20261009, trials: 10_000 }
 
 /** The parent keys this panel by coherent schedule and model identities. */
-export function WorldsTournamentPanel({ event, basis, fixtureFeed }: { event: TournamentEvent; basis: ForecastBasis | null; fixtureFeed: boolean }) {
+export function WorldsTournamentPanel({ event, forecast, fixtureFeed }: { event: TournamentEvent; forecast: WorldsForecastInput; fixtureFeed: boolean }) {
+  const { basis, seriesSource } = forecast
   const [artifact, setArtifact] = useState<WorldsArtifact | null>(null)
   const [display, setDisplay] = useState<WorldsSimulationResult | null>(null)
   const [historical, setHistorical] = useState<GroupReplayResult | null>(null)
@@ -40,7 +41,7 @@ export function WorldsTournamentPanel({ event, basis, fixtureFeed }: { event: To
         window.clearTimeout(timeout)
         if (!active || controller.signal.aborted) return
         setArtifact(loaded); setMode('running'); setDetail('Computing from the pinned event state.')
-        stop.current = startWorldsWorker(loaded.state, basis, OPTIONS, (message) => {
+        stop.current = startWorldsWorker(loaded.state, { basis, seriesSource }, OPTIONS, (message) => {
           if (!active || controller.signal.aborted) return
           if (message.type === 'progress') { setProgress(message.completed); return }
           if (message.type === 'state' || message.type === 'result') setDisplay(message.result)
@@ -60,7 +61,7 @@ export function WorldsTournamentPanel({ event, basis, fixtureFeed }: { event: To
       active = false; controller.abort(); window.clearTimeout(timer); window.clearTimeout(timeout)
       stop.current?.(); stop.current = null
     }
-  }, [event, fixtureFeed, basis, run])
+  }, [event, fixtureFeed, basis, seriesSource, run])
 
   const names = new Map(event.series.flatMap((series) => series.teams.filter((team) => team.id).map((team) => [team.id!, team.name ?? team.id!])))
   const name = (id: string) => names.get(id) ?? id
