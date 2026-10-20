@@ -126,16 +126,34 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     assert.ok(dataRequests.every((path) => path === tournamentPath || path === healthPath), `Unexpected data requests: ${dataRequests}`)
     assert.deepEqual(externalRequests, [])
 
-    const historyLength = await page.evaluate(() => history.length)
-    await page.evaluate((id) => {
+    const historyLength = await page.evaluate((id) => {
+      const changes: string[] = []
+      window.addEventListener('hashchange', (event) => changes.push(event.newURL))
+      Object.assign(window, { tournamentHashChanges: changes })
       const query = new URLSearchParams(location.hash.split('?')[1])
       query.set('event', id)
-      history.replaceState(null, '', `#tournaments?${query}`)
-      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      location.hash = `#tournaments?${query}`
+      return history.length
     }, worldsId)
     await page.waitForURL((url) => new URLSearchParams(url.hash.split('?')[1]).get('event') === worldsAddress)
-    assert.equal(await page.evaluate(() => history.length), historyLength, 'Legacy normalization replaces the entry')
+    await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
+    const normalized = await page.evaluate(() => ({
+      historyLength: history.length,
+      changes: Reflect.get(window, 'tournamentHashChanges') as string[],
+      query: [...new URLSearchParams(location.hash.split('?')[1])],
+    }))
+    assert.equal(normalized.historyLength, historyLength, 'Legacy normalization replaces the entry')
+    assert.equal(normalized.changes.length, 1, 'Only real navigation emits hashchange; normalization emits none')
+    assert.equal(new URLSearchParams(new URL(normalized.changes[0]!).hash.split('?')[1]).get('event'), worldsId)
+    assert.deepEqual(normalized.query, [['event', worldsAddress], ['view', 'schedule'], ['scope', 'season:2026'], ['scenario', 'kept']])
     assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
+    await page.locator('#tournament-event').selectOption('lcs:2026:fixture-lcs')
+    await page.getByRole('heading', { name: 'LCS 2026', exact: true }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), 'lcs:2026:fixture-lcs')
+    await page.goBack()
+    await page.getByRole('heading', { name: 'Worlds 2026', exact: true }).waitFor()
+    assert.equal(await page.locator('#tournament-event').inputValue(), worldsId)
+    assert.equal((await page.evaluate(() => Reflect.get(window, 'tournamentHashChanges') as string[])).length, 3, 'Picker and Back emit one real hashchange each after normalization')
     holdNextFeed = true
     await page.reload()
     await waitForPendingFeed(pendingFeed)
@@ -225,6 +243,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.getByText(missingLink, { exact: true }).waitFor()
     assert.equal(await page.getByRole('heading', { name: 'LCS 2026', exact: true }).count(), 0)
     assert.equal(await page.locator('#tournament-event').inputValue(), '')
+    assert.equal(await page.locator('#tournament-event option:checked').innerText(), 'No supported events')
     feed.events = originalEvents
     feed.fetchedAt = '2026-09-27T12:07:00.000Z'
     health.checkedAt = feed.fetchedAt
@@ -344,6 +363,7 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     await page.goto(`${base}/${unavailableHash}`)
     await page.getByText(missingLink, { exact: true }).waitFor()
     assert.equal(new URL(page.url()).hash, unavailableHash)
+    assert.equal(await page.locator('#tournament-event option:checked').innerText(), 'Choose a competition')
     assert.equal(await page.locator('#tournament-event').inputValue(), '')
     assert.equal(await page.getByRole('heading', { name: /LCS 2026|Worlds 2026/ }).count(), 0)
     assert.equal(await page.getByRole('group', { name: 'View', exact: true }).count(), 0)

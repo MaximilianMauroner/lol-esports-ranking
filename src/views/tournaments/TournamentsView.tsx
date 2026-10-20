@@ -39,7 +39,6 @@ export function TournamentsView() {
     const query = currentHashQuery()
     query.set('event', address)
     writeNavigationHash(`#tournaments?${query}`, 'replace')
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
   }, [address, requestedEvent])
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time'
   const grouped = useMemo(() => groupTournamentSeries(selected?.series ?? []), [selected])
@@ -62,7 +61,7 @@ export function TournamentsView() {
               const picked = events.find((candidate) => candidate.id === event.target.value)
               if (picked) selectEvent(picked, setRequestedEvent)
             }}>
-              {!selected ? <option value="">Choose a competition</option> : null}
+              {!selected ? <option value="">{events.length === 0 ? 'No supported events' : 'Choose a competition'}</option> : null}
               {events.map((event) => <option key={event.id} value={event.id}>{event.label}{events.some((other) => other !== event && other.label === event.label) ? ` · ${event.sourceTournamentId}` : ''}</option>)}
             </Select>
           </div>
