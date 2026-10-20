@@ -150,7 +150,11 @@ impl Bucket {
             .collect::<String>();
         headers.insert("authorization".into(), format!("AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed}, Signature={signature}", self.access));
         let head = method == Method::HEAD;
-        let mut request = self.client.request(method, url).body(body);
+        let mut request = self
+            .client
+            .request(method, url)
+            .timeout(self.request_timeout)
+            .body(body);
         for (key, value) in headers {
             request = request.header(key, value);
         }
