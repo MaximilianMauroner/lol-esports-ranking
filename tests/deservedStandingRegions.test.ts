@@ -56,6 +56,22 @@ test('buildDeservedStandingRegionModel applies roster validity, seed hooks, and 
   assert.equal(lck.bo5Record.losses, 0)
 })
 
+test('a drawn international series meets expectation without adding an outright win or loss', () => {
+  const model = buildDeservedStandingRegionModel([
+    matchFixture({ id: 'draw-1', sourceGameId: 'draw-1', bestOf: 2, gameNumber: 1, winner: 'Alpha' }),
+    matchFixture({ id: 'draw-2', sourceGameId: 'draw-2', bestOf: 2, gameNumber: 2, winner: 'Beta' }),
+  ], teamProfiles())
+
+  for (const region of ['LCK', 'LPL'] as const) {
+    const summary = regionFor(model, region)
+    assert.equal(summary.internationalWins, 0)
+    assert.equal(summary.internationalLosses, 0)
+    assert.equal(summary.expectedInternationalWins, 0.5)
+    assert.equal(summary.internationalWinsAboveExpectation, 0)
+    assert.deepEqual(summary.recordVsMajorRegions, { wins: 0, losses: 0 })
+  }
+})
+
 test('buildDeservedStandingRegionModel keeps same-number seed baselines region-specific', () => {
   const model = buildDeservedStandingRegionModel([
     matchFixture({
