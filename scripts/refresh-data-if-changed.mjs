@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
-import { access, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, cp, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { manifestWithResolvedFiles } from './local-data-manifest.js'
@@ -88,6 +88,8 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     ...splitExtraArgs(env.RANKING_REFRESH_DOWNLOAD_ARGS),
   ]
   const restoreStarted = monotonicNow()
+  const localRefreshStateMissing = await lstat(statePath).then(() => false, (error) => error.code === 'ENOENT')
+  const previousState = await readJsonIfExists(statePath)
   const localManifest = manifestWithResolvedFiles(await readJsonIfExists(manifestPath), rawDir)
   const hasUsableLocalRawBaseline = await manifestHasUsableSourceFiles(localManifest)
   const restoreResult = restoreRawEnabled && bucketConfig.enabled
@@ -184,7 +186,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       providerRequests: finiteOrNull(currentStagingManifest?.fetchTelemetry?.requests),
       providerRetries: finiteOrNull(currentStagingManifest?.fetchTelemetry?.retryCount),
     })
-    const previousState = await readJsonIfExists(statePath)
     if (!manifestHasCurrentMatchSourceFiles(currentStagingManifest)) {
       const attemptedAt = new Date(wallNow()).toISOString()
       const providerResult = sourceProviderResult(currentStagingManifest)
@@ -509,6 +510,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
     if (!skipCrunch && incrementalEnabled) {
       const checkpointRestoreStarted = monotonicNow()
+      let verifiedColdRestore = false
       if (bucketConfig.enabled && bucketClient) {
         try {
           let [activeState, activePublic] = await Promise.all([
@@ -517,6 +519,10 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
           ])
           if (activeState.found && activePublic.found
             && activeState.manifest.generationId === activePublic.active.generationId) {
+            verifiedColdRestore = localRefreshStateMissing && restoreResult.restored
+              && Boolean(activePublic.publication)
+              && restoreResult.generationId === activeState.manifest.generationId
+              && restoreResult.sourceReceiptDigest === activeState.manifest.sourceReceiptDigest
             restoredIncremental = {
               stateManifest: activeState.manifest,
               canonicalLedger: activeState.canonicalLedger,
@@ -554,7 +560,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       const incrementalBuildOptions = {
         mode: metrics.snapshot().mode,
         cause: metrics.snapshot().cause,
-        enabled: Boolean(previousState?.publishedFingerprint) && !repairRequired,
+        enabled: !repairRequired && (Boolean(previousState?.publishedFingerprint) || verifiedColdRestore),
         manifestPath,
         output,
         publicDataDir,
@@ -978,7 +984,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
 
     state.lastRun ??= completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
     if (!skipCrunch && (state.pendingPublication === 'local' || publishedBucket)) delete state.pendingPublication
-    if (!state.pendingPublication) state.publishedFingerprint = fingerprint.fingerprint
+    if (!skipCrunch && !state.pendingPublication) state.publishedFingerprint = fingerprint.fingerprint
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {

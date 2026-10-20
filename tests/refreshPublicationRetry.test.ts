@@ -16,6 +16,36 @@ const { refreshDataIfChanged } = await import(refreshScript) as {
   }) => Promise<{ changed: boolean; status?: string }>
 }
 
+for (const skip of ['CLI', 'environment'] as const) {
+  for (const destination of ['bucket', 'local'] as const) {
+    test(`ordinary refresh publishes changed source after ${skip} skip crunch for ${destination}`, async () => {
+      const fixture = await mutablePublicationFixture()
+      const args = destination === 'local' ? ['--skip-bucket-upload'] : []
+      const artifacts = () => destination === 'local' ? fixture.localArtifacts() : fixture.artifacts()
+      try {
+        await fixture.refresh(args)
+        const published = JSON.parse(await readFile(fixture.statePath, 'utf8'))
+        fixture.source = 'B'
+        await fixture.refresh([...args, ...(skip === 'CLI' ? ['--skip-crunch'] : [])],
+          skip === 'environment' ? { RANKING_SKIP_CRUNCH: 'true' } : {})
+        const skipped = JSON.parse(await readFile(fixture.statePath, 'utf8'))
+        assert.deepEqual(await artifacts(), { scope: 'A-1', summary: 'A-1' })
+
+        assert.equal((await fixture.refresh(args)).changed, true)
+        assert.deepEqual(await artifacts(), { scope: 'B-2', summary: 'B-2' })
+        assert.equal((await fixture.refresh(args)).changed, false)
+        assert.equal(fixture.builds, 2)
+        assert.equal(fixture.publications, destination === 'local' ? 0 : 2)
+        assert.equal(skipped.publishedFingerprint, published.publishedFingerprint)
+        assert.notEqual(skipped.fingerprint, published.publishedFingerprint)
+        assert.equal(skipped.pendingPublication, undefined)
+      } finally {
+        await fixture.cleanup()
+      }
+    })
+  }
+}
+
 for (const failure of ['different source', 'forced same source'] as const) {
   test(`refresh repairs a partial mutable publication after ${failure}`, async () => {
     const fixture = await mutablePublicationFixture()
@@ -149,9 +179,9 @@ async function mutablePublicationFixture() {
         summary: await readFile(join(bucketDir, 'ranking-summary.json'), 'utf8'),
       }
     },
-    refresh(extraArgs: string[] = []) {
+    refresh(extraArgs: string[] = [], env: Record<string, string> = {}) {
       return refreshDataIfChanged([...args, ...extraArgs], {
-        env: { RANKING_BUCKET_RESTORE_RAW: 'false' },
+        env: { RANKING_BUCKET_RESTORE_RAW: 'false', ...env },
         bucketConfig: { enabled: true, bucket: 'fixture', prefix: 'rankings' },
         bucketClient: { send: async () => { throw new Error('Unexpected bucket request') } },
         run: async (command, commandArgs) => {
