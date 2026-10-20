@@ -4,7 +4,7 @@ use crate::{
 };
 use reqwest::Url;
 use serde_json::{Value, json};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub struct Outcome {
     pub files: Vec<PathBuf>,
@@ -98,7 +98,20 @@ pub fn download(
     }
     let original_count = sources.len();
     let year = regex::Regex::new(r"^(\d{4})_")?;
-    sources.retain(|(name, _)| {
+    sources.retain(|(name, url)| {
+        let mut components = Path::new(name).components();
+        if !name.ends_with(".csv")
+            || name.contains('\\')
+            || !matches!(components.next(), Some(Component::Normal(_)))
+            || components.next().is_some()
+        {
+            let message = "Oracle source name must be a plain CSV file name";
+            failures.push(json!({"source":name,"url":url,"error":message}));
+            warnings.push(format!(
+                "Oracle source {name} was not downloaded: {message}"
+            ));
+            return false;
+        }
         year.captures(name)
             .is_none_or(|v| v[1] >= start[..4] && v[1] <= end[..4])
     });
@@ -207,6 +220,8 @@ mod tests {
             "subdirectory/child.csv".to_owned(),
             "./dot.csv".to_owned(),
             "subdirectory/../child.csv".to_owned(),
+            "2027_invalid/child.csv".to_owned(),
+            "subdirectory\\child.csv".to_owned(),
             "2026_valid.csv".to_owned(),
         ];
         let html = names
