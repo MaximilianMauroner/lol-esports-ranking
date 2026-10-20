@@ -360,6 +360,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       output: { fileCount: fingerprint.files.length },
     })
     const changed = force || previousState?.fingerprint !== fingerprint.fingerprint
+      || previousState?.lastRun?.result === 'failed'
 
     if (!changed) {
       const state = {
@@ -425,7 +426,6 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
       schemaVersion: 1,
       status: 'refreshed',
       refreshedAt: new Date().toISOString(),
-      fingerprint: fingerprint.fingerprint,
       healthFingerprint: fingerprint.healthFingerprint,
       previousFingerprint: previousState?.fingerprint,
       downloadStart: start,
@@ -674,6 +674,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
 
     if (incrementalBuild?.action === 'no-change') {
+      state.fingerprint = fingerprint.fingerprint
       state.crunch = { skipped: true, reason: 'canonical-ledger-unchanged' }
       state.publish = { skipped: true, reason: 'canonical-ledger-unchanged' }
       terminalResult = 'unchanged'
@@ -898,7 +899,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
               ...(storage ? { storage } : {}),
             }
             state.lastRun = refreshTelemetry
-            return state
+            return { ...state, fingerprint: fingerprint.fingerprint }
           },
         })
         publishedBucket = bucketPublish
@@ -964,6 +965,7 @@ export async function refreshDataIfChanged(rawArgs = [], options = {}) {
     }
 
     state.lastRun ??= completeRefreshMetrics(metrics.snapshot({ result: 'completed' }))
+    state.fingerprint = fingerprint.fingerprint
     await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`)
     console.log(`Source data changed; refreshed ranking artifacts for ${start} through ${end}.`)
     return {

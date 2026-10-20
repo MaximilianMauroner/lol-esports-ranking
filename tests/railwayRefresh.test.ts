@@ -602,6 +602,12 @@ test('refresh wrapper retries failed publication when source data is unchanged',
     assert.equal(third.changed, false)
     assert.equal(publishAttempts, 2)
     assert.equal(crunchCount, 2)
+
+    await writeFile(statePath, JSON.stringify({ ...failedState, fingerprint: second.fingerprint }))
+    const legacyRetry = await refreshDataIfChanged(args, options)
+    assert.equal(legacyRetry.changed, true)
+    assert.equal(publishedReceipts, 2, 'failed state from an older worker must publish again')
+    assert.equal(crunchCount, 3)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
