@@ -78,7 +78,7 @@ export async function collectLeaguepediaTournamentFeed(options: {
       maxAttempts: 3, maxElapsedMs: pageTimeoutMs,
     })
     if (!response.ok) {
-      await response.body?.cancel()
+      await response.body?.cancel().catch(() => {})
       throw new Error(`Leaguepedia returned HTTP ${response.status}`)
     }
     const body: unknown = await response.json()

@@ -238,7 +238,7 @@ async function downloadCsv(url, outputPath) {
     },
   }, { telemetry: fetchTelemetry, onFailure: writeDownloaderFailureTelemetry })
   if (!response.ok) {
-    await response.body?.cancel()
+    await response.body?.cancel().catch(() => {})
     throw new Error(`HTTP ${response.status} from ${url}`)
   }
 
@@ -258,7 +258,7 @@ async function discoverOracleDriveCsvs(folderId) {
     },
   }, { telemetry: fetchTelemetry, onFailure: writeDownloaderFailureTelemetry })
   if (!response.ok) {
-    await response.body?.cancel()
+    await response.body?.cancel().catch(() => {})
     throw new Error(`HTTP ${response.status} from Oracle Google Drive folder`)
   }
 

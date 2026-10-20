@@ -39,7 +39,7 @@ export async function collectTournamentFeed(options: {
       signal: AbortSignal.timeout(15_000),
     }, { fetcher: options.fetcher, telemetry, maxAttempts: 3, maxElapsedMs: 30_000 })
     if (!response.ok) {
-      await response.body?.cancel()
+      await response.body?.cancel().catch(() => {})
       throw new Error(`HTTP ${response.status} from ${path}`)
     }
     const body: unknown = await response.json()

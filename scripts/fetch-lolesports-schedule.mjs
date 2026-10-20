@@ -125,7 +125,7 @@ async function persistedJson(url) {
     },
   }, { telemetry: fetchTelemetry, onFailure: writeFailureTelemetry })
   if (!response.ok) {
-    await response.body?.cancel()
+    await response.body?.cancel().catch(() => {})
     throw new Error(`HTTP ${response.status} from ${url}`)
   }
   try {
