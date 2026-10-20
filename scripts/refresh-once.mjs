@@ -584,26 +584,46 @@ export async function runChildProcess(command, args, timeoutMs, env, options = {
     })
     let timedOut = false
     let killTimeout
+    let outcome
+    const settle = () => {
+      if (!outcome) return
+      clearTimeoutFn(timeout)
+      if (timedOut && killTimeout && processGroupExists(child)) return
+      if (killTimeout) clearTimeoutFn(killTimeout)
+      if (outcome.error) rejectRun(outcome.error)
+      else if (timedOut) rejectRun(new Error(`Refresh job exceeded ${timeoutMs}ms; process tree exited with ${outcome.code ?? outcome.signal}`))
+      else if (outcome.code === 0) resolveRun()
+      else rejectRun(new Error(`Refresh job exited with ${outcome.code ?? outcome.signal}`))
+    }
     const timeout = setTimeoutFn(() => {
       timedOut = true
+      killTimeout = setTimeoutFn(() => {
+        killTimeout = undefined
+        terminateProcessTree(child, 'SIGKILL')
+        settle()
+      }, 5_000)
       terminateProcessTree(child, 'SIGTERM')
-      killTimeout = setTimeoutFn(() => terminateProcessTree(child, 'SIGKILL'), 5_000)
-      killTimeout?.unref?.()
     }, timeoutMs)
     timeout.unref()
     child.on('error', (error) => {
-      clearTimeoutFn(timeout)
-      if (killTimeout) clearTimeoutFn(killTimeout)
-      rejectRun(error)
+      outcome = { error }
+      settle()
     })
     child.on('exit', (code, signal) => {
-      clearTimeoutFn(timeout)
-      if (killTimeout) clearTimeoutFn(killTimeout)
-      if (timedOut) rejectRun(new Error(`Refresh job exceeded ${timeoutMs}ms; process tree exited with ${code ?? signal}`))
-      else if (code === 0) resolveRun()
-      else rejectRun(new Error(`Refresh job exited with ${code ?? signal}`))
+      outcome = { code, signal }
+      settle()
     })
   })
+}
+
+function processGroupExists(child) {
+  if (process.platform === 'win32' || !child.pid) return false
+  try {
+    process.kill(-child.pid, 0)
+    return true
+  } catch (error) {
+    return error?.code !== 'ESRCH'
+  }
 }
 
 function terminateProcessTree(child, signal) {

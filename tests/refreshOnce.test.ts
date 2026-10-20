@@ -461,7 +461,7 @@ for (const childBehavior of ['exit', 'ignore']) {
     } finally {
       if (child?.pid) {
         try { process.kill(-child.pid, 'SIGKILL') } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+          assert.equal((error as NodeJS.ErrnoException).code, 'ESRCH')
         }
       }
       await outcome
