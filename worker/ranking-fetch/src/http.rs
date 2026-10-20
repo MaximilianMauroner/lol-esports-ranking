@@ -132,15 +132,32 @@ impl Http {
                     if let Some(reason) = &reason {
                         entry["reason"] = json!(reason);
                     }
-                    self.attempts.push(entry);
                     let Some(reason) = reason else {
                         if !(200..=299).contains(&status) {
+                            self.attempts.push(entry);
                             self.terminal_failure = true;
                             return Err(format!("HTTP {status} from {url}").into());
                         }
-                        let body = body.map_err(|_| "terminated")?;
-                        return Ok(Response { body, content_type });
+                        let body = body.map_err(|error| {
+                            self.terminal_failure = true;
+                            let timeout = error.is_timeout();
+                            let message = if timeout {
+                                "Provider request exceeded maxElapsedMs"
+                            } else {
+                                "terminated"
+                            };
+                            entry["reason"] =
+                                json!(if timeout { "max-elapsed" } else { "body-error" });
+                            entry["error"] = json!(message);
+                            message
+                        });
+                        self.attempts.push(entry);
+                        return Ok(Response {
+                            body: body?,
+                            content_type,
+                        });
                     };
+                    self.attempts.push(entry);
                     last_error = format!("Provider request exhausted retries: {reason}");
                     (
                         reason,
