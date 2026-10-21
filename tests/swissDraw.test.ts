@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  PLAY_IN_REGIONS, drawByRulebook, drawPots, fillDraw, pairReason, resolveScenario, seedBaseline,
+  PLAY_IN_REGIONS, drawByRulebook, drawPots, drawProblem, fillDraw, pairReason, resolveScenario, seedBaseline,
   type DrawContext, type DrawnRound, type PlayInRegion, type SwissBaseline,
 } from '../src/domains/tournaments/internal/swissScenario'
 import { WORLDS_2026_SWISS_RULES, replayWorlds2026Swiss, type SwissSeed } from '../src/domains/tournaments/internal/worlds2026Swiss'
-import { worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
+import { shuffled, worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
 
 const SEEDS = 2_000
 const ROUND_ONE_CLICKS = 5_000
@@ -71,7 +71,25 @@ function officialProblem(baseline: SwissBaseline, choices: DrawnRound[], region:
   return replay.status === 'supported' ? null : replay.detail
 }
 
-test('Round 1 fills are valid under the sourced rules, vary per click, and follow the rulebook odds', (t) => {
+test('a manual draw moves a team to the next open slot when the current slot blocks a valid pairing', () => {
+  const context = roundOneContext('LEC')
+  const legal = (a: string, b: string) => !pairReason(a, b, context)
+  assert.deepEqual(drawByRulebook(['LCK1', 'LPL1', 'LCS1', 'LEC1', 'LCK4', 'LPL4', 'LCP2', 'PLAYIN'], legal),
+    [['LCK1', 'LPL4'], ['LPL1', 'LCK4'], ['LCS1', 'PLAYIN'], ['LEC1', 'LCP2']])
+})
+
+test('manual Round 1 draws stay valid across sampled pot orders', () => {
+  const context = roundOneContext('LEC')
+  const random = worldsRandom(5)
+  for (let draw = 0; draw < 300; draw++) {
+    const order = [0, 3, 1, 2].flatMap((pool) => shuffled([...WORLDS_2026_SWISS_RULES.pools[pool]], random))
+    const pairs = drawByRulebook(order, (a, b) => !pairReason(a, b, context))
+    assert.ok(pairs)
+    assert.equal(drawProblem(pairs, context), null)
+  }
+})
+
+test('Round 1 manual fills are valid, vary per click, and follow the preview draw algorithm', (t) => {
   for (const region of PLAY_IN_CHOICES) {
     const context = roundOneContext(region)
     const legal = drawPots(context).map(([home, away]) => permutations(away)
@@ -106,12 +124,12 @@ test('Round 1 fills are valid under the sourced rules, vary per click, and follo
     assert.equal(draws.size, legalDraws, `Play-In ${label}: all ${legalDraws} legal draws show up in ${ROUND_ONE_CLICKS} clicks`)
     assert.deepEqual([...matchups.keys()].sort(), [...exact.keys()].sort(), `Play-In ${label}: every possible matchup shows up`)
     const worst = Math.max(...[...exact].map(([key, p]) => Math.abs((matchups.get(key) ?? 0) / ROUND_ONE_CLICKS - p)))
-    assert.ok(worst < 0.04, `Play-In ${label}: matchup shares stay within 4 points of the rulebook odds (worst ${worst.toFixed(3)})`)
+    assert.ok(worst < 0.04, `Play-In ${label}: matchup shares stay within 4 points of the manual algorithm shares (worst ${worst.toFixed(3)})`)
     t.diagnostic(`Round 1, Play-In ${label}: ${draws.size} of ${legalDraws} legal draws in ${ROUND_ONE_CLICKS} clicks, each drawn ${Math.min(...draws.values())} to ${Math.max(...draws.values())} times, ${matchups.size} matchups, worst share gap ${(worst * 100).toFixed(1)} pts`)
     if (region === 'LEC') {
       for (const home of WORLDS_2026_SWISS_RULES.pools[0]) {
         const row = [...matchups].filter(([key]) => key.split('-').includes(home)).sort(([a], [b]) => a.localeCompare(b))
-        t.diagnostic(`  ${home}: ${row.map(([key, count]) => `${key.split('-').find((id) => id !== home)} ${(count / ROUND_ONE_CLICKS * 100).toFixed(1)}% (rulebook ${(exact.get(key)! * 100).toFixed(1)}%)`).join(', ')}`)
+        t.diagnostic(`  ${home}: ${row.map(([key, count]) => `${key.split('-').find((id) => id !== home)} ${(count / ROUND_ONE_CLICKS * 100).toFixed(1)}% (manual algorithm ${(exact.get(key)! * 100).toFixed(1)}%)`).join(', ')}`)
       }
     }
   }

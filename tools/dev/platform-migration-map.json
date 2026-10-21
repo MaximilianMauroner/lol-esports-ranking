@@ -418,11 +418,6 @@
     "entry": "src/domains/tournaments/simulation.ts"
   },
   {
-    "old": "src/lib/swissOdds.ts",
-    "new": "src/domains/tournaments/internal/swissOdds.ts",
-    "entry": "src/domains/tournaments/simulation.ts"
-  },
-  {
     "old": "src/lib/worldsObservedRules.ts",
     "new": "src/domains/tournaments/internal/worldsObservedRules.ts",
     "entry": "src/domains/tournaments/simulation.ts"
@@ -646,10 +641,6 @@
   {
     "old": "src/components/SwissPreview.tsx",
     "new": "src/views/tournaments/SwissPreview.tsx"
-  },
-  {
-    "old": "src/components/SwissRegionOdds.tsx",
-    "new": "src/views/tournaments/SwissRegionOdds.tsx"
   },
   {
     "old": "src/components/WorldsTournamentPanel.tsx",
