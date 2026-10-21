@@ -75,6 +75,14 @@ export {
   POWER_COMPONENT_LABELS,
 } from './internal/queries/ratingComponentLabels.ts'
 export {
+  type RegionInternationalTimeline,
+  type RegionInternationalYear,
+  type TierOneInternationalFamily,
+  isTierOneInternationalFamily,
+  publishedRatedMatchRule,
+  regionInternationalTimeline,
+} from './internal/queries/regionInternationalTimeline.ts'
+export {
   groupEntriesByDate,
 } from './internal/queries/timelineCompaction.ts'
 export {
