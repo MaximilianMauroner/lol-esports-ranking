@@ -14,7 +14,7 @@ test('producer receipt round-trips through the public schema and contains every 
     const fixture = conditionalPowerReceiptFixture(bestOf)
     const value: unknown = JSON.parse(JSON.stringify({ version: 1, receipts: [fixture.receipt] }))
     assert.ok(isConditionalPowerResultLedger(value))
-    const forecast = forecastTournamentSeries(fixture.series, fixture.forecastBasis)
+    const forecast = forecastTournamentSeries(fixture.series, fixture.forecastBasis, { seriesSource: 'lolesports-persisted-site-api' })
     if (forecast.status !== 'ready') throw new Error(forecast.detail)
     for (const output of fixture.receipt.outputs) {
       const result = conditionalResultFromReceipt({ series: fixture.series, outcome: output.outcome, now: fixture.now,
@@ -44,7 +44,7 @@ test('public receipt validation rejects incomplete, duplicate, impossible or inc
 
 test('generation, event, identity, model and scale changes cannot reuse a numeric receipt', () => {
   const fixture = conditionalPowerReceiptFixture()
-  const forecast = forecastTournamentSeries(fixture.series, fixture.forecastBasis)
+  const forecast = forecastTournamentSeries(fixture.series, fixture.forecastBasis, { seriesSource: 'lolesports-persisted-site-api' })
   if (forecast.status !== 'ready') throw new Error(forecast.detail)
   for (const field of ['snapshotId', 'eventStateVersion', 'identityRevision', 'modelConfigHash', 'ratingDataAsOf'] as const) {
     const receipt = structuredClone(fixture.receipt)
@@ -56,19 +56,22 @@ test('generation, event, identity, model and scale changes cannot reuse a numeri
   receipt.ratingScale.spreadMultiplier += 1
   assert.equal(conditionalResultFromReceipt({ series: fixture.series, outcome: fixture.outcome, now: fixture.now,
     forecast, basis: fixture.forecastBasis, ledger: { version: 1, receipts: [receipt] } }).status, 'unavailable')
-  assert.equal(createConditionalPowerResultReceipt({ series: fixture.series, forecastBasis: fixture.forecastBasis,
+  assert.equal(createConditionalPowerResultReceipt({ seriesSource: 'lolesports-persisted-site-api', series: fixture.series, forecastBasis: fixture.forecastBasis,
     replayBasis: null, generatedAt: fixture.generatedAt }).status, 'unavailable')
 })
 
 test('offline immutable producer persists only valid receipts and leaves supplied inputs untouched', async () => {
   const fixture = conditionalPowerReceiptFixture()
-  const input = { series: fixture.series, forecastBasis: fixture.forecastBasis, replayBasis: fixture.basis, generatedAt: fixture.generatedAt }
+  const input = { seriesSource: 'lolesports-persisted-site-api' as const, series: fixture.series, forecastBasis: fixture.forecastBasis, replayBasis: fixture.basis, generatedAt: fixture.generatedAt }
   const before = structuredClone(input)
   const root = await mkdtemp(join(tmpdir(), 'conditional-power-component-'))
   try {
     const first = await publishConditionalPowerResultOffline(root, input)
     assert.equal(first.status, 'ready')
     assert.deepEqual(await publishConditionalPowerResultOffline(root, input), first)
+    const rejected = await publishConditionalPowerResultOffline(root, { ...input, seriesSource: 'leaguepedia-cargo' })
+    assert.equal(rejected.status, 'unavailable')
+    assert.match(rejected.detail, /this schedule source/)
     const ledger = await readConditionalPowerResultsOffline(root)
     assert.deepEqual(ledger, { version: 1, receipts: [fixture.receipt] })
     const artifact = conditionalPowerResultArtifact(ledger)
@@ -81,10 +84,10 @@ test('offline immutable producer persists only valid receipts and leaves supplie
 test('a corrected preplay schedule selects its current immutable receipt', () => {
   const fixture = conditionalPowerReceiptFixture()
   const revised = { ...fixture.series, startTime: '2026-09-16T14:00:00.000Z' }
-  const generated = createConditionalPowerResultReceipt({ series: revised, forecastBasis: fixture.forecastBasis,
+  const generated = createConditionalPowerResultReceipt({ seriesSource: 'lolesports-persisted-site-api', series: revised, forecastBasis: fixture.forecastBasis,
     replayBasis: fixture.basis, generatedAt: fixture.generatedAt })
   if (generated.status !== 'ready') throw new Error(generated.detail)
-  const forecast = forecastTournamentSeries(revised, fixture.forecastBasis)
+  const forecast = forecastTournamentSeries(revised, fixture.forecastBasis, { seriesSource: 'lolesports-persisted-site-api' })
   if (forecast.status !== 'ready') throw new Error(forecast.detail)
   const ledger: ConditionalPowerResultLedger = { version: 1, receipts: [fixture.receipt, generated.receipt] }
   assert.ok(isConditionalPowerResultLedger(ledger))
@@ -105,17 +108,24 @@ test('equal public Power cannot authorize a different canonical participant mapp
   assert.ok(fixture.receipt.outputs.every((output) => output.teams.every((team) => team.delta === 0)))
   const differentScale = structuredClone(fixture.basis)
   differentScale.ratingScale.spreadMultiplier += 1
-  assert.equal(createConditionalPowerResultReceipt({ series: fixture.series, forecastBasis: fixture.forecastBasis,
+  assert.equal(createConditionalPowerResultReceipt({ seriesSource: 'lolesports-persisted-site-api', series: fixture.series, forecastBasis: fixture.forecastBasis,
     replayBasis: differentScale, generatedAt: fixture.generatedAt }).status, 'unavailable')
   for (const mapping of tied.identityMap.mappings) {
     mapping.sourceTeamId = mapping.sourceTeamId === fixture.basis.sourceTeamIds[0] ? fixture.basis.sourceTeamIds[1] : fixture.basis.sourceTeamIds[0]
   }
-  const forecast = forecastTournamentSeries(fixture.series, tied)
+  const forecast = forecastTournamentSeries(fixture.series, tied, { seriesSource: 'lolesports-persisted-site-api' })
   if (forecast.status !== 'ready') throw new Error(forecast.detail)
-  const rejected = createConditionalPowerResultReceipt({ series: fixture.series, forecastBasis: tied,
+  const rejected = createConditionalPowerResultReceipt({ seriesSource: 'lolesports-persisted-site-api', series: fixture.series, forecastBasis: tied,
     replayBasis: fixture.basis, generatedAt: fixture.generatedAt })
   assert.equal(rejected.status, 'unavailable')
   if (rejected.status === 'unavailable') assert.equal(rejected.reason, 'projection-mismatch')
   assert.equal(conditionalResultFromReceipt({ series: fixture.series, outcome: fixture.outcome, now: fixture.now,
     forecast, basis: tied, ledger: { version: 1, receipts: [fixture.receipt] } }).status, 'unavailable')
+})
+
+test('conditional producer rejects a colliding unsupported source before replay', () => {
+  const fixture = conditionalPowerReceiptFixture()
+  const rejected = createConditionalPowerResultReceipt({ series: fixture.series, seriesSource: 'leaguepedia-cargo', forecastBasis: fixture.forecastBasis, replayBasis: null, generatedAt: fixture.generatedAt })
+  assert.equal(rejected.status, 'unavailable')
+  assert.match(rejected.detail, /this schedule source/)
 })

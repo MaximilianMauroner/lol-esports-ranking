@@ -58,17 +58,17 @@ test('Swiss rejects corrupt draws, missing prior rounds, future and nonterminal 
 
 test('pre-event retains all 19 international entrants, exact Play-In odds and precise later-stage unavailability', async () => {
   const input = worldsFixture('play-in'); const basis = worldsBasis()
-  const result = report(await runWorldsSimulation(input, basis, options))
+  const result = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options))
   assert.equal(result.teams.length, 19)
   assert.equal(result.model?.snapshotId, basis.snapshotId)
   assert.ok(result.unavailable.some((detail) => detail === WORLDS_2026_SWISS_RULES.drawUnavailable))
   assert.ok(result.teams.every((team) => team.stages.knockout === null))
   close(result.teams.reduce((sum, team) => sum + team.stages.swiss!, 0), 16)
-  const reference = forecastWorlds2026PlayIn(input.playIn, basis)
+  const reference = forecastWorlds2026PlayIn(input.playIn, { seriesSource: 'lolesports-persisted-site-api', basis: basis })
   assert.equal(reference.status, 'supported')
   for (const odds of reference.teams) close(result.teams.find((team) => team.id === odds.id)!.stages.swiss!, odds.advanceToSwissProbability)
   const missingRegion = structuredClone(input); missingRegion.directEntrants.pop()
-  assert.equal((await runWorldsSimulation(missingRegion, basis, options)).status, 'unsupported')
+  assert.equal((await runWorldsSimulation(missingRegion, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options)).status, 'unsupported')
 })
 
 test('direct qualification requires its own evidence before marking reached Swiss, even before a Swiss draw', async () => {
@@ -76,14 +76,14 @@ test('direct qualification requires its own evidence before marking reached Swis
     const input = worldsFixture('play-in')
     if (reference === undefined) Reflect.deleteProperty(input, 'directEntrantEvidence')
     else input.directEntrantEvidence = { ...worldsEvidence, reference }
-    const result = await runWorldsSimulation(input, null, options)
+    const result = await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: null }, options)
     assert.equal(result.status, 'unsupported')
     assert.equal(result.reason, 'evidence-missing')
     assert.match(result.detail, /fifteen direct entrants/)
   }
   const input = worldsFixture('play-in')
   input.directEntrantEvidence = { kind: 'source-observation', reference: 'Retained direct qualifier observations and canonical identities' }
-  const result = report(await runWorldsSimulation(input, null, options))
+  const result = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: null }, options))
   assert.equal(result.teams.filter((team) => team.deterministicStages.swiss && team.stages.swiss === 1).length, 15)
   assert.deepEqual(result.pinnedState.directEntrantEvidence, input.directEntrantEvidence)
 })
@@ -91,8 +91,8 @@ test('direct qualification requires its own evidence before marking reached Swis
 test('final observed Swiss draw composes with random knockout and fixed bracket; seed pins counts and frozen inputs', async () => {
   const input = worldsFixture(); const basis = worldsBasis(); const before = JSON.stringify({ input, basis })
   const progress: number[] = []
-  const first = report(await runWorldsSimulation(input, basis, options, { onProgress: (count) => progress.push(count) }))
-  const second = report(await runWorldsSimulation(input, basis, options))
+  const first = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options, { onProgress: (count) => progress.push(count) }))
+  const second = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options))
   assert.deepEqual(first.counts, second.counts)
   assert.deepEqual(first.teams, second.teams)
   assert.equal(JSON.stringify({ input, basis }), before)
@@ -112,13 +112,13 @@ test('final observed Swiss draw composes with random knockout and fixed bracket;
 
 test('known knockout agrees with exact enumeration; completed event uses no present-day model', async () => {
   const input = worldsFixture('knockout'); const basis = worldsBasis()
-  const result = report(await runWorldsSimulation(input, basis, options))
-  const reference = forecastWorlds2026Knockout(input.knockout!, basis)
+  const result = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options))
+  const reference = forecastWorlds2026Knockout(input.knockout!, { seriesSource: 'lolesports-persisted-site-api', basis: basis })
   assert.equal(result.model?.snapshotId, basis.snapshotId)
   assert.equal(reference.status, 'supported')
   for (const row of reference.teams) close(result.teams.find((team) => team.id === row.id)!.stages.champion!, row.championProbability)
   conservation(result)
-  const complete = report(await runWorldsSimulation(worldsFixture('completed'), null, options))
+  const complete = report(await runWorldsSimulation(worldsFixture('completed'), { seriesSource: 'lolesports-persisted-site-api', basis: null }, options))
   conservation(complete)
   assert.equal(complete.teams.find((team) => team.id === 'LCK1')!.stages.champion, 1)
   assert.equal(complete.method, 'exact-enumeration'); assert.equal(complete.hypotheticalMatchups.length, 0)
@@ -127,19 +127,19 @@ test('known knockout agrees with exact enumeration; completed event uses no pres
   futureInvalidBasis.ratingPublishedAt = '2027-01-01T00:00:00Z'
   futureInvalidBasis.snapshot.standings[0].rating = Number.NaN
   for (const unusedBasis of [basis, futureInvalidBasis]) {
-    const observed = report(await runWorldsSimulation(worldsFixture('completed'), unusedBasis, options))
+    const observed = report(await runWorldsSimulation(worldsFixture('completed'), { seriesSource: 'lolesports-persisted-site-api', basis: unusedBasis }, options))
     assert.deepEqual(observed.teams, complete.teams)
     assert.equal(observed.model, null, 'A supplied but unused model cannot become the basis of observed results.')
     assert.equal(observed.hypotheticalMatchups.length, 0)
   }
   const bad = worldsFixture('knockout'); bad.knockout!.qualifiers[0].id = 'CBLOL2'
-  assert.equal((await runWorldsSimulation(bad, basis, options)).status, 'unsupported')
+  assert.equal((await runWorldsSimulation(bad, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options)).status, 'unsupported')
 })
 
 test('mid-event observations remain fixed and conflicting stage handoffs fail closed', async () => {
   const partial = worldsFixture()
   partial.swiss!.rounds[4].results.push({ slot: 0, matchId: 'confirmed-final-swiss', teamIds: ['LCK2', 'CBLOL1'], gameWins: [2, 1], observedAt: partial.playIn.asOf })
-  const result = report(await runWorldsSimulation(partial, worldsBasis(), { seed: 47, trials: 1000 }))
+  const result = report(await runWorldsSimulation(partial, { seriesSource: 'lolesports-persisted-site-api', basis: worldsBasis() }, { seed: 47, trials: 1000 }))
   assert.equal(result.teams.find((team) => team.id === 'LCK2')!.stages.knockout, 1)
   assert.equal(result.teams.find((team) => team.id === 'CBLOL1')!.stages.champion, 0)
   assert.equal(result.teams.find((team) => team.id === 'LCK2')!.deterministicStages.knockout, true)
@@ -154,7 +154,7 @@ test('mid-event observations remain fixed and conflicting stage handoffs fail cl
     (input: ReturnType<typeof worldsFixture>) => { input.swiss!.rounds[0].results[0].matchId = 'play-0' },
   ]) {
     const input = worldsFixture(); change(input)
-    assert.equal((await runWorldsSimulation(input, worldsBasis(), options)).status, 'unsupported')
+    assert.equal((await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: worldsBasis() }, options)).status, 'unsupported')
   }
 })
 
@@ -171,17 +171,17 @@ test('unsupported model never yields partial totals; future basis, missing activ
     },
   ]) {
     const basis = worldsBasis(); change(basis)
-    const result = report(await runWorldsSimulation(input, basis, options))
+    const result = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: basis }, options))
     assert.ok(result.unavailable.length); assert.equal(result.counts.length, 0)
     assert.equal(result.model, null, 'A rejected forecast has no consumed model basis.')
     assert.equal(result.teams.find((team) => team.id === 'CBLOL1')!.stages.champion, null)
   }
-  for (const invalid of [{ seed: -1, trials: 1 }, { seed: 1, trials: 100_000 }, { seed: 1.5, trials: 100 }]) assert.equal((await runWorldsSimulation(input, worldsBasis(), invalid)).status, 'unsupported')
+  for (const invalid of [{ seed: -1, trials: 1 }, { seed: 1, trials: 100_000 }, { seed: 1.5, trials: 100 }]) assert.equal((await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: worldsBasis() }, invalid)).status, 'unsupported')
 })
 
 test('bounded computation yields and aborts before publishing; sampled zero has a positive upper error bound', async () => {
   const controller = new AbortController(); let seen = 0
-  await assert.rejects(runWorldsSimulation(worldsFixture(), worldsBasis(), options, {
+  await assert.rejects(runWorldsSimulation(worldsFixture(), { seriesSource: 'lolesports-persisted-site-api', basis: worldsBasis() }, options, {
     signal: controller.signal, onProgress: (completed) => { seen = completed; controller.abort() },
   }), /abort/i)
   assert.ok(seen > 0 && seen <= options.trials)
@@ -214,4 +214,22 @@ test('2022 observed groups keep historical labels and model unavailability; boun
   assert.equal(replay.forecast.reason, 'historical-model-inputs-unavailable')
   input.group.games.find((game) => game.id === 'past-1-2-1')!.winnerId = 'past-gamma'
   assert.match(JSON.stringify(replayWorlds2022Group(input.group)), /tiebreaker-rules-unavailable/)
+})
+
+test('Leaguepedia Worlds keeps the same observed replay without model odds', async () => {
+  for (const stage of ['play-in', 'swiss-5', 'knockout', 'completed'] as const) {
+    const input = worldsFixture(stage)
+    const observed = report(await runWorldsSimulation(input, { seriesSource: 'lolesports-persisted-site-api', basis: null }, options))
+    for (const basis of [worldsBasis(), null]) {
+      const result = report(await runWorldsSimulation(input, { seriesSource: 'leaguepedia-cargo', basis }, options))
+      assert.deepEqual(result.matches, observed.matches)
+      assert.deepEqual(result.teams, observed.teams)
+      assert.equal(result.method, observed.method)
+      assert.equal(result.model, null)
+      assert.equal(result.trials, 0)
+      assert.deepEqual(result.hypotheticalMatchups, [])
+      assert.equal(result.unavailable.filter((detail) => detail.includes('this schedule source')).length, 1)
+      assert.ok(!result.unavailable.some((detail) => detail.includes('snapshot is unavailable')))
+    }
+  }
 })

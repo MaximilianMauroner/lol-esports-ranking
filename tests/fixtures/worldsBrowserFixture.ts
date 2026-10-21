@@ -4,11 +4,11 @@ import { createStaticRankingData } from '../../src/domains/rankings/build'
 import { createPublicArtifactWritePlan } from '../../src/domains/rankings/artifact-write'
 import { emptyForecastLedger, type ForecastBasis } from '../../src/domains/tournaments/forecast'
 import type { MatchRecord, TeamProfile } from '../../src/domains/rankings/types'
-import type { TournamentEvent } from '../../src/domains/tournaments/read'
+import type { TournamentEvent, TournamentFeed } from '../../src/domains/tournaments/read'
 import { worldsFixture, worldsEvent, worldsFeed, worldsArtifact, historicalWorldsFixture } from './worldsFixtures'
 import { worldsFeedEventKey, type WorldsArtifact } from '../../src/browser/tournaments/worldsArtifacts'
 
-export type WorldsFixtureControls = { stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number; companionDelayMs: number; holdWorker: boolean; fictionalSourceAssertions: boolean; historicalConflict: boolean }
+export type WorldsFixtureControls = { seriesSource: TournamentFeed['source']; stage: 'play-in' | 'swiss-5' | 'knockout' | 'completed' | 'historical' | 'historical-tie'; corrupt: boolean; missingModel: boolean; live: boolean; revision: number; companionDelayMs: number; holdWorker: boolean; fictionalSourceAssertions: boolean; historicalConflict: boolean }
 
 /** Entirely local artifacts. No public/data replacement, external request or producer activation. */
 export async function createWorldsFixtureServer(port = 0) {
@@ -29,7 +29,7 @@ export async function createWorldsFixtureServer(port = 0) {
       if (!row) throw new Error(`Missing fixture rating ${id}`)
       return { sourceTeamId: id, teamId: row.teamId }
     }) }
-  const controls: WorldsFixtureControls = { stage: 'swiss-5', corrupt: false, missingModel: false, live: false, revision: 0, companionDelayMs: 0, holdWorker: false, fictionalSourceAssertions: false, historicalConflict: false }
+  const controls: WorldsFixtureControls = { seriesSource: 'lolesports-persisted-site-api', stage: 'swiss-5', corrupt: false, missingModel: false, live: false, revision: 0, companionDelayMs: 0, holdWorker: false, fictionalSourceAssertions: false, historicalConflict: false }
   type Progress = { completed: number; total: number }
   const heldWorkers = new Map<ServerResponse, Progress>()
   const gateWaiters = new Set<(progress: Progress) => void>()
@@ -99,11 +99,11 @@ export async function createWorldsFixtureServer(port = 0) {
       return source.replace(anchor, 'if (trial === 0 || performance.now() - yieldedAt > 16 || trial === options.trials - 1) {')
     }
     if (!path.endsWith('/src/browser/tournaments/worldsSimulationWorker.ts')) return
-    const anchor = "const result = await runWorldsSimulation(input, basis, options, { onProgress: (completed, total) => send({ type: 'progress', completed, total }) })"
+    const anchor = "const result = await runWorldsSimulation(input, forecast, options, { onProgress: (completed, total) => send({ type: 'progress', completed, total }) })"
     if (!source.includes(anchor)) throw new Error('Worlds fixture worker yield anchor changed.')
     return source.replace(anchor, `const holdAtYield = await (await fetch('/__worlds-worker-mode')).json()
     let completedTrials = 0
-    const result = await runWorldsSimulation(input, basis, options, {
+    const result = await runWorldsSimulation(input, forecast, options, {
       onProgress: (completed, total) => { completedTrials = completed; send({ type: 'progress', completed, total }) },
       yield: holdAtYield ? async () => { await fetch('/__worlds-worker-yield?completed=' + completedTrials + '&total=' + options.trials) } : undefined,
     })`)
@@ -135,7 +135,7 @@ export async function createWorldsFixtureServer(port = 0) {
       if (artifactBodies.has(path)) { response.setHeader('content-type', 'application/json'); response.end(artifactBodies.get(path)); return }
       if (!path.startsWith('/tournament-data/')) return next()
       const { event, artifact } = current()
-      const body = path === '/tournament-data/feed.json' ? worldsFeed(event)
+      const body = path === '/tournament-data/feed.json' ? { ...worldsFeed(event), source: controls.seriesSource, unsupportedApi: controls.seriesSource === 'lolesports-persisted-site-api' }
         : path === '/tournament-data/feed.json.health.json' ? { checkedAt: new Date().toISOString(), complete: true, warnings: [] }
           : path === '/tournament-data/forecasts/team-ids.json' ? controls.missingModel ? null : identityMap
             : path === '/tournament-data/forecasts/ledger.json' ? emptyForecastLedger

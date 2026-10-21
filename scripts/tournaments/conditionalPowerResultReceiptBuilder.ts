@@ -3,19 +3,20 @@ import type { ConditionalPowerReplayBasis } from '../../src/domains/rankings/bui
 import { evaluateConditionalPowerResultComponent } from '../../src/domains/rankings/build.ts'
 import { isConditionalPowerResultLedger, stableResultPolicy, type ConditionalPowerResultReceipt } from '../../src/domains/tournaments/forecast.ts'
 import { forecastTournamentSeries, type ForecastBasis } from '../../src/domains/tournaments/forecast.ts'
-import type { TournamentSeries } from '../../src/domains/tournaments/read.ts'
+import type { TournamentSeries, TournamentFeed } from '../../src/domains/tournaments/read.ts'
 import { ratingScaleFromUnknown } from '../../src/domains/rankings/build.ts'
 
 /** Builds a compact outcome table from exact producer inputs. It has no fetch or write API. */
 export function createConditionalPowerResultReceipt(input: {
   series: TournamentSeries
+  seriesSource: TournamentFeed['source']
   forecastBasis: ForecastBasis
   replayBasis: ConditionalPowerReplayBasis | null
   generatedAt: string
 }) {
   const { series, forecastBasis, replayBasis, generatedAt } = input
   const now = Date.parse(generatedAt)
-  const forecast = forecastTournamentSeries(series, forecastBasis)
+  const forecast = forecastTournamentSeries(series, forecastBasis, { seriesSource: input.seriesSource })
   if (forecast.status !== 'ready') return unavailablePowerPreview('missing-public-basis', forecast.detail)
   if (!Number.isFinite(now) || Date.parse(forecast.ratingDataAsOf) > Date.parse(forecast.ratingPublishedAt)
     || now < Date.parse(forecast.ratingPublishedAt) || now >= Date.parse(series.startTime ?? '')) {

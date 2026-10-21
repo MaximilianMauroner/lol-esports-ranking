@@ -3,16 +3,16 @@ import { link, mkdir, open, readFile, readdir, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, isForecastLedger, pinPreMatchReceipt,
-  type ForecastBasis, type ForecastLedger, type ForecastReceipt, type ForecastUnavailable,
+  type ForecastBasis, type ForecastOptions, type ForecastLedger, type ForecastReceipt, type ForecastUnavailable,
 } from '../src/domains/tournaments/forecast.ts'
-import type { TournamentSeries } from '../src/domains/tournaments/read.ts'
+import type { TournamentSeries, TournamentFeed } from '../src/domains/tournaments/read.ts'
 import { createConditionalPowerResultReceipt } from './tournaments/conditionalPowerResultReceiptBuilder.ts'
 import { isConditionalPowerResultLedger, type ConditionalPowerResultLedger } from '../src/domains/tournaments/forecast.ts'
 import { observeForecastDelivery } from './tournament-forecast-delivery.ts'
 
 /** Offline-only receipt store. Nothing calls this from the collector or production worker. */
 export async function publishPreMatchReceiptOffline(root: string, input: {
-  series: TournamentSeries; basis: ForecastBasis; forecastRevision: string; generatedAt: string; observedAt: string
+  series: TournamentSeries; basis: ForecastBasis; options: ForecastOptions; forecastRevision: string; generatedAt: string; observedAt: string
 }, now = new Date()): Promise<ForecastReceipt | ForecastUnavailable> {
   const result = createPreMatchReceipt({ ...input, publishedAt: now.toISOString() })
   if (result.status === 'unavailable') return result
@@ -25,9 +25,9 @@ export async function publishPreMatchReceiptOffline(root: string, input: {
   return result
 }
 
-export async function pinPreMatchReceiptOffline(root: string, series: TournamentSeries, firstStartedObservedAt: string): Promise<ForecastLedger> {
+export async function pinPreMatchReceiptOffline(root: string, series: TournamentSeries, seriesSource: TournamentFeed['source'], firstStartedObservedAt: string): Promise<ForecastLedger> {
   const prior = await readForecastLedgerOffline(root)
-  const next = pinPreMatchReceipt(prior, series, firstStartedObservedAt)
+  const next = pinPreMatchReceipt(prior, series, seriesSource, firstStartedObservedAt)
   const key = next.pinned[series.id]
   if (key && key !== prior.pinned[series.id]) {
     const directory = join(root, 'pins')

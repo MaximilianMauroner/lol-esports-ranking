@@ -1,5 +1,5 @@
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
-import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import { forecastSourceUnavailable, forecastTournamentSeries, type ForecastBasis, type WorldsForecastInput, type ForecastReady } from './tournamentForecast.ts'
 import { forecastWorlds2026PlayIn, replayWorlds2026PlayIn, WORLDS_2026_PLAY_IN_RULES, type Worlds2026PlayInInput } from './worlds2026PlayIn.ts'
 import { forecastWorlds2026Knockout, replayWorlds2026Knockout, WORLDS_2026_KNOCKOUT_RULES, type Worlds2026KnockoutInput } from './worlds2026Knockout.ts'
 import { applySwissWinner, replayWorlds2026Swiss, validWorldsEvidence, validWorldsTime, WORLDS_2026_SWISS_RULES, worldsUnavailable,
@@ -47,7 +47,7 @@ export type SimulationHooks = { signal?: AbortSignal; onProgress?: (completed: n
 export type WorldsSimulationResult = { status: 'supported'; report: WorldsReport } | WorldsUnavailable
 
 /** A full field is retained even when a later stage's random procedure is unavailable. */
-export async function runWorldsSimulation(input: Worlds2026EventInput, basis: ForecastBasis | null,
+export async function runWorldsSimulation(input: Worlds2026EventInput, forecastInput: WorldsForecastInput,
   options: SimulationOptions, hooks: SimulationHooks = {}): Promise<WorldsSimulationResult> {
   const started = performance.now()
   if (!Number.isInteger(options.seed) || options.seed < 0 || options.seed > 0xffffffff
@@ -56,12 +56,15 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
   }
   hooks.signal?.throwIfAborted()
   input = structuredClone(input)
-  basis = basis ? structuredClone(basis) : null
+  const unsupportedSource = forecastSourceUnavailable(forecastInput.seriesSource)
+  const basis = !unsupportedSource && forecastInput.basis ? structuredClone(forecastInput.basis) : null
+  const forecastContext = { seriesSource: forecastInput.seriesSource, basis }
   const playIn = replayWorlds2026PlayIn(input.playIn)
   if (playIn.status === 'unsupported') return playIn
   const contextError = validateEventContext(input)
   if (contextError) return contextError
   const report = initialReport(input, options)
+  if (unsupportedSource) report.unavailable.push(unsupportedSource.detail)
   for (const team of playIn.teams) {
     const row = report.teams.find((row) => row.id === team.id)!
     row.state = team.status === 'active' ? 'Play-In active' : team.status === 'qualified' ? 'Reached Swiss' : `Eliminated · ${team.finish}th`
@@ -74,7 +77,7 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
   }
   if (!playIn.resolvedMatches.r4) {
     if (basis) {
-      const forecast = forecastWorlds2026PlayIn(input.playIn, basis)
+      const forecast = forecastWorlds2026PlayIn(input.playIn, forecastContext)
       if (forecast.status === 'supported') {
         report.method = 'exact-enumeration'
         report.model = modelMetadata(basis)
@@ -85,7 +88,7 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
           row.finishes['17'] = odds.finish17Probability; row.finishes['18'] = odds.finish18Probability; row.finishes['19'] = odds.finish19Probability
         }
       } else report.unavailable.push(`Play-In forecast: ${forecast.detail}`)
-    } else report.unavailable.push('Play-In forecast: the frozen model snapshot is unavailable.')
+    } else if (!unsupportedSource) report.unavailable.push('Play-In forecast: the frozen model snapshot is unavailable.')
   }
   if (!input.swiss) {
     if (playIn.resolvedMatches.r4) report.currentStage = 'Swiss draw pending'
@@ -119,9 +122,9 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
       if (state.eliminatedAt) setFinish(row, state.eliminatedAt === 'quarterfinal' ? '5–8' : state.eliminatedAt === 'semifinal' ? '3–4' : '2')
       if (state.reached === 'champion') setFinish(row, '1')
     }
-    if (!basis && !replay.resolvedMatches[6]) report.unavailable.push('Knockout forecast: the frozen model snapshot is unavailable.')
+    if (!basis && !replay.resolvedMatches[6]) { if (!unsupportedSource) report.unavailable.push('Knockout forecast: the frozen model snapshot is unavailable.') }
     else {
-      const forecast = forecastWorlds2026Knockout(input.knockout, basis)
+      const forecast = forecastWorlds2026Knockout(input.knockout, forecastContext)
       if (forecast.status === 'unsupported') report.unavailable.push(`Knockout forecast: ${forecast.detail}`)
       else {
         report.method = 'exact-enumeration'
@@ -141,13 +144,13 @@ export async function runWorldsSimulation(input: Worlds2026EventInput, basis: Fo
     report.unavailable.push(WORLDS_2026_SWISS_RULES.drawUnavailable)
     return finishReport(report, started)
   }
-  if (!basis) { report.unavailable.push('Remaining-stage forecast: the frozen model snapshot is unavailable.'); return finishReport(report, started) }
+  if (!basis) { if (!unsupportedSource) report.unavailable.push('Remaining-stage forecast: the frozen model snapshot is unavailable.'); return finishReport(report, started) }
   if (!validWorldsTime(basis.ratingDataAsOf) || !validWorldsTime(basis.ratingPublishedAt)
     || Date.parse(basis.ratingDataAsOf) > Date.parse(basis.ratingPublishedAt) || Date.parse(basis.ratingPublishedAt) > Date.parse(input.playIn.asOf)) {
     report.unavailable.push('Remaining-stage forecast: snapshot cutoff must precede publication, which must precede event information cutoff.')
     return finishReport(report, started)
   }
-  const sampled = await sampleSwissToKnockout(report, swiss, basis, options, hooks)
+  const sampled = await sampleSwissToKnockout(report, swiss, basis, forecastInput.seriesSource, options, hooks)
   if (sampled) report.unavailable.push(sampled.detail)
   else report.model = modelMetadata(basis)
   return finishReport(report, started)
@@ -279,7 +282,7 @@ export function drawWorlds2026Knockout(standings: SwissTeamStanding[], random: (
   const rest = shuffled([...advanced.filter((team) => team.losses === 1), late[2]], random)
   return [unbeaten[0].id, late[0].id, rest[0].id, rest[1].id, unbeaten[1].id, late[1].id, rest[2].id, rest[3].id]
 }
-async function sampleSwissToKnockout(report: WorldsReport, swiss: SwissReplay, basis: ForecastBasis, options: SimulationOptions, hooks: SimulationHooks): Promise<WorldsUnavailable | null> {
+async function sampleSwissToKnockout(report: WorldsReport, swiss: SwissReplay, basis: ForecastBasis, seriesSource: WorldsForecastInput['seriesSource'], options: SimulationOptions, hooks: SimulationHooks): Promise<WorldsUnavailable | null> {
   const random = worldsRandom(options.seed)
   const cache = new Map<string, ForecastReady>()
   function probability(pair: [string, string], bestOf: 3 | 5): number | WorldsUnavailable {
@@ -288,7 +291,7 @@ async function sampleSwissToKnockout(report: WorldsReport, swiss: SwissReplay, b
     if (!forecast) {
       const result = forecastTournamentSeries({ id: `hypothetical:${key}`, eventId: report.eventId, startTime: null, stage: 'Worlds simulation',
         bestOf, status: 'upcoming', sourceState: 'unstarted', vodUrls: [],
-        teams: pair.map((id) => ({ id, name: null, code: null, gameWins: null, outcome: null })) }, basis)
+        teams: pair.map((id) => ({ id, name: null, code: null, gameWins: null, outcome: null })) }, basis, { seriesSource })
       if (result.status === 'unavailable') return worldsUnavailable('model-unavailable', `${pair.join(' vs ')}: ${result.detail}`)
       const values = [result.homeSeriesWinProbability, result.awaySeriesWinProbability, result.homeGameWinProbability, result.awayGameWinProbability]
       if (values.some((value) => !Number.isFinite(value) || value < 0 || value > 1)

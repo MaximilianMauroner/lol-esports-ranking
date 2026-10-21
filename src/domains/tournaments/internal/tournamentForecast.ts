@@ -5,13 +5,15 @@ import type { PublicRankingShard, PublicTeamStanding } from '../../rankings/type
 import { ratingScaleFromUnknown } from '../../rankings/read.ts'
 import { estimatePublicMatchup, type PublicMatchupSideAssumption } from '../../rankings/read.ts'
 import { DEFAULT_BLUE_SIDE_RATING_EDGE, seriesSwingStateProbability } from '../../rankings/read.ts'
-import { normalizeStatus, type TournamentSeries } from './tournamentFeed.ts'
+import { normalizeStatus, type TournamentSeries, type TournamentFeedSource } from './tournamentFeed.ts'
 import { compareCodeUnits } from '../../../shared/codeUnitOrder.mjs'
+
+const OFFICIAL_SOURCE = 'lolesports-persisted-site-api' as const
 
 /** An explicit, reviewed crosswalk. Source names and display codes are never join keys. */
 export type TournamentTeamIdentityMap = {
   version: 1
-  source: 'lolesports-persisted-site-api'
+  source: typeof OFFICIAL_SOURCE
   revision: string
   mappings: Array<{ sourceTeamId: string; teamId: string }>
 }
@@ -27,7 +29,7 @@ export type ForecastBasis = {
 }
 
 export type ForecastUnavailableReason =
-  | 'unsupported-format' | 'missing-team-id' | 'unmapped-team' | 'ambiguous-identity'
+  | 'unsupported-source' | 'unsupported-format' | 'missing-team-id' | 'unmapped-team' | 'ambiguous-identity'
   | 'missing-rating' | 'missing-model' | 'missing-rating-scale' | 'stale-model-basis'
   | 'not-upcoming' | 'already-started' | 'invalid-time' | 'invalid-score' | 'no-prestart-receipt'
 
@@ -67,7 +69,7 @@ export type TournamentForecast = ForecastReady | ForecastUnavailable
 export function isTournamentTeamIdentityMap(value: unknown): value is TournamentTeamIdentityMap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const map = value as Partial<TournamentTeamIdentityMap>
-  return map.version === 1 && map.source === 'lolesports-persisted-site-api'
+  return map.version === 1 && map.source === OFFICIAL_SOURCE
     && typeof map.revision === 'string' && map.revision.length > 0
     && Array.isArray(map.mappings) && map.mappings.every((entry) =>
       Boolean(entry && typeof entry.sourceTeamId === 'string' && entry.sourceTeamId.length
@@ -75,11 +77,26 @@ export function isTournamentTeamIdentityMap(value: unknown): value is Tournament
     && new Set(map.mappings.map((entry) => entry.sourceTeamId)).size === map.mappings.length
 }
 
+export type ForecastOptions = {
+  seriesSource: TournamentFeedSource
+  sideAssumption?: PublicMatchupSideAssumption
+  sideBasis?: string
+  blueSideRatingEdge?: number
+}
+export type WorldsForecastInput = { seriesSource: TournamentFeedSource; basis: ForecastBasis | null }
+
+export function forecastSourceUnavailable(seriesSource: TournamentFeedSource): ForecastUnavailable | null {
+  return seriesSource === OFFICIAL_SOURCE ? null : unavailable('unsupported-source', 'Forecasts are unavailable for this schedule source. A reviewed source-specific identity map and rules are required.')
+}
+
 export function forecastTournamentSeries(
   series: TournamentSeries,
-  basis: ForecastBasis,
-  options: { sideAssumption?: PublicMatchupSideAssumption; sideBasis?: string; blueSideRatingEdge?: number } = {},
+  basis: ForecastBasis | null,
+  options: ForecastOptions,
 ): TournamentForecast {
+  const sourceError = forecastSourceUnavailable(options?.seriesSource)
+  if (sourceError) return sourceError
+  if (!basis) return unavailable('stale-model-basis', 'Current ratings are unavailable.')
   if (series.status !== 'upcoming' || normalizeStatus(series.sourceState) !== 'upcoming') return unavailable('not-upcoming', 'Only a source-upcoming series can receive a new pre-match forecast.')
   if (!noCompletedGameEvidence(series)) return unavailable('already-started', 'The upcoming source row already contains played-game or result evidence.')
   if (series.bestOf !== 1 && series.bestOf !== 3 && series.bestOf !== 5) return unavailable('unsupported-format', 'Only decisive Bo1, Bo3 and Bo5 are supported; tie-capable or unknown formats need reviewed rules.')
@@ -196,7 +213,7 @@ export function isForecastLedger(value: unknown): value is ForecastLedger {
 /** The full source state is the version key; no lossy or collision-prone display-name hash. */
 
 export function createPreMatchReceipt(input: {
-  series: TournamentSeries; basis: ForecastBasis; options?: Parameters<typeof forecastTournamentSeries>[2]; forecastRevision: string
+  series: TournamentSeries; basis: ForecastBasis; options: ForecastOptions; forecastRevision: string
   generatedAt: string; publishedAt: string; observedAt: string
 }): ForecastReceipt | ForecastUnavailable {
   const { series, basis, options, forecastRevision, generatedAt, publishedAt, observedAt } = input
@@ -230,7 +247,8 @@ export function appendForecastReceipt(ledger: ForecastLedger, receipt: ForecastR
 }
 
 /** Pin once when a source series leaves upcoming; later rating or source corrections cannot rewrite history. */
-export function pinPreMatchReceipt(ledger: ForecastLedger, series: TournamentSeries, firstStartedObservedAt: string): ForecastLedger {
+export function pinPreMatchReceipt(ledger: ForecastLedger, series: TournamentSeries, seriesSource: TournamentFeedSource, firstStartedObservedAt: string): ForecastLedger {
+  if (forecastSourceUnavailable(seriesSource)) return ledger
   const sourceStatus = normalizeStatus(series.sourceState)
   if (ledger.pinned[series.id] || (series.status !== 'live' && series.status !== 'completed')
     || (sourceStatus !== 'live' && sourceStatus !== 'completed') || !validTime(firstStartedObservedAt)) return ledger
@@ -242,7 +260,9 @@ export function pinPreMatchReceipt(ledger: ForecastLedger, series: TournamentSer
   return eligible[0] ? { ...ledger, pinned: { ...ledger.pinned, [series.id]: eligible[0].receiptKey } } : ledger
 }
 
-export function pinnedForecast(ledger: ForecastLedger, series: TournamentSeries): ForecastReceipt | ForecastUnavailable {
+export function pinnedForecast(ledger: ForecastLedger, series: TournamentSeries, seriesSource: TournamentFeedSource): ForecastReceipt | ForecastUnavailable {
+  const sourceError = forecastSourceUnavailable(seriesSource)
+  if (sourceError) return sourceError
   const key = ledger.pinned[series.id]
   const receipt = key && ledger.receipts[key]
   if (!receipt) return unavailable('no-prestart-receipt', 'No published pre-start forecast receipt exists for this series.')
@@ -250,9 +270,11 @@ export function pinnedForecast(ledger: ForecastLedger, series: TournamentSeries)
     : unavailable('stale-model-basis', 'The source participants, event or format changed after the pre-match receipt was pinned.')
 }
 
-export function scoreConditionedSeriesOdds(receipt: ForecastReceipt, series: TournamentSeries):
+export function scoreConditionedSeriesOdds(receipt: ForecastReceipt, series: TournamentSeries, seriesSource: TournamentFeedSource):
   | { status: 'ready'; homeSeriesWinProbability: number; awaySeriesWinProbability: number; label: 'score-conditioned' }
   | ForecastUnavailable {
+  const sourceError = forecastSourceUnavailable(seriesSource)
+  if (sourceError) return sourceError
   if (!sameSeriesBasis(receipt, series)) {
     return unavailable('stale-model-basis', 'The live series identity or format differs from the pinned pre-series basis.')
   }

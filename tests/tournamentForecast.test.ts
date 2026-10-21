@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, rm, writeFile, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { publishPreMatchReceiptOffline, pinPreMatchReceiptOffline, readForecastLedgerOffline, recordForecastDeliveryOffline } from '../scripts/tournament-forecast-receipts'
@@ -42,7 +43,7 @@ function basis(): ForecastBasis {
   }
 }
 function receipt(forecastBasis = basis(), currentSeries = series(), publishedAt = before) {
-  return createPreMatchReceipt({ series: currentSeries, basis: forecastBasis, forecastRevision: 'rev-1',
+  return createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: currentSeries, basis: forecastBasis, forecastRevision: 'rev-1',
     generatedAt: before, publishedAt, observedAt: before })
 }
 
@@ -50,7 +51,7 @@ test('forecast matches public model for decisive formats, swapped teams and an e
   for (const bestOf of [1, 3, 5]) {
     const input = series(bestOf)
     const chosen = basis()
-    const result = forecastTournamentSeries(input, chosen)
+    const result = forecastTournamentSeries(input, chosen, { seriesSource: 'lolesports-persisted-site-api' })
     assert.equal(result.status, 'ready')
     if (result.status !== 'ready') continue
     const expected = estimatePublicMatchup(chosen.snapshot.standings[0]!, chosen.snapshot.standings[1]!, model, { bestOf, sideAssumption: 'neutral' })
@@ -58,12 +59,12 @@ test('forecast matches public model for decisive formats, swapped teams and an e
     assert.equal(result.homeSeriesWinProbability, expected.homeSeriesWinProbability)
     assert.equal(result.awaySeriesWinProbability, expected.awaySeriesWinProbability)
     const swapped = { ...input, teams: [input.teams[1]!, input.teams[0]!] }
-    const reverse = forecastTournamentSeries(swapped, chosen)
+    const reverse = forecastTournamentSeries(swapped, chosen, { seriesSource: 'lolesports-persisted-site-api' })
     assert.equal(reverse.status, 'ready')
     if (reverse.status === 'ready') assert.equal(reverse.homeSeriesWinProbability, result.awaySeriesWinProbability)
   }
-  const blue = forecastTournamentSeries(series(1), basis(), { sideAssumption: 'home-blue', sideBasis: 'fixture side assignment', blueSideRatingEdge: 50 })
-  const red = forecastTournamentSeries(series(1), basis(), { sideAssumption: 'home-red', sideBasis: 'fixture side assignment', blueSideRatingEdge: 50 })
+  const blue = forecastTournamentSeries(series(1), basis(), { seriesSource: 'lolesports-persisted-site-api', sideAssumption: 'home-blue', sideBasis: 'fixture side assignment', blueSideRatingEdge: 50 })
+  const red = forecastTournamentSeries(series(1), basis(), { seriesSource: 'lolesports-persisted-site-api', sideAssumption: 'home-red', sideBasis: 'fixture side assignment', blueSideRatingEdge: 50 })
   assert.equal(blue.status, 'ready')
   assert.equal(red.status, 'ready')
   if (blue.status === 'ready' && red.status === 'ready') {
@@ -71,30 +72,30 @@ test('forecast matches public model for decisive formats, swapped teams and an e
     assert.equal(blue.homeGameWinProbability, estimatePublicMatchup(basis().snapshot.standings[0]!, basis().snapshot.standings[1]!, model,
       { bestOf: 1, sideAssumption: 'home-blue', blueSideRatingEdge: 50 }).homeGameWinProbability)
   }
-  assert.equal(forecastTournamentSeries(series(5), basis(), { sideAssumption: 'home-blue', sideBasis: 'fixture side assignment' }).status, 'unavailable')
+  assert.equal(forecastTournamentSeries(series(5), basis(), { seriesSource: 'lolesports-persisted-site-api', sideAssumption: 'home-blue', sideBasis: 'fixture side assignment' }).status, 'unavailable')
 })
 
 test('unknown and tie-capable formats, absent source IDs and unmapped aliases fail closed', () => {
   for (const bestOf of [null, 0, 2, 4, 7]) {
-    const result = forecastTournamentSeries(series(bestOf), basis())
+    const result = forecastTournamentSeries(series(bestOf), basis(), { seriesSource: 'lolesports-persisted-site-api' })
     assert.deepEqual(result.status === 'unavailable' && result.reason, 'unsupported-format')
   }
   const missingId = series()
   missingId.teams[0]!.id = null
-  assert.equal(forecastTournamentSeries(missingId, basis()).status, 'unavailable')
-  assert.equal(forecastTournamentSeries({ ...series(), sourceState: 'inProgress' }, basis()).status, 'unavailable')
+  assert.equal(forecastTournamentSeries(missingId, basis(), { seriesSource: 'lolesports-persisted-site-api' }).status, 'unavailable')
+  assert.equal(forecastTournamentSeries({ ...series(), sourceState: 'inProgress' }, basis(), { seriesSource: 'lolesports-persisted-site-api' }).status, 'unavailable')
   const renamed = series()
   renamed.teams[0]!.name = 'Alpha'
   const noMapping = basis()
   noMapping.identityMap.mappings = noMapping.identityMap.mappings.slice(1)
-  const result = forecastTournamentSeries(renamed, noMapping)
+  const result = forecastTournamentSeries(renamed, noMapping, { seriesSource: 'lolesports-persisted-site-api' })
   assert.deepEqual(result.status === 'unavailable' && result.reason, 'unmapped-team')
   const noScale = basis()
   noScale.model.ratingScale = undefined
-  assert.deepEqual(forecastTournamentSeries(series(), noScale).status, 'unavailable')
+  assert.deepEqual(forecastTournamentSeries(series(), noScale, { seriesSource: 'lolesports-persisted-site-api' }).status, 'unavailable')
   const noCalibration = basis()
   noCalibration.model.parameters = {}
-  assert.deepEqual(forecastTournamentSeries(series(), noCalibration).status, 'unavailable')
+  assert.deepEqual(forecastTournamentSeries(series(), noCalibration, { seriesSource: 'lolesports-persisted-site-api' }).status, 'unavailable')
 })
 
 test('receipt is pinned before play, remains frozen across model revisions and rejects post-start publication', () => {
@@ -105,33 +106,33 @@ test('receipt is pinned before play, remains frozen across model revisions and r
   assert.equal(appendForecastReceipt(ledger, first), ledger)
   assert.throws(() => appendForecastReceipt(ledger, { ...first, modelVersion: 'tampered' }), /different content/)
   const live = { ...series(), status: 'live' as const, sourceState: 'inProgress', teams: series().teams.map((team, index) => ({ ...team, gameWins: index === 0 ? 1 : 0 })) }
-  ledger = pinPreMatchReceipt(ledger, live, after)
-  const pinned = pinnedForecast(ledger, live)
+  ledger = pinPreMatchReceipt(ledger, live, 'lolesports-persisted-site-api', after)
+  const pinned = pinnedForecast(ledger, live, 'lolesports-persisted-site-api')
   assert.equal(pinned.status, 'ready')
   const revised = basis()
   revised.snapshot.standings[0]!.rating = 1100
   revised.model.version = 'fixture-v2'
-  assert.deepEqual(pinnedForecast(ledger, live), pinned)
-  assert.equal(createPreMatchReceipt({ series: live, basis: basis(), forecastRevision: 'late',
+  assert.deepEqual(pinnedForecast(ledger, live, 'lolesports-persisted-site-api'), pinned)
+  assert.equal(createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: live, basis: basis(), forecastRevision: 'late',
     generatedAt: after, publishedAt: after, observedAt: after }).status, 'unavailable')
   assert.equal(receipt(basis(), series(), after).status, 'unavailable')
-  const afterPin = pinPreMatchReceipt(ledger, { ...live, status: 'completed' }, '2026-09-27T15:00:00.000Z')
+  const afterPin = pinPreMatchReceipt(ledger, { ...live, status: 'completed' }, 'lolesports-persisted-site-api', '2026-09-27T15:00:00.000Z')
   assert.deepEqual(afterPin.pinned, ledger.pinned)
 })
 
 test('pinning waits for source-reported play and chooses the latest actual publication instant', () => {
   const earlier = receipt()
   const current = series()
-  const later = createPreMatchReceipt({ series: current, basis: basis(),
+  const later = createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: current, basis: basis(),
     forecastRevision: 'offset-newer', generatedAt: before, publishedAt: '2026-09-27T11:30:00-01:00', observedAt: before })
   assert.equal(earlier.status, 'ready')
   assert.equal(later.status, 'ready')
   if (earlier.status !== 'ready' || later.status !== 'ready') return
   const ledger = appendForecastReceipt(appendForecastReceipt(emptyForecastLedger, earlier), later)
   const live = { ...current, status: 'live' as const, sourceState: 'inProgress' }
-  assert.deepEqual(pinPreMatchReceipt(ledger, { ...live, sourceState: 'unstarted' }, after).pinned, {})
-  assert.deepEqual(pinPreMatchReceipt(ledger, { ...live, sourceState: 'unknown' }, after).pinned, {})
-  assert.equal(pinPreMatchReceipt(ledger, live, after).pinned[current.id], later.receiptKey)
+  assert.deepEqual(pinPreMatchReceipt(ledger, { ...live, sourceState: 'unstarted' }, 'lolesports-persisted-site-api', after).pinned, {})
+  assert.deepEqual(pinPreMatchReceipt(ledger, { ...live, sourceState: 'unknown' }, 'lolesports-persisted-site-api', after).pinned, {})
+  assert.equal(pinPreMatchReceipt(ledger, live, 'lolesports-persisted-site-api', after).pinned[current.id], later.receiptKey)
 })
 
 test('a stalled optional forecast ledger read times out', async () => {
@@ -149,24 +150,24 @@ test('score-conditioned odds use frozen game probability and reject impossible o
   if (created.status !== 'ready') return
   const frozen = created as ForecastReceipt
   const live = { ...series(), status: 'live' as const, sourceState: 'inProgress', teams: series().teams.map((team, index) => ({ ...team, gameWins: index === 0 ? 1 : 0 })) }
-  const atOneZero = scoreConditionedSeriesOdds(frozen, live)
+  const atOneZero = scoreConditionedSeriesOdds(frozen, live, 'lolesports-persisted-site-api')
   assert.equal(atOneZero.status, 'ready')
   if (atOneZero.status === 'ready') assert.ok(atOneZero.homeSeriesWinProbability > frozen.homeSeriesWinProbability)
   live.teams[0]!.gameWins = 2
   live.teams[1]!.gameWins = 1
-  assert.equal(scoreConditionedSeriesOdds(frozen, live).status, 'ready')
+  assert.equal(scoreConditionedSeriesOdds(frozen, live, 'lolesports-persisted-site-api').status, 'ready')
   live.teams[0]!.gameWins = 3
-  const terminal = scoreConditionedSeriesOdds(frozen, live)
+  const terminal = scoreConditionedSeriesOdds(frozen, live, 'lolesports-persisted-site-api')
   assert.equal(terminal.status, 'ready')
   if (terminal.status === 'ready') assert.equal(terminal.homeSeriesWinProbability, 1)
   live.teams[1]!.gameWins = 3
-  assert.deepEqual(scoreConditionedSeriesOdds(frozen, live).status, 'unavailable')
-  assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, bestOf: 3 }).status, 'unavailable')
-  assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
+  assert.deepEqual(scoreConditionedSeriesOdds(frozen, live, 'lolesports-persisted-site-api').status, 'unavailable')
+  assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, bestOf: 3 }, 'lolesports-persisted-site-api').status, 'unavailable')
+  assert.deepEqual(scoreConditionedSeriesOdds(frozen, { ...live, eventId: 'worlds:2027' }, 'lolesports-persisted-site-api').status, 'unavailable')
   const contradictory = { ...live, status: 'completed' as const, teams: [
     { ...live.teams[0]!, gameWins: 3, outcome: 'loss' }, { ...live.teams[1]!, gameWins: 1, outcome: 'win' },
   ] }
-  assert.deepEqual(scoreConditionedSeriesOdds(frozen, contradictory).status, 'unavailable')
+  assert.deepEqual(scoreConditionedSeriesOdds(frozen, contradictory, 'lolesports-persisted-site-api').status, 'unavailable')
 })
 
 test('participant and event corrections cannot relabel a pinned forecast', () => {
@@ -176,39 +177,39 @@ test('participant and event corrections cannot relabel a pinned forecast', () =>
   const initial = appendForecastReceipt(emptyForecastLedger, created)
   const live = { ...series(), status: 'live' as const, sourceState: 'inProgress' }
   const corrected = { ...live, teams: [{ ...live.teams[0]!, id: 'source-c' }, live.teams[1]!] }
-  assert.equal(pinnedForecast(pinPreMatchReceipt(initial, corrected, after), corrected).status, 'unavailable')
-  const pinned = pinPreMatchReceipt(initial, live, after)
-  assert.equal(pinnedForecast(pinned, live).status, 'ready')
-  assert.deepEqual(pinnedForecast(pinned, corrected).status, 'unavailable')
-  assert.deepEqual(pinnedForecast(pinned, { ...live, eventId: 'worlds:2027' }).status, 'unavailable')
-  assert.deepEqual(pinnedForecast(pinned, { ...live, bestOf: 3 }).status, 'unavailable')
-  assert.deepEqual(createPreMatchReceipt({ series: { ...series(), teams: corrected.teams }, basis: basis(),
+  assert.equal(pinnedForecast(pinPreMatchReceipt(initial, corrected, 'lolesports-persisted-site-api', after), corrected, 'lolesports-persisted-site-api').status, 'unavailable')
+  const pinned = pinPreMatchReceipt(initial, live, 'lolesports-persisted-site-api', after)
+  assert.equal(pinnedForecast(pinned, live, 'lolesports-persisted-site-api').status, 'ready')
+  assert.deepEqual(pinnedForecast(pinned, corrected, 'lolesports-persisted-site-api').status, 'unavailable')
+  assert.deepEqual(pinnedForecast(pinned, { ...live, eventId: 'worlds:2027' }, 'lolesports-persisted-site-api').status, 'unavailable')
+  assert.deepEqual(pinnedForecast(pinned, { ...live, bestOf: 3 }, 'lolesports-persisted-site-api').status, 'unavailable')
+  assert.deepEqual(createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: { ...series(), teams: corrected.teams }, basis: basis(),
     forecastRevision: 'unmapped-team', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
-  assert.deepEqual(createPreMatchReceipt({ series: series(2), basis: basis(),
+  assert.deepEqual(createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: series(2), basis: basis(),
     forecastRevision: 'unsupported-format', generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
 })
 
 test('played-game evidence and corrected earlier start prevent pre-match labeling', () => {
   const played = series()
   played.teams[0]!.gameWins = 1
-  assert.deepEqual(forecastTournamentSeries(played, basis()).status, 'unavailable')
-  assert.deepEqual(createPreMatchReceipt({ series: played, basis: basis(), forecastRevision: 'played',
+  assert.deepEqual(forecastTournamentSeries(played, basis(), { seriesSource: 'lolesports-persisted-site-api' }).status, 'unavailable')
+  assert.deepEqual(createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: played, basis: basis(), forecastRevision: 'played',
     generatedAt: before, publishedAt: before, observedAt: before }).status, 'unavailable')
   const outcome = series()
   outcome.teams[0]!.outcome = 'win'
-  assert.deepEqual(forecastTournamentSeries(outcome, basis()).status, 'unavailable')
+  assert.deepEqual(forecastTournamentSeries(outcome, basis(), { seriesSource: 'lolesports-persisted-site-api' }).status, 'unavailable')
 
   const originallyLater = { ...series(), startTime: '2026-09-27T14:00:00.000Z' }
-  const created = createPreMatchReceipt({ series: originallyLater, basis: basis(),
+  const created = createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: originallyLater, basis: basis(),
     forecastRevision: 'before-original-start', generatedAt: '2026-09-27T13:30:00.000Z',
     publishedAt: '2026-09-27T13:30:00.000Z', observedAt: before })
   assert.equal(created.status, 'ready')
   if (created.status !== 'ready') return
   const ledger = appendForecastReceipt(emptyForecastLedger, created)
   const correctedLive = { ...originallyLater, startTime: start, status: 'live' as const, sourceState: 'inProgress' }
-  assert.equal(pinnedForecast(pinPreMatchReceipt(ledger, correctedLive, '2026-09-27T13:40:00.000Z'), correctedLive).status, 'unavailable')
-  const pinnedBeforeCorrection = pinPreMatchReceipt(ledger, { ...correctedLive, startTime: originallyLater.startTime }, '2026-09-27T13:40:00.000Z')
-  assert.equal(pinnedForecast(pinnedBeforeCorrection, correctedLive).status, 'unavailable')
+  assert.equal(pinnedForecast(pinPreMatchReceipt(ledger, correctedLive, 'lolesports-persisted-site-api', '2026-09-27T13:40:00.000Z'), correctedLive, 'lolesports-persisted-site-api').status, 'unavailable')
+  const pinnedBeforeCorrection = pinPreMatchReceipt(ledger, { ...correctedLive, startTime: originallyLater.startTime }, 'lolesports-persisted-site-api', '2026-09-27T13:40:00.000Z')
+  assert.equal(pinnedForecast(pinnedBeforeCorrection, correctedLive, 'lolesports-persisted-site-api').status, 'unavailable')
 })
 
 test('receipt parser rejects backdated, mismatched and non-upcoming persisted artifacts', () => {
@@ -228,7 +229,7 @@ test('receipt parser rejects backdated, mismatched and non-upcoming persisted ar
     [['source-a', null, null], ['source-b', null, null]]]) })), false)
   assert.equal(isForecastLedger(wrapped({ ...created, eventStateVersion: JSON.stringify([created.matchId, created.eventId, start, 'upcoming', 'unstarted', 5,
     [['source-a', 1, null], ['source-b', 0, null]]]) })), false)
-  assert.equal(createPreMatchReceipt({ series: series(), basis: basis(), forecastRevision: 'impossible-time',
+  assert.equal(createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: series(), basis: basis(), forecastRevision: 'impossible-time',
     generatedAt: '2026-09-27T11:59:00.000Z', publishedAt: before, observedAt: before }).status, 'unavailable')
 })
 
@@ -239,10 +240,10 @@ test('Bo1 score conditioning requires one integer completed-game win', () => {
   const live = { ...series(1), status: 'live' as const, sourceState: 'inProgress', teams: [
     { ...series(1).teams[0]!, gameWins: 0.5 }, { ...series(1).teams[1]!, gameWins: 0.5 },
   ] }
-  assert.deepEqual(scoreConditionedSeriesOdds(created, live).status, 'unavailable')
+  assert.deepEqual(scoreConditionedSeriesOdds(created, live, 'lolesports-persisted-site-api').status, 'unavailable')
   live.teams[0]!.gameWins = 1
   live.teams[1]!.gameWins = 0
-  const terminal = scoreConditionedSeriesOdds(created, live)
+  const terminal = scoreConditionedSeriesOdds(created, live, 'lolesports-persisted-site-api')
   assert.equal(terminal.status, 'ready')
   if (terminal.status === 'ready') assert.equal(terminal.homeSeriesWinProbability, 1)
 })
@@ -251,7 +252,7 @@ test('offline store writes each receipt and pin once without overwriting a revis
   const root = await mkdtemp(join(tmpdir(), 'forecast-receipts-'))
   try {
     const current = series()
-    const input = { series: current, basis: basis(), forecastRevision: 'rev-1', generatedAt: before, observedAt: before }
+    const input = { options: { seriesSource: 'lolesports-persisted-site-api' as const }, series: current, basis: basis(), forecastRevision: 'rev-1', generatedAt: before, observedAt: before }
     const saved = await publishPreMatchReceiptOffline(root, input, new Date(before))
     assert.equal(saved.status, 'ready')
     assert.deepEqual(await publishPreMatchReceiptOffline(root, input, new Date(before)), saved)
@@ -263,8 +264,8 @@ test('offline store writes each receipt and pin once without overwriting a revis
     changedBasis.snapshot.standings[0]!.rating = 1100
     await assert.rejects(publishPreMatchReceiptOffline(root, { ...input, basis: changedBasis }, new Date(before)), /Immutable forecast artifact/)
     const live = { ...current, status: 'live' as const, sourceState: 'inProgress' }
-    const ledger = await pinPreMatchReceiptOffline(root, live, after)
-    assert.equal(pinnedForecast(ledger, live).status, 'ready')
+    const ledger = await pinPreMatchReceiptOffline(root, live, 'lolesports-persisted-site-api', after)
+    assert.equal(pinnedForecast(ledger, live, 'lolesports-persisted-site-api').status, 'ready')
     await writeFile(join(root, 'receipts', 'interrupted-write.tmp'), '{')
     assert.deepEqual(await readForecastLedgerOffline(root), ledger)
     assert.equal((await publishPreMatchReceiptOffline(root, input, new Date(after))).status, 'unavailable')
@@ -298,4 +299,63 @@ test('public delivery observer proves exact pre-schedule bytes without certifyin
   await assert.rejects(observeForecastDelivery({ ...input, fetcher: async () => new Response(JSON.stringify({ ...ledger, receipts: { [expected.receiptKey]: altered } })) }), /not publicly delivered/)
   await assert.rejects(observeForecastDelivery({ ...input, ledgerUrl: 'https://example.invalid/ledger?token=secret' }), /public HTTPS URL/)
   await assert.rejects(observeForecastDelivery({ ...input, fetcher: async () => new Response(' '.repeat(8 * 1024 * 1024 + 1)) }), /exceeds observation budget/)
+})
+
+test('official Bo1/3/5 and side outputs retain exact pilot bytes and version1 keys', () => {
+  const options = { seriesSource: 'lolesports-persisted-site-api' as const }
+  const outputs = [1, 3, 5].map((bestOf) => ({ forecast: forecastTournamentSeries(series(bestOf), basis(), options), receipt: receipt(basis(), series(bestOf)) }))
+  const sides = (['home-blue', 'home-red'] as const).map((sideAssumption) => forecastTournamentSeries(series(1), basis(), { ...options, sideAssumption, sideBasis: 'fixture side assignment', blueSideRatingEdge: 50 }))
+  assert.equal(createHash('sha256').update(JSON.stringify({ outputs, sides })).digest('hex'), '5d4bb1b041c8fe1b945297cd800f1b39f4627ccda9cb0699d41c75f18672f739')
+  const frozen = receipt()
+  assert.equal(frozen.status, 'ready')
+  if (frozen.status !== 'ready') return
+  const state = '["official-match-1","worlds:2026","2026-09-27T13:00:00.000Z","upcoming","unstarted",5,[["source-a",null,null],["source-b",null,null]]]'
+  assert.equal(frozen.eventStateVersion, state)
+  assert.equal(frozen.receiptKey, JSON.stringify(['official-match-1', state, 'rev-1']))
+  const bytes = JSON.stringify(appendForecastReceipt(emptyForecastLedger, frozen))
+  assert.ok(isForecastLedger(JSON.parse(bytes)))
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), 'c746d41b6b0d8986186687052585c137cb167fc1bf592b51839b757851600f5b')
+})
+
+test('colliding namespaces and missing runtime source cannot calculate, create or consume receipts', () => {
+  const official = 'lolesports-persisted-site-api'
+  const created = receipt()
+  assert.equal(created.status, 'ready')
+  if (created.status !== 'ready') return
+  const ledger = appendForecastReceipt(emptyForecastLedger, created)
+  const live = { ...series(), status: 'live' as const, sourceState: 'inProgress', teams: series().teams.map((team, index) => ({ ...team, gameWins: index === 0 ? 1 : 0 })) }
+  const pinned = pinPreMatchReceipt(ledger, live, official, after)
+  const bytes = JSON.stringify(pinned)
+  for (const source of ['leaguepedia-cargo', undefined, 'unknown-provider']) {
+    const forecast = Reflect.apply(forecastTournamentSeries, null, [series(), null, { seriesSource: source }])
+    assert.equal(forecast.reason, 'unsupported-source')
+    assert.equal(Reflect.apply(forecastTournamentSeries, null, [series(), basis(), { seriesSource: source }]).reason, 'unsupported-source')
+    assert.equal(Reflect.apply(createPreMatchReceipt, null, [{ series: series(), basis: basis(), options: { seriesSource: source }, forecastRevision: 'collision', generatedAt: before, publishedAt: before, observedAt: before }]).reason, 'unsupported-source')
+    assert.equal(Reflect.apply(pinPreMatchReceipt, null, [ledger, live, source, after]), ledger)
+    assert.equal(Reflect.apply(pinPreMatchReceipt, null, [pinned, live, source, after]), pinned)
+    assert.equal(Reflect.apply(pinnedForecast, null, [pinned, live, source]).reason, 'unsupported-source')
+    assert.equal(Reflect.apply(scoreConditionedSeriesOdds, null, [created, live, source]).reason, 'unsupported-source')
+  }
+  assert.equal(Reflect.apply(forecastTournamentSeries, null, [series(), null]).reason, 'unsupported-source')
+  assert.equal(JSON.stringify(pinned), bytes)
+})
+
+test('unsupported offline provenance writes no receipt or pin with an existing official ledger', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'forecast-source-'))
+  const options = { seriesSource: 'lolesports-persisted-site-api' as const }
+  const input = { series: series(), basis: basis(), options, forecastRevision: 'rev-1', generatedAt: before, observedAt: before }
+  try {
+    await publishPreMatchReceiptOffline(root, input, new Date(before))
+    const files = await readdir(root, { recursive: true })
+    const receiptPath = files.find((path) => path.endsWith('.json'))
+    assert.ok(receiptPath)
+    const originalBytes = await readFile(join(root, receiptPath), 'utf8')
+    const result = await publishPreMatchReceiptOffline(root, { ...input, options: { seriesSource: 'leaguepedia-cargo' } }, new Date(before))
+    assert.equal(result.status === 'unavailable' && result.reason, 'unsupported-source')
+    const live = { ...series(), status: 'live' as const, sourceState: 'inProgress' }
+    const ledger = await pinPreMatchReceiptOffline(root, live, 'leaguepedia-cargo', after)
+    assert.deepEqual(ledger.pinned, {})
+    assert.deepEqual(await readdir(root, { recursive: true }), files)
+    assert.equal(await readFile(join(root, receiptPath), 'utf8'), originalBytes)
+  } finally { await rm(root, { recursive: true, force: true }) }
 })
