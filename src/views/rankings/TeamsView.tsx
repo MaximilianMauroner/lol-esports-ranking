@@ -10,6 +10,7 @@ import type {
 import type { ChartSeries } from '../../components/LineChart'
 import { TeamMark } from '../../components/TeamMark'
 import { DataState, FormDots, Segmented, SortHeader } from '../../components/ui'
+import { Alert } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
 import { LoadingState } from '../../components/ui/loading'
 import { PageShell } from '../../components/ui/page-shell'
@@ -29,7 +30,7 @@ import {
   type TierFilter
 } from '../../domains/rankings/read'
 import type { CompactPlayer, PublicCurrentLineup, RankingSummaryStanding, TeamHistorySeries } from '../../domains/rankings/types'
-import { useHistoryDetail } from '../../hooks/useHistoryDetail'
+import { useTeamDetailAddress } from '../../hooks/useTeamDetailAddress'
 import type { ChartPoint } from '../../shared/chartPoints'
 import { assignColorSlots, sameColorSlots } from '../../shared/colorSlots'
 import { extent, formatDate, formatDateRange, formatModelVersion, formatNumber, formatRating, formatRatio, formatRecord, formatSigned, teamKey } from '../../shared/display'
@@ -103,6 +104,8 @@ export function TeamsView({
   regionsHref,
   dataSummary,
   hashQuery,
+  requestedScope,
+  effectiveScope,
   onToggle,
   onRequestPlayers,
   onRequestTeamHistory,
@@ -128,6 +131,8 @@ export function TeamsView({
   dataSummary?: TeamDataSummary
   /** The hash query App read on the last hash change. A new object means a new address. */
   hashQuery: URLSearchParams
+  requestedScope: string
+  effectiveScope: string
   onToggle: (team: RankingSummaryStanding) => void
   onRequestPlayers?: () => void
   onRequestTeamHistory?: (teams?: readonly string[]) => void
@@ -161,7 +166,8 @@ export function TeamsView({
     setPageSize(next.pageSize)
     setPageState({ page: next.page })
   }
-  const { value: detailKey, open: openDetail, close: closeDetail } = useHistoryDetail('teamDetail')
+  const scopeTeams = useMemo(() => new Map(universe.scopeStandings.map((team) => [teamKey(team), team])), [universe.scopeStandings])
+  const detail = useTeamDetailAddress(hashQuery, scopeTeams, requestedScope, effectiveScope)
   const [metric, setMetric] = useState<TrajectoryMetric>('rating')
   // Phones fold the filters behind one button so the first screen shows teams.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -239,8 +245,11 @@ export function TeamsView({
   const gapExample = useMemo(() => gameWinChanceForGap(model), [model])
 
   const detailTeam = useMemo(
-    () => (detailKey ? standings.find((team) => teamKey(team) === detailKey) : undefined),
-    [detailKey, standings],
+    () => {
+      const scopeTeam = detail.item
+      return scopeTeam ? standings.find((team) => teamKey(team) === teamKey(scopeTeam)) : undefined
+    },
+    [detail.item, standings],
   )
   const detailPlayers = useMemo(
     () => (detailTeam ? playersForTeam(players, detailTeam) : []),
@@ -249,7 +258,7 @@ export function TeamsView({
   const detailLineup = detailTeam ? currentLineups?.[detailTeam.teamId] : undefined
 
   useEffect(() => {
-    if (!onRequestTeamHistory || exactTournamentId || detailKey) return undefined
+    if (!onRequestTeamHistory || exactTournamentId || detailTeam) return undefined
     const panel = trajectoryPanelRef.current
     if (!panel) return undefined
 
@@ -267,7 +276,7 @@ export function TeamsView({
 
     observer.observe(panel)
     return () => observer.disconnect()
-  }, [detailKey, exactTournamentId, onRequestTeamHistory])
+  }, [detailTeam, exactTournamentId, onRequestTeamHistory])
 
   const pickedFocusTeams = useMemo(
     () => exactTournamentId ? pickedTeams.filter((team) => activeHistory?.[teamKey(team)]) : pickedTeams,
@@ -281,8 +290,8 @@ export function TeamsView({
   // when the assignment changes, so an unchanged assignment keeps its identity.
   const requestedHistoryTeams = (detailTeam ? [teamKey(detailTeam)] : focusTeams.map(teamKey)).sort().join('\u0000')
   useEffect(() => {
-    if ((detailTeam || !detailKey && trajectoryRequested) && !exactTournamentId) onRequestTeamHistory?.(requestedHistoryTeams.split('\u0000').filter(Boolean))
-  }, [detailTeam, detailKey, trajectoryRequested, exactTournamentId, onRequestTeamHistory, requestedHistoryTeams])
+    if ((detailTeam || trajectoryRequested) && !exactTournamentId) onRequestTeamHistory?.(requestedHistoryTeams.split('\u0000').filter(Boolean))
+  }, [detailTeam, trajectoryRequested, exactTournamentId, onRequestTeamHistory, requestedHistoryTeams])
 
   const assignedSlots = assignColorSlots(colorSlots, focusTeams.map(teamKey), SERIES_COLORS.length)
   const slots = sameColorSlots(assignedSlots, colorSlots) ? colorSlots : assignedSlots
@@ -349,8 +358,7 @@ export function TeamsView({
   }
 
   function openTeam(team: RankingSummaryStanding) {
-    onRequestTeamHistory?.([teamKey(team)])
-    openDetail(teamKey(team))
+    detail.open(teamKey(team))
   }
 
   function prepareTeamDetails() {
@@ -381,6 +389,12 @@ export function TeamsView({
 
   return (
     <PageShell>
+      {detail.missing ? (
+        <Alert variant="warning" role="status">
+          This team is not available in {dataSummary?.scopeLabel ?? 'the selected scope'}. Showing the ranking board.
+          <Button variant="ghost" onClick={detail.dismissMissing}>Dismiss</Button>
+        </Alert>
+      ) : null}
       {headline ? <p className="max-w-[72ch] text-lg leading-[1.3] font-semibold text-[var(--text-strong)]">{headline}</p> : null}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_320px] items-start gap-6 max-[1280px]:grid-cols-1">
         <div className="min-w-0">
@@ -771,7 +785,7 @@ export function TeamsView({
           playerScopeLabel={playerScopeLabel}
           onRequestPlayers={onRequestPlayers}
           seeded={Boolean(panelData?.seeded)}
-          onClose={closeDetail}
+          onClose={detail.close}
         />
       ) : null}
     </PageShell>
