@@ -452,6 +452,8 @@ export function RankingRoute() {
                     onRetryTournamentMovements={retryTournamentMovements}
                     regionsHref={hashForModeAndScope('regions', effectiveScope)}
                     hashQuery={boardHashQuery}
+                    requestedScope={scope}
+                    effectiveScope={effectiveScope}
                     dataSummary={{
                       source: loadedData.source,
                       sources: loadedData.sources,
