@@ -194,7 +194,8 @@ export function LineChart({
             axisLine={false}
             tickFormatter={(value) => formatYTick(Number(value))}
           />
-          <RechartsTooltip trigger="hover" cursor={{ stroke: 'var(--line-strong)' }} content={renderTooltip} />
+          {/* renderTooltip builds its rows from the series. Recharts would drop a season row whose values are all empty and hide the tooltip. */}
+          <RechartsTooltip trigger="hover" cursor={{ stroke: 'var(--line-strong)' }} filterNull={false} content={renderTooltip} />
           {details ? <ActiveRowListener onActive={setHoveredT} /> : null}
           {gaps.map(({ key, series: entry }) => (
             <Line key={key} dataKey={key} opacity={focusedId && focusedId !== entry.id ? 0.18 : 1} stroke={entry.color} strokeWidth={1.5} strokeDasharray="4 4" connectNulls dot={false} activeDot={false} tooltipType="none" isAnimationActive={false} />
