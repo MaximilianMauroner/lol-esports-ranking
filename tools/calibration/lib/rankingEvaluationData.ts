@@ -1,10 +1,60 @@
+import { createHash } from 'node:crypto'
+import type { createRatingReplayContext } from '../../../src/domains/rankings/build'
+import { compareCodeUnits } from '../../../src/shared/codeUnitOrder.mjs'
 import { canonicalTeamNameFor } from '../../../src/domains/rankings/evidence'
-import type { MatchRecord, PregamePrediction } from '../../../src/domains/rankings/types'
+import type { MatchRecord, PregamePrediction, TeamProfile } from '../../../src/domains/rankings/types'
 import { binaryMetricContract } from '../../../src/domains/rankings/read'
 import { evaluationBaselineProbabilities } from './evaluationBaselines'
 import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from '../../../src/domains/rankings/evidence'
 import { seriesWinProbability } from '../../../src/domains/rankings/read'
-import { groupEvaluationBy, summarizeEvaluation, type EvaluationExport, type EvaluationRow } from './rankingEvaluation'
+import { groupEvaluationBy, summarizeEvaluation, type EvaluationExport, type EvaluationRow, type ReplayInputDigest } from './rankingEvaluation'
+
+export type ReplayInputs = {
+  matches: MatchRecord[]
+  teams: Record<string, TeamProfile>
+  tournamentLifecycles: {
+    generatedAt: string
+    byId: ReturnType<typeof createRatingReplayContext>['tournamentLifecycles']
+  } | null
+}
+
+export function requireEvaluationGeneratedAt(input: unknown): string {
+  if (typeof input !== 'string' || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(input)
+    || !Number.isFinite(Date.parse(input))
+    || new Date(`${input.slice(0, 10)}T00:00:00Z`).toISOString().slice(0, 10) !== input.slice(0, 10)) {
+    throw new Error('Accuracy export requires valid explicit manifest generatedAt')
+  }
+  return input
+}
+
+export function replayInputDigest(replays: readonly ReplayInputs[]): ReplayInputDigest {
+  const payload = replays.map((replay) => ({
+    matches: replay.matches,
+    teams: Object.entries(replay.teams),
+    tournamentLifecycles: replay.tournamentLifecycles === null ? null : {
+      generatedAt: requireEvaluationGeneratedAt(replay.tournamentLifecycles.generatedAt),
+      byId: [...replay.tournamentLifecycles.byId].sort(([a], [b]) => compareCodeUnits(a, b)),
+    },
+  }))
+  const active = new Set<object>()
+  function encode(value: unknown): string {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
+    if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value)
+    if (typeof value !== 'object' || !value || active.has(value)) throw new Error('Invalid replay-input encoding')
+    active.add(value)
+    let encoded: string
+    if (Array.isArray(value)) encoded = `[${Array.from(value, (item) => encode(item)).join(',')}]`
+    else {
+      if ((Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
+        || Object.getOwnPropertySymbols(value).length) throw new Error('Invalid replay-input object')
+      encoded = `{${Object.entries(value).sort(([a], [b]) => compareCodeUnits(a, b)).filter(([, item]) => item !== undefined)
+        .map(([key, item]) => `${JSON.stringify(key)}:${encode(item)}`).join(',')}}`
+    }
+    active.delete(value)
+    return encoded
+  }
+  return `replay-inputs/v1:${createHash('sha256').update('lol-replay-inputs/v1\n').update(encode(payload)).digest('hex')}`
+}
 
 export function evaluationEventId(match: MatchRecord) {
   return `${match.season}:${match.league}:${match.event}`
@@ -15,9 +65,11 @@ export function evaluationHomeLeague(match: MatchRecord, side: 'A' | 'B') {
   return (side === 'A' ? match.teamAHomeLeague : match.teamBHomeLeague) ?? 'Unknown'
 }
 
-export function buildEvaluationData(matches: MatchRecord[], predictions: PregamePrediction[], {
+export function buildEvaluationData(replay: ReplayInputs, predictions: PregamePrediction[], {
   sourceIdentity, scoreStart = '0000-01-01',
 }: { sourceIdentity: string; scoreStart?: string }) {
+  const { matches } = replay
+  const replayInputs = replayInputDigest([replay])
   if (new Set(matches.map((match) => match.id)).size !== matches.length) throw new Error('Duplicate source match identities')
   if (new Set(predictions.map((prediction) => prediction.id)).size !== predictions.length) throw new Error('Duplicate prediction identities')
   const canonicalMatches = matches.map((match) => ({ ...match,
@@ -56,7 +108,7 @@ export function buildEvaluationData(matches: MatchRecord[], predictions: Pregame
       }
     }
   }
-  const identity = { schemaVersion: 1, target: 'game',
+  const identity = { schemaVersion: 2, replayInputs, target: 'game',
     modelVersion: predictions[0]?.modelVersion ?? 'unavailable', modelConfigHash: predictions[0]?.modelConfigHash ?? 'unavailable',
     sourceIdentity, temporalPolicy: 'latest-corrected-prior-replay', metricContract: binaryMetricContract } as const
   const exportData: EvaluationExport = { ...identity, rows }

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { createRatingReplayContext, replayRatingDates, materializeRankingModel, makeDisplayRatings, makeDirectHeadToHeadContextAdjustments } from '../../src/domains/rankings/build'
-import { buildEvaluationData, evaluationHomeLeague } from './lib/rankingEvaluationData'
+import { buildEvaluationData, evaluationHomeLeague, replayInputDigest, type ReplayInputs } from './lib/rankingEvaluationData'
 import { compareEvaluationExports, readEvaluationExport, summarizeEvaluation, type EvaluationRow } from './lib/rankingEvaluation'
 import { neutralWinProbability } from '../../src/domains/rankings/read'
 import { effectiveLeagueRating, leaguePriorFor } from '../../src/domains/rankings/policy'
@@ -54,10 +54,13 @@ const boardRows = new Map(layerNames.map((name) => [name, [] as EvaluationRow[]]
 const hierarchyRows = new Map([['tierPriors', [] as EvaluationRow[]], ['flatPriors', [] as EvaluationRow[]], ['weakPriors', [] as EvaluationRow[]]])
 const priorBoardRows: EvaluationRow[] = []
 const cutReports = []
+const cutoffReplays: ReplayInputs[] = []
 for (const cutoff of cutoffs) {
   const prior = source.matches.filter((match) => match.date <= cutoff)
   const teams = priorTeams(prior, source.teams)
-  const context = createRatingReplayContext(prior, teams)
+  const replay: ReplayInputs = { matches: prior, teams, tournamentLifecycles: null }
+  cutoffReplays.push(replay)
+  const context = createRatingReplayContext(replay.matches, replay.teams)
   const state = replayRatingDates({ context, replayMatches: prior })
   const model = materializeRankingModel({ context, state })
   const preHeadToHead = makeDisplayRatings(state.ratings, teams, state.leagueScores, state.leagueMatchCounts, state.rosterPriorOffsets,
@@ -73,7 +76,7 @@ for (const cutoff of cutoffs) {
   laterDate.setUTCDate(laterDate.getUTCDate() + 30)
   const through = laterDate.toISOString().slice(0, 10)
   const forward = data.rows.filter((row) => row.date > cutoff && row.date <= through && standings.has(row.teamA) && standings.has(row.teamB))
-  const priorData = buildEvaluationData(prior, model.predictions, { sourceIdentity })
+  const priorData = buildEvaluationData(replay, model.predictions, { sourceIdentity })
   // One league effect per season. Domestic members define its center.
   const seasonRows = priorData.rows.filter((row) => row.date.slice(0, 4) === cutoff.slice(0, 4))
   const leagues = [...new Set(seasonRows.flatMap((row) => [row.leagueA, row.leagueB]))].filter((league) => league !== 'Unknown')
@@ -101,7 +104,8 @@ for (const cutoff of cutoffs) {
     hierarchy: fits.map(({ name, fit }) => ({ name, leagues: fit.leagues, excluded: fit.excluded, uncertaintyPolicy: fit.uncertaintyPolicy })) })
   console.log(`Completed prior board/league cutoff ${cutoff}: ${forward.length} forward games`)
 }
-const exportRows = (rows: EvaluationRow[], name: string) => ({ ...data, modelVersion: name,
+const replayInputs = replayInputDigest(cutoffReplays)
+const exportRows = (rows: EvaluationRow[], name: string) => ({ ...data, schemaVersion: 2 as const, replayInputs, modelVersion: name,
   modelConfigHash: createHash('sha256').update(JSON.stringify({ base: data.modelConfigHash, name, cutoffs, policyIdentity })).digest('hex'), rows })
 const current = exportRows(boardRows.get('current')!, 'prior-public-board')
 await writeFile(outputArg, `${JSON.stringify({ status: 'exploratory; fixed prior boards; neutral forecasts; no automatic adoption',

@@ -2,14 +2,18 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { binaryMetricContract } from '../src/domains/rankings/internal/projections/binaryPredictionMetrics.ts'
 import { chronologicalCohorts, compareEvaluationExports, readEvaluationExport, summarizeEvaluation, type EvaluationExport } from '../tools/calibration/lib/rankingEvaluation.ts'
-import { buildEvaluationData } from '../tools/calibration/lib/rankingEvaluationData.ts'
+import { buildEvaluationData, replayInputDigest, requireEvaluationGeneratedAt, type ReplayInputs } from '../tools/calibration/lib/rankingEvaluationData.ts'
 import { createRatingReplayContext, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
 import { seriesWinProbability } from '../src/domains/rankings/internal/queries/winProbability.ts'
 import type { MatchRecord, PregamePrediction } from '../src/domains/rankings/types.ts'
 import { sampleMatches, teams } from './fixtures/rankingFixtures.ts'
 
+function syntheticReplay(): ReplayInputs {
+  return { matches: structuredClone(sampleMatches.slice(0, 2)), teams: structuredClone(teams), tournamentLifecycles: null }
+}
+
 function fixture(): EvaluationExport {
-  return { schemaVersion: 1, target: 'game', modelVersion: 'fixture', modelConfigHash: 'fixture',
+  return { schemaVersion: 2, replayInputs: replayInputDigest([syntheticReplay()]), target: 'game', modelVersion: 'fixture', modelConfigHash: 'fixture',
     sourceIdentity: 'synthetic-fixture', temporalPolicy: 'latest-corrected-prior-replay', metricContract: binaryMetricContract,
     rows: Array.from({ length: 6 }, (_, index) => ({ id: `game-${index}`, seriesId: `series-${index}`,
       eventId: `event-${index}`, date: '2025-01-01', teamA: 'Alpha', teamB: 'Beta', leagueA: 'LCK', leagueB: 'LPL',
@@ -83,7 +87,7 @@ test('export builder rejects stale source joins, duplicate identities and mixed 
   const context = createRatingReplayContext(matches, { ...teams })
   const { predictions } = replayRatingDates({ context, replayMatches: matches })
   const exportPredictions = (rows: PregamePrediction[], source = matches) =>
-    buildEvaluationData(source, rows, { sourceIdentity: 'synthetic-fixture' })
+    buildEvaluationData({ matches: source, teams: context.teams, tournamentLifecycles: null }, rows, { sourceIdentity: 'synthetic-fixture' })
   const first = predictions[0]
   const mutations: Array<Partial<PregamePrediction>> = [
     { teamA: first.teamB, teamB: first.teamA },
@@ -113,7 +117,7 @@ test('exported aliases and swapped raw sides keep game and series probabilities 
     id: match.id, seriesId: undefined, date: match.date, event: match.event,
     teamA: match.teamA === alias ? 'LYON' : match.teamA, teamB: match.teamB,
     actualWinner: match.winner, teamAGameWinProbability: match.teamA === 'Beta' ? .2 : .8 }))
-  const exported = buildEvaluationData(matches, predictions, { sourceIdentity: 'synthetic-alias-fixture' })
+  const exported = buildEvaluationData({ matches, teams: templateContext.teams, tournamentLifecycles: null }, predictions, { sourceIdentity: 'synthetic-alias-fixture' })
   assert.deepEqual(exported.rows.map((row) => [row.teamA, row.teamB, row.actual, row.probability]), [
     ['LYON', 'Beta', 1, .8], ['Beta', 'LYON', 1, .2], ['LYON', 'Beta', 1, .8],
   ])
@@ -121,4 +125,126 @@ test('exported aliases and swapped raw sides keep game and series probabilities 
   assert.equal(exported.seriesExport.rows[0].teamA, 'LYON')
   assert.equal(exported.seriesExport.rows[0].actual, 1)
   assert.equal(exported.seriesExport.rows[0].probability, seriesWinProbability(.8, 3))
+})
+
+test('legacy exports remain readable summaries but never grant pairing authority', () => {
+  const base = { ...fixture(), schemaVersion: 1, provenance: { trainingSourceIdentity: 'warmup-A' } }
+  const next = { ...base, provenance: { trainingSourceIdentity: 'warmup-B' } }
+  assert.equal(readEvaluationExport(base).schemaVersion, 1)
+  assert.equal(summarizeEvaluation(readEvaluationExport(base).rows).count, 6)
+  assert.throws(() => compareEvaluationExports(base, next, 100), /Legacy export/)
+  assert.throws(() => compareEvaluationExports(base, fixture(), 100), /Legacy export/)
+})
+
+test('schema2 identity survives JSON and normalized-reader reparsing and admits model-only changes', () => {
+  const base = fixture()
+  const normalized = readEvaluationExport(JSON.parse(JSON.stringify(base)))
+  const next = { ...normalized, modelVersion: 'different-model', modelConfigHash: 'different-config' }
+  const result = compareEvaluationExports(normalized, next, 100)
+  assert.equal(result.replayInputs, base.schemaVersion === 2 && base.replayInputs)
+  assert.equal(result.passed, true)
+  for (const replayInputs of [undefined, null, '', 'replay-inputs/v2:' + 'a'.repeat(64), 'replay-inputs/v1:abc', 'replay-inputs/v1:' + 'A'.repeat(64)]) {
+    assert.throws(() => readEvaluationExport({ ...base, replayInputs }), /Invalid replay-input identity/)
+  }
+  const different = syntheticReplay()
+  different.matches[0].winner = different.matches[0].teamB
+  assert.throws(() => compareEvaluationExports(base, { ...base, replayInputs: replayInputDigest([different]) }, 100), /Replay inputs differ/)
+})
+
+test('one actual synthetic replay binds game, series and all control exports', () => {
+  const replay = syntheticReplay()
+  const context = createRatingReplayContext(replay.matches, replay.teams)
+  const state = replayRatingDates({ context, replayMatches: replay.matches })
+  const data = buildEvaluationData(replay, state.predictions, { sourceIdentity: 'synthetic', scoreStart: replay.matches[1].date })
+  assert.equal(data.replayInputs, replayInputDigest([replay]))
+  assert.ok(Object.keys(data.variants).length > 0)
+  for (const variant of [data, data.seriesExport, ...Object.values(data.variants)]) {
+    const parsed = readEvaluationExport(JSON.parse(JSON.stringify(variant)))
+    assert.equal(parsed.schemaVersion === 2 && parsed.replayInputs, data.replayInputs)
+  }
+  const warmup = structuredClone(replay)
+  warmup.matches[0].teamAKills = (warmup.matches[0].teamAKills ?? 0) + 1
+  const changed = buildEvaluationData(warmup, state.predictions, { sourceIdentity: 'synthetic', scoreStart: replay.matches[1].date })
+  assert.equal(changed.sourceIdentity, data.sourceIdentity)
+  assert.notEqual(changed.replayInputs, data.replayInputs)
+})
+
+test('digest binds every effective profile, lifecycle and exact generation-time dimension', () => {
+  const replay = syntheticReplay()
+  const lifecycle = { status: 'completed' as const, boundaryDate: '2025-01-02', ratedThroughDate: '2025-01-02', dataLag: false, resultCoverageComplete: false }
+  replay.tournamentLifecycles = { generatedAt: '2025-02-01T00:00:00Z', byId: new Map([['one', lifecycle]]) }
+  const digest = replayInputDigest([replay])
+  const team = Object.keys(replay.teams)[0]
+  const mutations: ReplayInputs[] = [
+    ...Object.entries({ name: 'Changed', code: 'NEW', region: 'International', league: 'Unknown' }).map(([key, value]) => {
+      const changed = structuredClone(replay)
+      Object.assign(changed.teams[team], { [key]: value })
+      return changed
+    }),
+    ...Object.entries({ status: 'ongoing', boundaryDate: '2025-01-03', ratedThroughDate: '2025-01-03', dataLag: true, resultCoverageComplete: true }).map(([key, value]) => ({
+      ...replay, tournamentLifecycles: { generatedAt: replay.tournamentLifecycles!.generatedAt, byId: new Map([['one', { ...lifecycle, [key]: value }]]) },
+    })),
+    { ...replay, tournamentLifecycles: { generatedAt: '2025-02-01T00:00:00.000Z', byId: replay.tournamentLifecycles.byId } },
+    { ...replay, tournamentLifecycles: { generatedAt: replay.tournamentLifecycles.generatedAt, byId: new Map() } },
+    { ...replay, tournamentLifecycles: null },
+  ]
+  for (const changed of mutations) assert.notEqual(replayInputDigest([changed]), digest)
+  assert.notEqual(replayInputDigest([{ ...replay, tournamentLifecycles: null }]), replayInputDigest([{ ...replay, tournamentLifecycles: { generatedAt: replay.tournamentLifecycles.generatedAt, byId: new Map() } }]))
+  for (const invalid of [undefined, '', 'tomorrow', '2025-02-30T00:00:00Z', '2025-01-01']) assert.throws(() => requireEvaluationGeneratedAt(invalid), /generatedAt/)
+  const offsetTime = '2025-01-01T23:00:00-02:00'
+  assert.equal(requireEvaluationGeneratedAt(offsetTime), offsetTime)
+})
+
+test('canonical replay encoding preserves meaningful orders and rejects invalid values', () => {
+  const replay = syntheticReplay()
+  const digest = replayInputDigest([replay])
+  const reorderedObjects = { ...replay, matches: replay.matches.map((match) => Object.fromEntries(Object.entries(match).reverse()) as MatchRecord),
+    teams: Object.fromEntries(Object.entries(replay.teams).map(([key, value]) => [key, { league: value.league, region: value.region, code: value.code, name: value.name }])) }
+  assert.equal(replayInputDigest([reorderedObjects]), digest)
+  assert.notEqual(replayInputDigest([{ ...replay, matches: [...replay.matches].reverse() }]), digest)
+  assert.notEqual(replayInputDigest([{ ...replay, teams: Object.fromEntries(Object.entries(replay.teams).reverse()) }]), digest)
+  const roster = structuredClone(replay)
+  const players = [{ id: 'one', name: 'One', role: 'Top' as const }, { id: 'two', name: 'Two', role: 'Jungle' as const }]
+  roster.matches[0].teamARoster = { sourceProvider: 'oracles-elixir', observedAt: '2025-01-01', completeness: 'partial', players }
+  const rosterDigest = replayInputDigest([roster])
+  players.reverse()
+  assert.notEqual(replayInputDigest([roster]), rosterDigest)
+  const lifecycle = { status: 'ongoing' as const, boundaryDate: '2025-01-01', ratedThroughDate: '2025-01-01', dataLag: false, resultCoverageComplete: false }
+  const withMap = { ...replay, tournamentLifecycles: { generatedAt: '2025-01-01T00:00:00Z', byId: new Map([['a', lifecycle], ['b', lifecycle]]) } }
+  assert.equal(replayInputDigest([withMap]), replayInputDigest([{ ...withMap, tournamentLifecycles: { ...withMap.tournamentLifecycles, byId: new Map([...withMap.tournamentLifecycles.byId].reverse()) } }]))
+  assert.equal(replayInputDigest([{ ...replay, matches: replay.matches.map((match) => ({ ...match, teamAKills: -0, teamAHomeLeague: undefined })) }]), replayInputDigest([{ ...replay, matches: replay.matches.map((match) => ({ ...match, teamAKills: 0, teamAHomeLeague: undefined })) }]))
+  for (const invalid of [NaN, Infinity, undefined, 1n, () => 0, new Date(), Symbol('invalid')]) {
+    const changed = structuredClone(replay)
+    Object.assign(changed.matches[0], { extra: [invalid] })
+    assert.throws(() => replayInputDigest([changed]), /Invalid replay-input/)
+  }
+  const cyclic = structuredClone(replay)
+  Object.assign(cyclic.matches[0], { self: cyclic.matches[0] })
+  assert.throws(() => replayInputDigest([cyclic]), /Invalid replay-input/)
+  const sparse = structuredClone(replay)
+  Object.assign(sparse.matches[0], { extra: Array(1) })
+  assert.throws(() => replayInputDigest([sparse]), /Invalid replay-input/)
+  const omitted = structuredClone(replay)
+  delete omitted.matches[0].teamAHomeLeague
+  const undefinedField = structuredClone(omitted)
+  undefinedField.matches[0].teamAHomeLeague = undefined
+  assert.equal(replayInputDigest([omitted]), replayInputDigest([undefinedField]))
+  const filename = structuredClone(replay)
+  filename.matches[0].sourceFileName = 'retained-games.json'
+  const originalFilenameDigest = replayInputDigest([filename])
+  filename.matches[0].sourceFileName = 'other-games.json'
+  assert.notEqual(originalFilenameDigest, replayInputDigest([filename]))
+  const duplicate = { ...replay, matches: [...replay.matches, replay.matches[0]] }
+  assert.notEqual(replayInputDigest([duplicate]), digest)
+})
+
+test('ordered cutoff snapshots bind their actual prior profiles and differ from a full replay', () => {
+  const full = syntheticReplay()
+  const first = { matches: full.matches.slice(0, 1), teams: { [full.matches[0].teamA]: full.teams[full.matches[0].teamA] }, tournamentLifecycles: null }
+  const second = { ...full, teams: structuredClone(full.teams) }
+  const aggregate = replayInputDigest([first, second])
+  assert.notEqual(aggregate, replayInputDigest([full]))
+  assert.notEqual(aggregate, replayInputDigest([second, first]))
+  second.teams[Object.keys(second.teams)[0]].code += 'changed'
+  assert.notEqual(aggregate, replayInputDigest([first, second]))
 })
