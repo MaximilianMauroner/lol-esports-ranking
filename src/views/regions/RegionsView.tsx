@@ -13,7 +13,6 @@ import type { PublicMatchHistoryEntry, PublicRegionHistoryScope, PublicRegionHis
 import type { MatchHistoryState, RegionTimelineState } from '../../browser/rankings/usePublicArtifacts'
 import { useHistoryDetail } from '../../hooks/useHistoryDetail'
 import {
-  extent,
   formatDate,
   formatDecimal,
   formatNumber,
@@ -291,14 +290,13 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
   )
 }
 
-const REGION_SPARKLINE_WIDTH = 150
-const REGION_SPARKLINE_HEIGHT = 42
-
-function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistorySeries; region: string }) {
-  const shape = useMemo(() => {
-    const values = (series?.points ?? []).slice(-24).map((point) => point[1]).filter(Number.isFinite)
-    return sparklineShape(values, REGION_SPARKLINE_WIDTH, REGION_SPARKLINE_HEIGHT)
-  }, [series])
+function RegionPowerTrend({ series, region }: { series?: PublicRegionHistorySeries; region: string }) {
+  const chartSeries = useMemo<ChartSeries[]>(() => series && series.points.length >= 2 ? [{
+    id: region,
+    label: region,
+    color: 'var(--series-1)',
+    points: series.points.map((point) => ({ t: Date.parse(point[0]), y: point[1] })),
+  }] : [], [region, series])
   const first = series?.points[0]
   const last = series?.points.at(-1)
   const delta = first && last ? last[1] - first[1] : undefined
@@ -308,63 +306,26 @@ function RegionPowerSparkline({ series, region }: { series?: PublicRegionHistory
       ? 'up'
       : undefined
 
-  if (!shape || !first || !last) {
-    return (
-      <div className="grid min-w-[180px] grid-cols-1 items-center gap-3 rounded-sm border border-border bg-[var(--surface-2)] px-3 py-2.5 text-muted-foreground max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px]" aria-label={`${region} region trajectory unavailable`}>
-        <small className="block text-2xs tracking-label text-[var(--faint)] uppercase">Power trajectory</small>
-        <b className="mt-1 block text-[var(--text-strong)] tabular-nums">History pending</b>
-      </div>
-    )
-  }
-
   return (
-    <div
-      className="grid min-w-[260px] grid-cols-[minmax(92px,auto)_150px] items-center gap-3 rounded-sm border border-border bg-[var(--surface-2)] px-3 py-2.5 max-[820px]:min-w-[min(260px,100%)] max-[820px]:flex-[1_1_260px] max-[560px]:w-full max-[560px]:grid-cols-1 [&_circle]:fill-[var(--series-1)] [&_polyline]:fill-none [&_polyline]:stroke-[var(--series-1)] [&_polyline]:stroke-[2.2] [&_polyline]:[stroke-linecap:round] [&_polyline]:[stroke-linejoin:round] [&_svg]:h-[42px] [&_svg]:w-[150px] [&_svg]:overflow-visible max-[560px]:[&_svg]:w-full"
-      aria-label={`${region} region power trajectory ${formatSignedDecimal(delta)} from ${formatDate(first[0])} to ${formatDate(last[0])}`}
-    >
-      <div>
-        <small className="block text-2xs tracking-label text-[var(--faint)] uppercase">Power trajectory</small>
-        <b className={`mt-1 block tabular-nums ${deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}`}>{formatSignedDecimal(delta)}</b>
-        <span className="mt-1 block text-xs text-muted-foreground">{formatDate(first[0])} to {formatDate(last[0])}</span>
+    <section className="min-w-0 rounded-md border border-border bg-card" aria-label={`${region} power trajectory`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pt-3 max-[560px]:px-3">
+        <h3 className="text-base font-semibold text-[var(--text-strong)]">Power trajectory</h3>
+        {first && last && chartSeries.length > 0 ? (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            <b className={deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}>{formatSignedDecimal(delta)}</b>
+            {' '}from {formatDate(first[0])} to {formatDate(last[0])}
+          </span>
+        ) : null}
       </div>
-      <svg viewBox={`0 0 ${REGION_SPARKLINE_WIDTH} ${REGION_SPARKLINE_HEIGHT}`} role="img" focusable="false">
-        <polyline points={shape.points} />
-        <circle cx={shape.last.x} cy={shape.last.y} r="2.8" />
-      </svg>
-    </div>
+      {chartSeries.length > 0 ? (
+        <LineChart series={chartSeries} height={240} yLabel="Region power" yFormat={formatRating} />
+      ) : (
+        <p className="px-4 pt-2 pb-4 text-sm text-muted-foreground max-[560px]:px-3">History pending</p>
+      )}
+    </section>
   )
 }
 
-type SparklineShape = {
-  points: string
-  last: { x: number; y: number }
-}
-
-function sparklineShape(values: number[], width: number, height: number): SparklineShape | null {
-  const finiteValues = values.filter(Number.isFinite)
-  if (finiteValues.length < 2) return null
-  const [min, max] = extent(finiteValues)
-  const range = max - min
-  const inset = 4
-  const drawableWidth = width - inset * 2
-  const drawableHeight = height - inset * 2
-  const coords = finiteValues.map((value, index) => {
-    const x = inset + (index / (finiteValues.length - 1)) * drawableWidth
-    const y = range === 0
-      ? height / 2
-      : inset + (1 - (value - min) / range) * drawableHeight
-    return { x: roundSparklineCoord(x), y: roundSparklineCoord(y) }
-  })
-  const last = coords.at(-1)!
-  return {
-    points: coords.map((point) => `${point.x},${point.y}`).join(' '),
-    last,
-  }
-}
-
-function roundSparklineCoord(value: number) {
-  return Math.round(value * 10) / 10
-}
 
 function RegionDetailDrawer({
   region,
@@ -416,8 +377,9 @@ function RegionDetailDrawer({
                 {formatRating(displayRegionPowerScore(region))}
                 <span className="text-2xs font-semibold tracking-label text-[var(--faint)] uppercase">Region power</span>
               </strong>
-              <RegionPowerSparkline series={series} region={region.region} />
             </section>
+
+            <RegionPowerTrend series={series} region={region.region} />
 
             <div className="rounded-md border border-border bg-card">
               <DetailStat
