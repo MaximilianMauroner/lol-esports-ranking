@@ -1,6 +1,6 @@
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 import type { Region } from '../../types.ts'
-import { currentTopTierRegionForLeague, isMajorRegionPowerRegion, majorRegionPowerRegions } from '../evidence/competitionTaxonomy.ts'
+import { currentTopTierRegionForLeague, majorRegionPowerRegionFor, majorRegionPowerRegions } from '../evidence/competitionTaxonomy.ts'
 import type { InternationalTournamentFamilyId } from '../evidence/internationalTournaments.ts'
 import type { PublicTeamDirectory, PublicTournamentMovementShard } from './publishedTypes.ts'
 
@@ -20,8 +20,13 @@ export type RegionInternationalYear = {
 }
 
 export type RegionInternationalTimeline = {
-  /** `absent` lists the tier-1 events of the season that the published data does not have. */
-  seasons: { season: number; events: TierOneInternationalFamily[]; absent: TierOneInternationalFamily[]; inProgress: boolean }[]
+  /**
+   * Every year from the first published event through the in-progress year.
+   * A year without published events has no events and no series.
+   * `notYetPublished` names the tier-1 events the in-progress year does not have yet. It is empty for past years,
+   * because a past event that is not in the data may not have been held.
+   */
+  seasons: { season: number; events: TierOneInternationalFamily[]; notYetPublished: TierOneInternationalFamily[]; inProgress: boolean }[]
   regions: { region: Region; years: RegionInternationalYear[] }[]
   unresolvedSeries: number
 }
@@ -45,8 +50,8 @@ export function regionInternationalTimeline({
   events: { family: TierOneInternationalFamily; season: number; shard: PublicTournamentMovementShard }[]
 }): RegionInternationalTimeline {
   const regionByTeamId = new Map(directory.teams.flatMap((team) => {
-    const region = currentTopTierRegionForLeague(team.league, team.region)
-    return isMajorRegionPowerRegion(region) ? [[team.teamId, region] as const] : []
+    const region = majorRegionPowerRegionFor(currentTopTierRegionForLeague(team.league, team.region))
+    return region ? [[team.teamId, region] as const] : []
   }))
   const records = new Map<string, { wins: number; losses: number; ties: number }>()
   const unresolved = new Set<string>()
@@ -55,38 +60,43 @@ export function regionInternationalTimeline({
     const teamIdByName = new Map(shard.teams.map((team) => [team.team, team.teamId]))
     for (const team of shard.teams) {
       const region = regionByTeamId.get(team.teamId)
-      team.points.forEach(([, , , context], index) => {
-        if (!context?.result) return
+      for (const [date, , , context] of team.points) {
+        if (!context?.result) continue
+        // Matches the published series result: an unfinished series has no result yet.
+        if (context.seriesState !== undefined && context.seriesState !== 'completed') continue
         const opponentId = context.opponent === undefined ? undefined : teamIdByName.get(context.opponent)
         const opponentRegion = opponentId === undefined ? undefined : regionByTeamId.get(opponentId)
         if (!region || !opponentRegion) {
-          unresolved.add(`${shard.id}|${context.seriesId ?? `${team.teamId}|${index}`}`)
-          return
+          const sides = [team.teamId, opponentId ?? context.opponent ?? ''].sort(compareCodeUnits).join('|')
+          unresolved.add(`${shard.id}|${context.seriesId ?? `${sides}|${date}`}`)
+          continue
         }
-        if (opponentRegion === region) return
+        if (opponentRegion === region) continue
         const key = `${season}|${region}`
         const record = records.get(key) ?? { wins: 0, losses: 0, ties: 0 }
         if (context.result === 'W') record.wins += 1
         else if (context.result === 'L') record.losses += 1
         else record.ties += 1
         records.set(key, record)
-      })
+      }
     }
   }
 
-  const seasons = [...new Set(events.map((event) => event.season))].sort((left, right) => left - right)
   const inProgressSeason = Number(generatedAt.slice(0, 4))
+  const eventSeasons = events.map((event) => event.season)
+  const seasons = eventSeasons.length === 0 ? [] : yearRange(Math.min(...eventSeasons), Math.max(...eventSeasons, inProgressSeason))
   return {
     seasons: seasons.map((season) => {
       const families = events
         .filter((event) => event.season === season)
         .toSorted((left, right) => compareCodeUnits(left.shard.startDate, right.shard.startDate))
         .map((event) => event.family)
+      const inProgress = season === inProgressSeason
       return {
         season,
         events: families,
-        absent: TIER_ONE_FAMILIES.filter((family) => !families.includes(family)),
-        inProgress: season === inProgressSeason,
+        notYetPublished: inProgress ? TIER_ONE_FAMILIES.filter((family) => !families.includes(family)) : [],
+        inProgress,
       }
     }),
     regions: majorRegionPowerRegions.map((region) => ({
@@ -105,6 +115,10 @@ export function regionInternationalTimeline({
 export function publishedRatedMatchRule(parameters: unknown) {
   const universe = isRecord(parameters) ? parameters.ratingUniverse : undefined
   return isRecord(universe) && typeof universe.sideRule === 'string' ? universe.sideRule : undefined
+}
+
+function yearRange(first: number, last: number) {
+  return Array.from({ length: last - first + 1 }, (_, index) => first + index)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

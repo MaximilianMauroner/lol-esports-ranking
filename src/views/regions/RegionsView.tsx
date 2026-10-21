@@ -227,6 +227,8 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
   const syncId = useId()
   const inProgress = timeline.seasons.find((season) => season.inProgress)?.season
   const charts = useMemo(() => {
+    // A season without events has no value in either chart, so both charts show the same seasons.
+    const heldSeasons = new Set(timeline.seasons.flatMap((season) => season.events.length > 0 ? [season.season] : []))
     const seriesFor = (value: (year: RegionInternationalYear) => number | null) => timeline.regions.map(({ region, years }, index): ChartSeries => ({
       id: region,
       label: region,
@@ -236,7 +238,7 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
         return y === null ? [] : [{ t: year.season, y }]
       }),
     }))
-    const played = seriesFor((year) => year.wins + year.losses + year.ties)
+    const played = seriesFor((year) => heldSeasons.has(year.season) ? year.wins + year.losses + year.ties : null)
     const mostPlayed = Math.max(...played.flatMap((entry) => entry.points.map((point) => point.y)))
     return [
       {
@@ -255,9 +257,10 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
       },
     ]
   }, [timeline])
-  const seasonNotes = timeline.seasons.map(({ season, events, absent, inProgress: current }) => {
-    const missing = absent.map((family) => `${tournamentFamilyLabel(family)} ${season} is not in the published data${current ? ' yet' : ''}.`)
-    return [`${season}: ${events.map(tournamentFamilyLabel).join(', ')}.`, ...missing].join(' ')
+  const seasonNotes = timeline.seasons.map(({ season, events, notYetPublished, inProgress: current }) => {
+    if (events.length === 0) return `${season} has no Worlds, MSI or EWC results in the published data${current ? ' yet' : ''}.`
+    const pending = notYetPublished.map((family) => `${tournamentFamilyLabel(family)} ${season} is not in the published data yet.`)
+    return [`${season}: ${events.map(tournamentFamilyLabel).join(', ')}.`, ...pending].join(' ')
   })
 
   return (

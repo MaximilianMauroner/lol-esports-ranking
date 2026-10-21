@@ -415,6 +415,12 @@ export function isMajorRegionPowerRegion(region: string | undefined): region is 
   return majorRegionPowerRegionSet.has(normalizeLeagueName(region ?? ''))
 }
 
+/** The canonical name of a major region, or undefined when the region is not one of them. */
+export function majorRegionPowerRegionFor(region: string | undefined): Region | undefined {
+  const normalized = normalizeLeagueName(region ?? '')
+  return majorRegionPowerRegions.find((major) => major === normalized)
+}
+
 export function formatCompetitionRegionLabel(region: string | undefined) {
   if (!region) return '—'
   const normalized = normalizeLeagueName(region)
