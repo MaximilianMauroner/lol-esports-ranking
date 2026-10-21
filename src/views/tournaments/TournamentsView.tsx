@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { currentHashQuery, hashParam, writeNavigationHash } from '../../browser/navigation'
+import { eventAddress, resolveEventLink } from '../../browser/tournaments/eventAddress'
 import { FORECASTS_ENABLED, REFRESH_MS, useTournamentResources, type ForecastArtifacts } from '../../browser/tournaments/resources'
 import { worldsFeedEventKey } from '../../browser/tournaments/worldsArtifacts'
 import { TeamMark } from '../../components/TeamMark'
@@ -19,18 +20,39 @@ import { WorldsTournamentPanel } from './WorldsTournamentPanel'
 
 /** The server rechecks Leaguepedia every five minutes while the hub is viewed. */
 const STALE_MS = 15 * REFRESH_MS
+const EMPTY_EVENTS: TournamentEvent[] = []
+
+function replaceLegacyEventAlias(requested: string, address: string | undefined): void {
+  if (!address || requested === address || window.location.hash.slice(1).split('?', 2)[0] !== 'tournaments') return
+  const query = currentHashQuery()
+  if (hashParam('event', query) !== requested) return
+  query.set('event', address)
+  writeNavigationHash(`#tournaments?${query}`, 'replace')
+}
+
 export function TournamentsView() {
   const { state, now, forecastArtifacts, refresh } = useTournamentResources()
-  const [selectedId, setSelectedId] = useState(() => hashParam('event') ?? '')
+  const [requestedEvent, setRequestedEvent] = useState(() => hashParam('event') ?? '')
   const [view, setView] = useState(() => hashParam('view'))
+  const events = state.status === 'ready' ? state.feed.events : EMPTY_EVENTS
   useEffect(() => {
-    const onHashChange = () => { setSelectedId(hashParam('event') ?? ''); setView(hashParam('view')) }
+    const onHashChange = () => {
+      const query = currentHashQuery()
+      const requested = hashParam('event', query) ?? ''
+      const link = resolveEventLink(events, requested)
+      replaceLegacyEventAlias(requested, link.kind === 'resolved' ? link.address : undefined)
+      setRequestedEvent(requested)
+      setView(hashParam('view', query))
+    }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
-
-  const events = state.status === 'ready' ? state.feed.events : []
-  const selected = events.find((event) => event.id === selectedId) ?? nextEvent(events, now)
+  }, [events])
+  const link = resolveEventLink(events, requestedEvent)
+  const selected = link.kind === 'resolved' ? link.event : link.kind === 'absent' ? nextEvent(events, now) : undefined
+  const address = link.kind === 'resolved' ? link.address : undefined
+  useEffect(() => {
+    replaceLegacyEventAlias(requestedEvent, address)
+  }, [address, requestedEvent])
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time'
   const grouped = useMemo(() => groupTournamentSeries(selected?.series ?? []), [selected])
 
@@ -48,8 +70,11 @@ export function TournamentsView() {
         <div className="flex min-w-0 flex-wrap items-end gap-x-4 gap-y-3">
           <div className="grid min-w-0 gap-1">
             <label htmlFor="tournament-event" className="text-sm font-semibold">Competition</label>
-            <Select id="tournament-event" className="max-w-full" value={selected?.id ?? ''} onChange={(event) => selectEvent(event.target.value, setSelectedId)}>
-              {events.length === 0 ? <option value="">No supported events</option> : null}
+            <Select id="tournament-event" className="max-w-full" value={selected?.id ?? ''} onChange={(event) => {
+              const picked = events.find((candidate) => candidate.id === event.target.value)
+              if (picked) selectEvent(picked, setRequestedEvent)
+            }}>
+              {!selected ? <option value="">{events.length === 0 ? 'No supported events' : 'Choose a competition'}</option> : null}
               {events.map((event) => <option key={event.id} value={event.id}>{event.label}{events.some((other) => other !== event && other.label === event.label) ? ` · ${event.sourceTournamentId}` : ''}</option>)}
             </Select>
           </div>
@@ -77,7 +102,9 @@ export function TournamentsView() {
       {!state.feed.coverage.complete || state.feed.coverage.warnings.length ? (
         <Alert variant="warning" role="status">Coverage {state.feed.coverage.complete ? 'has warnings' : 'is incomplete'} for {state.feed.coverage.start.slice(0, 10)} to {state.feed.coverage.end.slice(0, 10)}. {state.feed.coverage.warnings.join(' ')}</Alert>
       ) : null}
-      {!selected ? <Card><CardContent>No tournaments in the schedule window.</CardContent></Card> : shown === 'bracket' ? (
+      {link.kind === 'missing' ? <Alert role="status">This competition link is not in the current schedule. Choose a competition.</Alert>
+        : link.kind === 'ambiguous' ? <Alert role="status">This competition link matches more than one event.</Alert>
+          : !selected ? <Card><CardContent>No tournaments in the schedule window.</CardContent></Card> : shown === 'bracket' ? (
         <>
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">{selected.label}</h2>
           <TournamentBracket key={selected.id} series={selected.series} timezone={timezone} />
@@ -238,12 +265,12 @@ function liveOrNext(events: TournamentEvent[], now: number) {
   }
   return nearest?.event
 }
-function selectEvent(id: string, update: (value: string) => void) {
-  update(id)
+function selectEvent(event: TournamentEvent, update: (value: string) => void) {
+  const address = eventAddress(event)
+  update(address)
   const query = currentHashQuery()
-  if (id) query.set('event', id)
-  else query.delete('event')
-  writeNavigationHash(`tournaments${query.size ? `?${query}` : ''}`, 'navigate')
+  query.set('event', address)
+  writeNavigationHash(`tournaments?${query}`, 'navigate')
 }
 type TournamentPanel = 'bracket' | 'schedule' | 'swiss'
 function selectView(view: TournamentPanel, update: (value: string | undefined) => void) {
