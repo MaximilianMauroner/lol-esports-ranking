@@ -272,6 +272,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
           signal: controller.signal,
           cache: 'no-cache',
         })
+        if (controller.signal.aborted) return
         validatePublicTournamentMovementIndex(next, manifest)
         next.tournaments.forEach((entry) => assertGenerationMapping(next, entry.url))
         tournamentMovementIndexRef.current = next
@@ -503,22 +504,33 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   const prefetchTournament = useCallback((id: TournamentInstanceId) => {
     if (tournamentMovementIndexState.status !== 'ready') return
     const index = tournamentMovementIndexState.data
+    // An effect in the same pass as an index reload still sees the old index. Its cache is gone, so start nothing for it.
+    if (tournamentMovementIndexRef.current !== index) return
     const expected = index.tournaments.find((entry) => entry.id === id)
     const cached = tournamentMovementCacheRef.current[id]
     if (!expected || cached?.status === 'ready' || cached?.status === 'loading') return
     const loadingEntry: TournamentMovementCacheEntry = { status: 'loading' }
     tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: loadingEntry }
     setTournamentMovementCache((current) => ({ ...current, [id]: loadingEntry }))
+    // A response for a replaced index takes back only the loading entry that this request wrote.
+    const dropIfStale = () => {
+      if (tournamentMovementIndexRef.current === index) return false
+      if (tournamentMovementCacheRef.current[id] === loadingEntry) {
+        tournamentMovementCacheRef.current = omitCacheEntry(tournamentMovementCacheRef.current, id)
+        setTournamentMovementCache((current) => current[id] === loadingEntry ? omitCacheEntry(current, id) : current)
+      }
+      return true
+    }
     void fetchPublicArtifact(index, expected.url, DATA_URL, parsePublicTournamentMovementShard)
       .then((shard) => {
-        if (tournamentMovementIndexRef.current !== index) return
+        if (dropIfStale()) return
         validatePublicTournamentMovementShard(expected, shard, index)
         const readyEntry: TournamentMovementCacheEntry = { status: 'ready', shard }
         tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: readyEntry }
         setTournamentMovementCache((current) => ({ ...current, [id]: readyEntry }))
       })
       .catch((error: unknown) => {
-        if (tournamentMovementIndexRef.current !== index) return
+        if (dropIfStale()) return
         const errorEntry: TournamentMovementCacheEntry = { status: 'error', message: error instanceof Error ? error.message : 'Unable to load tournament movement' }
         tournamentMovementCacheRef.current = { ...tournamentMovementCacheRef.current, [id]: errorEntry }
         setTournamentMovementCache((current) => ({ ...current, [id]: errorEntry }))
