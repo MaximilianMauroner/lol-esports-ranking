@@ -15,8 +15,12 @@ export type EvaluationRow = {
   segments: string[]
 }
 
-export type EvaluationExport = {
-  schemaVersion: 1
+export type ReplayInputDigest = `replay-inputs/v1:${string}`
+
+export type EvaluationExport = (
+  | { schemaVersion: 1 }
+  | { schemaVersion: 2; replayInputs: ReplayInputDigest }
+) & {
   target: 'game' | 'series'
   modelVersion: string
   modelConfigHash: string
@@ -29,10 +33,14 @@ export type EvaluationExport = {
 export function readEvaluationExport(input: unknown): EvaluationExport {
   const data = object(input)
   const metric = object(data.metricContract)
-  if (data.schemaVersion !== 1 || (data.target !== 'game' && data.target !== 'series')
+  if ((data.schemaVersion !== 1 && data.schemaVersion !== 2) || (data.target !== 'game' && data.target !== 'series')
     || data.temporalPolicy !== 'latest-corrected-prior-replay'
     || Object.entries(binaryMetricContract).some(([key, value]) => metric[key] !== value)
     || !Array.isArray(data.rows)) throw new Error('Unsupported prediction export or metric/temporal contract')
+  const replayInputs = data.replayInputs
+  if (data.schemaVersion === 2 && !isReplayInputDigest(replayInputs)) {
+    throw new Error('Invalid replay-input identity')
+  }
   const rows = data.rows.map((value): EvaluationRow => {
     const row = object(value)
     const actual = row.actual
@@ -57,7 +65,9 @@ export function readEvaluationExport(input: unknown): EvaluationExport {
     seriesEvents.set(row.seriesId, row.eventId)
     if (data.target === 'series' && row.id !== row.seriesId) throw new Error('Series target requires one row per series')
   }
-  return { schemaVersion: 1, target: data.target, modelVersion: string(data.modelVersion),
+  const authority = data.schemaVersion === 2 && isReplayInputDigest(replayInputs)
+    ? { schemaVersion: 2, replayInputs } as const : { schemaVersion: 1 } as const
+  return { ...authority, target: data.target, modelVersion: string(data.modelVersion),
     modelConfigHash: string(data.modelConfigHash), sourceIdentity: string(data.sourceIdentity),
     temporalPolicy: data.temporalPolicy, metricContract: binaryMetricContract,
     rows: rows.toSorted((a, b) => compareCodeUnits(a.date, b.date) || compareCodeUnits(a.id, b.id)) }
@@ -85,6 +95,10 @@ export function compareEvaluationExports(oldInput: unknown, nextInput: unknown, 
   if (!Number.isInteger(iterations) || iterations < 100) throw new Error('Bootstrap iterations must be at least 100')
   const oldData = readEvaluationExport(oldInput)
   const nextData = readEvaluationExport(nextInput)
+  if (oldData.schemaVersion !== 2 || nextData.schemaVersion !== 2) {
+    throw new Error('Legacy export has no replay-input pairing authority')
+  }
+  if (oldData.replayInputs !== nextData.replayInputs) throw new Error('Replay inputs differ')
   if (oldData.target !== nextData.target || oldData.sourceIdentity !== nextData.sourceIdentity) {
     throw new Error('Prediction target or source identities differ')
   }
@@ -132,7 +146,7 @@ export function compareEvaluationExports(oldInput: unknown, nextInput: unknown, 
     const slice = slices[segment]
     if (slice && slice.count >= 50 && slice.brierDelta !== null && slice.brierDelta > allowance) failures.push(`${segment} Brier worsened`)
   }
-  return { target: nextData.target, metricContract: binaryMetricContract,
+  return { target: nextData.target, replayInputs: nextData.replayInputs, metricContract: binaryMetricContract,
     oldModel: { version: oldData.modelVersion, configHash: oldData.modelConfigHash },
     nextModel: { version: nextData.modelVersion, configHash: nextData.modelConfigHash },
     pairedPredictions: pairs.length, global, crossRegion, slices, leagues,
@@ -209,4 +223,8 @@ function string(input: unknown) { if (typeof input !== 'string' || !input.trim()
 function object(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Expected prediction object')
   return Object.fromEntries(Object.entries(input))
+}
+
+function isReplayInputDigest(input: unknown): input is ReplayInputDigest {
+  return typeof input === 'string' && /^replay-inputs\/v1:[0-9a-f]{64}$/.test(input)
 }

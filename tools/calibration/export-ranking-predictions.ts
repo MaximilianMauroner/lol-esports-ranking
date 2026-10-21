@@ -20,7 +20,7 @@ void (async () => {
   if (!matches.length || source.dataMode === 'no-data' || matches.some((match) => match.sourceProvider === 'seed')) {
     throw new Error('Accuracy export requires real nonempty source data')
   }
-  const generatedAt = source.manifest?.generatedAt ?? new Date().toISOString()
+  const generatedAt = evaluationModule.requireEvaluationGeneratedAt(source.manifest?.generatedAt)
   const instances = tournamentModule.deriveTournamentInstances({
     matches,
     scheduleReferences: source.tournamentScheduleReferences,
@@ -33,10 +33,11 @@ void (async () => {
     dataLag: instance.dataLag,
     resultCoverageComplete: instance.resultCoverageComplete,
   }]))
-  const model = modelModule.buildRankingModel(matches, source.teams, { tournamentLifecycles: lifecycles })
+  const replay = { matches, teams: source.teams, tournamentLifecycles: { generatedAt, byId: lifecycles } }
+  const model = modelModule.buildRankingModel(replay.matches, replay.teams, { tournamentLifecycles: replay.tournamentLifecycles.byId })
   const scoredMatches = matches.filter((match) => match.date >= scoreStart).toSorted((a, b) => compareCodeUnits(a.id, b.id))
   const sourceIdentity = createHash('sha256').update(JSON.stringify(scoredMatches)).digest('hex')
-  const data = evaluationModule.buildEvaluationData(matches, model.predictions, { sourceIdentity, scoreStart })
+  const data = evaluationModule.buildEvaluationData(replay, model.predictions, { sourceIdentity, scoreStart })
   await writeFile(resolve(outputArg), `${JSON.stringify({ ...data,
     provenance: { trainingSourceIdentity: createHash('sha256').update(JSON.stringify(matches)).digest('hex'),
       manifestIdentity: createHash('sha256').update(await readFile(resolve(manifestArg))).digest('hex'),
