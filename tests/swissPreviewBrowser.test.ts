@@ -8,6 +8,7 @@ import { createServer, type Plugin } from 'vite'
 import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan'
 import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot'
 import { encodeChoices, fillDraw, resolveScenario, seedBaseline, type DrawnRound, type SwissBaseline } from '../src/domains/tournaments/internal/swissScenario'
+import { WORLDS_2026_SWISS_RULES } from '../src/domains/tournaments/internal/worlds2026Swiss'
 import { worldsRandom } from '../src/domains/tournaments/internal/worldsSimulation'
 import type { MatchRecord, TeamProfile } from '../src/domains/rankings/types'
 import { closedSelectKeysChangeValue } from './fixtures/nativeSelect'
@@ -59,8 +60,7 @@ function fixtureFeed() {
   }
 }
 
-for (const forecasts of ['0', '1']) for (const ratingsAvailable of [true, false]) {
-test(`Swiss manual preview preserves scenarios with forecasts=${forecasts}, ratings=${ratingsAvailable}`, { timeout: 90_000 }, async () => {
+for (const forecasts of ['0', '1']) for (const ratingsAvailable of [true, false]) test(`Swiss manual preview preserves scenarios with forecasts=${forecasts}, ratings=${ratingsAvailable}`, { timeout: 90_000 }, async () => {
   const feed = fixtureFeed()
   const ratings = rankingArtifacts()
   const requests: string[] = []
@@ -110,6 +110,8 @@ test(`Swiss manual preview preserves scenarios with forecasts=${forecasts}, rati
     await page.getByRole('button', { name: 'Swiss preview' }).click()
     await page.getByRole('heading', { name: 'Worlds 2026 Swiss preview' }).waitFor()
     assert.match(page.url(), /view=swiss/)
+    assert.equal(await page.evaluate(async (path) => (await import(path)).FORECASTS_ENABLED, '/src/browser/tournaments/resources.ts'), forecasts === '1')
+    assert.match(WORLDS_2026_SWISS_RULES.drawUnavailable, /Future Swiss draw probabilities are unavailable/)
     assert.match(await body(page), /Live draws are not available: The Round 1 draw is not in the schedule yet\./)
     assert.equal(await page.locator('#swiss-start').inputValue(), 'seeds')
     assert.equal(await page.locator('#swiss-start option[value="live"]').isDisabled(), true)
@@ -383,8 +385,6 @@ test(`Swiss manual preview preserves scenarios with forecasts=${forecasts}, rati
     await server.close()
   }
 })
-
-}
 
 function teamName(seed: string) {
   return seedBaseline(null).teams.find((team) => team.id === seed)!.label

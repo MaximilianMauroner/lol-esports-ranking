@@ -1,9 +1,4 @@
 export {
-  type SeriesWinChance,
-  type SwissOdds,
-  simulateSwissOdds,
-} from './internal/swissOdds.ts'
-export {
   type BracketBox,
   type DrawContext,
   type DrawnRound,

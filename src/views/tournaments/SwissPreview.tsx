@@ -5,7 +5,6 @@ import { Button } from '../../components/ui/button'
 import { Panel, PanelFooter, PanelHeader } from '../../components/ui/panel'
 import { Select } from '../../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { SwissRegionOdds } from './SwissRegionOdds'
 import { TeamMark } from '../../components/TeamMark'
 import { teamBrandingFor } from '../../data/teamBranding'
 import { canonicalTeamNameFor, teamCodeFor, teamIdentityFor } from '../../domains/rankings/evidence'
@@ -238,7 +237,10 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
         {liveNotice ? <p className="text-[var(--warn)]">{liveNotice}</p> : null}
       </div>
 
-      <SwissRegionOdds teams={baseline.teams} scenario={current} label={slot.toUpperCase()} />
+      <Alert>
+        <p><a className="underline" href={WORLDS_2026_SWISS_RULES.source} target="_blank" rel="noreferrer">Future Swiss draw probabilities are unavailable.</a></p>
+        <p>Use picks and draws to explore possible outcomes.</p>
+      </Alert>
 
       <div className="grid min-w-0 items-start gap-4 min-[1700px]:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="grid min-w-0 gap-2">
