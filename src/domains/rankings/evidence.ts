@@ -19,6 +19,7 @@ export {
   deriveTournamentInstances,
   tournamentBoundaryLabel,
   tournamentEntriesForScope,
+  tournamentFamilyLabel,
   tournamentIdFromFilter,
   tournamentInstanceForEvent,
 } from './internal/evidence/internationalTournaments.ts'
