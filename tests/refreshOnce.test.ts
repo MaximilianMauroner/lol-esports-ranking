@@ -10,6 +10,7 @@ import { Readable } from 'node:stream'
 import { defaultRunChild, isDailyAuditDue, publishRefreshRolloutEvidence, runChildProcess, runRefreshOnce, startLeaseHeartbeat } from '../scripts/refresh-once.mjs'
 import { completeRefreshMetrics, createRefreshMetrics, readRefreshMetrics, writeRefreshMetrics } from '../scripts/refresh-metrics.mjs'
 import type { RefreshRunMetrics } from '../scripts/refresh-metrics.mjs'
+import { writeBucketJson } from '../scripts/railway-bucket.mjs'
 
 type RefreshDataIfChanged = (args?: string[], options?: Record<string, unknown>) => Promise<Record<string, unknown>>
 const refreshDataScriptPath: string = '../scripts/refresh-data-if-changed.mjs'
@@ -640,6 +641,63 @@ test('child error preserves one canonical failed record across refresh, metrics,
     assert.deepEqual(caught.refreshMetrics, metricLog(logs))
     assert.equal((caught.refreshMetrics as { result: string }).result, 'failed')
     assert.equal(client.objects.has('rankings/latest-publish.json'), false, 'failed pre-publish runs intentionally have no receipt')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('child failure saves retry backoff and canonical metrics when the refresh-state mirror write fails', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'refresh-child-error-mirror-'))
+  const paths = refreshPaths(root)
+  const client = memoryS3()
+  const logs: string[] = []
+  const warnings: string[] = []
+  const childError = new Error('provider-child-error')
+  let childRuns = 0
+  const options = {
+    ...realParentOptions(paths, client, logs),
+    runId: 'child-error-mirror',
+    writeBucketJson: async (...args: Parameters<typeof writeBucketJson>) => args[0] === 'raw/refresh-state.json'
+      ? { written: false }
+      : writeBucketJson(...args),
+    runChild: async () => {
+      childRuns += 1
+      throw childError
+    },
+    logger: { log: (value: string) => logs.push(value), warn: (value: string) => warnings.push(value), error() {} },
+  }
+  try {
+    let caught: Error & { refreshMetrics?: RefreshRunMetrics } | undefined
+    try {
+      await runRefreshOnce(options)
+    } catch (error) {
+      caught = error as Error & { refreshMetrics?: RefreshRunMetrics }
+    }
+    assert.equal(caught, childError)
+    const triggerState = JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body)
+    const pending = triggerState.pending['match-1']
+    assert.equal(pending.attempts, 1)
+    assert.equal(pending.lastAttemptAt, '2026-07-22T00:00:30.000Z')
+    assert.equal(pending.nextAttemptAt, '2026-07-22T00:15:30.000Z')
+    assert.equal(pending.lastReason, childError.message)
+    assert.equal(caught?.refreshMetrics?.result, 'failed')
+    assert.equal(caught?.refreshMetrics?.error, childError.message)
+    assert.deepEqual(triggerState.lastRun, caught?.refreshMetrics)
+    assert.deepEqual(JSON.parse(await readFile(paths.metrics, 'utf8')), caught?.refreshMetrics)
+    assert.deepEqual(metricLog(logs), caught?.refreshMetrics)
+    assert.deepEqual(warnings.filter((value) => value.startsWith('Unable to persist canonical refresh failure:')), [
+      'Unable to persist canonical refresh failure: refresh-state: Unable to persist refresh telemetry',
+    ])
+
+    const next = await runRefreshOnce({
+      ...options,
+      runId: 'child-error-mirror-before-retry',
+      now: () => new Date('2026-07-22T00:05:30Z'),
+    })
+    assert.equal(next.status, 'completed')
+    assert.equal(childRuns, 1, 'the saved backoff prevents a child retry before nextAttemptAt')
+    const nextTriggerState = JSON.parse(client.objects.get('rankings/raw/refresh-trigger-state.json')!.body)
+    assert.deepEqual(nextTriggerState.pending['match-1'], pending)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
