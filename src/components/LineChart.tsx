@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type CSSProperties, type ReactElement } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -6,10 +6,12 @@ import {
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
+  useActiveTooltipLabel,
+  type TooltipContentProps,
 } from 'recharts'
 import { Button } from './ui/button'
-import { ChartContainer, type ChartConfig } from './ui/chart'
-import { formatChartTimestamp, formatChartTooltipTimestamp } from '../shared/chartTime'
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from './ui/chart'
+import { formatChartTimestamp } from '../shared/chartTime'
 
 export type ChartPoint = {
   t: number
@@ -24,6 +26,11 @@ export type ChartSeries = {
   points: ChartPoint[]
 }
 
+export type ChartActiveRow = {
+  t: number
+  points: { series: ChartSeries; point: ChartPoint }[]
+}
+
 type ChartDatum = { t: number } & Record<string, unknown>
 
 /**
@@ -36,14 +43,6 @@ type SeriesMeta = {
   series: ChartSeries
 }
 
-export type LineChartTooltipPayloadItem = {
-  dataKey?: string | number
-  name?: string | number
-  value?: unknown
-  color?: string
-  payload?: ChartDatum
-}
-
 export type LineChartProps = {
   series: ChartSeries[]
   height?: number
@@ -54,11 +53,13 @@ export type LineChartProps = {
   yTicks?: number[]
   yReverse?: boolean
   curve?: 'linear' | 'step'
-  tooltipContent?: ReactElement
-  tooltipPortal?: HTMLElement | null
-  tooltipWrapperStyle?: CSSProperties
   interactiveLegend?: boolean
-  persistentTooltip?: boolean
+  /** Season years on the x axis instead of Unix ms dates. */
+  xAxis?: { kind: 'year'; inProgress?: number }
+  /** Charts with the same id show the same x value on hover. */
+  syncId?: string
+  /** Shown below the chart for the hovered row, or the latest row. */
+  details?: (active: ChartActiveRow) => ReactNode
 }
 
 /** Longer than a normal break between matches; shorter than an off-season. */
@@ -79,18 +80,23 @@ export function LineChart({
   yTicks: providedYTicks,
   yReverse = false,
   curve = 'linear',
-  tooltipContent,
-  tooltipPortal,
-  tooltipWrapperStyle,
-  persistentTooltip = false,
   interactiveLegend = false,
+  xAxis,
+  syncId,
+  details,
 }: LineChartProps) {
   const [focusedSeriesId, setFocusedSeriesId] = useState<string>()
+  const [hoveredT, setHoveredT] = useState<number>()
   const focusedId = interactiveLegend && series.some((entry) => entry.id === focusedSeriesId) ? focusedSeriesId : undefined
   const chartId = useId().replace(/:/g, '')
   const summaryId = `${chartId}-summary`
+  const yearAxis = xAxis?.kind === 'year'
+  const inProgress = xAxis?.inProgress
   const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
-  const { data, meta, gaps } = useMemo(() => buildChartData(series), [series])
+  const { data, meta, gaps } = useMemo(
+    () => buildChartData(series, { maxGap: yearAxis ? Infinity : SEGMENT_GAP_MS, inProgress }),
+    [series, yearAxis, inProgress],
+  )
   const config = useMemo<ChartConfig>(
     () =>
       Object.fromEntries(
@@ -110,21 +116,35 @@ export function LineChart({
   }
 
   const { minT, maxT, minY, maxY } = domain
+  const formatX = (t: number) => yearAxis ? (t === inProgress ? `${t} · in progress` : String(t)) : formatChartTimestamp(t)
   const directLabels = series.length >= 2 && series.length <= MAX_DIRECT_LABELS
-    ? directLabelPositions(series, { minY, maxY, plotHeight: height - CHART_VERTICAL_CHROME_PX, reversed: yReverse })
+    ? directLabelPositions(series, data.map((row) => row.t), { minY, maxY, plotHeight: height - CHART_VERTICAL_CHROME_PX, reversed: yReverse })
     : undefined
   const lastSegmentKey = new Map(meta.map(({ key, series: entry }) => [entry.id, key]))
   const yTicks = providedYTicks ?? niceTicks(minY, maxY, 4)
   const formatYTick = yTickFormat ?? yFormat
-  const xTicks = timeTicks(minT, maxT, 5)
+  const xTicks = yearAxis ? yearTicks(minT, maxT) : timeTicks(minT, maxT, 5)
   const lineType = curve === 'step' ? 'stepAfter' : 'linear'
+  const detailT = hoveredT !== undefined && data.some((row) => row.t === hoveredT) ? hoveredT : data[data.length - 1].t
   const summaries = series.flatMap((entry) => {
     const summary = summarizeSeries(entry)
     return summary ? [summary] : []
   })
+  const formatPoint = (point: ChartPoint) => `${yFormat(point.y)} ${yearAxis ? 'in' : 'on'} ${formatX(point.t)}`
   const summaryText = `${yLabel} chart data summary. ${summaries.map((entry) =>
-    `${entry.label}: latest ${formatPointSummary(entry.latest, yFormat)}, minimum ${formatPointSummary(entry.min, yFormat)}, maximum ${formatPointSummary(entry.max, yFormat)}, ${entry.count} points.`,
+    `${entry.label}: latest ${formatPoint(entry.latest)}, minimum ${formatPoint(entry.min)}, maximum ${formatPoint(entry.max)}, ${entry.count} points.`,
   ).join(' ')}`
+
+  function renderTooltip({ active, label }: TooltipContentProps) {
+    if (typeof label !== 'number') return null
+    const row = activeRow(series, label)
+    const payload = series.flatMap((entry) => {
+      const point = row.points.find((hit) => hit.series === entry)?.point
+      if (!point && !yearAxis) return []
+      return [{ graphicalItemId: entry.id, dataKey: entry.id, name: entry.label, color: entry.color, value: point ? yFormat(point.y) : 'No value' }]
+    })
+    return <ChartTooltipContent active={active} label={formatX(label)} payload={payload} />
+  }
 
   return (
     <div className="chart-shell">
@@ -148,11 +168,15 @@ export function LineChart({
         config={config}
         className="chart relative min-h-[220px] w-full min-w-0 aspect-auto overflow-hidden px-4 pt-4 pb-3 [&_svg]:block [&_svg]:size-full [&_svg]:touch-pan-y [&_svg]:overflow-hidden"
         style={{ height }}
-        role="img"
-        aria-label={`${yLabel} over time for ${series.map((entry) => entry.label).join(', ')}`}
-        aria-describedby={summaryId}
       >
-        <RechartsLineChart data={data} margin={{ top: 18, right: directLabels ? DIRECT_LABEL_WIDTH : 20, bottom: 16, left: 4 }}>
+        <RechartsLineChart
+          data={data}
+          margin={{ top: 18, right: directLabels ? DIRECT_LABEL_WIDTH : 20, bottom: 16, left: 4 }}
+          syncId={syncId}
+          syncMethod="value"
+          aria-label={`${yLabel} over ${yearAxis ? 'seasons' : 'time'} for ${series.map((entry) => entry.label).join(', ')}`}
+          aria-describedby={summaryId}
+        >
           <CartesianGrid vertical={false} strokeDasharray="0" />
           <XAxis
             dataKey="t"
@@ -162,7 +186,8 @@ export function LineChart({
             tickLine={false}
             axisLine={false}
             minTickGap={28}
-            tickFormatter={(value) => formatChartTimestamp(value, 'month-day')}
+            padding={yearAxis ? { left: 24, right: 24 } : undefined}
+            tickFormatter={(value) => yearAxis ? String(value) : formatChartTimestamp(value, 'month-day')}
           />
           <YAxis
             type="number"
@@ -174,14 +199,8 @@ export function LineChart({
             axisLine={false}
             tickFormatter={(value) => formatYTick(Number(value))}
           />
-          <RechartsTooltip
-            cursor={{ stroke: 'var(--line-strong)' }}
-            content={tooltipContent ?? <LineChartTooltip yFormat={yFormat} />}
-            portal={tooltipPortal}
-            wrapperStyle={tooltipWrapperStyle}
-            trigger={persistentTooltip ? 'click' : 'hover'}
-            defaultIndex={persistentTooltip ? data.length - 1 : undefined}
-          />
+          <RechartsTooltip trigger="hover" cursor={{ stroke: 'var(--line-strong)' }} content={renderTooltip} />
+          {details ? <ActiveRowListener onActive={setHoveredT} /> : null}
           {gaps.map(({ key, series: entry }) => (
             <Line key={key} dataKey={key} opacity={focusedId && focusedId !== entry.id ? 0.18 : 1} stroke={entry.color} strokeWidth={1.5} strokeDasharray="4 4" connectNulls dot={false} activeDot={false} tooltipType="none" isAnimationActive={false} />
           ))}
@@ -194,8 +213,8 @@ export function LineChart({
               stroke={entry.color}
               opacity={focusedId && focusedId !== entry.id ? 0.18 : 1}
               strokeWidth={2}
-              connectNulls
-              dot={entry.points.length <= 36 && series.length <= 2 ? { r: 3.2, strokeWidth: 2 } : false}
+              connectNulls={!yearAxis}
+              dot={yearAxis || (entry.points.length <= 36 && series.length <= 2) ? { r: 3.2, strokeWidth: 2 } : false}
               activeDot={{ r: 4, stroke: 'var(--surface)', strokeWidth: 2 }}
               isAnimationActive={false}
               label={directLabels && lastSegmentKey.get(entry.id) === key
@@ -213,15 +232,37 @@ export function LineChart({
           ))}
         </RechartsLineChart>
       </ChartContainer>
-      {gaps.length > 0 ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
+      {gaps.length > 0 && !yearAxis ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
+      {inProgress !== undefined && inProgress >= minT && inProgress <= maxT ? (
+        <p className="px-4 pb-2 text-xs text-muted-foreground">{inProgress} is in progress. The dashed line leads to its value so far.</p>
+      ) : null}
+      {details ? (
+        <div className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details">
+          {details(activeRow(series, detailT))}
+        </div>
+      ) : null}
       <div id={summaryId} className="sr-only">{summaryText}</div>
-
     </div>
   )
 }
 
-function chartDetailDataKey(key: string) {
-  return `${key}Detail`
+/** Keeps the last row that hover, touch, or the arrow keys made active. */
+function ActiveRowListener({ onActive }: { onActive: (t: number) => void }) {
+  const label = useActiveTooltipLabel()
+  useEffect(() => {
+    if (typeof label === 'number') onActive(label)
+  }, [label, onActive])
+  return null
+}
+
+function activeRow(series: ChartSeries[], t: number): ChartActiveRow {
+  return {
+    t,
+    points: series.flatMap((entry) => {
+      const point = entry.points.findLast((candidate) => candidate.t === t && isValidPoint(candidate))
+      return point ? [{ series: entry, point }] : []
+    }),
+  }
 }
 
 function summarizeSeries(series: ChartSeries) {
@@ -240,11 +281,11 @@ function summarizeSeries(series: ChartSeries) {
   }
 }
 
-function formatPointSummary(point: ChartSeries['points'][number], formatValue: (value: number) => string) {
-  return `${formatValue(point.y)} on ${formatChartTimestamp(point.t)}`
-}
-
-function buildChartData(series: ChartSeries[]) {
+/**
+ * A dashed connector replaces the solid line across a gap longer than
+ * `maxGap`, and into the in-progress season, whose value is not final.
+ */
+function buildChartData(series: ChartSeries[], { maxGap, inProgress }: { maxGap: number; inProgress?: number }) {
   const dataByTime = new Map<number, ChartDatum>()
   const meta: SeriesMeta[] = []
   const gaps: SeriesMeta[] = []
@@ -254,7 +295,7 @@ function buildChartData(series: ChartSeries[]) {
     let previousPoint: ChartPoint | undefined
     for (const point of entry.points) {
       if (!isValidPoint(point)) continue
-      if (previousPoint && point.t - previousPoint.t > SEGMENT_GAP_MS) {
+      if (previousPoint && (point.t - previousPoint.t > maxGap || (point.t === inProgress && point.t - previousPoint.t === 1))) {
         const gapKey = `gap${index}_${segment}`
         gaps.push({ key: gapKey, series: entry })
         const previousDatum = dataByTime.get(previousPoint.t) ?? { t: previousPoint.t }
@@ -269,7 +310,6 @@ function buildChartData(series: ChartSeries[]) {
       if (meta.at(-1)?.key !== key) meta.push({ key, series: entry })
       const datum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
       datum[key] = point.y
-      if (point.detail) datum[chartDetailDataKey(key)] = point.detail
       dataByTime.set(point.t, datum)
     }
   })
@@ -289,9 +329,9 @@ function buildChartData(series: ChartSeries[]) {
  */
 function directLabelPositions(
   series: ChartSeries[],
+  times: number[],
   { minY, maxY, plotHeight, reversed }: { minY: number; maxY: number; plotHeight: number; reversed: boolean },
 ) {
-  const times = [...new Set(series.flatMap((entry) => entry.points.filter(isValidPoint).map((point) => point.t)))].sort((left, right) => left - right)
   const pxPerUnit = plotHeight / Math.max(1, maxY - minY)
   const ends = series.flatMap((entry) => {
     const last = entry.points.filter(isValidPoint).at(-1)
@@ -356,53 +396,10 @@ function timeTicks(min: number, max: number, count: number) {
   return Array.from({ length: count }, (_, index) => min + step * index)
 }
 
-function isValidPoint(point: ChartSeries['points'][number]) {
-  return Number.isFinite(point.t) && Number.isFinite(point.y)
+function yearTicks(min: number, max: number) {
+  return Array.from({ length: max - min + 1 }, (_, index) => min + index)
 }
 
-function LineChartTooltip({
-  active,
-  payload,
-  yFormat,
-}: {
-  active?: boolean
-  payload?: LineChartTooltipPayloadItem[]
-  yFormat: (value: number) => string
-}) {
-  if (!active || !payload?.length) return null
-
-  const rows = payload
-    .map((item) => {
-      const value = Number(item.value)
-      const key = String(item.dataKey ?? '')
-      if (!Number.isFinite(value)) return null
-      return {
-        key,
-        label: String(item.name ?? key),
-        value,
-        color: item.color ?? 'var(--muted)',
-      }
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null)
-
-  if (rows.length === 0) return null
-
-  return (
-    <div className="pointer-events-none static z-2 grid gap-1 whitespace-nowrap rounded-md border border-[var(--line-strong)] bg-[color-mix(in_oklch,var(--surface)_96%,transparent)] px-3 py-2 text-sm shadow-[var(--shadow-2)]">
-      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{formatChartTooltipTimestamp(payload)}</b>
-      <div className="grid gap-2">
-        {rows.map((row) => (
-          <div className="grid gap-1" key={row.key}>
-            <div className="grid grid-cols-[12px_minmax(0,1fr)_minmax(70px,auto)] items-center gap-2 text-muted-foreground">
-              <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: row.color }} aria-hidden="true" />
-              <em className="min-w-0 overflow-hidden text-ellipsis not-italic">{row.label}</em>
-              <div className="grid justify-items-end gap-px">
-                <strong className="text-foreground tabular-nums">{yFormat(row.value)}</strong>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+function isValidPoint(point: ChartSeries['points'][number]) {
+  return Number.isFinite(point.t) && Number.isFinite(point.y)
 }

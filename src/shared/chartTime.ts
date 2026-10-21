@@ -10,8 +10,3 @@ export function formatChartTimestamp(value: unknown, format: 'full-date' | 'mont
   if (!Number.isFinite(date.getTime())) return invalidDateLabel
   return (format === 'month-day' ? monthDay : fullDate).format(date)
 }
-
-export function formatChartTooltipTimestamp(payload: unknown) {
-  if (!Array.isArray(payload)) return invalidDateLabel
-  return formatChartTimestamp(payload[0]?.payload?.t)
-}

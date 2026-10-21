@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { LineChart, type LineChartProps, type LineChartTooltipPayloadItem } from '../../components/LineChart'
+import { LineChart, type ChartActiveRow, type LineChartProps } from '../../components/LineChart'
 import {
   formatChartAttribution,
   formatChartInfluence,
@@ -10,74 +9,43 @@ import {
   nonMatchDeltaFor,
   type ChartPointDetail,
 } from '../../shared/chartPoints'
-import { formatChartTooltipTimestamp } from '../../shared/chartTime'
+import { formatChartTimestamp } from '../../shared/chartTime'
 
-export type TeamHistoryLineChartProps = Omit<LineChartProps, 'tooltipContent'>
+export type TeamHistoryLineChartProps = Omit<LineChartProps, 'details'>
 
 const defaultValueFormat = (value: number) => String(Math.round(value))
-const chartDetailDataKey = (key: string) => `${key}Detail`
 
 export function TeamHistoryLineChart({ yFormat, ...props }: TeamHistoryLineChartProps) {
   const formatValue = yFormat ?? defaultValueFormat
-  const [detailsPortal, setDetailsPortal] = useState<HTMLDivElement | null>(null)
   return (
     <div className="min-w-0">
-      <LineChart
-        {...props}
-        yFormat={formatValue}
-        tooltipContent={<TeamHistoryTooltip yFormat={formatValue} />}
-        tooltipPortal={detailsPortal}
-        tooltipWrapperStyle={{ position: 'static', width: '100%' }}
-        persistentTooltip
-      />
-      <div ref={setDetailsPortal} className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details" />
+      <LineChart {...props} yFormat={formatValue} details={(active) => <TeamHistoryDetails active={active} yFormat={formatValue} />} />
     </div>
   )
 }
 
-function TeamHistoryTooltip({
-  active,
-  payload,
-  yFormat,
-}: {
-  active?: boolean
-  payload?: LineChartTooltipPayloadItem[]
-  yFormat: (value: number) => string
-}) {
-  if (!active || !payload?.length) return null
-
-  const rows = payload
-    .map((item) => {
-      const value = Number(item.value)
-      const key = String(item.dataKey ?? '')
-      const detail = item.payload?.[chartDetailDataKey(key)]
-      if (!Number.isFinite(value)) return null
-      const pointDetail = isChartPointDetail(detail) ? detail : undefined
-      return {
-        key,
-        label: String(item.name ?? key),
-        value,
-        color: item.color ?? 'var(--muted)',
-        detail: pointDetail,
-        influence: formatChartInfluence(pointDetail),
-        result: pointDetail ? formatChartInfluence({
-          ...pointDetail,
-          delta: undefined,
-          event: pointDetail.kind && pointDetail.kind !== 'match' ? pointDetail.event : undefined,
-        }) : undefined,
-      }
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null)
+function TeamHistoryDetails({ active, yFormat }: { active: ChartActiveRow; yFormat: (value: number) => string }) {
+  const rows = active.points.map(({ series, point }) => {
+    const detail = isChartPointDetail(point.detail) ? point.detail : undefined
+    return {
+      key: series.id,
+      label: series.label,
+      value: point.y,
+      color: series.color,
+      detail,
+      influence: formatChartInfluence(detail),
+      result: detail ? formatChartInfluence({
+        ...detail,
+        delta: undefined,
+        event: detail.kind && detail.kind !== 'match' ? detail.event : undefined,
+      }) : undefined,
+    }
+  })
 
   if (rows.length === 0) return null
-  const selectedDate = formatChartTooltipTimestamp(payload)
   return (
-    <div
-      className="grid min-w-0 gap-2 border-t border-border pt-3 text-sm whitespace-normal"
-      // Portal clicks still bubble through Recharts. Keep disclosures from selecting a point.
-      onClick={(event) => event.stopPropagation()}
-    >
-      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{selectedDate}</b>
+    <div className="grid min-w-0 gap-2 border-t border-border pt-3 text-sm whitespace-normal">
+      <b className="mb-0.5 text-xs text-[var(--text-strong)]">{formatChartTimestamp(active.t)}</b>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))] gap-x-5 gap-y-3">
         {rows.map((row) => (
             <div className="grid min-w-0 content-start gap-1" key={row.key}>
