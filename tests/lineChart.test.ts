@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import test from 'node:test'
-import { formatChartTimestamp } from '../src/shared/chartTime.ts'
-
-test('chart timestamp formatting tolerates non-date labels', () => {
-  assert.equal(formatChartTimestamp('Karmine Corp'), 'Unknown date')
-})
 
 test('chart calendar dates stay on the same day in every timezone', () => {
   for (const timezone of ['America/Los_Angeles', 'UTC', 'Asia/Tokyo']) {

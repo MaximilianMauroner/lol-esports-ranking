@@ -35,8 +35,9 @@ type ChartDatum = { t: number } & Record<string, unknown>
 
 /**
  * One drawn line. A series with a long gap in its data is split into several
- * segments that share its colour and label. A dashed connector marks the gap
- * without presenting the interval as a recorded trend.
+ * segments that share its colour and label. On a date axis a dashed connector
+ * marks the gap without presenting the interval as a recorded trend. On a year
+ * axis nothing crosses a season without a value.
  */
 type SeriesMeta = {
   key: string
@@ -69,6 +70,8 @@ const MAX_DIRECT_LABELS = 6
 const DIRECT_LABEL_WIDTH = 52
 const DIRECT_LABEL_MIN_GAP_PX = 13
 const CHART_VERTICAL_CHROME_PX = 92
+/** Lines take their colours from the series, and the tooltip takes names from its payload. */
+const CHART_CONFIG: ChartConfig = {}
 
 export function LineChart({
   series,
@@ -94,21 +97,8 @@ export function LineChart({
   const inProgress = xAxis?.inProgress
   const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
   const { data, meta, gaps } = useMemo(
-    () => buildChartData(series, { maxGap: yearAxis ? Infinity : SEGMENT_GAP_MS, inProgress }),
+    () => buildChartData(series, yearAxis ? { maxGap: 1, dashLongGaps: false, inProgress } : { maxGap: SEGMENT_GAP_MS, dashLongGaps: true }),
     [series, yearAxis, inProgress],
-  )
-  const config = useMemo<ChartConfig>(
-    () =>
-      Object.fromEntries(
-        meta.map(({ key, series: entry }) => [
-          key,
-          {
-            label: entry.label,
-            color: entry.color,
-          },
-        ]),
-      ),
-    [meta],
   )
 
   if (series.length === 0 || domain === null || data.length === 0) {
@@ -136,14 +126,18 @@ export function LineChart({
   ).join(' ')}`
 
   function renderTooltip({ active, label }: TooltipContentProps) {
-    if (typeof label !== 'number') return null
-    const row = activeRow(series, label)
-    const payload = series.flatMap((entry) => {
+    const row = typeof label === 'number' ? activeRow(series, label) : undefined
+    const payload = row ? series.flatMap((entry) => {
       const point = row.points.find((hit) => hit.series === entry)?.point
       if (!point && !yearAxis) return []
       return [{ graphicalItemId: entry.id, dataKey: entry.id, name: entry.label, color: entry.color, value: point ? yFormat(point.y) : 'No value' }]
-    })
-    return <ChartTooltipContent active={active} label={formatX(label)} payload={payload} />
+    }) : []
+    // The live region stays mounted so screen readers hear each new row, as with the Recharts default tooltip.
+    return (
+      <div role="status" aria-live="polite">
+        {row ? <ChartTooltipContent active={active} label={formatX(row.t)} payload={payload} /> : null}
+      </div>
+    )
   }
 
   return (
@@ -165,7 +159,7 @@ export function LineChart({
       </div>
       <ChartContainer
         id={chartId}
-        config={config}
+        config={CHART_CONFIG}
         className="chart relative min-h-[220px] w-full min-w-0 aspect-auto overflow-hidden px-4 pt-4 pb-3 [&_svg]:block [&_svg]:size-full [&_svg]:touch-pan-y [&_svg]:overflow-hidden"
         style={{ height }}
       >
@@ -233,7 +227,7 @@ export function LineChart({
         </RechartsLineChart>
       </ChartContainer>
       {gaps.length > 0 && !yearAxis ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
-      {inProgress !== undefined && inProgress >= minT && inProgress <= maxT ? (
+      {yearAxis && gaps.length > 0 ? (
         <p className="px-4 pb-2 text-xs text-muted-foreground">{inProgress} is in progress. The dashed line leads to its value so far.</p>
       ) : null}
       {details ? (
@@ -282,10 +276,11 @@ function summarizeSeries(series: ChartSeries) {
 }
 
 /**
- * A dashed connector replaces the solid line across a gap longer than
- * `maxGap`, and into the in-progress season, whose value is not final.
+ * A gap longer than `maxGap` starts a new segment. With `dashLongGaps` a
+ * dashed connector spans it. A dashed connector also leads into the
+ * in-progress season from the season before it, because that value is not final.
  */
-function buildChartData(series: ChartSeries[], { maxGap, inProgress }: { maxGap: number; inProgress?: number }) {
+function buildChartData(series: ChartSeries[], { maxGap, dashLongGaps, inProgress }: { maxGap: number; dashLongGaps: boolean; inProgress?: number }) {
   const dataByTime = new Map<number, ChartDatum>()
   const meta: SeriesMeta[] = []
   const gaps: SeriesMeta[] = []
@@ -295,14 +290,18 @@ function buildChartData(series: ChartSeries[], { maxGap, inProgress }: { maxGap:
     let previousPoint: ChartPoint | undefined
     for (const point of entry.points) {
       if (!isValidPoint(point)) continue
-      if (previousPoint && (point.t - previousPoint.t > maxGap || (point.t === inProgress && point.t - previousPoint.t === 1))) {
-        const gapKey = `gap${index}_${segment}`
-        gaps.push({ key: gapKey, series: entry })
-        const previousDatum = dataByTime.get(previousPoint.t) ?? { t: previousPoint.t }
-        previousDatum[gapKey] = previousPoint.y
-        const nextDatum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
-        nextDatum[gapKey] = point.y
-        dataByTime.set(point.t, nextDatum)
+      const longGap = previousPoint !== undefined && point.t - previousPoint.t > maxGap
+      const intoInProgress = previousPoint !== undefined && point.t === inProgress && point.t - previousPoint.t === 1
+      if (previousPoint && (longGap || intoInProgress)) {
+        if (intoInProgress || dashLongGaps) {
+          const gapKey = `gap${index}_${segment}`
+          gaps.push({ key: gapKey, series: entry })
+          const previousDatum = dataByTime.get(previousPoint.t) ?? { t: previousPoint.t }
+          previousDatum[gapKey] = previousPoint.y
+          const nextDatum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
+          nextDatum[gapKey] = point.y
+          dataByTime.set(point.t, nextDatum)
+        }
         segment += 1
       }
       previousPoint = point
