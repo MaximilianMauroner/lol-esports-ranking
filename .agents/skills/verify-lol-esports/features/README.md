@@ -20,16 +20,15 @@ revision, setup, outcomes and cleanup in private audit evidence.
 | [L13](l13.md) | Swiss scenarios | Partial: live evidence required |
 | [L14](l14.md) | Loading, navigation and delivery performance | Partial: live evidence required |
 
-## Existing setup and coverage notes
+## Select journeys
 
-# Feature map
+L1-L8 cover the main browser paths. L11-L13 need their named tournament fixtures.
+L14 checks loading and delivery across those paths. L9-L10 are local operator
+checks. Read all entry points in each selected guide. One passing route does not
+prove the others. Mark each selected journey as passed, failed, or blocked with
+its evidence path. Leave unselected journeys unverified.
 
-Reusable procedure map. Select affected journeys for each run. A source map
-and offline receipts do not prove completed browser journeys.
-Ranking claims must retain source manifest and model/config identity.
-
-
-Browser groups L1-L8 require an allowed browser that reaches the owned server. Missing
-static data stays explicit. Without network access, the tournament hub shows
-that the Leaguepedia feed is unavailable; use a local `feed.json` override. Production cadence, activation, artifact publication,
-presigned delivery and deletion are outside this procedure's authority.
+Use the launch, doctor, evidence, and cleanup steps in [the skill](../SKILL.md).
+The fixed ranking snapshot cannot prove every tournament precondition. Report
+missing inputs as failures of those journeys and record the cause in Gotchas.
+Do not collect providers or change production data to fill a verification gap.

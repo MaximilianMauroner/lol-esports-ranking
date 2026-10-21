@@ -1,57 +1,146 @@
 ---
 name: verify-lol-esports
-description: Verify LoL Power Index ranking and archive journeys using isolated static data. Use when checking changed ranking, match history, comparison or tournament paths.
+description: Verify the LoL Esports Power Index web UI with T3 preview and isolated static data. Use for ranking, search, details, comparison, match archive, region, and tournament changes.
 ---
 
 # Verify LoL Esports Power Index
 
-Read `AGENTS.md`, `README.md`, and [the feature index](features/README.md). Use an isolated
-worktree, not a running refresh owner's checkout. Select journeys affected by
-product work in the requested window, then read every selected feature guide
-before setup or execution.
-Record revision, manifest
-model/config/schema, source coverage, chosen port and process handle. Never
-present fixture or no-data payloads as official rankings.
+Read `AGENTS.md`, `README.md`, and [the feature index](features/README.md).
+Read each selected feature guide before setup. The browser is the primary user
+interface. L9 and L10 cover local operator commands. Native services and provider
+refreshes need their own checks and authorization.
 
-Check active owners, memory, load, disk and listeners. Use Node 24 and the
-pinned pnpm version. Run `pnpm install --frozen-lockfile` and `pnpm data:pull`
-for the pinned Node reference snapshot, or reuse an existing owned locally built
-payload with recorded provenance. `public/data` is ignored by Git. Downloading the
-reference snapshot is a read-only public GitHub request, not a provider refresh.
-Start one owned static
-instance on an unused loopback port:
+## Launch
+
+Check active agents, `git status --short`, `git worktree list`, `ss -ltnp`,
+`free -m`, and `df -h .`. Reuse an existing server for this worktree if its owner
+permits driving it. Do not stop or replace that server during cleanup.
+Otherwise use a disposable worktree at the revision under test. Keep evidence
+outside that worktree. Uncommitted changes do not enter a new worktree. To verify
+such changes, use the current checkout only if no refresh owner uses it.
+
+Use Node 24 and pnpm 11.16.0. For L10, run only the dependency install below,
+then use its feature guide to generate the payload instead of `pnpm data:pull`.
+For the reference ranking journeys, run both commands:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm data:pull
+```
+
+This reaches a usable ranking board from an empty data directory. No database,
+migration, or login is needed. `data:pull` downloads a fixed public GitHub snapshot,
+checks its complete path and SHA-256 digest list, and replaces `public/data`.
+It writes a cache in `data/reference`. Use an owned checkout because Git cannot
+restore ignored payloads. A reference snapshot is not a current official ranking.
+For an existing owned payload, record provenance before reuse.
+
+Leave `VITE_RANKING_DATA_URL` unset. Check `.env` files for overrides. Start Vite
+in a retained terminal session on the unused port 43129:
 
 ```sh
 pnpm dev --host 127.0.0.1 --port 43129 --strictPort
 ```
 
-Require HTTP 200 for `/` and `/data/ranking-summary.json`. Inspect the actual
-manifest before browser actions. Leave `VITE_RANKING_DATA_URL` unset so the
-instance reads its own downloaded or generated `public/data` tree. Do not run remote refresh,
-bucket cleanup, baseline recapture, provider downloads or deployments.
-`pnpm ranking:baseline` verifies the committed receipt without bucket mutation.
+Record the checkout, revision, port, terminal session, and listener PID. Require
+Vite's ready message, then run Doctor. The browser must show the loaded board,
+not just an HTTP response. If the remote browser needs a network address, bind
+the owned server to `0.0.0.0` and use its reachable address. Record that choice.
+Stop the exact session as described in Cleanup, including after failed attempts.
 
-Establish where the browser runs. Prefer the environment-port preview target.
-If it needs a network address, bind the owned instance with `--host 0.0.0.0`
-and use its actual reachable address. HTTP readiness alone is not browser proof.
-Use T3 preview status/open/navigate/snapshot and current role/name locators.
-If preview open explicitly reports unsupported or unavailable, use an available
-headless Chromium browser against the same owned instance and report that fallback.
-Run journeys serially. Record browser reachability separately from HTTP.
-If navigation fails, recheck readiness and retry once. Keep absent shards,
-unavailable model evidence, harness failures and confirmed UI regressions
-separate. Preserve intended expectations when a product fails.
+Rankings use local static files. Tournaments can call the live Leaguepedia feed.
+Do not open Tournaments in an offline proof without an owned local
+`public/tournament-data/feed.json` override. The existing tournament browser tests
+use fixture middleware at that HTTP boundary. Record its synthetic provenance.
+Do not run provider collection, bucket changes, publication, baseline recapture,
+or deployment. Do not treat a dry-run name as evidence that these actions are safe.
 
-Supporting checks are `pnpm verify`, public artifact tests, archive browser
-tests and tournament tests. Do not repeat memory benchmarks owned by another
-agent or run `release:check` merely for a procedure edit. Tests do not replace
-live browser actions.
+## Doctor
 
-Before captures, exclude the owned `.agents/artifacts/<run-id>/` directory
-through Git's local exclude file and confirm it with `git check-ignore`. Do not
-assume the repository's singular `.agent/artifacts/` rule covers this path.
-Save the owned local payload before a journey that replaces it; Git cannot
-restore ignored data. Stop the exact server session, confirm its port closes, and retain redacted
-evidence in that excluded run directory. Static journeys should
-not change provider or bucket state. Remove only owned downloads or captures
-not needed as evidence. Report CI, review, merge and acceptance separately.
+Run this read-only check from the chosen checkout before driving or after a fault:
+
+```sh
+node --version
+pnpm --version
+ss -ltnp 'sport = :43129'
+curl --fail --silent --show-error http://127.0.0.1:43129/ -o /dev/null
+curl --fail --silent --show-error http://127.0.0.1:43129/data/ranking-summary.json
+```
+
+Compare the listener PID with the process you started and inspect
+`/proc/<listener-pid>/cwd` on Linux. It must resolve to the chosen checkout.
+Inspect the returned manifest's schema, source coverage, data mode, model identity,
+and config identity. Keep the complete manifest as evidence. A wrong checkout,
+missing payload, invalid manifest, or unintended remote URL fails Doctor.
+A browser reachability failure is separate from HTTP readiness.
+
+## Drive
+
+Call T3 `preview_status`, then `preview_open` with `profileId: "incognito"` and
+`reuseExistingTab: false`. Retain the returned `tabId` for every browser call.
+Use `preview_navigate` with
+`target: {kind: "environment-port", port: 43129, path: "/#rankings?scope=all"}`.
+Read `preview_snapshot` before each action and use its current ARIA refs.
+Do not operate a tab while a human owns it.
+
+For the first proof, run L2's search journey. Wait for the heading
+`Team Power Index`, a loaded table, and the search input with placeholder
+`Find a team`. Use `preview_type` to enter a team name observed in that table.
+Capture the filtered board and its address. Click the button whose accessible
+name is `Clear search for ` followed by that name. Capture the restored board.
+Use `preview_navigate` to open the saved filtered address. Then reload it with
+`preview_press` using Control-R, or call `preview_evaluate` with
+`location.reload()`. Check that the same search and results return.
+Navigating to the same hash alone does not prove a full reload.
+Read [L2](features/l2.md) for the remaining filter and address journeys.
+
+Use `preview_select` only for native selects. Use `preview_click` for custom
+controls. Read DOM or network state with `preview_evaluate` when needed, but never
+set internal application state to make a proof pass. Run journeys serially.
+If navigation fails, run Doctor and retry once. Follow T3's browser fallback
+rules if preview is unavailable or repeatedly fails. Record the raw error and
+fallback. HTTP readiness and automated test results do not replace browser proof.
+
+## Evidence
+
+Create `.agents/artifacts/<run-id>/` in the source checkout, outside disposable
+worktrees. Exclude that exact directory in Git's local exclude file and confirm
+with `git check-ignore`. Do not assume the singular `.agent/artifacts` rule covers it.
+
+Save a run record with revision, setup, selected journeys, commands, actions,
+addresses, pass or failure results, and cleanup. Save the manifest and before,
+action, and after snapshots. Use `preview_snapshot` with `save: true`, then copy
+its `screenshotPath` into the run directory. Call `preview_snapshot` again without `save` to capture semantic text and
+action history. The saved-image call returns only the image path. Record actions
+in the run record when the tool truncates its history. A final screenshot alone does not prove the action.
+
+Verify visible state and side effects. Search must update the URL and rendered
+rows, then survive a reload. For local operator journeys, inspect their output
+files and receipts. Capture requests to confirm the browser journey only reads
+data. Mocks belong at an existing external HTTP boundary, not in UI state.
+A missing fixture precondition fails that journey. Record the reason in its
+feature guide's Gotchas. Keep harness failures separate from product failures.
+Keep ranking claims tied to the captured source and model configuration.
+
+## Cleanup
+
+Close only the browser tab you created with `t3_preview_close`. Send Ctrl-C to
+the retained server session and wait for its exit. If needed, signal only its
+recorded PID after checking ownership. Never kill by process name. Confirm the
+listener closes with `ss -ltnp 'sport = :43129'`. Leave a reused server running.
+
+Remove only owned scratch payloads, fixture overrides, and disposable worktrees.
+Check the worktree for unexpected edits first. Never remove the source checkout
+or evidence directory. Confirm the manifest, snapshots, screenshots, and run
+record still exist after cleanup. Report local checks, CI, review, merge, and
+user acceptance separately.
+
+## Helpers
+
+This skill ships no helper scripts. It uses package commands and T3 preview.
+Existing browser tests under `tests/*Browser.test.ts` provide selectors and
+fixture recipes. Supporting checks include `pnpm verify`, artifact tests,
+archive tests, and tournament tests. Run heavy commands on hostname `coding`
+through `heavy-check`, one at a time. Do not run `release:check` for a skill edit.
+
+Use `/maintain-verification-skill` to update the feature map as the app changes.
