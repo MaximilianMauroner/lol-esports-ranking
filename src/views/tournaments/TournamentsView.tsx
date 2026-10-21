@@ -121,13 +121,13 @@ export function TournamentsView() {
           <h2 className="text-lg font-semibold text-[var(--text-strong)]">{selected.label}</h2>
           {!FORECASTS_ENABLED ? <p className="text-sm text-muted-foreground">Match forecasts are not enabled for this schedule.</p> : null}
           {FORECASTS_ENABLED && selected.competition === 'worlds' ? <WorldsTournamentPanel
-            key={JSON.stringify([worldsFeedEventKey(selected), forecastArtifacts.basis?.snapshotId, forecastArtifacts.basis?.model.version,
+            key={JSON.stringify([state.feed.source, worldsFeedEventKey(selected), forecastArtifacts.basis?.snapshotId, forecastArtifacts.basis?.model.version,
               forecastArtifacts.basis?.model.configHash, forecastArtifacts.basis?.ratingDataAsOf, forecastArtifacts.basis?.ratingPublishedAt, forecastArtifacts.basis?.identityMap.revision])}
-            event={selected} basis={forecastArtifacts.basis} fixtureFeed={state.feed.dataMode === 'synthetic-fixture'} /> : null}
+            event={selected} forecast={{ seriesSource: state.feed.source, basis: forecastArtifacts.basis }} fixtureFeed={state.feed.dataMode === 'synthetic-fixture'} /> : null}
           {SECTION_ORDER.some((group) => grouped[group].length > 0)
             ? SECTION_ORDER.filter((group) => grouped[group].length > 0).map((group) => <section key={group} aria-label={group} className="grid gap-2">
               <h3 className="flex items-baseline gap-2 text-base font-semibold text-[var(--text-strong)]">{SECTION_TITLES[group]}{' '}<span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{grouped[group].length}</span></h3>
-              <SeriesList series={grouped[group]} timezone={timezone} now={now} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />
+              <SeriesList series={grouped[group]} timezone={timezone} now={now} seriesSource={state.feed.source} forecasts={FORECASTS_ENABLED ? forecastArtifacts : null} />
             </section>)
             : <p className="text-sm text-muted-foreground">No series in the schedule window.</p>}
         </>
@@ -154,7 +154,7 @@ function formatFeedAge(timestamp: string, now: number) {
 }
 
 /** Series grouped under one heading per local day, in feed order. */
-function SeriesList({ series, timezone, now, forecasts }: { series: TournamentSeries[]; timezone: string; now: number; forecasts: ForecastArtifacts | null }) {
+function SeriesList({ series, timezone, now, seriesSource, forecasts }: { series: TournamentSeries[]; timezone: string; now: number; seriesSource: TournamentFeed['source']; forecasts: ForecastArtifacts | null }) {
   const days: Array<{ label: string; series: TournamentSeries[] }> = []
   for (const entry of series) {
     const label = entry.startTime ? formatDay(entry.startTime, timezone) : 'Date not supplied'
@@ -166,13 +166,13 @@ function SeriesList({ series, timezone, now, forecasts }: { series: TournamentSe
     {days.map((day) => <div key={day.label} className="grid gap-1.5">
       <h4 className="text-xs font-semibold text-muted-foreground">{day.label}</h4>
       <ol className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-        {day.series.map((entry) => <SeriesRow key={entry.id} series={entry} timezone={timezone} now={now} forecasts={forecasts} />)}
+        {day.series.map((entry) => <SeriesRow key={entry.id} series={entry} timezone={timezone} now={now} seriesSource={seriesSource} forecasts={forecasts} />)}
       </ol>
     </div>)}
   </div>
 }
 
-function SeriesRow({ series, timezone, now, forecasts }: { series: TournamentSeries; timezone: string; now: number; forecasts: ForecastArtifacts | null }) {
+function SeriesRow({ series, timezone, now, seriesSource, forecasts }: { series: TournamentSeries; timezone: string; now: number; seriesSource: TournamentFeed['source']; forecasts: ForecastArtifacts | null }) {
   const [first, second] = series.teams
   const winner = seriesWinner(series)
   const winningTeam = winner !== null ? series.teams[winner] : undefined
@@ -180,14 +180,15 @@ function SeriesRow({ series, timezone, now, forecasts }: { series: TournamentSer
   const forecast = useMemo<TournamentForecast | ForecastReceipt | null>(() => {
     if (!forecasts) return null
     if (series.status === 'upcoming') {
+      const estimate = forecastTournamentSeries(series, forecasts.basis, { seriesSource })
+      if (estimate.status === 'unavailable' && estimate.reason === 'unsupported-source') return estimate
       if (scheduledStartPassed) return { status: 'unavailable', reason: 'already-started', detail: 'Scheduled start has passed; a new pre-match estimate is withheld.' }
-      return forecasts.basis ? forecastTournamentSeries(series, forecasts.basis)
-        : { status: 'unavailable', reason: 'stale-model-basis', detail: forecasts.reason ?? 'Current ratings are unavailable.' }
+      return !forecasts.basis && estimate.status === 'unavailable' ? { ...estimate, detail: forecasts.reason ?? estimate.detail } : estimate
     }
-    return pinnedForecast(forecasts.ledger, series)
-  }, [forecasts, scheduledStartPassed, series])
+    return pinnedForecast(forecasts.ledger, series, seriesSource)
+  }, [forecasts, scheduledStartPassed, series, seriesSource])
   const receipt = forecast?.status === 'ready' && 'receiptKey' in forecast ? forecast : null
-  const conditional = receipt && (series.status === 'live' || series.status === 'completed') ? scoreConditionedSeriesOdds(receipt, series) : null
+  const conditional = receipt && (series.status === 'live' || series.status === 'completed') ? scoreConditionedSeriesOdds(receipt, series, seriesSource) : null
   const scored = first?.gameWins != null || second?.gameWins != null
   return <li className="grid gap-x-4 gap-y-0.5 px-3 py-2 md:grid-cols-[8.5rem_6.5rem_minmax(0,1fr)_minmax(0,1fr)] md:items-baseline">
     <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground md:contents">

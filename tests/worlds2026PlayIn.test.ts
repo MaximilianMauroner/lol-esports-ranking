@@ -64,7 +64,7 @@ test('complete symmetric Play-In enumerates 64 paths and conserves one Swiss/eac
   const state = input()
   const model = basis()
   const original = structuredClone({ state, model })
-  const forecast = supported(forecastWorlds2026PlayIn(state, model))
+  const forecast = supported(forecastWorlds2026PlayIn(state, { seriesSource: 'lolesports-persisted-site-api', basis: model }))
   assert.equal(forecast.terminalPaths, 64)
   assert.equal(forecast.method, 'exact-enumeration')
   for (const row of forecast.teams) {
@@ -76,7 +76,7 @@ test('complete symmetric Play-In enumerates 64 paths and conserves one Swiss/eac
   }
   conservation(forecast)
   assert.deepEqual({ state, model }, original)
-  assert.deepEqual(forecastWorlds2026PlayIn(state, model), forecast)
+  assert.deepEqual(forecastWorlds2026PlayIn(state, { seriesSource: 'lolesports-persisted-site-api', basis: model }), forecast)
   assert.ok(forecast.hypotheticalMatchups.every((match) => match.bestOf === 5 && match.sideAssumption === 'neutral'
     && match.matchId.startsWith('hypothetical:') && match.snapshotId === model.snapshotId && match.modelConfigHash === model.model.configHash))
   assert.match(forecast.assumptions.join(' '), /RoDS|not modeled/)
@@ -84,7 +84,7 @@ test('complete symmetric Play-In enumerates 64 paths and conserves one Swiss/eac
 })
 
 test('completed opening winners have 3/8 Swiss odds and losers 1/8 without a final reset', () => {
-  const forecast = supported(forecastWorlds2026PlayIn(input(completed.slice(0, 2)), basis()))
+  const forecast = supported(forecastWorlds2026PlayIn(input(completed.slice(0, 2)), { seriesSource: 'lolesports-persisted-site-api', basis: basis() }))
   assert.equal(forecast.terminalPaths, 16)
   for (const row of forecast.teams) close(row.advanceToSwissProbability, ['A', 'C'].includes(row.id) ? 3 / 8 : 1 / 8)
   conservation(forecast)
@@ -99,12 +99,12 @@ test('partial independent rounds replay, reordered observations and swapped scor
   results[0].gameWins = [1, 3]
   const original = replayWorlds2026PlayIn(input(completed))
   assert.deepEqual(replayWorlds2026PlayIn(input(results.reverse())), original)
-  assert.deepEqual(forecastWorlds2026PlayIn(input([...completed].reverse()), basis()), forecastWorlds2026PlayIn(input(completed), basis()))
+  assert.deepEqual(forecastWorlds2026PlayIn(input([...completed].reverse()), { seriesSource: 'lolesports-persisted-site-api', basis: basis() }), forecastWorlds2026PlayIn(input(completed), { seriesSource: 'lolesports-persisted-site-api', basis: basis() }))
 })
 
 test('final loser is eliminated even with one match loss and terminal state requires no model', () => {
   const state = input(completed)
-  const forecast = supported(forecastWorlds2026PlayIn(state, { ...basis(), identityMap: { ...basis().identityMap, mappings: [] } }))
+  const forecast = supported(forecastWorlds2026PlayIn(state, { seriesSource: 'lolesports-persisted-site-api', basis: { ...basis(), identityMap: { ...basis().identityMap, mappings: [] } } }))
   assert.equal(forecast.terminalPaths, 1)
   assert.deepEqual(forecast.hypotheticalMatchups, [])
   assert.deepEqual(forecast.state.teams.map((team) => [team.id, team.finish, team.losses]), [['A', 17, 1], ['B', 18, 2], ['C', 'swiss', 1], ['D', 19, 2]])
@@ -116,13 +116,13 @@ test('final loser is eliminated even with one match loss and terminal state requ
 test('a stronger team improves exact odds, and a fixed final uses the #46 Bo5 probability unchanged', () => {
   const model = basis()
   model.snapshot.standings[0].rating = 2000
-  const all = supported(forecastWorlds2026PlayIn(input(), model))
+  const all = supported(forecastWorlds2026PlayIn(input(), { seriesSource: 'lolesports-persisted-site-api', basis: model }))
   assert.ok(all.teams[0].advanceToSwissProbability > 0.25)
   conservation(all)
-  const forecast = supported(forecastWorlds2026PlayIn(input(completed.slice(0, 5)), model))
+  const forecast = supported(forecastWorlds2026PlayIn(input(completed.slice(0, 5)), { seriesSource: 'lolesports-persisted-site-api', basis: model }))
   const provider = forecastTournamentSeries({ id: 'hypothetical-final', eventId: 'synthetic:worlds-2026', stage: 'Play-In',
     startTime: null, status: 'upcoming', sourceState: 'unstarted', bestOf: 5, vodUrls: [],
-    teams: ['A', 'C'].map((id) => ({ id, name: null, code: null, gameWins: null, outcome: null })) }, model)
+    teams: ['A', 'C'].map((id) => ({ id, name: null, code: null, gameWins: null, outcome: null })) }, model, { seriesSource: 'lolesports-persisted-site-api' })
   assert.equal(provider.status, 'ready')
   if (provider.status === 'ready') close(forecast.teams[0].advanceToSwissProbability, provider.homeSeriesWinProbability)
   assert.equal(forecast.terminalPaths, 2)
@@ -162,7 +162,7 @@ test('missing/future/incompatible frozen inputs never yield partial or substitut
   models[2].ratingPublishedAt = '2026-10-03T00:00:00Z'
   models[3].snapshot.standings[3].rating = Number.NaN
   for (const model of models) {
-    const value = forecastWorlds2026PlayIn(input(), model)
+    const value = forecastWorlds2026PlayIn(input(), { seriesSource: 'lolesports-persisted-site-api', basis: model })
     assert.equal(value.status, 'unsupported')
     if (value.status === 'unsupported') assert.equal(value.reason, 'model-unavailable')
   }
@@ -174,7 +174,7 @@ test('an accepted finite rating scale that overflows provider calculations canno
   model.model.ratingScale = scale
   model.snapshot.ratingScale = scale
   for (const team of model.snapshot.standings) team.rating = 2000
-  const value = forecastWorlds2026PlayIn(input(), model)
+  const value = forecastWorlds2026PlayIn(input(), { seriesSource: 'lolesports-persisted-site-api', basis: model })
   assert.equal(value.status, 'unsupported')
   if (value.status === 'unsupported') assert.equal(value.reason, 'model-unavailable')
 })
@@ -188,15 +188,15 @@ test('an empty bracket may omit result evidence but cannot echo explicitly inval
   const value = replayWorlds2026PlayIn(empty)
   assert.equal(value.status, 'unsupported')
   if (value.status === 'unsupported') assert.equal(value.reason, 'evidence-missing')
-  assert.equal(forecastWorlds2026PlayIn(empty, basis()).status, 'unsupported')
+  assert.equal(forecastWorlds2026PlayIn(empty, { seriesSource: 'lolesports-persisted-site-api', basis: basis() }).status, 'unsupported')
 })
 
 test('snapshot data cannot postdate publication, including when both dates precede the state cutoff', () => {
   const model = basis()
   model.ratingDataAsOf = '2026-10-01T02:00:00Z'
-  const invalid = forecastWorlds2026PlayIn(input(), model)
+  const invalid = forecastWorlds2026PlayIn(input(), { seriesSource: 'lolesports-persisted-site-api', basis: model })
   assert.equal(invalid.status, 'unsupported')
   if (invalid.status === 'unsupported') assert.equal(invalid.reason, 'model-unavailable')
   model.ratingPublishedAt = model.ratingDataAsOf
-  assert.equal(forecastWorlds2026PlayIn(input(), model).status, 'supported')
+  assert.equal(forecastWorlds2026PlayIn(input(), { seriesSource: 'lolesports-persisted-site-api', basis: model }).status, 'supported')
 })

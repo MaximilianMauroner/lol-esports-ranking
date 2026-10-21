@@ -14,7 +14,7 @@ test('offline numeric result component follows legal outcomes, keeps frozen odds
   const originalBasis = structuredClone(fixture.basis)
   const generatedAt = fixture.generatedAt
   const componentArtifact = conditionalPowerResultArtifact({ version: 1, receipts: [fixture.receipt] })
-  const forecastReceipt = createPreMatchReceipt({ series: fixture.series, basis: fixture.forecastBasis, forecastRevision: 'controlled-component',
+  const forecastReceipt = createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: fixture.series, basis: fixture.forecastBasis, forecastRevision: 'controlled-component',
     generatedAt, publishedAt: generatedAt, observedAt: generatedAt })
   if (forecastReceipt.status !== 'ready') throw new Error(forecastReceipt.detail)
   let forecastLedger = appendForecastReceipt(emptyForecastLedger, forecastReceipt)
@@ -95,7 +95,7 @@ test('offline numeric result component follows legal outcomes, keeps frozen odds
     assert.match(await preview.innerText(), /statistics.*unavailable.*not invented/)
     assert.match(await preview.innerText(), /Full future Power delta unavailable/)
     const live = { ...fixture.series, status: 'live' as const, sourceState: 'inProgress', teams: fixture.series.teams.map((team, index) => ({ ...team, gameWins: index === 0 ? 1 : 0 })) }
-    forecastLedger = pinPreMatchReceipt(forecastLedger, live, fixture.series.startTime!)
+    forecastLedger = pinPreMatchReceipt(forecastLedger, live, 'lolesports-persisted-site-api', fixture.series.startTime!)
     feed = { ...feed, fetchedAt: fixture.series.startTime!, events: [{ ...feed.events[0]!, series: [live] }] }
     await page.clock.fastForward(50 * 60_000)
     await page.getByText('Published pre-match forecast', { exact: true }).waitFor()

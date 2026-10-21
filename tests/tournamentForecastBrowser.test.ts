@@ -9,6 +9,7 @@ import { createServer, type Plugin } from 'vite'
 import { appendForecastReceipt, createPreMatchReceipt, emptyForecastLedger, forecastTournamentSeries, pinPreMatchReceipt } from '../src/domains/tournaments/internal/tournamentForecast'
 import { parsePublicRankingManifest, parsePublicRankingShard } from '../src/domains/rankings/internal/published/schema'
 import type { TournamentFeed, TournamentSeries } from '../src/domains/tournaments/internal/tournamentFeed'
+import { createWorldsFixtureServer } from './fixtures/worldsBrowserFixture'
 import { closedSelectKeysChangeValue } from './fixtures/nativeSelect'
 
 const eventId = 'worlds:2026'
@@ -35,7 +36,7 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     ratingDataAsOf: manifest.coverage.latestMatchDate!, ratingPublishedAt: manifest.generatedAt,
     dataMode: manifest.dataMode, model: manifest.model, snapshot: shard, identityMap }
   const upcoming = series(start)
-  const estimate = forecastTournamentSeries(upcoming, forecastBasis)
+  const estimate = forecastTournamentSeries(upcoming, forecastBasis, { seriesSource: 'lolesports-persisted-site-api' })
   assert.equal(estimate.status, 'ready')
   let servedManifestJson = manifestJson
   let ledger = emptyForecastLedger
@@ -85,10 +86,20 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   const executablePath = chromium.executablePath()
   browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+  const errors: string[] = []
+  page.on('pageerror', (error) => errors.push(error.message))
   const external: string[] = []
   page.on('request', (request) => { if (!request.url().startsWith(base)) external.push(request.url()) })
   await page.clock.install({ time: new Date(at) })
+  feed = { ...feed, source: 'leaguepedia-cargo', unsupportedApi: false }
   await page.goto(`${base}/#tournaments?event=worlds%3A2026&view=schedule`)
+  await page.getByText(/Forecast unavailable: Forecasts are unavailable for this schedule source/).first().waitFor()
+  assert.match(await page.locator('body').innerText(), /T1 vs Gen.G/)
+  assert.equal(await page.getByText(/Game win:/).count(), 0)
+  assert.equal(await page.getByText(/Current ratings are unavailable/).count(), 0)
+  feed = { ...feed, source: 'lolesports-persisted-site-api', unsupportedApi: true }
+  await page.reload()
+
   await page.getByText(/Forecast unavailable: No reviewed source-to-ranking team ID map is published/).first().waitFor()
   await page.getByText(/Forecast receipt check failed; showing the last valid ledger/).waitFor()
   await page.getByText('Conditional Power preview', { exact: true }).first().click()
@@ -136,13 +147,13 @@ test('synthetic tournament card keeps published pre-match odds through live and 
   assert.equal(await page.getByLabel('Winner', { exact: true }).inputValue(), 'home')
 
   ledgerStatus = 200
-  const created = createPreMatchReceipt({ series: upcoming, basis: forecastBasis, forecastRevision: 'fixture-rev-1',
+  const created = createPreMatchReceipt({ options: { seriesSource: 'lolesports-persisted-site-api' }, series: upcoming, basis: forecastBasis, forecastRevision: 'fixture-rev-1',
     generatedAt: at, publishedAt: new Date(Date.parse(at) + 1000).toISOString(), observedAt: at })
   assert.equal(created.status, 'ready')
   if (created.status !== 'ready') return
   ledger = appendForecastReceipt(ledger, created)
   const live = { ...upcoming, status: 'live' as const, sourceState: 'inProgress', teams: [team('fixture-t1', 'T1', 1), team('fixture-gen', 'Gen.G', 0)] }
-  ledger = pinPreMatchReceipt(ledger, live, afterMinutes(20))
+  ledger = pinPreMatchReceipt(ledger, live, 'lolesports-persisted-site-api', afterMinutes(20))
   feed = { ...feed, fetchedAt: afterMinutes(20), events: [{ ...feed.events[0]!, series: [live, series(start, 2)] }] }
   await page.clock.fastForward(9 * 60_000)
   await page.getByText('Published pre-match forecast').waitFor()
@@ -174,5 +185,50 @@ test('synthetic tournament card keeps published pre-match odds through live and 
     await page.setViewportSize({ width, height: 800 })
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Horizontal overflow at ${width}px`)
   }
+  feed = { ...feed, source: 'leaguepedia-cargo', unsupportedApi: false }
+  identityStatus = 503
+  await page.clock.fastForward(65_000)
+  await page.getByText(/Forecast unavailable: Forecasts are unavailable for this schedule source/).first().waitFor()
+  assert.equal(await page.getByText('Published pre-match forecast', { exact: true }).count(), 0)
+  assert.equal(await page.getByText(/Score-conditioned series odds:/).count(), 0)
+  assert.match(await page.locator('body').innerText(), /T1 3–1 Gen.G/)
+  assert.deepEqual(errors, [])
   assert.deepEqual(external, [])
+})
+
+test('Worlds source changes retain observations and withhold official-basis odds even without artifacts', { timeout: 30_000 }, async () => {
+  const { server, controls } = await createWorldsFixtureServer()
+  controls.stage = 'play-in'
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    await server.listen()
+    const address = server.httpServer?.address()
+    assert.ok(address && typeof address !== 'string')
+    const path = chromium.executablePath()
+    browser = await chromium.launch(existsSync(path) ? { headless: true } : { headless: true, channel: 'chrome' })
+    const page = await browser.newPage()
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.goto(`http://127.0.0.1:${address.port}/#tournaments?view=schedule`)
+    await page.getByText('Computation complete.', { exact: true }).waitFor()
+    await page.getByText('Simulation basis and precision', { exact: true }).click()
+    await page.getByText(/exact-enumeration/).waitFor()
+    controls.seriesSource = 'leaguepedia-cargo'
+    for (const missingModel of [false, true]) {
+      controls.missingModel = missingModel
+      await page.reload()
+      await page.getByText('Computation complete.', { exact: true }).waitFor()
+      await page.getByText('Simulation basis and precision', { exact: true }).click()
+      await page.getByText(/observed-state/).waitFor()
+      const panel = page.getByLabel('Worlds simulation', { exact: true })
+      assert.match(await panel.innerText(), /Forecasts are unavailable for this schedule source/)
+      assert.match(await panel.innerText(), /Current stage: Play-In/)
+      assert.equal(await panel.getByRole('region', { name: 'Worlds cumulative probabilities' }).locator('tbody tr').count(), 19)
+      assert.equal(await page.getByText(/Game win:/).count(), 0)
+      assert.equal(await panel.getByText(/exact-enumeration|seeded-monte-carlo/).count(), 0)
+      const labels = await panel.getByRole('region', { name: 'Worlds cumulative probabilities' }).locator('td[aria-label]').evaluateAll((cells) => cells.map((cell) => cell.getAttribute('aria-label') ?? ''))
+      assert.ok(labels.filter((label) => label.includes('%')).every((label) => label.includes('observed outcome')))
+    }
+    assert.deepEqual(errors, [])
+  } finally { await browser?.close(); await server.close() }
 })

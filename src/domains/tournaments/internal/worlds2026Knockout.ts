@@ -1,4 +1,4 @@
-import { forecastTournamentSeries, type ForecastBasis, type ForecastReady } from './tournamentForecast.ts'
+import { forecastSourceUnavailable, forecastTournamentSeries, type WorldsForecastInput, type ForecastReady } from './tournamentForecast.ts'
 import type { ObservationEvidence } from './worldsObservedRules.ts'
 
 /** Conditional on a supplied draw, not a simulation of the draw procedure. */
@@ -127,9 +127,12 @@ export type KnockoutForecastResult = Unsupported | {
 }
 
 /** Enumerates at most 128 winner paths. Observed winners and bracket links stay fixed. */
-export function forecastWorlds2026Knockout(input: Worlds2026KnockoutInput, basis: ForecastBasis | null): KnockoutForecastResult {
+export function forecastWorlds2026Knockout(input: Worlds2026KnockoutInput, forecastInput: WorldsForecastInput): KnockoutForecastResult {
+  const { basis, seriesSource } = forecastInput
   const state = replayWorlds2026Knockout(input)
   if (state.status === 'unsupported') return state
+  const sourceError = forecastSourceUnavailable(seriesSource)
+  if (!state.resolvedMatches[6] && sourceError) return unsupported('model-unavailable', sourceError.detail)
   if (!state.resolvedMatches[6] && (!basis || !validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)
     || Date.parse(basis.ratingDataAsOf) > Date.parse(basis.ratingPublishedAt)
     || Date.parse(basis.ratingPublishedAt) > Date.parse(input.asOf))) {
@@ -170,7 +173,7 @@ export function forecastWorlds2026Knockout(input: Worlds2026KnockoutInput, basis
         id: `hypothetical:${JSON.stringify([input.stateVersion, slot, pair])}`, eventId: input.eventId,
         startTime: null, stage: definition.stage, status: 'upcoming', sourceState: 'unstarted', bestOf: 5, vodUrls: [],
         teams: pair.map((id) => ({ id, name: null, code: null, gameWins: null, outcome: null })),
-      }, basis, { sideAssumption: 'neutral', sideBasis: 'Hypothetical neutral-side Bo5; selection rights and draft choices are not modeled.' })
+      }, basis, { seriesSource, sideAssumption: 'neutral', sideBasis: 'Hypothetical neutral-side Bo5; selection rights and draft choices are not modeled.' })
       if (result.status === 'unavailable') return unsupported('model-unavailable', `${pair.join(' vs ')}: ${result.reason}: ${result.detail}`)
       const probabilities = [result.homeGameWinProbability, result.awayGameWinProbability,
         result.homeSeriesWinProbability, result.awaySeriesWinProbability]

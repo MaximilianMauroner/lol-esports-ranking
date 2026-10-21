@@ -16,6 +16,8 @@ export {
 } from './internal/conditionalPowerResultReceipts.ts'
 export {
   type ForecastBasis,
+  type ForecastOptions,
+  type WorldsForecastInput,
   type ForecastLedger,
   type ForecastReceipt,
   type ForecastUnavailable,

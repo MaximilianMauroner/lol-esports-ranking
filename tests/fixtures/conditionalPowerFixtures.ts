@@ -124,7 +124,7 @@ export function conditionalPowerReceiptFixture(bestOf: 1 | 3 | 5 = 5, options: {
       }),
     },
   }
-  const result = createConditionalPowerResultReceipt({ series: input.series, forecastBasis, replayBasis: input.basis, generatedAt })
+  const result = createConditionalPowerResultReceipt({ seriesSource: 'lolesports-persisted-site-api', series: input.series, forecastBasis, replayBasis: input.basis, generatedAt })
   if (result.status !== 'ready') throw new Error(result.detail)
   return { ...input, generatedAt, forecastBasis, plan, receipt: result.receipt }
 }
