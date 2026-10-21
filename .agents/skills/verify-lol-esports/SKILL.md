@@ -88,9 +88,10 @@ For the first proof, run L2's search journey. Wait for the heading
 `Find a team`. Use `preview_type` to enter a team name observed in that table.
 Capture the filtered board and its address. Click the button whose accessible
 name is `Clear search for ` followed by that name. Capture the restored board.
-Reload the filtered address with `preview_press` using Control-R, or call
-`preview_evaluate` with `location.reload()`. Check that the same search and results
-return. Navigating to the same hash alone does not prove a full reload.
+Use `preview_navigate` to open the saved filtered address. Then reload it with
+`preview_press` using Control-R, or call `preview_evaluate` with
+`location.reload()`. Check that the same search and results return.
+Navigating to the same hash alone does not prove a full reload.
 Read [L2](features/l2.md) for the remaining filter and address journeys.
 
 Use `preview_select` only for native selects. Use `preview_click` for custom
