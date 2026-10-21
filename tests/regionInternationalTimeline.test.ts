@@ -12,9 +12,8 @@ test('the bundled Worlds, MSI and EWC results give the reviewed series records p
   const manifest = await read('ranking-summary.json')
   const index = parsePublicTournamentMovementIndex(await read(manifest.tournamentMovementIndexUrl))
   const directory = parsePublicTeamDirectory(await read(manifest.teamDirectoryUrl))
-  const events = await Promise.all(index.tournaments.flatMap((entry) => isTierOneInternationalFamily(entry.family)
-    ? [read(entry.url).then((value) => ({ family: entry.family, season: Number(entry.season), shard: parsePublicTournamentMovementShard(value) }))]
-    : []))
+  const entries = index.tournaments.flatMap(({ family, season, url }) => isTierOneInternationalFamily(family) ? [{ family, season: Number(season), url }] : [])
+  const events = await Promise.all(entries.map(async ({ family, season, url }) => ({ family, season, shard: parsePublicTournamentMovementShard(await read(url)) })))
 
   const timeline = regionInternationalTimeline({ generatedAt: manifest.generatedAt, directory, events })
 
@@ -92,6 +91,7 @@ function directory(teams: [string, string][]) {
 
 type FixtureSeries = [opponent: string, result: 'W' | 'L' | 'T', seriesId?: string, seriesState?: PublicTeamHistoryPointContext['seriesState']]
 
+// The fixture has only the shard fields that the timeline reads.
 function shard(teams: [string, FixtureSeries[]][]) {
   return {
     id: 'msi:2026',
@@ -101,5 +101,5 @@ function shard(teams: [string, FixtureSeries[]][]) {
       team: teamId,
       points: series.map(([opponent, result, seriesId, seriesState]): PublicTeamHistoryPoint => ['2026-06-02', 1500, 1, { kind: 'match', opponent, result, seriesId, seriesState }]),
     })),
-  } as PublicTournamentMovementShard
+  } as unknown as PublicTournamentMovementShard
 }

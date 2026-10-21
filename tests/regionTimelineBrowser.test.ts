@@ -14,7 +14,7 @@ const teams: Record<string, TeamProfile> = Object.fromEntries(regions.flatMap((r
     return [name, { name, code: `${region[1]}${index + 1}`, league: region, region }]
   })))
 
-function series(id: string, date: string, event: string, tier: MatchRecord['tier'], league: string, region: string, teamA: string, teamB: string): MatchRecord {
+function series(id: string, date: string, event: string, tier: MatchRecord['tier'], league: string, region: MatchRecord['region'], teamA: string, teamB: string): MatchRecord {
   return { id, sourceProvider: 'oracles-elixir', date, datetimeUtc: `${date}T12:00:00.000Z`, season: Number(date.slice(0, 4)), event,
     phase: 'Regular season', region, league, patch: '', bestOf: 1, bestOfBasis: 'provider', tier, teamA, teamB, winner: teamA,
     teamAKills: 15, teamBKills: 9, teamAGold: 60_000, teamBGold: 55_000 }
