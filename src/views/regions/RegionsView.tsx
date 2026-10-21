@@ -226,6 +226,7 @@ const WIN_RATE_TICKS = [0, 25, 50, 75, 100]
 function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternationalTimeline; ratedMatchRule?: string }) {
   const syncId = useId()
   const inProgress = timeline.seasons.find((season) => season.inProgress)?.season
+  const seasons = useMemo(() => timeline.seasons.map((season) => season.season), [timeline])
   const charts = useMemo(() => {
     // A season without events has no value in either chart, so both charts show the same seasons.
     const heldSeasons = new Set(timeline.seasons.flatMap((season) => season.events.length > 0 ? [season.season] : []))
@@ -283,7 +284,7 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
               yFormat={chart.yFormat}
               yDomain={chart.yDomain}
               yTicks={chart.yTicks}
-              xAxis={{ kind: 'year', inProgress }}
+              xAxis={{ kind: 'year', seasons, inProgress }}
               syncId={syncId}
             />
           </section>

@@ -25,12 +25,21 @@ createRoot(document.getElementById('root')!).render([
     }],
     details: (active) => createElement('p', null, describeRow(active)),
   }),
-  createElement(LineChart, { key: 'power', yLabel: 'Power', syncId: 'seasons', xAxis: { kind: 'year', inProgress: 2026 }, series: seasonSeries([2300, 2100], 1900) }),
-  createElement(LineChart, { key: 'average', yLabel: 'Average', syncId: 'seasons', xAxis: { kind: 'year', inProgress: 2026 }, series: seasonSeries([2140, 1950], 1700) }),
+  createElement(LineChart, { key: 'power', yLabel: 'Power', syncId: 'seasons', xAxis: { kind: 'year', seasons: [2025, 2026], inProgress: 2026 }, series: seasonSeries([2300, 2100], 1900) }),
+  createElement(LineChart, { key: 'average', yLabel: 'Average', syncId: 'seasons', xAxis: { kind: 'year', seasons: [2025, 2026], inProgress: 2026 }, series: seasonSeries([2140, 1950], 1700) }),
   createElement(LineChart, {
     key: 'gap',
     yLabel: 'Gap',
-    xAxis: { kind: 'year', inProgress: 2026 },
+    xAxis: { kind: 'year', seasons: [2023, 2024, 2025, 2026], inProgress: 2026 },
     series: [{ id: 'west', label: 'West', color: '#199e70', points: [{ t: 2023, y: 10 }, { t: 2025, y: 20 }, { t: 2026, y: 30 }] }],
+  }),
+  createElement(LineChart, {
+    key: 'empty',
+    yLabel: 'Pending',
+    xAxis: { kind: 'year', seasons: [2024, 2025, 2026], inProgress: 2026 },
+    series: [
+      { id: 'east', label: 'East', color: '#c98500', points: [{ t: 2024, y: 40 }, { t: 2025, y: 50 }] },
+      { id: 'north', label: 'North', color: '#3987e5', points: [{ t: 2025, y: 45 }] },
+    ],
   }),
 ])

@@ -55,8 +55,8 @@ export type LineChartProps = {
   yReverse?: boolean
   curve?: 'linear' | 'step'
   interactiveLegend?: boolean
-  /** Season years on the x axis instead of Unix ms dates. */
-  xAxis?: { kind: 'year'; inProgress?: number }
+  /** Season years on the x axis instead of Unix ms dates. Every season gets a row, even one with no values. */
+  xAxis?: { kind: 'year'; seasons: number[]; inProgress?: number }
   /** Charts with the same id show the same x value on hover. */
   syncId?: string
   /** Shown below the chart for the hovered row, or the latest row. */
@@ -95,10 +95,11 @@ export function LineChart({
   const summaryId = `${chartId}-summary`
   const yearAxis = xAxis?.kind === 'year'
   const inProgress = xAxis?.inProgress
-  const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
+  const seasons = xAxis?.seasons
+  const domain = useMemo(() => computeDomain(series, yDomain, seasons), [series, yDomain, seasons])
   const { data, meta, gaps } = useMemo(
-    () => buildChartData(series, yearAxis ? { maxGap: 1, dashLongGaps: false, inProgress } : { maxGap: SEGMENT_GAP_MS, dashLongGaps: true }),
-    [series, yearAxis, inProgress],
+    () => buildChartData(series, seasons ? { maxGap: 1, dashLongGaps: false, inProgress, seasons } : { maxGap: SEGMENT_GAP_MS, dashLongGaps: true }),
+    [series, seasons, inProgress],
   )
 
   if (series.length === 0 || domain === null || data.length === 0) {
@@ -227,8 +228,11 @@ export function LineChart({
         </RechartsLineChart>
       </ChartContainer>
       {gaps.length > 0 && !yearAxis ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
-      {yearAxis && gaps.length > 0 ? (
-        <p className="px-4 pb-2 text-xs text-muted-foreground">{inProgress} is in progress. The dashed line leads to its value so far.</p>
+      {yearAxis && inProgress !== undefined && inProgress >= minT && inProgress <= maxT ? (
+        <p className="px-4 pb-2 text-xs text-muted-foreground">
+          {inProgress} is in progress.
+          {gaps.length > 0 ? ' The dashed line leads to its value so far.' : activeRow(series, inProgress).points.length === 0 ? ' It has no value yet.' : null}
+        </p>
       ) : null}
       {details ? (
         <div className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details">
@@ -280,8 +284,12 @@ function summarizeSeries(series: ChartSeries) {
  * dashed connector spans it. A dashed connector also leads into the
  * in-progress season from the season before it, because that value is not final.
  */
-function buildChartData(series: ChartSeries[], { maxGap, dashLongGaps, inProgress }: { maxGap: number; dashLongGaps: boolean; inProgress?: number }) {
-  const dataByTime = new Map<number, ChartDatum>()
+function buildChartData(
+  series: ChartSeries[],
+  { maxGap, dashLongGaps, inProgress, seasons = [] }: { maxGap: number; dashLongGaps: boolean; inProgress?: number; seasons?: number[] },
+) {
+  // A season without values still gets a row, so hover can reach it and synced charts share the same rows.
+  const dataByTime = new Map<number, ChartDatum>(seasons.map((season) => [season, { t: season }]))
   const meta: SeriesMeta[] = []
   const gaps: SeriesMeta[] = []
 
@@ -350,9 +358,9 @@ function directLabelPositions(
   }]))
 }
 
-function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: number }) {
-  let minT = Infinity
-  let maxT = -Infinity
+function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: number }, seasons: number[] = []) {
+  let minT = Math.min(...seasons)
+  let maxT = Math.max(...seasons)
   let minY = Infinity
   let maxY = -Infinity
   for (const entry of series) {

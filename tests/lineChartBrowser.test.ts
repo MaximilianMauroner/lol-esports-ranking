@@ -19,7 +19,7 @@ test('line charts share one hover model', { timeout: 90_000 }, async (t) => {
     await page.goto(fixtureUrl)
     const chart = page.getByRole('application', { name: 'Rating over time for Alpha' })
     await chart.locator('.recharts-xAxis-tick-labels text').last().waitFor()
-    const [calendarBox, powerBox, averageBox, gapBox] = await page.locator('[data-slot="chart"]').all()
+    const [calendarBox, powerBox, averageBox, gapBox, emptyBox] = await page.locator('[data-slot="chart"]').all()
     const power = page.getByRole('application', { name: 'Power over seasons for North, South' })
     const average = page.getByRole('application', { name: 'Average over seasons for North, South' })
     const details = page.getByRole('region', { name: 'Selected chart point details' })
@@ -97,6 +97,19 @@ test('line charts share one hover model', { timeout: 90_000 }, async (t) => {
       assert.deepEqual(lines.filter((line) => line.left < x2024 && line.right > x2024), [])
       assert.equal(lines.filter((line) => line.dashed === '4 4').length, 1, 'only the connector into the in-progress season is dashed')
       await gapBox.locator('xpath=..').getByText('2026 is in progress. The dashed line leads to its value so far.').waitFor()
+    })
+    await t.test('an in-progress season without values has a tick and a row that hover reaches', async () => {
+      const empty = page.getByRole('application', { name: 'Pending over seasons for East, North' })
+      await empty.scrollIntoViewIfNeeded()
+      assert.deepEqual(await empty.locator('.recharts-xAxis-tick-labels text').allTextContents(), ['2024', '2025', '2026'])
+      await emptyBox.locator('xpath=..').getByText('2026 is in progress. It has no value yet.').waitFor()
+      const box = await empty.boundingBox()
+      assert.ok(box)
+      await page.mouse.move(box.x + box.width * 0.92, box.y + box.height / 2)
+      const tooltip = emptyBox.locator('.recharts-tooltip-wrapper')
+      await tooltip.getByText('2026 · in progress', { exact: true }).waitFor()
+      assert.match(await tooltip.innerText(), /East\s+No value/)
+      assert.match(await tooltip.innerText(), /North\s+No value/)
     })
 
     await t.test('a horizontal touch scrub shows the tooltip and moves the details', async () => {
