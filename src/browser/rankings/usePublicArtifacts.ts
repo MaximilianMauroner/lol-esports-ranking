@@ -1,10 +1,11 @@
 import { teamKey } from '../../shared/display'
 export type { PublicSnapshotState } from './published/resolver'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PublicPlayerDirectory, PublicRankingManifest, PublicRegionHistoryDirectory, PublicRegionHistoryScope, PublicTeamHistoryIndex, PublicTeamHistoryShard, PublicTournamentMovementIndex, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicMatchHistoryCatalog, PublicMatchHistoryIndex, PublicMatchHistoryPage, SnapshotCheckpointOption, SnapshotFilter } from '../../domains/rankings/types'
+import type { PublicPlayerDirectory, PublicRankingManifest, PublicRegionHistoryDirectory, PublicRegionHistoryScope, PublicTeamDirectory, PublicTeamHistoryIndex, PublicTeamHistoryShard, PublicTournamentMovementIndex, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicMatchHistoryCatalog, PublicMatchHistoryIndex, PublicMatchHistoryPage, SnapshotCheckpointOption, SnapshotFilter } from '../../domains/rankings/types'
 import {
   parsePublicPlayerDirectory,
   parsePublicRegionHistory,
+  parsePublicTeamDirectory,
   parsePublicTeamHistoryIndex,
   parsePublicTeamHistoryShard,
   parsePublicTournamentMovementIndex,
@@ -23,6 +24,7 @@ import {
   type PublicSnapshotCacheEntry,
 } from './published/resolver'
 import { tournamentEntriesForScope, type TournamentInstanceId } from '../../domains/rankings/evidence'
+import { isTierOneInternationalFamily, regionInternationalTimeline, type RegionInternationalTimeline } from '../../domains/rankings/read'
 import { createPublicRankingManifestLoader } from './published/manifestLoader'
 import {
   assertGenerationMapping,
@@ -44,6 +46,7 @@ export type PlayerDirectoryState = PublicArtifactState<PublicPlayerDirectory>
 export type RegionHistoryScopeState = PublicArtifactState<PublicRegionHistoryScope>
 export type TournamentMovementIndexState = PublicArtifactState<PublicTournamentMovementIndex>
 export type TournamentMovementState = PublicArtifactState<PublicTournamentMovementShard>
+export type RegionTimelineState = PublicArtifactState<RegionInternationalTimeline>
 export type MatchHistoryPageState = PublicArtifactState<PublicMatchHistoryPage>
 export type MatchHistoryState = PublicArtifactState<{
   catalog: PublicMatchHistoryCatalog
@@ -56,6 +59,7 @@ type PublicArtifactLoadOptions = {
   loadTeamHistory?: boolean
   loadRegionHistory?: boolean
   loadTournamentMovements?: boolean
+  loadRegionTimeline?: boolean
   matchHistoryYear?: string
   teamHistoryTeams?: readonly string[]
   loadMatchHistory?: boolean
@@ -79,6 +83,7 @@ const PLAYERS_URL = import.meta.env.VITE_PLAYER_DATA_URL || '/data/entities/play
 const TEAM_HISTORY_INDEX_URL = import.meta.env.VITE_TEAM_HISTORY_INDEX_URL || import.meta.env.VITE_TEAM_HISTORY_URL || '/data/history/team-series/index.json'
 const REGION_HISTORY_URL = import.meta.env.VITE_REGION_HISTORY_URL || '/data/history/region-series.json'
 const TOURNAMENT_MOVEMENT_INDEX_URL = import.meta.env.VITE_TOURNAMENT_MOVEMENT_INDEX_URL || '/data/history/tournament-moves/index.json'
+const TEAMS_URL = '/data/entities/teams.json'
 const MATCH_HISTORY_INDEX_URL = import.meta.env.VITE_MATCH_HISTORY_INDEX_URL || '/data/matches/index.json'
 
 const loadPublicRankingManifest = createPublicRankingManifestLoader(DATA_URL)
@@ -89,6 +94,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     loadTeamHistory = false,
     loadRegionHistory = false,
     loadTournamentMovements = false,
+    loadRegionTimeline = false,
     loadMatchHistory = false,
     matchHistoryYear,
     teamHistoryTeams,
@@ -107,6 +113,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   const [tournamentMovementIndexAttempt, setTournamentMovementIndexAttempt] = useState(0)
   const [tournamentMovementCache, setTournamentMovementCache] = useState<Record<string, TournamentMovementCacheEntry>>({})
   const tournamentMovementCacheRef = useRef(tournamentMovementCache)
+  const [teamDirectoryState, setTeamDirectoryState] = useState<PublicArtifactState<PublicTeamDirectory>>({ status: 'idle' })
   const [snapshotCache, setSnapshotCache] = useState<Record<string, PublicSnapshotCacheEntry>>({})
   const [matchHistoryAttempt, setMatchHistoryAttempt] = useState(0)
   const [matchHistoryIndexState, setMatchHistoryIndexState] = useState<PublicArtifactState<PublicMatchHistoryIndex>>({ status: 'idle' })
@@ -144,6 +151,12 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     () => resolveTournamentMovementState(tournamentMovementIndexState, tournamentMovementCache, tournamentId),
     [tournamentId, tournamentMovementCache, tournamentMovementIndexState],
   )
+  const regionTimelineState = useMemo<RegionTimelineState>(
+    () => loadRegionTimeline ? resolveRegionTimelineState(data, tournamentMovementIndexState, teamDirectoryState, tournamentMovementCache) : { status: 'idle' },
+    [data, loadRegionTimeline, teamDirectoryState, tournamentMovementCache, tournamentMovementIndexState],
+  )
+  // The region timeline reads the same index and shard cache. One flag keeps the cache when the view changes.
+  const loadTournamentMovementIndex = loadTournamentMovements || loadRegionTimeline
   const matchHistoryYears = matchHistoryIndexState.status === 'ready' ? matchHistoryIndexState.data.scopeIndex[snapshotKey(filter)]?.years ?? [] : []
   const selectedMatchYear = matchHistoryYear && matchHistoryYear !== 'All' && (matchHistoryIndexState.status !== 'ready' || matchHistoryYears.includes(matchHistoryYear)) ? matchHistoryYear : undefined
   const matchHistoryState = useMemo<MatchHistoryState>(() => {
@@ -241,7 +254,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
   }, [data, loadRegionHistory, filter])
 
   useEffect(() => {
-    if (!data || !loadTournamentMovements) return
+    if (!data || !loadTournamentMovementIndex) return
     const manifest = data
     const controller = new AbortController()
     const url = resolvePublicArtifactUrl(manifest.tournamentMovementIndexUrl ?? TOURNAMENT_MOVEMENT_INDEX_URL, DATA_URL)
@@ -267,7 +280,26 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     }
     void load()
     return () => controller.abort()
-  }, [data, loadTournamentMovements, tournamentMovementIndexAttempt])
+  }, [data, loadTournamentMovementIndex, tournamentMovementIndexAttempt])
+
+  useEffect(() => {
+    if (!data || !loadRegionTimeline) return
+    const manifest = data
+    const controller = new AbortController()
+    const url = resolvePublicArtifactUrl(manifest.teamDirectoryUrl ?? TEAMS_URL, DATA_URL)
+    setTeamDirectoryState({ status: 'loading' })
+    async function load() {
+      try {
+        const directory = await fetchPublicArtifact(manifest, url, DATA_URL, parsePublicTeamDirectory, { signal: controller.signal })
+        setTeamDirectoryState({ status: 'ready', data: directory })
+      } catch (error) {
+        if (isAbortError(error)) return
+        setTeamDirectoryState({ status: 'error', message: error instanceof Error ? error.message : 'Unable to load teams' })
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [data, loadRegionTimeline])
 
   useEffect(() => {
     if (!data || !loadMatchHistory) return
@@ -483,6 +515,13 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
       })
   }, [tournamentMovementIndexState])
 
+  useEffect(() => {
+    if (!loadRegionTimeline || tournamentMovementIndexState.status !== 'ready') return
+    tournamentMovementIndexState.data.tournaments
+      .filter((entry) => isTierOneInternationalFamily(entry.family))
+      .forEach((entry) => prefetchTournament(entry.id))
+  }, [loadRegionTimeline, prefetchTournament, tournamentMovementIndexState])
+
   const retryTournamentMovements = useCallback(() => {
     setTournamentMovementIndexState({ status: 'loading' })
     setTournamentMovementCache({})
@@ -557,6 +596,7 @@ export function usePublicArtifacts(scope: string, options: PublicArtifactLoadOpt
     tournamentMovementIndexState: requestedState(loadTournamentMovements, tournamentMovementIndexState),
     tournamentMovementEntries,
     tournamentMovementState,
+    regionTimelineState,
     matchHistoryState,
     matchHistoryYears,
     selectedMatchYear,
@@ -738,6 +778,32 @@ function resolveTournamentMovementState(
   if (!cached) return { status: 'loading' }
   if (cached.status === 'ready') return { status: 'ready', data: cached.shard }
   return cached.status === 'loading' ? { status: 'loading' } : cached
+}
+
+function resolveRegionTimelineState(
+  data: PublicRankingManifest | undefined,
+  indexState: TournamentMovementIndexState,
+  directoryState: PublicArtifactState<PublicTeamDirectory>,
+  cache: Record<string, TournamentMovementCacheEntry>,
+): RegionTimelineState {
+  if (!data || indexState.status === 'idle' || indexState.status === 'loading') return { status: 'loading' }
+  if (indexState.status !== 'ready') return indexState
+  const entries = indexState.data.tournaments.flatMap((entry) => isTierOneInternationalFamily(entry.family) ? [{ ...entry, family: entry.family }] : [])
+  if (!entries.length) return { status: 'missing', message: 'No Worlds, MSI or EWC results are published.' }
+  if (directoryState.status === 'error' || directoryState.status === 'missing') return { status: 'error', message: directoryState.message }
+  const failed = entries.flatMap((entry) => {
+    const cached = cache[entry.id]
+    return cached?.status === 'error' || cached?.status === 'missing' ? [`${entry.label}: ${cached.message}`] : []
+  })
+  if (failed.length) return { status: 'error', message: failed.join(' ') }
+  if (directoryState.status !== 'ready') return { status: 'loading' }
+  const events = []
+  for (const entry of entries) {
+    const cached = cache[entry.id]
+    if (cached?.status !== 'ready') return { status: 'loading' }
+    events.push({ family: entry.family, season: Number(entry.season), shard: cached.shard })
+  }
+  return { status: 'ready', data: regionInternationalTimeline({ generatedAt: data.generatedAt, directory: directoryState.data, events }) }
 }
 
 function compatibleTournamentMovementEntries(
