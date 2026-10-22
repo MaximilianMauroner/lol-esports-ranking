@@ -1,4 +1,5 @@
-import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '../shared/utils'
 
 /** A point the reader can make active, in viewBox units. */
@@ -11,12 +12,14 @@ export type ChartTarget = {
 }
 
 const TOOLTIP_GAP = 12
+/** Keeps the tooltip off the window edge. */
+const VIEWPORT_MARGIN = 8
 
 /**
  * The hover model of the line charts for a hand-drawn SVG chart of points.
  * Pointer and touch snap to the nearest point, a crosshair marks its value,
- * and the tooltip is a polite live region inside the chart box. The chart is
- * one tab stop: the arrow keys move between points, and Enter selects one.
+ * and the tooltip is a polite live region beside the point. The chart is one
+ * tab stop: the arrow keys move between points, and Enter selects one.
  *
  * `targets` come in reading order. Keyboard focus starts on the first one.
  */
@@ -46,24 +49,23 @@ export function PointChart<T extends ChartTarget>({
 }) {
   const [activeKey, setActiveKey] = useState<string>()
   const active = targets.find((target) => target.key === activeKey)
-  const wrapperRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const summaryId = useId()
+  // The point as a share of the chart's width and height.
+  const anchorX = active ? active.x / width : undefined
+  const anchorY = active ? active.y / height : undefined
 
-  useLayoutEffect(() => {
-    const wrapper = wrapperRef.current
-    const svg = svgRef.current
-    const tip = tooltipRef.current
-    if (!active || !wrapper || !svg || !tip) return
-    const position = tooltipPosition({
-      anchor: { x: active.x * svg.clientWidth / width, y: active.y * svg.clientWidth / width },
-      tooltip: { width: tip.offsetWidth, height: tip.offsetHeight },
-      bounds: { width: wrapper.clientWidth, height: wrapper.clientHeight },
+  useLayoutEffect(() => placeTooltip(svgRef.current, tooltipRef.current, anchorX, anchorY))
+  useEffect(() => {
+    if (anchorX === undefined || anchorY === undefined) return
+    // Scrolling, resizing and content loading above the chart all move the point, so the tooltip follows it each frame while it shows.
+    let frame = requestAnimationFrame(function follow() {
+      placeTooltip(svgRef.current, tooltipRef.current, anchorX, anchorY)
+      frame = requestAnimationFrame(follow)
     })
-    tip.style.left = `${position.left}px`
-    tip.style.top = `${position.top}px`
-  })
+    return () => cancelAnimationFrame(frame)
+  }, [anchorX, anchorY])
 
   function targetAt(event: { clientX: number; clientY: number }) {
     const matrix = svgRef.current?.getScreenCTM()
@@ -94,7 +96,7 @@ export function PointChart<T extends ChartTarget>({
   }
 
   return (
-    <div ref={wrapperRef} className="relative min-w-0">
+    <div className="min-w-0">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
@@ -123,17 +125,21 @@ export function PointChart<T extends ChartTarget>({
         ) : null}
         {children(active)}
       </svg>
-      {/* The live region stays mounted so screen readers hear each new point, as in the line charts. */}
-      <div role="status" aria-live="polite">
-        {active ? (
-          <div
-            ref={tooltipRef}
-            className="pointer-events-none absolute top-0 left-0 z-10 grid w-max max-w-[min(17rem,100%)] gap-1.5 rounded-md border border-border/50 bg-background px-2.5 py-2 text-xs shadow-xl"
-          >
-            {tooltip(active)}
-          </div>
-        ) : null}
-      </div>
+      {/* The live region stays mounted so screen readers hear each new point, as in the line charts.
+          It is a portal, so a short chart or an overflow-hidden panel cannot clip the tooltip. */}
+      {typeof document === 'undefined' ? null : createPortal(
+        <div role="status" aria-live="polite">
+          {active ? (
+            <div
+              ref={tooltipRef}
+              className="pointer-events-none fixed top-0 left-0 z-50 grid w-max max-w-[min(17rem,calc(100vw-1rem))] gap-1.5 rounded-md border border-border/50 bg-background px-2.5 py-2 text-xs shadow-xl"
+            >
+              {tooltip(active)}
+            </div>
+          ) : null}
+        </div>,
+        document.body,
+      )}
     </div>
   )
 }
@@ -164,14 +170,14 @@ function nearestTarget<T extends ChartTarget>(targets: readonly T[], x: number, 
 
 function keyboardTarget<T extends ChartTarget>(targets: readonly T[], active: T | undefined, key: string) {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(key)) return undefined
+  if (key === 'Home') return targets[0]
+  if (key === 'End') return targets.at(-1)
   if (!active) return targets[0]
   const rowTargets = (row: number) => targets.filter((target) => target.row === row).toSorted((left, right) => left.x - right.x)
   const row = rowTargets(active.row)
   const index = row.indexOf(active)
   if (key === 'ArrowLeft') return row[index - 1] ?? active
   if (key === 'ArrowRight') return row[index + 1] ?? active
-  if (key === 'Home') return row[0]
-  if (key === 'End') return row.at(-1)
   const rows = [...new Set(targets.map((target) => target.row))].sort((left, right) => left - right)
   const nextRow = rows[rows.indexOf(active.row) + (key === 'ArrowDown' ? 1 : -1)]
   if (nextRow === undefined) return active
@@ -179,26 +185,33 @@ function keyboardTarget<T extends ChartTarget>(targets: readonly T[], active: T 
 }
 
 /**
- * Beside the point when there is room, else above or below it. Always inside
- * the chart box, as the line chart tooltip stays inside its chart.
+ * Beside the point when there is room, else above or below it, always inside
+ * the window. Hidden while the point is scrolled out of view.
  */
-function tooltipPosition({ anchor, tooltip, bounds }: {
-  anchor: { x: number; y: number }
-  tooltip: { width: number; height: number }
-  bounds: { width: number; height: number }
-}) {
-  const clamp = (value: number, max: number) => Math.min(Math.max(0, max), Math.max(0, value))
-  const right = anchor.x + TOOLTIP_GAP
-  const left = anchor.x - TOOLTIP_GAP - tooltip.width
-  if (right + tooltip.width <= bounds.width || left >= 0) {
-    return {
-      left: right + tooltip.width <= bounds.width ? right : left,
-      top: clamp(anchor.y - tooltip.height / 2, bounds.height - tooltip.height),
-    }
+function placeTooltip(svg: SVGSVGElement | null, tip: HTMLDivElement | null, anchorX: number | undefined, anchorY: number | undefined) {
+  if (!svg || !tip || anchorX === undefined || anchorY === undefined) return
+  const chart = svg.getBoundingClientRect()
+  const x = chart.left + anchorX * chart.width
+  const y = chart.top + anchorY * chart.height
+  const view = { width: document.documentElement.clientWidth, height: window.innerHeight }
+  setStyle(tip, 'visibility', y < 0 || y > view.height ? 'hidden' : 'visible')
+  const width = tip.offsetWidth
+  const height = tip.offsetHeight
+  const clamp = (value: number, size: number, max: number) => Math.min(Math.max(VIEWPORT_MARGIN, value), Math.max(VIEWPORT_MARGIN, max - size - VIEWPORT_MARGIN))
+  const right = x + TOOLTIP_GAP
+  const left = x - TOOLTIP_GAP - width
+  let position: { left: number; top: number }
+  if (right + width <= view.width - VIEWPORT_MARGIN) position = { left: right, top: clamp(y - height / 2, height, view.height) }
+  else if (left >= VIEWPORT_MARGIN) position = { left, top: clamp(y - height / 2, height, view.height) }
+  else {
+    const above = y - TOOLTIP_GAP - height
+    position = { left: clamp(x - width / 2, width, view.width), top: above >= VIEWPORT_MARGIN ? above : clamp(y + TOOLTIP_GAP, height, view.height) }
   }
-  const above = anchor.y - TOOLTIP_GAP - tooltip.height
-  return {
-    left: clamp(anchor.x - tooltip.width / 2, bounds.width - tooltip.width),
-    top: above >= 0 ? above : clamp(anchor.y + TOOLTIP_GAP, bounds.height - tooltip.height),
-  }
+  setStyle(tip, 'left', `${position.left}px`)
+  setStyle(tip, 'top', `${position.top}px`)
+}
+
+/** Writes only a changed value, so following an unmoved point costs no style work. */
+function setStyle(element: HTMLElement, property: 'left' | 'top' | 'visibility', value: string) {
+  if (element.style[property] !== value) element.style[property] = value
 }

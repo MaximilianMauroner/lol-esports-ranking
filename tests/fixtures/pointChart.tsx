@@ -19,13 +19,14 @@ const regions = [
   ] },
 ]
 
-createRoot(document.getElementById('root')!).render(createElement('div', { style: { display: 'grid', gap: 24, width: 760 } },
+createRoot(document.getElementById('root')!).render(createElement('div', { style: { display: 'grid', gap: 24, maxWidth: 760 } },
   createElement('button', null, 'Before depth'),
   createElement(RegionDepthChart, { regions }),
   createElement('button', null, 'After depth'),
-  createElement('div', { style: { width: 320 } },
+  // Clips like a panel. The two-row ladder is shorter than its tooltip.
+  createElement('div', { style: { width: '100%', maxWidth: 320, overflow: 'hidden' } },
     createElement(PowerLadder, {
-      groups: [[team('Alpha', 1, 2000)], [team('Bravo', 2, 1900), team('Charlie', 3, 1890)]],
+      groups: [[team('Alpha', 1, 2000), team('Bravo', 2, 1990)]],
       tierFor: () => 'A',
       gapExample: 64,
       onOpen: (standing: RankingSummaryStanding) => {
