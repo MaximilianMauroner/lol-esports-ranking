@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState } from 'react'
 import { ArrowRight, ChevronLeft, ChevronRight, Globe2, Swords, Trophy, X } from 'lucide-react'
 import {
   displayRegionPowerScore,
@@ -225,7 +225,8 @@ const WIN_RATE_TICKS = [0, 25, 50, 75, 100]
 
 function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternationalTimeline; ratedMatchRule?: string }) {
   const syncId = useId()
-  const inProgress = timeline.seasons.find((season) => season.inProgress)?.season
+  const current = timeline.seasons.find((season) => season.inProgress)
+  const inProgress = current?.season
   const seasons = useMemo(() => timeline.seasons.map((season) => season.season), [timeline])
   const charts = useMemo(() => {
     // A season without events has no value in either chart, so both charts show the same seasons.
@@ -258,21 +259,44 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
       },
     ]
   }, [timeline])
-  const seasonNotes = timeline.seasons.map(({ season, events, notYetPublished, inProgress: current }) => {
-    if (events.length === 0) return `${season} has no Worlds, MSI or EWC results in the published data${current ? ' yet' : ''}.`
-    const pending = notYetPublished.map((family) => `${tournamentFamilyLabel(family)} ${season} is not in the published data yet.`)
-    return [`${season}: ${events.map(tournamentFamilyLabel).join(', ')}.`, ...pending].join(' ')
-  })
+  const footnotes = [
+    // A season with no results yet has no line to draw, and its row in the season list says so.
+    current && current.events.length > 0 ? `${current.season} is in progress, so its dashed lines lead to the results so far.` : undefined,
+    ratedMatchRule ? `${ratedMatchRule} Series against teams from leagues without a rating do not count.` : undefined,
+    timeline.unresolvedSeries > 0 ? `${timeline.unresolvedSeries} series ${timeline.unresolvedSeries === 1 ? 'does' : 'do'} not count because a team has no known region.` : undefined,
+  ].filter(Boolean)
 
   return (
     <>
-      <p className="max-w-[72ch] text-sm text-muted-foreground">
-        Each value counts series at Worlds, MSI and the Esports World Cup against teams from other regions.
-        Series between two teams of the same region do not count. A tied series counts as half a win.
-        {' '}{seasonNotes.join(' ')}
-        {ratedMatchRule ? ` ${ratedMatchRule} Series against teams from leagues without a rating do not count.` : null}
-        {timeline.unresolvedSeries > 0 ? ` ${timeline.unresolvedSeries} series ${timeline.unresolvedSeries === 1 ? 'does' : 'do'} not count because a team has no known region.` : null}
-      </p>
+      <div className="grid max-w-[72ch] gap-2 text-sm text-muted-foreground">
+        <p>
+          Each value counts series at Worlds, MSI and the Esports World Cup against teams from other regions.
+          Series between two teams of the same region do not count. A tied series counts as half a win.
+        </p>
+        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-0.5" aria-label="Events per season">
+          {timeline.seasons.map(({ season, events, notYetPublished, inProgress: current }) => (
+            <Fragment key={season}>
+              <dt className="font-semibold text-[var(--text-strong)] tabular-nums">{current ? `${season} so far` : season}</dt>
+              <dd>
+                {events.length === 0
+                  ? `No Worlds, MSI or EWC results in the published data${current ? ' yet' : ''}.`
+                  : `${events.map(tournamentFamilyLabel).join(', ')}.`}
+                {notYetPublished.length > 0 && events.length > 0
+                  ? ` ${notYetPublished.map((family) => tournamentFamilyLabel(family)).join(' and ')} ${notYetPublished.length === 1 ? 'is' : 'are'} not in the published data yet.`
+                  : null}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1" aria-hidden="true">
+        {charts[0].series.map((entry) => (
+          <span className="inline-flex items-center gap-2 text-sm text-muted-foreground" key={entry.id}>
+            <i className="inline-block h-[3px] w-[11px] shrink-0 rounded-full" style={{ background: entry.color }} />
+            {entry.label}
+          </span>
+        ))}
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         {charts.map((chart) => (
           <section className="min-w-0 rounded-md border border-border" aria-label={chart.title} key={chart.title}>
@@ -286,10 +310,12 @@ function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternat
               yTicks={chart.yTicks}
               xAxis={{ kind: 'year', seasons, inProgress }}
               syncId={syncId}
+              legend={false}
             />
           </section>
         ))}
       </div>
+      {footnotes.length > 0 ? <p className="max-w-[72ch] text-xs text-muted-foreground">{footnotes.join(' ')}</p> : null}
     </>
   )
 }

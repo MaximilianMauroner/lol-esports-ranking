@@ -55,6 +55,8 @@ export type LineChartProps = {
   yReverse?: boolean
   curve?: 'linear' | 'step'
   interactiveLegend?: boolean
+  /** Off when charts of one group share a legend above them. */
+  legend?: boolean
   /** Season years on the x axis instead of Unix ms dates. Every season gets a row, even one with no values. */
   xAxis?: { kind: 'year'; seasons: number[]; inProgress?: number }
   /** Charts with the same id show the same x value on hover. */
@@ -84,6 +86,7 @@ export function LineChart({
   yReverse = false,
   curve = 'linear',
   interactiveLegend = false,
+  legend = true,
   xAxis,
   syncId,
   details,
@@ -107,7 +110,7 @@ export function LineChart({
   }
 
   const { minT, maxT, minY, maxY } = domain
-  const formatX = (t: number) => yearAxis ? (t === inProgress ? `${t} · in progress` : String(t)) : formatChartTimestamp(t)
+  const formatX = (t: number) => yearAxis ? (t === inProgress ? `${t} so far` : String(t)) : formatChartTimestamp(t)
   const directLabels = series.length >= 2 && series.length <= MAX_DIRECT_LABELS
     ? directLabelPositions(series, data.map((row) => row.t), { minY, maxY, plotHeight: height - CHART_VERTICAL_CHROME_PX, reversed: yReverse })
     : undefined
@@ -144,7 +147,7 @@ export function LineChart({
   return (
     <div className="chart-shell">
       {/* Names come before the lines they identify. */}
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-3" role={interactiveLegend ? 'group' : undefined} aria-label={interactiveLegend ? 'Highlight a team' : undefined}>
+      {legend ? <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-3" role={interactiveLegend ? 'group' : undefined} aria-label={interactiveLegend ? 'Highlight a team' : undefined}>
         {interactiveLegend ? <Button variant="ghost" size="tab" aria-pressed={!focusedId} onClick={() => setFocusedSeriesId(undefined)}>All teams</Button> : null}
         {series.map((entry) => interactiveLegend ? (
           <Button key={entry.id} variant="ghost" size="tab" aria-pressed={focusedId === entry.id} onClick={() => setFocusedSeriesId(entry.id)} className={focusedId && focusedId !== entry.id ? 'opacity-45' : undefined}>
@@ -157,7 +160,7 @@ export function LineChart({
             {entry.label}
           </span>
         ))}
-      </div>
+      </div> : null}
       <ChartContainer
         id={chartId}
         config={CHART_CONFIG}
@@ -182,7 +185,7 @@ export function LineChart({
             axisLine={false}
             minTickGap={28}
             padding={yearAxis ? { left: 24, right: 24 } : undefined}
-            tickFormatter={(value) => yearAxis ? String(value) : formatChartTimestamp(value, 'month-day')}
+            tickFormatter={(value) => yearAxis ? formatX(Number(value)) : formatChartTimestamp(value, 'month-day')}
           />
           <YAxis
             type="number"
@@ -229,12 +232,6 @@ export function LineChart({
         </RechartsLineChart>
       </ChartContainer>
       {gaps.length > 0 && !yearAxis ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
-      {yearAxis && inProgress !== undefined && inProgress >= minT && inProgress <= maxT ? (
-        <p className="px-4 pb-2 text-xs text-muted-foreground">
-          {inProgress} is in progress.
-          {gaps.length > 0 ? ' The dashed line leads to its value so far.' : activeRow(series, inProgress).points.length === 0 ? ' It has no value yet.' : null}
-        </p>
-      ) : null}
       {details ? (
         <div className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details">
           {details(activeRow(series, detailT))}
