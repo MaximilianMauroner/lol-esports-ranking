@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { RegionDepthChart, regionDepthLayout } from '../src/components/RegionDepthChart.tsx'
 
 function dotCentre(html: string, team: string) {
-  const match = html.match(new RegExp(`aria-label="${team}, [^"]*"[^>]*><circle cx="([\\d.]+)" cy="([\\d.]+)"`))
+  const match = html.match(new RegExp(`data-team="${team}"><circle cx="([\\d.]+)" cy="([\\d.]+)"`))
   assert.ok(match, `no dot for ${team}`)
   return { x: Number(match[1]), y: Number(match[2]) }
 }

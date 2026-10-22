@@ -1,8 +1,8 @@
-import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { displayRegionPowerScore, type RegionStrength } from '../domains/rankings/read'
 import { formatRating, formatRecord } from '../shared/display'
 import { TeamMark } from './TeamMark'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card'
+import { PointChart } from './PointChart'
 
 type RegionDepthInput = Pick<RegionStrength, 'region' | 'rank' | 'score' | 'topTeams' | 'internationalWins' | 'internationalLosses'>
 
@@ -18,9 +18,8 @@ const MAX_TICKS = 6
 const DOMAIN_PADDING = 0.04
 /** Teams at these positions in `topTeams` make up the region score. */
 const SCORED_TEAM_COUNT = 3
-/** Covers the transparent pointer target and the focus ring. */
-const DOT_TARGET_RADIUS = 9
-const DOT_LANE_STEP = DOT_TARGET_RADIUS * 2
+/** Keeps the active ring of one dot clear of its neighbours. */
+const DOT_LANE_STEP = 18
 
 /**
  * Every ranked team of each region on one shared Power axis. The three teams
@@ -31,115 +30,110 @@ export function RegionDepthChart({ regions }: { regions: RegionDepthInput[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const width = useElementWidth(containerRef) ?? DEFAULT_WIDTH
   const layout = useMemo(() => regionDepthLayout(regions, width), [regions, width])
-  const titleId = useId()
-  const descId = useId()
+  const targets = useMemo(() => layout.rows.flatMap((row, rowIndex) => row.dots
+    .toSorted((left, right) => left.regionalRank - right.regionalRank)
+    .map((dot) => ({ key: `${row.region}|${dot.team}`, x: dot.x, y: row.dotY + dot.dy, row: rowIndex, dot, region: row }))), [layout])
 
   return (
     <div ref={containerRef} className="min-w-0">
-      <svg
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
-        className="block h-auto w-full overflow-visible font-[family-name:var(--sans)]"
-        role="group"
-        aria-labelledby={titleId}
-        aria-describedby={descId}
+      <PointChart
+        width={layout.width}
+        height={layout.height}
+        targets={targets}
+        crosshair={{ top: layout.gridBands[0]?.y1 ?? 0, bottom: layout.gridBands.at(-1)?.y2 ?? layout.height }}
+        label="Region depth: every ranked team by region on one Power axis"
+        summary={layout.summary}
+        className="overflow-visible font-[family-name:var(--sans)]"
+        tooltip={({ dot, region: row }) => (
+          <>
+            <div className="flex items-center gap-2.5">
+              <TeamMark team={dot.team} code={dot.code} />
+              <div className="min-w-0">
+                <p className="font-semibold text-[var(--text-strong)]">{dot.team}</p>
+                <p className="text-muted-foreground">{dot.rank !== undefined ? `#${dot.rank} globally · ` : ''}{row.region}</p>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-y border-border/50 py-1.5">
+              <span className="text-muted-foreground">Power</span>
+              <strong className="font-mono text-sm tabular-nums">{formatRating(dot.rating)}</strong>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-3">
+              <div><dt className="text-muted-foreground">Rank in {row.region}</dt><dd className="font-mono font-semibold tabular-nums">{dot.regionalRank} of {row.dots.length}</dd></div>
+              <div><dt className="text-muted-foreground">{row.region} score</dt><dd className="font-mono font-semibold tabular-nums">{formatRating(row.score)}</dd></div>
+            </dl>
+            <p className={dot.counts ? 'font-semibold text-[var(--series-1)]' : 'font-semibold text-foreground'}>{contribution(dot, row.region)}</p>
+          </>
+        )}
       >
-        <title id={titleId}>Region depth: every ranked team by region on one Power axis</title>
-        <desc id={descId}>{layout.summary}</desc>
-
-        {layout.ticks.map((tick) => (
-          <g key={tick.value}>
-            {layout.gridBands.map((band) => (
-              <line key={band.y1} x1={tick.x} x2={tick.x} y1={band.y1} y2={band.y2} stroke="var(--line)" strokeWidth={1} />
+        {(active) => (
+          <>
+            {layout.ticks.map((tick) => (
+              <g key={tick.value}>
+                {layout.gridBands.map((band) => (
+                  <line key={band.y1} x1={tick.x} x2={tick.x} y1={band.y1} y2={band.y2} stroke="var(--line)" strokeWidth={1} />
+                ))}
+                {layout.axisLabelYs.map((y) => (
+                  <text key={y} x={tick.x} y={y} textAnchor="middle" fill="var(--faint)" className="text-2xs tabular-nums">
+                    {formatRating(tick.value)}
+                  </text>
+                ))}
+              </g>
             ))}
-            {layout.axisLabelYs.map((y) => (
-              <text key={y} x={tick.x} y={y} textAnchor="middle" fill="var(--faint)" className="text-2xs tabular-nums">
-                {formatRating(tick.value)}
-              </text>
+
+            {layout.rows.map((row) => (
+              <g key={row.region}>
+                <text x={0} y={row.labelY} className="text-xs tabular-nums">
+                  <tspan fill="var(--text-strong)" className="font-bold">{row.rank}. {row.region}</tspan>
+                  {layout.stacked ? (
+                    <tspan fill="var(--faint)" className="text-2xs" dx={8}>{row.detail}</tspan>
+                  ) : null}
+                </text>
+                {layout.stacked ? null : (
+                  <text x={0} y={row.detailY} fill="var(--faint)" className="text-2xs tabular-nums">{row.detail}</text>
+                )}
+
+                {row.span ? (
+                  <line x1={row.span.x1} x2={row.span.x2} y1={row.dotY} y2={row.dotY} stroke="var(--line-strong)" strokeWidth={2} strokeLinecap="round" />
+                ) : (
+                  <text x={layout.plotLeft} y={row.dotY + 4} fill="var(--faint)" className="text-2xs">No ranked teams</text>
+                )}
+
+                {row.dots.map((dot) => (
+                  <g key={dot.team} data-team={dot.team}>
+                    <circle
+                      cx={dot.x}
+                      cy={row.dotY + dot.dy}
+                      r={dotRadius(dot.counts)}
+                      fill={dot.counts ? 'var(--series-1)' : 'var(--muted)'}
+                      stroke="var(--surface)"
+                      strokeWidth={1.5}
+                    />
+                    {active?.dot === dot ? <circle cx={dot.x} cy={row.dotY + dot.dy} r={8} fill="none" stroke="var(--focus)" strokeWidth={1.5} /> : null}
+                  </g>
+                ))}
+
+                {row.dots.length > 0 ? (
+                  <line x1={row.scoreX} x2={row.scoreX} y1={row.dotY - 9} y2={row.dotY + 9} stroke="var(--text-strong)" strokeWidth={2}>
+                    <title>{`${row.region} region score ${formatRating(row.score)}`}</title>
+                  </line>
+                ) : null}
+
+                {row.lead ? (
+                  <text x={row.lead.x} y={row.lead.y} textAnchor="middle" fill="var(--muted)" className="font-mono text-2xs font-bold">
+                    {row.lead.code}
+                  </text>
+                ) : null}
+              </g>
             ))}
-          </g>
-        ))}
-
-        {layout.rows.map((row) => (
-          <g key={row.region}>
-            <text x={0} y={row.labelY} className="text-xs tabular-nums">
-              <tspan fill="var(--text-strong)" className="font-bold">{row.rank}. {row.region}</tspan>
-              {layout.stacked ? (
-                <tspan fill="var(--faint)" className="text-2xs" dx={8}>{row.detail}</tspan>
-              ) : null}
-            </text>
-            {layout.stacked ? null : (
-              <text x={0} y={row.detailY} fill="var(--faint)" className="text-2xs tabular-nums">{row.detail}</text>
-            )}
-
-            {row.span ? (
-              <line x1={row.span.x1} x2={row.span.x2} y1={row.dotY} y2={row.dotY} stroke="var(--line-strong)" strokeWidth={2} strokeLinecap="round" />
-            ) : (
-              <text x={layout.plotLeft} y={row.dotY + 4} fill="var(--faint)" className="text-2xs">No ranked teams</text>
-            )}
-
-            {row.dots.map((dot) => {
-              const contribution = dot.counts ? `Counts toward ${row.region} score` : `Outside ${row.region}'s top three`
-              return (
-                <HoverCard key={dot.team}>
-                  <HoverCardTrigger delay={250} render={(
-                    <g
-                      role="img"
-                      tabIndex={0}
-                      aria-label={`${dot.team}, Power ${formatRating(dot.rating)}, number ${dot.regionalRank} in ${row.region}. ${contribution}.`}
-                      className="group cursor-help outline-none"
-                    >
-                      <circle cx={dot.x} cy={row.dotY + dot.dy} r={DOT_TARGET_RADIUS} fill="transparent" />
-                      <circle
-                        cx={dot.x}
-                        cy={row.dotY + dot.dy}
-                        r={dotRadius(dot.counts)}
-                        fill={dot.counts ? 'var(--series-1)' : 'var(--muted)'}
-                        stroke="var(--surface)"
-                        strokeWidth={1.5}
-                      />
-                      <circle cx={dot.x} cy={row.dotY + dot.dy} r={8} fill="none" stroke="var(--focus)" strokeWidth={1.5} className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
-                    </g>
-                  )} />
-                  <HoverCardContent side="top">
-                    <div className="flex items-center gap-3">
-                      <TeamMark team={dot.team} code={dot.code} />
-                      <div className="min-w-0">
-                        <p className="font-semibold text-[var(--text-strong)]">{dot.team}</p>
-                        <p className="text-xs text-muted-foreground">{dot.rank !== undefined ? `#${dot.rank} globally · ` : ''}{row.region}</p>
-                      </div>
-                    </div>
-                    <div className="my-3 flex items-baseline justify-between gap-3 border-y border-border py-3">
-                      <span className="text-muted-foreground">Power</span>
-                      <strong className="font-mono text-lg tabular-nums">{formatRating(dot.rating)}</strong>
-                    </div>
-                    <dl className="grid grid-cols-2 gap-3 text-xs">
-                      <div><dt className="text-muted-foreground">Rank in {row.region}</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{dot.regionalRank} of {row.dots.length}</dd></div>
-                      <div><dt className="text-muted-foreground">{row.region} region score</dt><dd className="mt-1 font-mono font-semibold tabular-nums">{formatRating(row.score)}</dd></div>
-                    </dl>
-                    <div className="mt-3 border-t border-border pt-3 text-xs">
-                      <p className={dot.counts ? 'font-semibold text-[var(--series-1)]' : 'font-semibold text-foreground'}>{contribution}</p>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              )
-            })}
-
-            {row.dots.length > 0 ? (
-              <line x1={row.scoreX} x2={row.scoreX} y1={row.dotY - 9} y2={row.dotY + 9} stroke="var(--text-strong)" strokeWidth={2}>
-                <title>{`${row.region} region score ${formatRating(row.score)}`}</title>
-              </line>
-            ) : null}
-
-            {row.lead ? (
-              <text x={row.lead.x} y={row.lead.y} textAnchor="middle" fill="var(--muted)" className="font-mono text-2xs font-bold">
-                {row.lead.code}
-              </text>
-            ) : null}
-          </g>
-        ))}
-      </svg>
+          </>
+        )}
+      </PointChart>
     </div>
   )
+}
+
+function contribution(dot: RegionDepthDot, region: string) {
+  return dot.counts ? `Counts toward ${region} score` : `Outside ${region}'s top three`
 }
 
 function useElementWidth(ref: RefObject<HTMLElement | null>) {
@@ -289,8 +283,8 @@ function dotRadius(counts: boolean) {
 
 /**
  * Places strongest scoring dots first, in the first downward lane that clears
- * every existing pointer target. New lanes keep dense rows reachable without
- * moving dots into the lead label above the line.
+ * the active ring of every placed dot. New lanes keep dense rows readable
+ * without moving dots into the lead label above the line.
  */
 function withLanes<T extends { x: number; counts: boolean }>(dots: T[]): Array<T & { dy: number }> {
   const placed: Array<T & { dy: number }> = []
