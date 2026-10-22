@@ -7,6 +7,11 @@ import '../../src/index.css'
 
 const team = (name: string, rank: number, rating: number) => ({ team: name, teamId: `team:${name}`, code: name.slice(0, 3).toUpperCase(), league: 'LCK', rank, rating, uncertainty: 20, wins: 3, losses: 1, form: ['W', 'L'] }) as unknown as RankingSummaryStanding
 
+const largeGroup = new URLSearchParams(location.search).has('large-group')
+const ladderTeams = largeGroup
+  ? Array.from({ length: 16 }, (_, index) => ({ ...team(`Near tie team ${String(index + 1).padStart(2, '0')}`, index + 1, 2000 - index), code: undefined }))
+  : [team('Alpha', 1, 2000), team('Bravo', 2, 1990)]
+
 const regions = [
   { region: 'North', rank: 1, score: 1900, internationalWins: 4, internationalLosses: 2, topTeams: [
     { team: 'Aurora', code: 'AUR', rating: 2000, rank: 1 },
@@ -26,7 +31,7 @@ createRoot(document.getElementById('root')!).render(createElement('div', { style
   // Clips like a panel. The two-row ladder is shorter than its tooltip.
   createElement('div', { style: { width: '100%', maxWidth: 320, overflow: 'hidden' } },
     createElement(PowerLadder, {
-      groups: [[team('Alpha', 1, 2000), team('Bravo', 2, 1990)]],
+      groups: [ladderTeams],
       tierFor: () => 'A',
       gapExample: 64,
       onOpen: (standing: RankingSummaryStanding) => {

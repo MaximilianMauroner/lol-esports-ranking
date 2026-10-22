@@ -116,6 +116,31 @@ test('point charts share the line chart hover model', { timeout: 90_000 }, async
       await page.setViewportSize({ width: 1000, height: 1400 })
     })
 
+    await t.test('a large near-tie group keeps the tooltip readable in a short window', async () => {
+      assert.ok(browser)
+      const shortPage = await browser.newPage({ viewport: { width: 320, height: 240 } })
+      try {
+        await shortPage.goto(`${fixtureUrl}?large-group`)
+        const shortLadder = shortPage.getByRole('application', { name: /^Power ladder/ })
+        await shortLadder.locator('g[data-team="Near tie team 01"]').waitFor()
+        await shortLadder.evaluate((element) => element.focus({ preventScroll: true }))
+        await shortLadder.locator('g[data-team="Near tie team 01"]').evaluate((element) => element.scrollIntoView({ block: 'center' }))
+        await shortPage.keyboard.press('Home')
+        const dot = await centre(shortLadder, 'Near tie team 01')
+        assert.ok(dot.y > 0 && dot.y < 240, 'the active point is in the window')
+        const tip = tooltip(shortPage, 'Near tie team 01')
+        await tip.waitFor()
+        const box = await tip.boundingBox()
+        assert.ok(box)
+        assert.ok(box.y >= 8 && box.y + box.height <= 232, `tooltip spans ${box.y} to ${box.y + box.height} in a 240 px window`)
+        assert.ok(box.x >= 8 && box.x + box.width <= 312, 'the whole tooltip fits the window width')
+        assert.match(await tip.innerText(), /Near tie with 15 other teams\./)
+        assert.match(await shortLadder.locator('path title').textContent() ?? '', /Near tie team 16/)
+      } finally {
+        await shortPage.close()
+      }
+    })
+
     await t.test('a tap shows the tooltip after the finger lifts, and a horizontal scrub moves it', async () => {
       assert.ok(browser)
       const touchPage = await browser.newPage({ viewport: { width: 1000, height: 1400 }, hasTouch: true })

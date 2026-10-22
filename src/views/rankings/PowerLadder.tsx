@@ -136,7 +136,7 @@ function LadderTooltip({ team, tier, neighbours }: { team: RankingSummaryStandin
         <div><dt className="text-muted-foreground">Win rate</dt><dd className="font-mono font-semibold tabular-nums">{formatRatio(total > 0 ? team.wins / total : undefined)}</dd></div>
         <div><dt className="mb-0.5 text-muted-foreground">Last five</dt><dd><FormDots form={team.form} /></dd></div>
       </dl>
-      {neighbours.length > 0 ? <p className="text-muted-foreground">Near tie with <span className="text-foreground">{neighbours.map((other) => other.code ?? other.team).join(', ')}</span>.</p> : null}
+      {neighbours.length > 0 ? <p className="text-muted-foreground">Near tie with <span className="text-foreground">{neighbours.length > 3 ? `${neighbours.length} other teams` : neighbours.map((other) => other.code ?? other.team).join(', ')}</span>.</p> : null}
     </>
   )
 }
