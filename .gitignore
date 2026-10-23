@@ -32,3 +32,6 @@ logs/
 *.sln
 *.sw?
 /t3.json
+
+/.agents/*
+!/.agents/skills/
