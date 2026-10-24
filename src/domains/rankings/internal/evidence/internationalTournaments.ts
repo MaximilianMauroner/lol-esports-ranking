@@ -358,7 +358,7 @@ export function tournamentBoundaryLabel(status: TournamentLifecycleStatus) {
   return 'Latest data'
 }
 
-export function tournamentFamilyLabel(family: InternationalTournamentFamilyId) {
+function tournamentFamilyLabel(family: InternationalTournamentFamilyId) {
   return tournamentFamilies.find((definition) => definition.value === family)?.label ?? family
 }
 

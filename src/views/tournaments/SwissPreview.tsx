@@ -17,7 +17,8 @@ import {
   type DrawnRound, type PreviewTeam, type ResolvedMatch, type ResolvedScenario, type SwissBaseline,
 } from '../../domains/tournaments/simulation'
 import { WORLDS_2026_SWISS_RULES } from '../../domains/tournaments/simulation'
-import { SwissStatsPreview } from './SwissStatsPreview'
+import { AdvanceOdds, SwissOddsProvider, SwissStatsBar, SwissStatsDetails } from './SwissStatsPreview'
+import { useSwissStats } from './useSwissStats'
 import type { SwissTeamStanding } from '../../domains/tournaments/simulation'
 
 type Slot = 'a' | 'b'
@@ -100,6 +101,7 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
     return (id) => byId.get(id) ?? { name: id, code: id, slot: null, mark: null }
   }, [baseline])
   const canDraw = useMemo(() => current.next.kind === 'draw' && drawExists(current.next.context), [current])
+  const stats = useSwissStats(baseline.teams, current, event, slot.toUpperCase(), !liveMissing)
 
   useHashSync('tournaments', {
     start,
@@ -238,15 +240,20 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
         {liveNotice ? <p className="text-[var(--warn)]">{liveNotice}</p> : null}
       </div>
 
-      <SwissStatsPreview teams={baseline.teams} scenario={current} event={event} label={slot.toUpperCase()} />
+      <SwissStatsBar stats={stats} />
 
       <div className="grid min-w-0 items-start gap-4 min-[1700px]:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="grid min-w-0 gap-2">
           <NextStep scenario={current} canDraw={canDraw} team={team} playInOpen={baseline.kind === 'seeds' && !playIn} />
-          <SwissBracket scenario={current} team={team} pools={baseline.kind === 'seeds' ? WORLDS_2026_SWISS_RULES.pools : null}
-            canDraw={canDraw} focusRound={focusRound} onFocused={focusDone} edits={edits} />
+          <SwissOddsProvider stats={stats}>
+            <SwissBracket scenario={current} team={team} pools={baseline.kind === 'seeds' ? WORLDS_2026_SWISS_RULES.pools : null}
+              canDraw={canDraw} focusRound={focusRound} onFocused={focusDone} edits={edits} />
+          </SwissOddsProvider>
         </div>
-        <StandingsPanel scenarios={scenarios} slot={slot} team={team} />
+        <div className="grid min-w-0 content-start gap-4">
+          <StandingsPanel scenarios={scenarios} slot={slot} team={team} />
+          <SwissStatsDetails stats={stats} />
+        </div>
       </div>
     </div>
   )
@@ -448,7 +455,7 @@ function TeamSlots({ ids, size, team }: { ids: readonly string[]; size: number; 
   const open = Math.max(0, size - ids.length)
   return (
     <ul className="grid gap-1">
-      {ids.map((id) => <li key={id} title={team(id).name} className={cn(ROW, 'rounded-sm bg-[var(--surface-2)] text-foreground')}><TeamLine info={team(id)} /></li>)}
+      {ids.map((id) => <li key={id} title={team(id).name} className={cn(ROW, 'rounded-sm bg-[var(--surface-2)] text-foreground')}><TeamLine info={team(id)} oddsId={id} /></li>)}
       {Array.from({ length: open }, (_, index) => (
         <li key={`open-${index}`} aria-hidden="true" className="h-7 rounded-sm border border-[color-mix(in_oklch,var(--line)_55%,transparent)]" />
       ))}
@@ -503,7 +510,7 @@ function TeamRow({ id, info, match, locked, onPick }: { id: string; info: TeamIn
       <span title={info.name} className={cn(ROW, won
         ? 'bg-[color-mix(in_oklch,var(--win)_16%,var(--surface-2))] text-[var(--text-strong)] shadow-[inset_2px_0_0_var(--win)]'
         : 'bg-[var(--surface-2)] text-muted-foreground')}>
-        <TeamLine info={info} faded={lost} />
+        <TeamLine info={info} faded={lost} oddsId={match.winnerId ? undefined : id} />
         <span className="sr-only">{won ? ', won' : lost ? ', lost' : ''}</span>
       </span>
     )
@@ -514,16 +521,17 @@ function TeamRow({ id, info, match, locked, onPick }: { id: string; info: TeamIn
         'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--focus)]',
         won && 'bg-[color-mix(in_oklch,var(--preview)_16%,var(--surface-2))] text-[var(--text-strong)] outline-1 -outline-offset-1 outline-dashed outline-[var(--preview-line)] hover:bg-[color-mix(in_oklch,var(--preview)_22%,var(--surface-2))]',
         lost && 'text-muted-foreground')}>
-      <TeamLine info={info} faded={lost} />
+      <TeamLine info={info} faded={lost} oddsId={match.winnerId ? undefined : id} />
     </Button>
   )
 }
 
 /**
  * Logo, short code and seed slot. Screen readers then hear the full name, so a pick button's name starts with its
- * visible text. The row title also shows the full name.
+ * visible text. The row title also shows the full name. `oddsId` is set only on the row that holds the team's
+ * current record, so each team's chance to advance shows once.
  */
-function TeamLine({ info, faded = false }: { info: TeamInfo; faded?: boolean }) {
+function TeamLine({ info, faded = false, oddsId }: { info: TeamInfo; faded?: boolean; oddsId?: string }) {
   return (
     <>
       {info.mark
@@ -532,6 +540,7 @@ function TeamLine({ info, faded = false }: { info: TeamInfo; faded?: boolean }) 
       <span className="min-w-0 truncate">{info.code}</span>
       {info.slot ? <span className="ml-auto shrink-0 text-2xs font-normal text-[var(--faint)]">{info.slot}</span> : null}
       {info.name !== info.code ? <span className="sr-only">, {info.name}</span> : null}
+      {oddsId ? <AdvanceOdds id={oddsId} className={info.slot ? undefined : 'ml-auto'} /> : null}
     </>
   )
 }

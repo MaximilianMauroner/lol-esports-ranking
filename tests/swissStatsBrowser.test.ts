@@ -53,9 +53,23 @@ test('on-demand hypothetical stats load, cancel, retry, and replace changed scen
     })
     await page.goto(`${base}/#tournaments?event=${encodeURIComponent(mainId)}&view=swiss`)
     const panel = page.getByRole('region', { name: 'Swiss stats', exact: true })
+    const details = page.getByRole('region', { name: 'Advancement estimates', exact: true })
+    const bracket = page.getByRole('region', { name: 'Swiss bracket', exact: true })
+    const tables = page.getByRole('table', { name: 'Team advancement', exact: true })
     await panel.getByRole('button', { name: 'Preview stats', exact: true }).waitFor()
     assert.deepEqual(requests.filter((request) => request.includes('/data/')), [])
     assert.doesNotMatch(await panel.innerText(), /\d+(\.\d+)?%/)
+    assert.doesNotMatch(await bracket.innerText(), /\d+(\.\d+)?%/)
+    const barHeights = async () => {
+      const heights: number[] = []
+      for (const width of [320, 390, 1440]) {
+        await page.setViewportSize({ width, height: 900 })
+        heights.push(await panel.evaluate((element) => element.getBoundingClientRect().height))
+      }
+      await page.setViewportSize({ width: 390, height: 900 })
+      return heights
+    }
+    const idleHeights = await barHeights()
     await panel.getByRole('button', { name: 'Preview stats', exact: true }).click()
     await panel.getByText(/Choose a named Play-In winner/).waitFor()
     assert.deepEqual(requests.filter((request) => request.includes('/data/')), [], 'unknown identities do not load ratings')
@@ -63,8 +77,8 @@ test('on-demand hypothetical stats load, cancel, retry, and replace changed scen
     holdRatings = true
     await page.locator('#swiss-playin').selectOption('LEC')
     await panel.getByText('Loading published Power ratings.').waitFor()
-    await panel.locator('[data-slot="skeleton"]').first().waitFor()
-    assert.equal(await panel.getByRole('table').count(), 0)
+    await bracket.locator('[data-slot="skeleton"]').first().waitFor()
+    assert.equal(await tables.count(), 0)
     const releaseHeld = async () => {
       for (let attempt = 0; attempt < 100 && !releaseRatings; attempt++) await new Promise((resolve) => setTimeout(resolve, 5))
       assert.ok(releaseRatings, 'the rating request reached the fixture server')
@@ -73,7 +87,7 @@ test('on-demand hypothetical stats load, cancel, retry, and replace changed scen
     await panel.getByRole('button', { name: 'Cancel stats' }).click()
     await panel.getByText('Stats cancelled. No estimates are shown.').waitFor()
     await releaseHeld()
-    assert.equal(await panel.getByRole('table').count(), 0)
+    assert.equal(await tables.count(), 0)
 
     await page.evaluate(() => {
       const values: number[] = []
@@ -88,12 +102,21 @@ test('on-demand hypothetical stats load, cancel, retry, and replace changed scen
     await panel.getByRole('button', { name: 'Cancel stats' }).click()
     await panel.getByText('Stats cancelled. No estimates are shown.').waitFor()
     await panel.getByRole('button', { name: 'Retry stats' }).click()
-    await panel.getByRole('table', { name: 'Team advancement', exact: true }).waitFor()
-    await panel.getByText(/The ratings are sample data/).waitFor()
-    assert.equal(await panel.getByRole('table', { name: 'Team advancement' }).getByRole('row').count(), 17)
-    assert.match(await panel.innerText(), /sampling error, not model confidence/)
-    assert.match(await panel.innerText(), /uniform-legal-v1/)
-    assert.match(await panel.innerText(), /Snapshot .*Model .*Config /)
+    await tables.waitFor()
+    await details.getByText(/The ratings are sample data/).waitFor()
+    assert.equal(await tables.getByRole('row').count(), 17)
+    assert.match(await details.innerText(), /sampling error, not model confidence/)
+    assert.match(await details.innerText(), /uniform-legal-v1/)
+    assert.match(await details.innerText(), /Snapshot .*Model .*Config /)
+    const odds = bracket.locator('[title^="Advances in"]')
+    const oddsTeams = () => odds.evaluateAll((chips) => chips.map((chip) => chip.parentElement!.closest('[title]')!.getAttribute('title')))
+    const assertOncePerTeam = async (count: number) => {
+      const teams = await oddsTeams()
+      assert.equal(teams.length, count)
+      assert.equal(new Set(teams).size, count, `each team shows its chance once in the bracket: ${teams.join(', ')}`)
+    }
+    await assertOncePerTeam(16)
+    assert.ok((await odds.allTextContents()).every((text) => /^, [<>]?\d+(\.\d)?% to advance$/.test(text)), 'bracket chances are short percentages')
     assert.equal(await page.evaluate(() => (window as unknown as { swissStatsProgress: number[] }).swissStatsProgress.some((count) => count > 0 && count < 4000)), true, 'real trial completion reaches the DOM')
 
     const ratingRequestsBeforeRefresh = requests.filter((request) => request.includes('/data/')).length
@@ -101,56 +124,64 @@ test('on-demand hypothetical stats load, cancel, retry, and replace changed scen
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await refreshed
     await page.evaluate(() => new Promise(requestAnimationFrame))
-    assert.equal(await panel.getByRole('table', { name: 'Team advancement' }).count(), 1, 'an unchanged feed keeps the ready result')
+    assert.equal(await tables.count(), 1, 'an unchanged feed keeps the ready result')
     assert.equal(requests.filter((request) => request.includes('/data/')).length, ratingRequestsBeforeRefresh, 'an unchanged feed does not reload ratings')
 
+    const readyHeights = await barHeights()
     holdRatings = true
     await page.getByRole('region', { name: 'Round 1', exact: true }).getByRole('button', { name: 'Fill a valid draw', exact: true }).click()
     await panel.getByText('Loading published Power ratings.').waitFor()
-    assert.equal(await panel.getByRole('table').count(), 0, 'an edit removes old percentages before the next result')
+    assert.equal(await tables.count(), 0, 'an edit removes old percentages before the next result')
+    assert.equal(await odds.count(), 0, 'an edit removes old bracket chances before the next result')
+    assert.deepEqual(await barHeights(), idleHeights, 'the stats bar keeps its height while loading')
+    assert.deepEqual(readyHeights, idleHeights, 'the stats bar keeps its height when results arrive')
     await panel.getByRole('button', { name: 'Cancel stats' }).click()
     await releaseHeld()
     await page.getByRole('region', { name: 'Round 1', exact: true }).getByRole('group').first().getByRole('button').first().click()
     await panel.getByRole('button', { name: 'Preview stats', exact: true }).click()
-    await panel.getByRole('table', { name: 'Team advancement' }).waitFor()
-    assert.match(await panel.innerText(), /1 drawn rounds and 1 observed results or picks stay fixed/)
+    await tables.waitFor()
+    assert.match(await details.innerText(), /1 drawn rounds and 1 observed results or picks stay fixed/)
+    await assertOncePerTeam(16)
 
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 })
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `no page overflow at ${width}`)
-      assert.ok(await panel.getByRole('table', { name: 'Team advancement' }).evaluate((table) => table.parentElement!.scrollWidth - table.parentElement!.clientWidth <= 1), `the stats table fits at ${width}px`)
+      assert.ok(await tables.evaluate((table) => table.parentElement!.scrollWidth - table.parentElement!.clientWidth <= 1), `the stats table fits at ${width}px`)
     }
-    assert.equal(await panel.locator('.motion-reduce\\:animate-none').evaluate((element) => getComputedStyle(element).animationName), 'none')
+    assert.equal(await details.locator('.motion-reduce\\:animate-none').evaluate((element) => getComputedStyle(element).animationName), 'none')
 
     holdRatings = true
     await page.getByRole('button', { name: 'B', exact: true }).click()
     await panel.getByText('Loading published Power ratings.').waitFor()
-    assert.equal(await panel.getByRole('table').count(), 0, 'switching scenario removes stale percentages')
+    assert.equal(await tables.count(), 0, 'switching scenario removes stale percentages')
     ratingsAvailable = false
     await releaseHeld()
     await panel.getByRole('alert').filter({ hasText: 'Stats are unavailable.' }).waitFor()
     ratingsAvailable = true
     await panel.getByRole('button', { name: 'Retry stats' }).click()
-    await panel.getByRole('table', { name: 'Team advancement' }).waitFor()
+    await tables.waitFor()
 
     feed.events[1].series[0].teams[1] = team('Cloud9')
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await page.locator('#swiss-playin').selectOption('LCS')
     await panel.getByText(/unique published Power rating is required for Cloud9/).waitFor()
-    assert.equal(await panel.getByRole('table').count(), 0)
+    assert.equal(await tables.count(), 0)
 
     await page.locator('#swiss-playin').selectOption('LEC')
-    await panel.getByRole('table', { name: 'Team advancement' }).waitFor()
+    await tables.waitFor()
     const roundOne = page.getByRole('region', { name: 'Round 1', exact: true })
     await roundOne.getByRole('button', { name: 'Fill a valid draw', exact: true }).click()
     const pair = (await roundOne.getByRole('group').first().getAttribute('aria-label'))!.replace('Round 1: ', '').split(' against ')
     feed.events[0].series[0] = swissSeries(1, 0, [team(pair[0], 1), team(pair[1], 0)], 'live')
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await panel.getByText(/Pre-match estimates cannot use that score/).waitFor()
-    assert.equal(await panel.getByRole('table').count(), 0)
+    assert.equal(await tables.count(), 0)
     await roundOne.getByRole('group').first().getByRole('button').first().click()
     await panel.getByText(/fixed to your picked winner/).waitFor()
-    await panel.getByRole('table', { name: 'Team advancement' }).waitFor()
+    await tables.waitFor()
+    await panel.getByRole('button', { name: 'Hide stats', exact: true }).click()
+    await panel.getByText('Stats cancelled. No estimates are shown.').waitFor()
+    assert.equal(await odds.count() + await tables.count(), 0, 'hiding stats removes every estimate')
     assert.deepEqual(errors, [])
     assert.deepEqual(external, [])
     assert.ok(requests.every((request) => request.startsWith('GET ')))

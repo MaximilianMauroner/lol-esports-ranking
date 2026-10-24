@@ -1,16 +1,13 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, ChevronLeft, ChevronRight, Globe2, Swords, Trophy, X } from 'lucide-react'
 import {
   displayRegionPowerScore,
   displayRegionTotalTeamRating,
   isRegionPowerTeam,
-  type RegionInternationalTimeline,
-  type RegionInternationalYear,
   type RegionStrength,
 } from '../../domains/rankings/read'
-import { tournamentFamilyLabel } from '../../domains/rankings/evidence'
-import type { PublicMatchHistoryEntry, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../../domains/rankings/types'
-import type { MatchHistoryState, RegionTimelineState } from '../../browser/rankings/usePublicArtifacts'
+import type { PublicMatchHistoryEntry, PublicRegionHistorySeries, PublicTeamStanding } from '../../domains/rankings/types'
+import type { MatchHistoryState, RegionHistoryScopeState } from '../../browser/rankings/usePublicArtifacts'
 import { useHistoryDetail } from '../../hooks/useHistoryDetail'
 import {
   formatDate,
@@ -33,15 +30,14 @@ import { cn } from '../../shared/utils'
 import { TeamMark } from '../../components/TeamMark'
 import { LineChart, type ChartSeries } from '../../components/LineChart'
 import { RegionDepthChart } from '../../components/RegionDepthChart'
+import { RegionPowerHistory } from './RegionPowerHistory'
 import { CompareToggle } from '../rankings/CompareToggle'
 import { seriesWinner } from '../matches/seriesOutcome'
 
 export function RegionsView({
   regions,
   standings,
-  regionHistory,
-  regionTimelineState,
-  ratedMatchRule,
+  regionHistoryState,
   matchHistoryState,
   onRequestMatchHistoryPages,
   pickedIds,
@@ -50,10 +46,7 @@ export function RegionsView({
 }: {
   regions: RegionStrength[]
   standings: RegionStanding[]
-  regionHistory?: PublicRegionHistoryScope
-  regionTimelineState: RegionTimelineState
-  /** The manifest text that says which matches enter the rating run. */
-  ratedMatchRule?: string
+  regionHistoryState: RegionHistoryScopeState
   matchHistoryState: MatchHistoryState
   onRequestMatchHistoryPages: (pages: number[]) => void
   pickedIds: Set<string>
@@ -77,6 +70,13 @@ export function RegionsView({
     () => selectedRegion ? flagshipTeamsForRegion(selectedRegion, standings) : [],
     [selectedRegion, standings],
   )
+  const historyLines = useMemo(
+    () => regions
+      .map((region, index) => ({ region: region.region, color: REGION_LINE_COLORS[index % REGION_LINE_COLORS.length] }))
+      .filter((line) => pickedIds.size === 0 || pickedIds.has(line.region)),
+    [pickedIds, regions],
+  )
+  const regionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
 
   if (regions.length === 0) {
     return (
@@ -106,15 +106,14 @@ export function RegionsView({
       }
     >
       <Panel>
-        <PanelHeader title="International results by season" />
-        <PanelBody className="grid gap-3">
-          {regionTimelineState.status === 'ready' ? (
-            <RegionTimeline timeline={regionTimelineState.data} ratedMatchRule={ratedMatchRule} />
-          ) : regionTimelineState.status === 'missing' || regionTimelineState.status === 'error' ? (
-            <p className="text-sm text-muted-foreground">{regionTimelineState.message}</p>
-          ) : (
-            <LoadingState presentation="chart" label="Loading international results" />
-          )}
+        <PanelHeader
+          title="Region power over time"
+          description={`Each line shows the historical mean Power of up to three highest-rated teams from each region's eligible field, day by day. ${pickedIds.size > 0
+            ? 'The chart shows only the regions that you compare.'
+            : 'Select Compare on a region below to show only the regions that you compare.'}`}
+        />
+        <PanelBody className="px-0 pt-0 pb-1">
+          <RegionPowerHistory state={regionHistoryState} lines={historyLines} standings={standings} />
         </PanelBody>
       </Panel>
 
@@ -211,6 +210,8 @@ export function RegionsView({
   )
 }
 
+const REGION_LINE_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
+
 type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league' | 'rating' | 'rank' | 'eligibility'>
 
 type RegionDrawerTeam = {
@@ -218,80 +219,6 @@ type RegionDrawerTeam = {
   code?: string
   rating: number
   rank?: number
-}
-
-const WIN_RATE_DOMAIN = { min: 0, max: 100 }
-const WIN_RATE_TICKS = [0, 25, 50, 75, 100]
-
-function RegionTimeline({ timeline, ratedMatchRule }: { timeline: RegionInternationalTimeline; ratedMatchRule?: string }) {
-  const syncId = useId()
-  const inProgress = timeline.seasons.find((season) => season.inProgress)?.season
-  const seasons = useMemo(() => timeline.seasons.map((season) => season.season), [timeline])
-  const charts = useMemo(() => {
-    // A season without events has no value in either chart, so both charts show the same seasons.
-    const heldSeasons = new Set(timeline.seasons.flatMap((season) => season.events.length > 0 ? [season.season] : []))
-    const seriesFor = (value: (year: RegionInternationalYear) => number | null) => timeline.regions.map(({ region, years }, index): ChartSeries => ({
-      id: region,
-      label: region,
-      color: `var(--series-${index + 1})`,
-      points: years.flatMap((year) => {
-        const y = value(year)
-        return y === null ? [] : [{ t: year.season, y }]
-      }),
-    }))
-    const played = seriesFor((year) => heldSeasons.has(year.season) ? year.wins + year.losses + year.ties : null)
-    const mostPlayed = Math.max(...played.flatMap((entry) => entry.points.map((point) => point.y)))
-    return [
-      {
-        title: 'Series win rate against other regions',
-        series: seriesFor((year) => year.winRate === null ? null : year.winRate * 100),
-        yFormat: (value: number) => `${Math.round(value)}%`,
-        yDomain: WIN_RATE_DOMAIN,
-        yTicks: WIN_RATE_TICKS,
-      },
-      {
-        title: 'Series played against other regions',
-        series: played,
-        yFormat: (value: number) => String(Math.round(value)),
-        yDomain: { min: 0, max: Math.max(5, Math.ceil(mostPlayed / 5) * 5) },
-        yTicks: undefined,
-      },
-    ]
-  }, [timeline])
-  const seasonNotes = timeline.seasons.map(({ season, events, notYetPublished, inProgress: current }) => {
-    if (events.length === 0) return `${season} has no Worlds, MSI or EWC results in the published data${current ? ' yet' : ''}.`
-    const pending = notYetPublished.map((family) => `${tournamentFamilyLabel(family)} ${season} is not in the published data yet.`)
-    return [`${season}: ${events.map(tournamentFamilyLabel).join(', ')}.`, ...pending].join(' ')
-  })
-
-  return (
-    <>
-      <p className="max-w-[72ch] text-sm text-muted-foreground">
-        Each value counts series at Worlds, MSI and the Esports World Cup against teams from other regions.
-        Series between two teams of the same region do not count. A tied series counts as half a win.
-        {' '}{seasonNotes.join(' ')}
-        {ratedMatchRule ? ` ${ratedMatchRule} Series against teams from leagues without a rating do not count.` : null}
-        {timeline.unresolvedSeries > 0 ? ` ${timeline.unresolvedSeries} series ${timeline.unresolvedSeries === 1 ? 'does' : 'do'} not count because a team has no known region.` : null}
-      </p>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {charts.map((chart) => (
-          <section className="min-w-0 rounded-md border border-border" aria-label={chart.title} key={chart.title}>
-            <h3 className="px-4 pt-3 text-sm font-semibold text-[var(--text-strong)]">{chart.title}</h3>
-            <LineChart
-              series={chart.series}
-              height={260}
-              yLabel={chart.title}
-              yFormat={chart.yFormat}
-              yDomain={chart.yDomain}
-              yTicks={chart.yTicks}
-              xAxis={{ kind: 'year', seasons, inProgress }}
-              syncId={syncId}
-            />
-          </section>
-        ))}
-      </div>
-    </>
-  )
 }
 
 function RegionPowerTrend({ series, region }: { series?: PublicRegionHistorySeries; region: string }) {

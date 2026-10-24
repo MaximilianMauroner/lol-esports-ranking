@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { Button } from './ui/button'
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from './ui/chart'
-import { formatChartTimestamp } from '../shared/chartTime'
+import { formatChartTimestamp, monthTicks } from '../shared/chartTime'
 
 export type ChartPoint = {
   t: number
@@ -35,9 +35,8 @@ type ChartDatum = { t: number } & Record<string, unknown>
 
 /**
  * One drawn line. A series with a long gap in its data is split into several
- * segments that share its colour and label. On a date axis a dashed connector
- * marks the gap without presenting the interval as a recorded trend. On a year
- * axis nothing crosses a season without a value.
+ * segments that share its colour and label, and a dashed connector marks the
+ * gap without presenting the interval as a recorded trend.
  */
 type SeriesMeta = {
   key: string
@@ -55,10 +54,6 @@ export type LineChartProps = {
   yReverse?: boolean
   curve?: 'linear' | 'step'
   interactiveLegend?: boolean
-  /** Season years on the x axis instead of Unix ms dates. Every season gets a row, even one with no values. */
-  xAxis?: { kind: 'year'; seasons: number[]; inProgress?: number }
-  /** Charts with the same id show the same x value on hover. */
-  syncId?: string
   /** Shown below the chart for the hovered row, or the latest row. */
   details?: (active: ChartActiveRow) => ReactNode
 }
@@ -84,8 +79,6 @@ export function LineChart({
   yReverse = false,
   curve = 'linear',
   interactiveLegend = false,
-  xAxis,
-  syncId,
   details,
 }: LineChartProps) {
   const [focusedSeriesId, setFocusedSeriesId] = useState<string>()
@@ -93,50 +86,42 @@ export function LineChart({
   const focusedId = interactiveLegend && series.some((entry) => entry.id === focusedSeriesId) ? focusedSeriesId : undefined
   const chartId = useId().replace(/:/g, '')
   const summaryId = `${chartId}-summary`
-  const yearAxis = xAxis?.kind === 'year'
-  const inProgress = xAxis?.inProgress
-  const seasons = xAxis?.seasons
-  const domain = useMemo(() => computeDomain(series, yDomain, seasons), [series, yDomain, seasons])
-  const { data, meta, gaps } = useMemo(
-    () => buildChartData(series, seasons ? { maxGap: 1, dashLongGaps: false, inProgress, seasons } : { maxGap: SEGMENT_GAP_MS, dashLongGaps: true }),
-    [series, seasons, inProgress],
-  )
+  const domain = useMemo(() => computeDomain(series, yDomain), [series, yDomain])
+  const { data, meta, gaps } = useMemo(() => buildChartData(series), [series])
 
   if (series.length === 0 || domain === null || data.length === 0) {
     return <p className="text-muted-foreground p-5">No chart data available.</p>
   }
 
   const { minT, maxT, minY, maxY } = domain
-  const formatX = (t: number) => yearAxis ? (t === inProgress ? `${t} · in progress` : String(t)) : formatChartTimestamp(t)
   const directLabels = series.length >= 2 && series.length <= MAX_DIRECT_LABELS
     ? directLabelPositions(series, data.map((row) => row.t), { minY, maxY, plotHeight: height - CHART_VERTICAL_CHROME_PX, reversed: yReverse })
     : undefined
   const lastSegmentKey = new Map(meta.map(({ key, series: entry }) => [entry.id, key]))
   const yTicks = providedYTicks ?? niceTicks(minY, maxY, 4)
   const formatYTick = yTickFormat ?? yFormat
-  const xTicks = yearAxis ? yearTicks(minT, maxT) : timeTicks(minT, maxT, 5)
+  const xMonthTicks = monthTicks(minT, maxT)
+  const xTicks = xMonthTicks ?? timeTicks(minT, maxT, 5)
   const lineType = curve === 'step' ? 'stepAfter' : 'linear'
   const detailT = hoveredT !== undefined && data.some((row) => row.t === hoveredT) ? hoveredT : data[data.length - 1].t
   const summaries = series.flatMap((entry) => {
     const summary = summarizeSeries(entry)
     return summary ? [summary] : []
   })
-  const formatPoint = (point: ChartPoint) => `${yFormat(point.y)} ${yearAxis ? 'in' : 'on'} ${formatX(point.t)}`
+  const formatPoint = (point: ChartPoint) => `${yFormat(point.y)} on ${formatChartTimestamp(point.t)}`
   const summaryText = `${yLabel} chart data summary. ${summaries.map((entry) =>
     `${entry.label}: latest ${formatPoint(entry.latest)}, minimum ${formatPoint(entry.min)}, maximum ${formatPoint(entry.max)}, ${entry.count} points.`,
   ).join(' ')}`
 
   function renderTooltip({ active, label }: TooltipContentProps) {
     const row = typeof label === 'number' ? activeRow(series, label) : undefined
-    const payload = row ? series.flatMap((entry) => {
-      const point = row.points.find((hit) => hit.series === entry)?.point
-      if (!point && !yearAxis) return []
-      return [{ graphicalItemId: entry.id, dataKey: entry.id, name: entry.label, color: entry.color, value: point ? yFormat(point.y) : 'No value' }]
-    }) : []
+    const payload = row ? row.points.map(({ series: entry, point }) => (
+      { graphicalItemId: entry.id, dataKey: entry.id, name: entry.label, color: entry.color, value: yFormat(point.y) }
+    )) : []
     // The live region stays mounted so screen readers hear each new row, as with the Recharts default tooltip.
     return (
       <div role="status" aria-live="polite">
-        {row ? <ChartTooltipContent active={active} label={formatX(row.t)} payload={payload} /> : null}
+        {row ? <ChartTooltipContent active={active} label={formatChartTimestamp(row.t)} payload={payload} /> : null}
       </div>
     )
   }
@@ -166,9 +151,7 @@ export function LineChart({
         <RechartsLineChart
           data={data}
           margin={{ top: 18, right: directLabels ? DIRECT_LABEL_WIDTH : 20, bottom: 16, left: 4 }}
-          syncId={syncId}
-          syncMethod="value"
-          aria-label={`${yLabel} over ${yearAxis ? 'seasons' : 'time'} for ${series.map((entry) => entry.label).join(', ')}`}
+          aria-label={`${yLabel} over time for ${series.map((entry) => entry.label).join(', ')}`}
           aria-describedby={summaryId}
         >
           <CartesianGrid vertical={false} strokeDasharray="0" />
@@ -180,8 +163,9 @@ export function LineChart({
             tickLine={false}
             axisLine={false}
             minTickGap={28}
-            padding={yearAxis ? { left: 24, right: 24 } : undefined}
-            tickFormatter={(value) => yearAxis ? String(value) : formatChartTimestamp(value, 'month-day')}
+            tickFormatter={(value: number, index: number) => !xMonthTicks
+              ? formatChartTimestamp(value, 'month-day')
+              : formatChartTimestamp(value, index === 0 || new Date(value).getUTCMonth() === 0 ? 'month-year' : 'month')}
           />
           <YAxis
             type="number"
@@ -193,8 +177,7 @@ export function LineChart({
             axisLine={false}
             tickFormatter={(value) => formatYTick(Number(value))}
           />
-          {/* renderTooltip builds its rows from the series. Recharts would drop a season row whose values are all empty and hide the tooltip. */}
-          <RechartsTooltip trigger="hover" cursor={{ stroke: 'var(--line-strong)' }} filterNull={false} content={renderTooltip} />
+          <RechartsTooltip trigger="hover" cursor={{ stroke: 'var(--line-strong)' }} content={renderTooltip} />
           {details ? <ActiveRowListener onActive={setHoveredT} /> : null}
           {gaps.map(({ key, series: entry }) => (
             <Line key={key} dataKey={key} opacity={focusedId && focusedId !== entry.id ? 0.18 : 1} stroke={entry.color} strokeWidth={1.5} strokeDasharray="4 4" connectNulls dot={false} activeDot={false} tooltipType="none" isAnimationActive={false} />
@@ -208,8 +191,8 @@ export function LineChart({
               stroke={entry.color}
               opacity={focusedId && focusedId !== entry.id ? 0.18 : 1}
               strokeWidth={2}
-              connectNulls={!yearAxis}
-              dot={yearAxis || (entry.points.length <= 36 && series.length <= 2) ? { r: 3.2, strokeWidth: 2 } : false}
+              connectNulls
+              dot={entry.points.length <= 36 && series.length <= 2 ? { r: 3.2, strokeWidth: 2 } : false}
               activeDot={{ r: 4, stroke: 'var(--surface)', strokeWidth: 2 }}
               isAnimationActive={false}
               label={directLabels && lastSegmentKey.get(entry.id) === key
@@ -227,13 +210,7 @@ export function LineChart({
           ))}
         </RechartsLineChart>
       </ChartContainer>
-      {gaps.length > 0 && !yearAxis ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
-      {yearAxis && inProgress !== undefined && inProgress >= minT && inProgress <= maxT ? (
-        <p className="px-4 pb-2 text-xs text-muted-foreground">
-          {inProgress} is in progress.
-          {gaps.length > 0 ? ' The dashed line leads to its value so far.' : activeRow(series, inProgress).points.length === 0 ? ' It has no value yet.' : null}
-        </p>
-      ) : null}
+      {gaps.length > 0 ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
       {details ? (
         <div className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details">
           {details(activeRow(series, detailT))}
@@ -279,17 +256,9 @@ function summarizeSeries(series: ChartSeries) {
   }
 }
 
-/**
- * A gap longer than `maxGap` starts a new segment. With `dashLongGaps` a
- * dashed connector spans it. A dashed connector also leads into the
- * in-progress season from the season before it, because that value is not final.
- */
-function buildChartData(
-  series: ChartSeries[],
-  { maxGap, dashLongGaps, inProgress, seasons = [] }: { maxGap: number; dashLongGaps: boolean; inProgress?: number; seasons?: number[] },
-) {
-  // A season without values still gets a row, so hover can reach it and synced charts share the same rows.
-  const dataByTime = new Map<number, ChartDatum>(seasons.map((season) => [season, { t: season }]))
+/** A gap longer than SEGMENT_GAP_MS starts a new segment, and a dashed connector spans it. */
+function buildChartData(series: ChartSeries[]) {
+  const dataByTime = new Map<number, ChartDatum>()
   const meta: SeriesMeta[] = []
   const gaps: SeriesMeta[] = []
 
@@ -298,18 +267,14 @@ function buildChartData(
     let previousPoint: ChartPoint | undefined
     for (const point of entry.points) {
       if (!isValidPoint(point)) continue
-      const longGap = previousPoint !== undefined && point.t - previousPoint.t > maxGap
-      const intoInProgress = previousPoint !== undefined && point.t === inProgress && point.t - previousPoint.t === 1
-      if (previousPoint && (longGap || intoInProgress)) {
-        if (intoInProgress || dashLongGaps) {
-          const gapKey = `gap${index}_${segment}`
-          gaps.push({ key: gapKey, series: entry })
-          const previousDatum = dataByTime.get(previousPoint.t) ?? { t: previousPoint.t }
-          previousDatum[gapKey] = previousPoint.y
-          const nextDatum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
-          nextDatum[gapKey] = point.y
-          dataByTime.set(point.t, nextDatum)
-        }
+      if (previousPoint && point.t - previousPoint.t > SEGMENT_GAP_MS) {
+        const gapKey = `gap${index}_${segment}`
+        gaps.push({ key: gapKey, series: entry })
+        const previousDatum = dataByTime.get(previousPoint.t) ?? { t: previousPoint.t }
+        previousDatum[gapKey] = previousPoint.y
+        const nextDatum: ChartDatum = dataByTime.get(point.t) ?? { t: point.t }
+        nextDatum[gapKey] = point.y
+        dataByTime.set(point.t, nextDatum)
         segment += 1
       }
       previousPoint = point
@@ -358,9 +323,9 @@ function directLabelPositions(
   }]))
 }
 
-function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: number }, seasons: number[] = []) {
-  let minT = Math.min(...seasons)
-  let maxT = Math.max(...seasons)
+function computeDomain(series: ChartSeries[], yDomain?: { min: number; max: number }) {
+  let minT = Infinity
+  let maxT = -Infinity
   let minY = Infinity
   let maxY = -Infinity
   for (const entry of series) {
@@ -401,10 +366,6 @@ function timeTicks(min: number, max: number, count: number) {
   if (max <= min) return [min]
   const step = (max - min) / (count - 1)
   return Array.from({ length: count }, (_, index) => min + step * index)
-}
-
-function yearTicks(min: number, max: number) {
-  return Array.from({ length: max - min + 1 }, (_, index) => min + index)
 }
 
 function isValidPoint(point: ChartSeries['points'][number]) {
