@@ -3,6 +3,7 @@ import type { TournamentInstanceId } from '../evidence/internationalTournaments.
 import type { PlayerMetricInfo, PlayerRatingProof, PUBLIC_ARTIFACT_SCHEMA_VERSION, PublicPlayerDirectory, PublicRankingManifest, PublicRankingShard, PublicRegionHistoryDirectory, PublicRollingWindow, PublicSnapshotIndexEntry, PublicTeamDirectory, PublicTeamHistoryDirectory, PublicTeamHistoryIndex, PublicTeamHistoryPoint, PublicTeamHistorySeries, PublicTeamHistoryShard, PublicTeamStanding, PublicTournamentMovementIndex, PublicTournamentMovementShard } from '../published/schema.ts'
 import type { ComputedTeamStanding } from './deservedStandingPublicComparison.ts'
 import type { WalkForwardMetrics } from './predictionModel.ts'
+import type { ReplayEvidence } from '../queries/replayEvidence.ts'
 import type { RegionStrength } from './regionStrength.ts'
 
 export type SnapshotFilter = {
@@ -193,6 +194,7 @@ export type StaticRankingData = {
     awardSignals: AwardSignalData
     ratingProof?: PlayerRatingProof
   }
+  replayEvidence: ReplayEvidence
   walkForward: {
     metrics: WalkForwardMetrics
   }

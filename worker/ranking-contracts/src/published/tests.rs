@@ -419,6 +419,36 @@ fn publication_fixture(prepared: &str, token: Value, duplicate: bool) -> Publica
 }
 
 #[test]
+fn replay_evidence_uses_shared_reference_closure_and_generic_reader() {
+    let root = r#"{"artifactKind":"public-ranking-manifest","replayPredictionsUrl":"/data/evaluation/replay-predictions.json?v=g"}"#;
+    let replay = r#"{"artifactKind":"replay-predictions","contractVersion":1,"predictions":[],"sourceGames":[]}"#;
+    let complete = checked_generation(
+        &[
+            ("/data/ranking-summary.json", root),
+            ("/data/evaluation/replay-predictions.json", replay),
+        ],
+        &"2026-10-08T09:28:28.547Z".into(),
+        GenerationScope::Artifacts,
+    );
+    complete.reference_graph().unwrap().assert_closed().unwrap();
+    let missing = checked_generation(
+        &[("/data/ranking-summary.json", root)],
+        &"2026-10-08T09:28:28.547Z".into(),
+        GenerationScope::Artifacts,
+    );
+    assert!(missing.reference_graph().unwrap().assert_closed().is_err());
+    let retained = checked_generation(
+        &[(
+            "/data/ranking-summary.json",
+            r#"{"artifactKind":"public-ranking-manifest"}"#,
+        )],
+        &"2026-10-08T09:28:28.547Z".into(),
+        GenerationScope::Artifacts,
+    );
+    retained.reference_graph().unwrap().assert_closed().unwrap();
+}
+
+#[test]
 fn checked_receipt_preserves_declared_members_pointer_coercion_and_date_binding() {
     for token in [json!(1), json!("1"), json!(true), json!([["1"]])] {
         let PublicationFixture {

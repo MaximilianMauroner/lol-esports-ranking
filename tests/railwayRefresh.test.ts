@@ -1723,7 +1723,7 @@ test('refresh fallback persists distinct restored generation and run lineage', a
       },
     })
     assert.equal(result.incrementalAction, 'publish-full')
-    assert.match(result.incrementalMetrics?.fallbackReason ?? '', /ledger schema is invalid/)
+    assert.match(result.incrementalMetrics?.fallbackReason ?? '', /replay-evidence-capability-missing/)
     assert.deepEqual(persistedLineage, { baseGenerationId: generationId, baseRunId: runId })
     const state = JSON.parse(await readFile(join(rawDir, 'refresh-state.json'), 'utf8'))
     assert.equal(state.lastRun.stages.find((stage: { name: string }) => stage.name === 'checkpoint-restore').result, 'completed')

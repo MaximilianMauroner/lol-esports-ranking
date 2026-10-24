@@ -78,3 +78,6 @@ export type {
 } from './internal/replay/seriesResultUpdate.ts'
 
 export type { SeriesPassCapture, SeriesPassFrame, SeriesPassExpectation, SeriesPassObserver } from './internal/replay/seriesPass.ts'
+
+export { createReplayEvidence } from './internal/projections/replayEvidence.ts'
+export { summarizePredictions } from './internal/projections/predictionModel.ts'

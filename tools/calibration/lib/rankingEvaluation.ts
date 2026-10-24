@@ -1,4 +1,6 @@
-import { binaryMetricContract, binaryPredictionLoss } from '../../../src/domains/rankings/read'
+import { canonicalTeamNameFor } from '../../../src/domains/rankings/evidence.ts'
+import { readReplayEvidence, replayPregameWinRate, requireReplayDate, type ReplayEvidence } from '../../../src/domains/rankings/published-read.ts'
+import { binaryMetricContract, binaryPredictionLoss } from '../../../src/domains/rankings/read.ts'
 import { compareCodeUnits } from '../../../src/shared/codeUnitOrder.mjs'
 
 export type EvaluationRow = {
@@ -112,6 +114,13 @@ export function compareEvaluationExports(oldInput: unknown, nextInput: unknown, 
     }
     return { old, next }
   })
+  return { target: nextData.target, replayInputs: nextData.replayInputs, metricContract: binaryMetricContract,
+    oldModel: { version: oldData.modelVersion, configHash: oldData.modelConfigHash },
+    nextModel: { version: nextData.modelVersion, configHash: nextData.modelConfigHash },
+    ...comparePairs(pairs, iterations) }
+}
+
+function comparePairs(pairs: Pair[], iterations: number) {
   const summarize = (selected: Pair[]) => {
     const old = summarizeEvaluation(selected.map((pair) => pair.old))
     const next = summarizeEvaluation(selected.map((pair) => pair.next))
@@ -146,10 +155,7 @@ export function compareEvaluationExports(oldInput: unknown, nextInput: unknown, 
     const slice = slices[segment]
     if (slice && slice.count >= 50 && slice.brierDelta !== null && slice.brierDelta > allowance) failures.push(`${segment} Brier worsened`)
   }
-  return { target: nextData.target, replayInputs: nextData.replayInputs, metricContract: binaryMetricContract,
-    oldModel: { version: oldData.modelVersion, configHash: oldData.modelConfigHash },
-    nextModel: { version: nextData.modelVersion, configHash: nextData.modelConfigHash },
-    pairedPredictions: pairs.length, global, crossRegion, slices, leagues,
+  return { pairedPredictions: pairs.length, global, crossRegion, slices, leagues,
     superiority: { status: global.confidence95.status === 'estimated' && global.confidence95.logLoss.high < 0
       ? 'supported-on-this-cohort' : 'inconclusive', publishedAccuracyClaim: false },
     passed: failures.length === 0, failures }
@@ -227,4 +233,111 @@ function object(input: unknown): Record<string, unknown> {
 
 function isReplayInputDigest(input: unknown): input is ReplayInputDigest {
   return typeof input === 'string' && /^replay-inputs\/v1:[0-9a-f]{64}$/.test(input)
+}
+
+
+export function compareStoredReplayPolicy(input: ReplayEvidence, window: { scoreStart: string; recentStart: string }, iterations = 10_000) {
+  const evidence = readReplayEvidence(input)
+  requireReplayDate(window.scoreStart); requireReplayDate(window.recentStart)
+  if (!Number.isInteger(iterations) || iterations < 100) throw new Error('Bootstrap iterations must be at least 100')
+  if (evidence.dataMode !== 'scheduled-public-data' || evidence.sourceGames.length === 0
+    || evidence.predictions.some((prediction) => prediction.source.provider === 'seed')) throw new Error('Replay scoring requires nonempty real source evidence')
+  const predictionById = new Map(evidence.predictions.map((prediction) => [prediction.id, prediction]))
+  const sourceById = new Map(evidence.sourceGames.map((source) => [source.id, source]))
+  const rows: EvaluationRow[] = evidence.sourceGames.flatMap((source) => {
+    const teamA = canonicalTeamNameFor(source.teamA); const teamB = canonicalTeamNameFor(source.teamB)
+    const winner = canonicalTeamNameFor(source.winner)
+    if (source.date < window.scoreStart || (winner !== teamA && winner !== teamB)) return []
+    const prediction = predictionById.get(source.id)!
+    return [{ id: source.id, seriesId: source.seriesId, eventId: source.eventId, date: source.date,
+      teamA, teamB, leagueA: source.leagueA, leagueB: source.leagueB, actual: winner === teamA ? 1 as const : 0 as const,
+      probability: prediction.teamAGameWinProbability, segments: [...prediction.segments].sort() }]
+  }).sort((a, b) => compareCodeUnits(a.date, b.date) || compareCodeUnits(a.id, b.id))
+  const latestGameDate = rows.at(-1)?.date
+  if (!latestGameDate) throw new Error('Replay score window has no binary outcomes')
+  if (window.recentStart < window.scoreStart || window.recentStart > latestGameDate) throw new Error('Invalid replay recent window')
+  const fallbackMissingIds: string[] = []
+  const pairs: Pair[] = rows.map((old) => {
+    const prediction = predictionById.get(old.id)!
+    let probability = old.probability
+    if (old.segments.includes('unknown-lineup')) {
+      const explicit = prediction.teamALineupEvidenceBasis !== undefined && prediction.teamBLineupEvidenceBasis !== undefined
+        && (prediction.teamALineupEvidenceBasis === 'unavailable' || prediction.teamBLineupEvidenceBasis === 'unavailable')
+      const control = replayPregameWinRate(prediction)
+      if (!explicit || control === null) fallbackMissingIds.push(old.id)
+      else probability = control
+    }
+    return { old, next: { ...old, probability } }
+  })
+  const lineupCategory = (row: EvaluationRow) => {
+    const prediction = predictionById.get(row.id)!
+    if (prediction.teamALineupEvidenceBasis === undefined || prediction.teamBLineupEvidenceBasis === undefined) return 'unrecorded'
+    if (row.segments.includes('unknown-lineup')) return 'unknown-lineup'
+    if (row.segments.includes('partial-lineup')) return 'partial-lineup'
+    return 'observed-other'
+  }
+  const slice = (selected: Pair[]) => {
+    const selectedIds = new Set(selected.map((pair) => pair.old.id))
+    const unavailableIds = fallbackMissingIds.filter((id) => selectedIds.has(id))
+    const controls = Object.fromEntries((['coinFlip', 'pregameWinRate', 'teamOnly'] as const).map((key) => {
+      const available = selected.flatMap(({ old }) => {
+        const prediction = predictionById.get(old.id)!
+        const probability = key === 'coinFlip' ? .5 : key === 'pregameWinRate' ? replayPregameWinRate(prediction)
+          : prediction.variants['team-only'].teamAGameWinProbability
+        return probability === null ? [] : [{ old, control: { ...old, probability } }]
+      })
+      const availableIds = new Set(available.map((pair) => pair.old.id))
+      return [key, { status: available.length === selected.length ? 'complete' : 'unavailable-for-some-games',
+        missingIds: selected.filter((pair) => !availableIds.has(pair.old.id)).map((pair) => pair.old.id),
+        current: summarizeEvaluation(available.map((pair) => pair.old)),
+        control: summarizeEvaluation(available.map((pair) => pair.control)) }]
+    }))
+    return { current: summarizeEvaluation(selected.map((pair) => pair.old)), controls,
+      fallback: unavailableIds.length ? { status: 'unavailable' as const, missingEvidenceIds: unavailableIds }
+        : { status: 'evaluated' as const, ...comparePairs(selected, iterations) } }
+  }
+  const lineup = (side: 'A' | 'B') => {
+    const bases = ['unrecorded', 'unavailable', 'prior-observed', 'pregame-confirmed']
+    const ages = ['unrecorded', 'unavailable', 'observation-date-unknown', 'same-UTC-date', '1-30', '31-90', 'over-90']
+    const facts = pairs.map((pair) => {
+      const prediction = predictionById.get(pair.old.id)!
+      const basis = prediction[`team${side}LineupEvidenceBasis`] ?? 'unrecorded'
+      const observedAt = prediction[`team${side}LineupObservedAt`] ?? null
+      const observedUtcDate = observedAt === null ? null : new Date(observedAt).toISOString().slice(0, 10)
+      const ageDays = observedUtcDate === null ? null : (Date.parse(pair.old.date) - Date.parse(observedUtcDate)) / 86_400_000
+      const freshnessWeight = prediction[`team${side}LineupFreshnessWeight`] ?? null
+      const age = basis === 'unrecorded' || basis === 'unavailable' ? basis : ageDays === null ? 'observation-date-unknown'
+        : ageDays === 0 ? 'same-UTC-date' : ageDays <= 30 ? '1-30' : ageDays <= 90 ? '31-90' : 'over-90'
+      return { pair, basis, observedAt, ageDays, freshnessWeight, age }
+    })
+    return { basis: Object.fromEntries(bases.map((basis) => {
+      const selected = facts.filter((fact) => fact.basis === basis)
+      return [basis, { sides: selected.length, observationsWithDate: selected.filter((fact) => fact.observedAt !== null).length,
+        meanAgeDays: mean(selected.flatMap((fact) => fact.ageDays === null ? [] : [fact.ageDays])),
+        meanFreshnessWeight: mean(selected.flatMap((fact) => fact.freshnessWeight === null ? [] : [fact.freshnessWeight])),
+        ...slice(selected.map((fact) => fact.pair)) }]
+    })), age: Object.fromEntries(ages.map((age) => [age, slice(facts.filter((fact) => fact.age === age).map((fact) => fact.pair))])) }
+  }
+  const eventLeagues = [...new Set(rows.map((row) => sourceById.get(row.id)!.eventLeague))].sort(compareCodeUnits)
+  const homeLeagues = [...new Set(rows.flatMap((row) => [row.leagueA, row.leagueB]))].sort(compareCodeUnits)
+  return { version: 1, claim: 'exploratory-corrected-history-replay', model: evidence.model, window,
+    metricContract: binaryMetricContract, coverage: evidence.coverage,
+    scoreCoverage: { warmupGames: evidence.sourceGames.filter((source) => source.date < window.scoreStart).length,
+      expectedScoredIds: rows.map((row) => row.id).sort(compareCodeUnits),
+      excludedMissingOutcomeIds: evidence.sourceGames.filter((source) => source.date >= window.scoreStart
+        && ![canonicalTeamNameFor(source.teamA), canonicalTeamNameFor(source.teamB)].includes(canonicalTeamNameFor(source.winner))).map((source) => source.id).sort(compareCodeUnits) },
+    latestGameDate, informationAvailability: evidence.informationAvailability,
+    fallback: { candidateId: 'unknown-lineup-stored-pregame-win-rate-v1', control: 'stored-pregame-record-counts',
+      pairingAuthority: 'derived-policy-on-one-validated-stored-replay-corpus',
+      status: fallbackMissingIds.length ? 'unavailable' : 'evaluated', missingEvidenceIds: fallbackMissingIds,
+      affectedGames: pairs.filter((pair) => pair.old.segments.includes('unknown-lineup')).length,
+      changedGames: fallbackMissingIds.length ? null : pairs.filter((pair) => pair.old.probability !== pair.next.probability).length,
+      unaffectedGames: pairs.filter((pair) => !pair.old.segments.includes('unknown-lineup')).length,
+      productionState: 'unchanged', publishedAccuracyClaim: false },
+    global: slice(pairs), recent: slice(pairs.filter((pair) => pair.old.date >= window.recentStart)),
+    leagues: Object.fromEntries(eventLeagues.map((league) => [league, slice(pairs.filter((pair) => sourceById.get(pair.old.id)!.eventLeague === league))])),
+    homeLeagues: Object.fromEntries(homeLeagues.map((league) => [league, slice(pairs.filter((pair) => pair.old.leagueA === league || pair.old.leagueB === league))])),
+    lineupCategories: Object.fromEntries(['unrecorded', 'unknown-lineup', 'partial-lineup', 'observed-other'].map((category) =>
+      [category, slice(pairs.filter((pair) => lineupCategory(pair.old) === category))])),
+    lineup: { ageBasis: 'UTC-calendar-dates;forecast-times-unrecorded', A: lineup('A'), B: lineup('B') }, publishedAccuracyClaim: false }
 }
