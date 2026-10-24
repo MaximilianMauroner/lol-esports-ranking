@@ -75,6 +75,9 @@ export {
   POWER_COMPONENT_LABELS,
 } from './internal/queries/ratingComponentLabels.ts'
 export {
+  regionRatingHistory,
+} from './internal/queries/regionRatingHistory.ts'
+export {
   groupEntriesByDate,
 } from './internal/queries/timelineCompaction.ts'
 export {

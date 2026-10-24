@@ -424,7 +424,7 @@ export function RankingRoute() {
                 <RegionsView
                   regions={regions}
                   standings={standings}
-                  regionHistory={activeRegionHistory}
+                  regionHistoryState={regionHistoryState}
                   matchHistoryState={matchHistoryState}
                   onRequestMatchHistoryPages={requestMatchHistoryPages}
                   pickedIds={regionPickIds}

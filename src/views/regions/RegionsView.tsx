@@ -6,8 +6,8 @@ import {
   isRegionPowerTeam,
   type RegionStrength,
 } from '../../domains/rankings/read'
-import type { PublicMatchHistoryEntry, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicTeamStanding } from '../../domains/rankings/types'
-import type { MatchHistoryState } from '../../browser/rankings/usePublicArtifacts'
+import type { PublicMatchHistoryEntry, PublicRegionHistorySeries, PublicTeamStanding } from '../../domains/rankings/types'
+import type { MatchHistoryState, RegionHistoryScopeState } from '../../browser/rankings/usePublicArtifacts'
 import { useHistoryDetail } from '../../hooks/useHistoryDetail'
 import {
   formatDate,
@@ -30,13 +30,14 @@ import { cn } from '../../shared/utils'
 import { TeamMark } from '../../components/TeamMark'
 import { LineChart, type ChartSeries } from '../../components/LineChart'
 import { RegionDepthChart } from '../../components/RegionDepthChart'
+import { RegionPowerHistory } from './RegionPowerHistory'
 import { CompareToggle } from '../rankings/CompareToggle'
 import { seriesWinner } from '../matches/seriesOutcome'
 
 export function RegionsView({
   regions,
   standings,
-  regionHistory,
+  regionHistoryState,
   matchHistoryState,
   onRequestMatchHistoryPages,
   pickedIds,
@@ -45,7 +46,7 @@ export function RegionsView({
 }: {
   regions: RegionStrength[]
   standings: RegionStanding[]
-  regionHistory?: PublicRegionHistoryScope
+  regionHistoryState: RegionHistoryScopeState
   matchHistoryState: MatchHistoryState
   onRequestMatchHistoryPages: (pages: number[]) => void
   pickedIds: Set<string>
@@ -69,6 +70,13 @@ export function RegionsView({
     () => selectedRegion ? flagshipTeamsForRegion(selectedRegion, standings) : [],
     [selectedRegion, standings],
   )
+  const historyLines = useMemo(
+    () => regions
+      .map((region, index) => ({ region: region.region, color: REGION_LINE_COLORS[index % REGION_LINE_COLORS.length] }))
+      .filter((line) => pickedIds.size === 0 || pickedIds.has(line.region)),
+    [pickedIds, regions],
+  )
+  const regionHistory = regionHistoryState.status === 'ready' ? regionHistoryState.data : undefined
 
   if (regions.length === 0) {
     return (
@@ -97,6 +105,18 @@ export function RegionsView({
         </StatRibbon>
       }
     >
+      <Panel>
+        <PanelHeader
+          title="Region power over time"
+          description={`Each line shows the mean Power of the three highest-rated eligible flagship teams of a region, day by day. ${pickedIds.size > 0
+            ? 'The chart shows only the regions that you compare.'
+            : 'Select Compare on a region below to show only the regions that you compare.'}`}
+        />
+        <PanelBody className="px-0 pt-0 pb-1">
+          <RegionPowerHistory state={regionHistoryState} lines={historyLines} standings={standings} />
+        </PanelBody>
+      </Panel>
+
       <Panel>
         <PanelHeader title="Region depth" />
         <PanelBody className="grid gap-3">
@@ -189,6 +209,8 @@ export function RegionsView({
     </PageShell>
   )
 }
+
+const REGION_LINE_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)']
 
 type RegionStanding = Pick<PublicTeamStanding, 'team' | 'code' | 'region' | 'league' | 'rating' | 'rank' | 'eligibility'>
 
