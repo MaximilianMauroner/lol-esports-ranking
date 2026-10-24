@@ -39,6 +39,7 @@ export function startSwissStats(teams: PreviewTeam[], scenario: ResolvedScenario
     signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000), ...(init?.signal ? [init.signal] : [])]) })
   void loadCurrentRatingSnapshot(boundedFetch).then(({ manifest, key, snapshot }) => {
     if (!active) return
+    if (JSON.stringify(snapshot.ratingScale) !== JSON.stringify(manifest.model.ratingScale)) throw new Error('The snapshot and model rating scales disagree.')
     worker = createWorker()
     const ownedWorker = worker
     worker.onmessage = ({ data }) => {

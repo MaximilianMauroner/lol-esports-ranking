@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react'
 import { startSwissStats, type SwissStatsState } from '../../browser/tournaments/swissStatsClient'
 import { Alert } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
@@ -16,12 +16,13 @@ export function SwissStatsPreview({ teams, scenario, event, label }: { teams: Pr
   const [request, setRequest] = useState({ enabled: false, attempt: 0 })
   const [saved, setSaved] = useState<{ key: string; state: SwissStatsState }>({ key: inputKey, state: { status: 'idle' } })
   const state: SwissStatsState = saved.key === inputKey ? saved.state : request.enabled ? { status: 'loading' } : { status: 'idle' }
+  const beginRun = useEffectEvent((key: string) => startSwissStats(teams, scenario, (state) => setSaved({ key, state })))
   useEffect(() => {
     if (!request.enabled) return
     if (conditioning.blocked) return
-    stop.current = startSwissStats(teams, scenario, (state) => setSaved({ key: inputKey, state }))
+    stop.current = beginRun(inputKey)
     return () => { stop.current?.(); stop.current = null }
-  }, [request, inputKey, teams, scenario, conditioning.blocked])
+  }, [request, inputKey, conditioning.blocked])
   const pending = state.status === 'loading' || state.status === 'running'
   const start = () => setRequest((previous) => ({ enabled: true, attempt: previous.attempt + 1 }))
   const cancel = () => {

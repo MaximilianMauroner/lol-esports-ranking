@@ -96,6 +96,14 @@ test('on-demand hypothetical stats load, cancel, retry, and replace changed scen
     assert.match(await panel.innerText(), /Snapshot .*Model .*Config /)
     assert.equal(await page.evaluate(() => (window as unknown as { swissStatsProgress: number[] }).swissStatsProgress.some((count) => count > 0 && count < 4000)), true, 'real trial completion reaches the DOM')
 
+    const ratingRequestsBeforeRefresh = requests.filter((request) => request.includes('/data/')).length
+    const refreshed = page.waitForResponse((response) => response.url().endsWith('/tournament-data/feed.json.health.json'))
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await refreshed
+    await page.evaluate(() => new Promise(requestAnimationFrame))
+    assert.equal(await panel.getByRole('table', { name: 'Team advancement' }).count(), 1, 'an unchanged feed keeps the ready result')
+    assert.equal(requests.filter((request) => request.includes('/data/')).length, ratingRequestsBeforeRefresh, 'an unchanged feed does not reload ratings')
+
     holdRatings = true
     await page.getByRole('region', { name: 'Round 1', exact: true }).getByRole('button', { name: 'Fill a valid draw', exact: true }).click()
     await panel.getByText('Loading published Power ratings.').waitFor()

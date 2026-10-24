@@ -5,6 +5,7 @@ import { drawContext, drawProblem, SWISS_ROUND_SIZES, type PreviewTeam, type Res
 import { uniformLegalSwissDraw } from './swissLegalDraw.ts'
 import { WORLDS_2026_SWISS_RULES, applySwissWinner, swissBestOf } from './worlds2026Swiss.ts'
 import type { SwissTeamStanding } from './worldsObservedRules.ts'
+import type { TournamentSeries } from './tournamentFeed.ts'
 import type { TournamentEvent } from './tournamentFeed.ts'
 import { worldsRandom } from './worldsSimulation.ts'
 
@@ -33,11 +34,13 @@ export function runSwissStats(input: SwissStatsInput, options: SwissStatsOptions
     || !ratingScaleFromUnknown(model.ratingScale) || !model.parameters || typeof model.parameters !== 'object' || Array.isArray(model.parameters)) {
     throw new Error('A valid published rating model and config are required.')
   }
-  for (const [name, value] of Object.entries(model.parameters)) {
-    if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(`Invalid rating model parameter ${name}.`)
-    if (['winProbabilityEloScale', 'winProbabilityUncertaintyScale'].includes(name) && (typeof value !== 'number' || value <= 0)) throw new Error(`Invalid rating model parameter ${name}.`)
-    if (name === 'winProbabilityUncertaintyFloor' && (typeof value !== 'number' || value < 0 || value > 1)) throw new Error(`Invalid rating model parameter ${name}.`)
+  const parameters = model.parameters as Record<string, unknown>
+  for (const name of ['winProbabilityEloScale', 'winProbabilityUncertaintyScale']) {
+    const value = parameters[name]
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) throw new Error(`Invalid rating model parameter ${name}.`)
   }
+  const floor = parameters.winProbabilityUncertaintyFloor
+  if (typeof floor !== 'number' || !Number.isFinite(floor) || floor < 0 || floor > 1) throw new Error('Invalid rating model parameter winProbabilityUncertaintyFloor.')
   const byName = new Map<string, RankingSummaryStanding[]>()
   for (const standing of input.standings) {
     const name = canonicalTeamNameFor(standing.team)
@@ -153,12 +156,33 @@ export function swissStatsConditioning(event: TournamentEvent, teams: readonly P
   let conditioned = 0
   for (const series of event.series) {
     const round = Number(/^Round ([1-5])$/.exec(series.stage ?? '')?.[1])
-    if (!round || series.status === 'completed' || (series.status !== 'live' && !series.teams.some((team) => (team.gameWins ?? 0) > 0))) continue
+    if (!round) continue
     const names = series.teams.map((team) => canonicalTeamNameFor(team.name ?? team.id ?? ''))
-    const match = scenario.rounds.find((entry) => entry.round === round)?.matches.find((match) =>
+    const drawnRound = scenario.rounds.find((entry) => entry.round === round)
+    const match = drawnRound?.matches.find((match) =>
       match.teamIds.length === names.length && match.teamIds.every((id) => names.includes(canonicalTeamNameFor(teams.find((team) => team.id === id)!.label))))
+    if (series.status === 'completed') {
+      if (drawnRound?.liveDraw && match && !validCompletedResult(series, match.bestOf)) return { blocked: 'A completed Swiss series has an incomplete or conflicting result. Stats need a valid final score or an unambiguous winner.', conditioned }
+      continue
+    }
+    if (series.status !== 'live' && !series.teams.some((team) => (team.gameWins ?? 0) > 0)) continue
     if (!match?.winnerId || match.result !== 'preview') return { blocked: 'A Swiss series is live or has a partial score. Pre-match estimates cannot use that score. Pick its winner in this scenario to condition the preview, or wait for its final result.', conditioned }
     conditioned++
   }
   return { blocked: null, conditioned }
+}
+
+function validCompletedResult(series: TournamentSeries, bestOf: 1 | 3): boolean {
+  if (series.teams.length !== 2 || (series.bestOf !== null && series.bestOf !== bestOf)) return false
+  const target = (bestOf + 1) / 2
+  const outcomes = series.teams.map((team) => team.outcome?.toLowerCase())
+  const scores = series.teams.map((team) => team.gameWins)
+  if (scores.some((score) => score !== null && (!Number.isInteger(score) || score < 0))) return false
+  let winner: number | null = null
+  if (outcomes.filter((outcome) => outcome === 'win').length === 1) winner = outcomes.indexOf('win')
+  else if (scores[0] === target && scores[1] !== null && scores[1] < target) winner = 0
+  else if (scores[1] === target && scores[0] !== null && scores[0] < target) winner = 1
+  return winner !== null
+    && outcomes.every((outcome, index) => !outcome || outcome === (index === winner ? 'win' : 'loss'))
+    && scores.every((score, index) => score === null || (index === winner ? score === target : score < target))
 }

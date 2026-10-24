@@ -152,6 +152,13 @@ test('invalid probabilities, counts, scenarios, rating joins, and model values a
   assert.throws(() => runSwissStats(unknown, options), /unique published/)
   const model = ratedInput(); model.model.parameters = { winProbabilityEloScale: NaN }
   assert.throws(() => runSwissStats(model, options), /model parameter/)
+  for (const missing of ['winProbabilityEloScale', 'winProbabilityUncertaintyScale', 'winProbabilityUncertaintyFloor']) {
+    const model = ratedInput()
+    delete (model.model.parameters as Record<string, unknown>)[missing]
+    assert.throws(() => runSwissStats(model, options), /model parameter/)
+  }
+  const empty = ratedInput(); empty.model.parameters = {}
+  assert.throws(() => runSwissStats(empty, options), /model parameter/)
   const config = ratedInput(); config.model.configHash = 'different'
   assert.throws(() => runSwissStats(config, options), /model and config/)
 })
@@ -176,6 +183,35 @@ test('partly scored and live series block pre-match stats unless a matching scen
   assert.deepEqual(swissStatsConditioning(event, baseline.teams, finished), { blocked: null, conditioned: 1 })
   event.series[0].status = 'live'; event.series[0].teams.forEach((team) => { team.gameWins = 0 })
   assert.match(swissStatsConditioning(event, baseline.teams, resolveScenario(baseline, [])).blocked!, /live/)
-  event.series[0].status = 'completed'
+  event.series[0].status = 'completed'; event.series[0].teams[0].gameWins = 1
+  event.series[0].bestOf = 1
   assert.equal(swissStatsConditioning(event, baseline.teams, resolveScenario(baseline, [])).blocked, null)
+})
+
+test('completed Swiss series use the scenario format and reject incomplete or conflicting results', () => {
+  const event = worldsEvent()
+  const finished = completed(baseline)
+  const drawn = finished.rounds[2]
+  const source: SwissBaseline = { ...baseline, kind: 'live', rounds: finished.rounds.slice(0, 3).map((round) => ({ pairs: round.matches.map((match) => match.teamIds), winners: round.matches.map((match) => match.winnerId) })) }
+  const scenario = resolveScenario(source, [])
+  const first = drawn.matches.find((match) => match.bestOf === 3)!
+  event.series = [{ ...event.series[0], stage: 'Round 3', bestOf: 3, status: 'completed', teams: first.teamIds.map((id, index) => ({
+    id, name: baseline.teams.find((team) => team.id === id)!.label, code: null, gameWins: index ? 0 : 1, outcome: index ? 'loss' : 'win',
+  })) }]
+  assert.match(swissStatsConditioning(event, baseline.teams, scenario).blocked!, /incomplete or conflicting/)
+  event.series[0].teams[0].gameWins = 2
+  assert.equal(swissStatsConditioning(event, baseline.teams, scenario).blocked, null)
+  event.series[0].bestOf = null
+  assert.equal(swissStatsConditioning(event, baseline.teams, scenario).blocked, null, 'the scenario supplies the Swiss format')
+  event.series[0].teams[1].gameWins = null
+  assert.equal(swissStatsConditioning(event, baseline.teams, scenario).blocked, null, 'a missing loser score does not contradict a terminal winner')
+  event.series[0].teams[0].outcome = 'loss'; event.series[0].teams[1].outcome = 'win'
+  assert.match(swissStatsConditioning(event, baseline.teams, scenario).blocked!, /incomplete or conflicting/)
+  event.series[0].teams.forEach((team) => { team.gameWins = null; team.outcome = null })
+  assert.match(swissStatsConditioning(event, baseline.teams, scenario).blocked!, /incomplete or conflicting/)
+  event.series[0].teams[0].outcome = 'win'
+  assert.equal(swissStatsConditioning(event, baseline.teams, scenario).blocked, null)
+  event.series[0].bestOf = 1
+  assert.match(swissStatsConditioning(event, baseline.teams, scenario).blocked!, /incomplete or conflicting/)
+  assert.equal(swissStatsConditioning(event, baseline.teams, resolveScenario(baseline, [])).blocked, null, 'unrelated observed results do not restrict a seed-only what-if scenario')
 })
