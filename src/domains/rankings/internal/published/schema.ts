@@ -67,10 +67,6 @@ export function scopeArtifactFileNameForKey(key: string) {
   return `${scopeSlugForFilter(filterFromSnapshotKey(key))}.json`
 }
 
-export function scopeArtifactFileNameForFilter(filter: SnapshotFilter) {
-  return `${scopeSlugForFilter(filter)}.json`
-}
-
 export function scopeSlugForFilter(filter: SnapshotFilter) {
   if (filter.season === 'All' && filter.event === 'All' && filter.region === 'All') return 'all'
   if (/^\d{4}$/.test(filter.season) && filter.event === 'All' && filter.region === 'All' && filter.checkpoint) return `season-${filter.season}-${stableArtifactSlug(filter.checkpoint)}`
@@ -139,14 +135,6 @@ export function teamIdFor(team: { team: string; region?: string; code?: string }
 
 export function leagueIdFor(league: { league: string; region?: string }) {
   return `league:${stableArtifactSlug(league.region ?? 'global')}:${stableArtifactSlug(league.league)}`
-}
-
-export function eventIdFor(event: { event: string; season?: string | number }) {
-  return `event:${stableArtifactSlug(String(event.season ?? 'all'))}:${stableArtifactSlug(event.event)}`
-}
-
-export function playerIdFor(player: { id: string }) {
-  return player.id
 }
 
 function stableArtifactSlug(value: string) {
