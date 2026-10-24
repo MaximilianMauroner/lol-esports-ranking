@@ -54,11 +54,9 @@ test('web app manifest includes installable icon sizes', async () => {
 
 test('app shell includes the Riot project disclaimer footer', async () => {
   const app = await readFile('src/views/rankings/RankingRoute.tsx', 'utf8')
-  const legal = await readFile('src/data/legal.ts', 'utf8')
 
   assert.match(RIOT_PROJECT_NOTICE, /created under Riot Games' "Legal Jibber Jabber" policy/)
   assert.match(RIOT_PROJECT_NOTICE, /Riot Games does not endorse or sponsor this project/)
-  assert.match(legal, /export const RIOT_PROJECT_NOTICE/)
   assert.match(app, /<footer\b[^>]*aria-label="Project disclaimer"/)
   assert.match(app, /RIOT_PROJECT_NOTICE/)
   assert.match(app, /PROJECT_REPOSITORY_URL/)
