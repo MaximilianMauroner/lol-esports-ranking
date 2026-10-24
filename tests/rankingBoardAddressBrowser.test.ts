@@ -210,9 +210,9 @@ test('the Rankings board follows its address after load: typed and linked hashes
     const comparison = page.getByRole('dialog', { name: 'Team comparison', exact: true })
     assert.equal(await comparison.count(), 1, 'Comparison opens its shell without a full-screen module loader')
     const trend = comparison.getByRole('region', { name: 'Compared team power score trend', exact: true })
-    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(5, 8).join(', ')}`, exact: true }).waitFor()
+    await trend.getByRole('application', { name: `Power score over time for ${comparisonCodes.slice(5, 8).join(', ')}`, exact: true }).waitFor()
     await comparison.getByRole('button', { name: `Remove ${comparisonNames[5]} from comparison`, exact: true }).click()
-    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(6, 8).join(', ')}`, exact: true }).waitFor()
+    await trend.getByRole('application', { name: `Power score over time for ${comparisonCodes.slice(6, 8).join(', ')}`, exact: true }).waitFor()
     await comparison.getByRole('button', { name: 'Close', exact: true }).click()
     await page.getByRole('region', { name: 'Compare teams: 2 selected', exact: true }).getByRole('button', { name: 'Clear', exact: true }).click()
 
@@ -230,7 +230,7 @@ test('the Rankings board follows its address after load: typed and linked hashes
     await compare.nth(8).check()
     await compare.nth(9).check()
     await page.getByRole('button', { name: 'Open comparison', exact: true }).click()
-    await trend.getByRole('img', { name: `Power score over time for ${comparisonCodes.slice(8, 10).join(', ')}`, exact: true }).waitFor()
+    await trend.getByRole('application', { name: `Power score over time for ${comparisonCodes.slice(8, 10).join(', ')}`, exact: true }).waitFor()
   } finally {
     pendingManifest.splice(0).forEach((respond) => respond())
     await browser?.close()
