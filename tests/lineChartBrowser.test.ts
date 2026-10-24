@@ -30,6 +30,10 @@ test('line charts share one hover model', { timeout: 90_000 }, async (t) => {
       assert.equal(ticks[0], 'Jun 1')
       assert.equal(ticks.at(-1), 'Jun 30')
     })
+    await t.test('an axis over many months has ticks on month starts, and the first tick and January show the year', async () => {
+      const span = page.getByRole('application', { name: 'Span over time for Beta' })
+      assert.deepEqual(await span.locator('.recharts-xAxis-tick-labels text').allTextContents(), ['May 2025', 'Sep', 'Jan 2026', 'May', 'Sep'])
+    })
     await t.test('screen-reader summary shows the recorded calendar days', async () => {
       const summaryId = await chart.getAttribute('aria-describedby')
       assert.ok(summaryId)

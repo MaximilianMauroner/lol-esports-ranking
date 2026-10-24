@@ -20,4 +20,14 @@ createRoot(document.getElementById('root')!).render([
     }],
     details: (active) => createElement('p', null, describeRow(active)),
   }),
+  createElement(LineChart, {
+    key: 'span',
+    yLabel: 'Span',
+    series: [{
+      id: 'beta',
+      label: 'Beta',
+      color: '#199e70',
+      points: ['2025-01-13', '2025-06-01', '2025-11-20', '2026-04-15', '2026-10-06'].map((date, index) => ({ t: Date.parse(date), y: 1500 + index * 10 })),
+    }],
+  }),
 ])

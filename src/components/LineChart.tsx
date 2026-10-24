@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { Button } from './ui/button'
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from './ui/chart'
-import { formatChartTimestamp } from '../shared/chartTime'
+import { formatChartTimestamp, monthTicks } from '../shared/chartTime'
 
 export type ChartPoint = {
   t: number
@@ -100,7 +100,8 @@ export function LineChart({
   const lastSegmentKey = new Map(meta.map(({ key, series: entry }) => [entry.id, key]))
   const yTicks = providedYTicks ?? niceTicks(minY, maxY, 4)
   const formatYTick = yTickFormat ?? yFormat
-  const xTicks = timeTicks(minT, maxT, 5)
+  const xMonthTicks = monthTicks(minT, maxT)
+  const xTicks = xMonthTicks ?? timeTicks(minT, maxT, 5)
   const lineType = curve === 'step' ? 'stepAfter' : 'linear'
   const detailT = hoveredT !== undefined && data.some((row) => row.t === hoveredT) ? hoveredT : data[data.length - 1].t
   const summaries = series.flatMap((entry) => {
@@ -162,7 +163,9 @@ export function LineChart({
             tickLine={false}
             axisLine={false}
             minTickGap={28}
-            tickFormatter={(value) => formatChartTimestamp(value, 'month-day')}
+            tickFormatter={(value: number, index: number) => !xMonthTicks
+              ? formatChartTimestamp(value, 'month-day')
+              : formatChartTimestamp(value, index === 0 || new Date(value).getUTCMonth() === 0 ? 'month-year' : 'month')}
           />
           <YAxis
             type="number"
