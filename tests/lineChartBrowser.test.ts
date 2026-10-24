@@ -19,9 +19,7 @@ test('line charts share one hover model', { timeout: 90_000 }, async (t) => {
     await page.goto(fixtureUrl)
     const chart = page.getByRole('application', { name: 'Rating over time for Alpha' })
     await chart.locator('.recharts-xAxis-tick-labels text').last().waitFor()
-    const [calendarBox, powerBox, averageBox, gapBox, emptyBox] = await page.locator('[data-slot="chart"]').all()
-    const power = page.getByRole('application', { name: 'Power over seasons for North, South' })
-    const average = page.getByRole('application', { name: 'Average over seasons for North, South' })
+    const calendarBox = page.locator('[data-slot="chart"]').first()
     const details = page.getByRole('region', { name: 'Selected chart point details' })
 
     await t.test('details show the latest row before any hover', async () => {
@@ -60,56 +58,15 @@ test('line charts share one hover model', { timeout: 90_000 }, async (t) => {
       await page.keyboard.press('ArrowRight')
       await details.getByText('Row 2026-06-30: Alpha 1600', { exact: true }).waitFor()
     })
-    await t.test('hovering one season chart shows the same season in its sibling', async () => {
-      const box = await power.boundingBox()
-      assert.ok(box)
-      await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2)
-      const sibling = averageBox.locator('.recharts-tooltip-wrapper')
-      await sibling.getByText('2025', { exact: true }).waitFor()
-      assert.match(await sibling.innerText(), /North\s+2140/)
-      assert.match(await sibling.innerText(), /South\s+No value/)
-    })
-    await t.test('Tab focus draws a 2px ring, and ArrowRight moves the active season in both charts', async () => {
-      await page.mouse.move(0, 0)
-      await power.focus()
+    await t.test('Tab focus draws a 2px ring on the chart surface', async () => {
+      await page.reload()
+      await chart.locator('.recharts-xAxis-tick-labels text').last().waitFor()
       await page.keyboard.press('Tab')
-      const ring = await average.evaluate((svg) => {
+      const ring = await chart.evaluate((svg) => {
         const style = getComputedStyle(svg)
         return { focused: document.activeElement === svg, style: style.outlineStyle, width: style.outlineWidth }
       })
       assert.deepEqual(ring, { focused: true, style: 'solid', width: '2px' })
-      const tooltip = averageBox.locator('.recharts-tooltip-wrapper')
-      await tooltip.getByText('2025', { exact: true }).waitFor()
-      await page.keyboard.press('ArrowRight')
-      await tooltip.getByText('2026 · in progress', { exact: true }).waitFor()
-      assert.match(await tooltip.innerText(), /South\s+1700/)
-      await powerBox.locator('.recharts-tooltip-wrapper').getByText('2026 · in progress', { exact: true }).waitFor()
-    })
-    await t.test('no line crosses a season without a value', async () => {
-      const tick2024 = await gapBox.locator('.recharts-xAxis-tick-labels text').filter({ hasText: /^2024$/ }).boundingBox()
-      assert.ok(tick2024)
-      const x2024 = tick2024.x + tick2024.width / 2
-      const lines = await gapBox.locator('.recharts-line path.recharts-curve').evaluateAll((paths) => paths.map((path) => {
-        const rect = path.getBoundingClientRect()
-        return { left: rect.left, right: rect.right, dashed: path.getAttribute('stroke-dasharray') }
-      }))
-      assert.ok(lines.length > 0)
-      assert.deepEqual(lines.filter((line) => line.left < x2024 && line.right > x2024), [])
-      assert.equal(lines.filter((line) => line.dashed === '4 4').length, 1, 'only the connector into the in-progress season is dashed')
-      await gapBox.locator('xpath=..').getByText('2026 is in progress. The dashed line leads to its value so far.').waitFor()
-    })
-    await t.test('an in-progress season without values has a tick and a row that hover reaches', async () => {
-      const empty = page.getByRole('application', { name: 'Pending over seasons for East, North' })
-      await empty.scrollIntoViewIfNeeded()
-      assert.deepEqual(await empty.locator('.recharts-xAxis-tick-labels text').allTextContents(), ['2024', '2025', '2026'])
-      await emptyBox.locator('xpath=..').getByText('2026 is in progress. It has no value yet.').waitFor()
-      const box = await empty.boundingBox()
-      assert.ok(box)
-      await page.mouse.move(box.x + box.width * 0.92, box.y + box.height / 2)
-      const tooltip = emptyBox.locator('.recharts-tooltip-wrapper')
-      await tooltip.getByText('2026 · in progress', { exact: true }).waitFor()
-      assert.match(await tooltip.innerText(), /East\s+No value/)
-      assert.match(await tooltip.innerText(), /North\s+No value/)
     })
 
     await t.test('a horizontal touch scrub shows the tooltip and moves the details', async () => {

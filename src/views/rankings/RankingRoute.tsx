@@ -18,7 +18,7 @@ import { LoadingState } from '../../components/ui/loading'
 import { PROJECT_FEEDBACK_URL, PROJECT_REPOSITORY_URL, RIOT_PROJECT_NOTICE } from '../../data/legal'
 import { tournamentIdFromFilter, type TournamentFilterValue } from '../../domains/rankings/evidence'
 import type { RegionStrength } from '../../domains/rankings/read'
-import { currentSeasonScope, createRankingBoard, emptyPlayerScope, publishedRatedMatchRule, resolvePlayerScope } from '../../domains/rankings/read'
+import { currentSeasonScope, createRankingBoard, emptyPlayerScope, resolvePlayerScope } from '../../domains/rankings/read'
 import type { PublicTeamStanding as RankingSummaryStanding, SnapshotCheckpointOption } from '../../domains/rankings/types'
 import {
   formatDate,
@@ -76,7 +76,6 @@ export function RankingRoute() {
     playersState,
     teamHistoryState,
     regionHistoryState,
-    regionTimelineState,
     tournamentMovementIndexState,
     tournamentMovementEntries,
     tournamentMovementState,
@@ -93,7 +92,6 @@ export function RankingRoute() {
     teamHistoryTeams: drawerOpen && mode === 'rankings' ? teamPicks.map(teamKey) : historyTeams,
     matchHistoryYear: matchYear,
     loadRegionHistory,
-    loadRegionTimeline: mode === 'regions',
     loadTournamentMovements: mode === 'rankings',
     loadMatchHistory,
     tournamentId,
@@ -427,8 +425,6 @@ export function RankingRoute() {
                   regions={regions}
                   standings={standings}
                   regionHistory={activeRegionHistory}
-                  regionTimelineState={regionTimelineState}
-                  ratedMatchRule={publishedRatedMatchRule(loadedData.model.parameters)}
                   matchHistoryState={matchHistoryState}
                   onRequestMatchHistoryPages={requestMatchHistoryPages}
                   pickedIds={regionPickIds}
