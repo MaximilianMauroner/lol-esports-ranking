@@ -16,10 +16,6 @@ export function teamBrandingFor(teamName: string): TeamBranding | undefined {
   return (teamBranding as Record<string, TeamBranding>)[teamName]
 }
 
-export function teamLogoFor(teamName: string) {
-  return teamBrandingFor(teamName)?.logo
-}
-
 export function withAuditedTeamCodes<T>(value: T): T {
   const visited = new Set<object>()
 

@@ -139,29 +139,6 @@ export function seriesSwingStateProbability(state: SeriesScoreState): SeriesSwin
   }
 }
 
-export function seriesSwingStates(
-  bestOf: 3 | 5,
-  teamAGameWinProbability: number,
-): SeriesSwingStateProbability[] {
-  const normalizedBestOf = normalizedSwingBestOf(bestOf)
-  const winsNeeded = Math.floor(normalizedBestOf / 2) + 1
-  const states: SeriesSwingStateProbability[] = []
-
-  for (let teamAWins = 0; teamAWins <= winsNeeded; teamAWins += 1) {
-    for (let teamBWins = 0; teamBWins <= winsNeeded; teamBWins += 1) {
-      if (!isValidSeriesScore(normalizedBestOf, winsNeeded, teamAWins, teamBWins)) continue
-      states.push(seriesSwingStateProbability({
-        bestOf: normalizedBestOf,
-        teamAWins,
-        teamBWins,
-        teamAGameWinProbability,
-      }))
-    }
-  }
-
-  return states.sort((a, b) => a.gamesPlayed - b.gamesPlayed || a.teamBWins - b.teamBWins || a.teamAWins - b.teamAWins)
-}
-
 function uncertaintyBandFor(
   teamA: ProbabilityTeam,
   teamB: ProbabilityTeam,
@@ -241,8 +218,6 @@ function isValidSeriesScore(bestOf: 3 | 5, winsNeeded: number, teamAWins: number
   if (teamAWins > winsNeeded || teamBWins > winsNeeded) return false
   if (teamAWins >= winsNeeded && teamBWins >= winsNeeded) return false
   if (teamAWins + teamBWins > bestOf) return false
-  if (teamAWins >= winsNeeded && teamAWins + teamBWins > winsNeeded + teamBWins) return false
-  if (teamBWins >= winsNeeded && teamAWins + teamBWins > winsNeeded + teamAWins) return false
   return true
 }
 

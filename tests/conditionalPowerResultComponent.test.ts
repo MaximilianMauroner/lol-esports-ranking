@@ -18,7 +18,6 @@ test('result component matches production stable updates and frozen-state public
         const untouched = structuredClone(fixture)
         const component = evaluateConditionalPowerResultComponent(fixture)
         if (component.status !== 'partial') throw new Error(component.detail)
-        assert.equal(component.status, 'partial')
 
         // The reference runs the actual production member path with explicit controlled stats.
         // Priors are fixed to the pinned snapshot, matching this component's declared policy.
@@ -95,8 +94,6 @@ test('result component needs no hypothetical games or future statistics and pres
   const result = evaluateConditionalPowerResultComponent(input)
   assert.equal(result.status, 'partial')
   assert.deepEqual(input, before)
-  assert.equal('games' in input, false)
-  assert.equal('playerEdges' in input, false)
 })
 
 test('missing pinned raw result state stays unavailable even under a fresh state pin', () => {

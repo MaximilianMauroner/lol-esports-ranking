@@ -153,11 +153,6 @@ export function Segmented<T extends string>({
   )
 }
 
-/**
- * Every empty, missing and error state in the product. The `action` slot exists
- * so that a retry button no longer forces a caller to hand-build its own empty
- * state: Match history and the snapshot error screen each had their own.
- */
 export function DataState({
   icon,
   title,

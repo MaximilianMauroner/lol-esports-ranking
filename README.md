@@ -70,7 +70,7 @@ workspace. It has one JavaScript dependency set and no package split.
 | `scripts/` | Production Node server, refresh, publication, storage, and operator commands. |
 | `tools/` | Developer calibration, audits, assets, and test tools. |
 | `tests/` | Tests and focused fixtures. |
-| `worker/` | Native refresh seams and Rust contracts. |
+| `worker/` | Native services, refresh code, and Rust contracts. |
 | `ops/` | Tracked safety receipts. |
 | `docs/` | Product purpose, requirements, principles, and lasting design decisions. |
 | `.agents/artifacts/` | Ignored reports, plans, audit output, and local evidence. |
