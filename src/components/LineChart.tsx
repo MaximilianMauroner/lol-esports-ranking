@@ -143,7 +143,6 @@ export function LineChart({
 
   return (
     <div className="chart-shell">
-      {/* Names come before the lines they identify. */}
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-3" role={interactiveLegend ? 'group' : undefined} aria-label={interactiveLegend ? 'Highlight a team' : undefined}>
         {interactiveLegend ? <Button variant="ghost" size="tab" aria-pressed={!focusedId} onClick={() => setFocusedSeriesId(undefined)}>All teams</Button> : null}
         {series.map((entry) => interactiveLegend ? (

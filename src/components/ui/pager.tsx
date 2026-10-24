@@ -4,15 +4,6 @@ import { Select } from './select'
 import { cn } from '@/shared/utils'
 
 /**
- * The one pagination control.
- *
- * There used to be three shapes: the team board (rows-per-page select, four
- * edge buttons, "Page X of Y"), the match ledger (a range label, two buttons,
- * and its rows-per-page select stranded in the filter card above), and the
- * recent-matches list inside the team drawer (the board's markup with a pile of
- * size overrides). They now differ only in `density` and in which optional
- * slots are supplied.
- *
  * `rangeLabel` is shown alongside the page counter rather than instead of it.
  * Both answers matter: which page you are on, and which rows you are looking at.
  */

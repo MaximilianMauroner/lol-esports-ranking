@@ -2,7 +2,7 @@
 
 The product helps people make decisions about League of Legends through connected evidence. A player can review a purchase, a coach can prepare for an opponent, and a scout can compare candidates. Each should be able to inspect the history, assumptions, and source records behind an assessment, save a decision, and review later evidence.
 
-The product has four connected categories: esports intelligence and scouting, builds and gameplay optimization, personal performance analytics, and an installed Windows and macOS companion. All four belong to the product's purpose. Their inclusion is a target, not a claim that they are implemented or must ship together. The [product specification](product-specification.md) defines their requirements, acceptance conditions, limits, and open decisions.
+The product has four connected categories: esports intelligence and scouting, builds and gameplay optimization, personal performance analytics, and an installed Windows and macOS companion. Their inclusion is a target, not a claim that they are implemented or must ship together. The [product specification](product-specification.md) defines their requirements, acceptance conditions, limits, and open decisions.
 
 ## People and decisions
 
