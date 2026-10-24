@@ -58,3 +58,11 @@ export {
   runWorldsSimulation,
   worldsSamplingInterval,
 } from './internal/worldsSimulation.ts'
+export {
+  runSwissStats,
+  swissStatsConditioning,
+  type SwissStatsInput,
+  type SwissStatsOptions,
+  type SwissStatsProvenance,
+  type SwissStatsResult,
+} from './internal/swissStats.ts'

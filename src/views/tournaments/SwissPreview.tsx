@@ -17,6 +17,7 @@ import {
   type DrawnRound, type PreviewTeam, type ResolvedMatch, type ResolvedScenario, type SwissBaseline,
 } from '../../domains/tournaments/simulation'
 import { WORLDS_2026_SWISS_RULES } from '../../domains/tournaments/simulation'
+import { SwissStatsPreview } from './SwissStatsPreview'
 import type { SwissTeamStanding } from '../../domains/tournaments/simulation'
 
 type Slot = 'a' | 'b'
@@ -237,10 +238,7 @@ export function SwissPreview({ event, playInEvent, checkedAt, timezone }: { even
         {liveNotice ? <p className="text-[var(--warn)]">{liveNotice}</p> : null}
       </div>
 
-      <Alert>
-        <p><a className="underline" href={WORLDS_2026_SWISS_RULES.source} target="_blank" rel="noreferrer">Future Swiss draw probabilities are unavailable.</a></p>
-        <p>Use picks and draws to explore possible outcomes.</p>
-      </Alert>
+      <SwissStatsPreview teams={baseline.teams} scenario={current} event={event} label={slot.toUpperCase()} />
 
       <div className="grid min-w-0 items-start gap-4 min-[1700px]:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="grid min-w-0 gap-2">
