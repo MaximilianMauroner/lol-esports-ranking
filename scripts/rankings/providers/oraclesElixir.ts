@@ -126,6 +126,10 @@ function normalizeGame(
   })
   const rawDate = value(first, 'date')
   const date = providerDate(rawDate)
+  const datetimeUtc = /[T ]\d{2}:\d{2}/.test(rawDate) ? providerDatetimeUtc(rawDate) : undefined
+  const duration = gameLengthSeconds(value(first, 'gamelength'))
+  const completedAt = new Date(datetimeUtc && duration !== undefined && Number.isFinite(duration) && duration > 0
+    ? Date.parse(datetimeUtc) + duration * 1000 : NaN)
   const format = bestOfForGame(first, playoffs)
   const gameNumber = numberValue(first, 'game')
 
@@ -138,7 +142,8 @@ function normalizeGame(
     sourceFileName: options.sourceFileName,
     dataCompleteness: value(first, 'datacompleteness') || undefined,
     date,
-    datetimeUtc: /[T ]\d{2}:\d{2}/.test(rawDate) ? providerDatetimeUtc(rawDate) : undefined,
+    datetimeUtc,
+    gameCompletedAtUtc: Number.isNaN(completedAt.getTime()) ? undefined : completedAt.toISOString(),
     season: year || new Date().getUTCFullYear(),
     event: event || league,
     phase: playoffs ? 'Playoffs' : 'Regular season',
@@ -171,7 +176,7 @@ function normalizeGame(
     teamBDragons: numberValue(red, 'dragons'),
     teamABarons: numberValue(blue, 'barons'),
     teamBBarons: numberValue(red, 'barons'),
-    gameLengthSeconds: gameLengthSeconds(value(first, 'gamelength')),
+    gameLengthSeconds: duration,
   }
 }
 

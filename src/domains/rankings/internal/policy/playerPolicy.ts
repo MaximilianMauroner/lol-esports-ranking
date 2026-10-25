@@ -60,6 +60,14 @@ export const roleStatBaselines: Record<Role, { damageShare: number; earnedGoldSh
   Support: { damageShare: 0.08, earnedGoldShare: 0.13, kda: 3.2, vspm: 2.4 },
 }
 
+export const playerPregameEvidencePolicy = {
+  version: 'prior-date-player-series-v3',
+  cutoff: 'strictly-before-series-start-utc-date',
+  observation: 'latest-game-imported-completion-or-roster-utc-date',
+  unsupportedCompletion: 'withhold-entire-series-from-forecast-player-state',
+  seriesEdge: 'frozen-at-series-start',
+} as const
+
 export const playerModelParameters = {
   initialPlayerRating,
   sourcedPlayerKFactor,
@@ -85,4 +93,5 @@ export const playerModelParameters = {
   individualResidualMinimumRankedGames,
   roleStatBaselines,
   playerPerformancePolicy,
+  playerPregameEvidencePolicy,
 } as const

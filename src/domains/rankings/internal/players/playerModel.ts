@@ -319,9 +319,38 @@ export function buildPregamePlayerRatingEdges(
   const edges = new Map<string, PregamePlayerRatingEdge>()
   const leagueRatings = leagueRatingsFor(resolvedContext.leagueStrengths)
   const lastObservedRosterByTeam = new Map<string, MatchRosterSnapshot>()
+  const seriesList = resolveCanonicalSeries(matches)
+  const observations = seriesList.map((series, order) => ({
+    series,
+    order,
+    completionProven: series.games.every((match) => Number.isFinite(Date.parse(match.gameCompletedAtUtc ?? ''))),
+    observedThrough: series.games.reduce((latest, match) => [
+      latest, match.date, match.datetimeUtc?.slice(0, 10) ?? '', match.gameCompletedAtUtc?.slice(0, 10) ?? '',
+      match.teamARoster?.observedAt ?? '', match.teamBRoster?.observedAt ?? '',
+    ].sort(compareCodeUnits).at(-1)!, series.date),
+  })).filter((observation) => observation.completionProven).toSorted((a, b) => compareCodeUnits(a.observedThrough, b.observedThrough)
+    || a.order - b.order)
+  let observedSeriesCount = 0
 
-  for (const series of resolveCanonicalSeries(matches)) {
-    const preSeriesRatings = new Map(state.ratings)
+  for (const series of seriesList) {
+    while (observedSeriesCount < observations.length && observations[observedSeriesCount]!.observedThrough < series.date) {
+      const observed = observations[observedSeriesCount++]!.series
+      const preUpdateRatings = new Map(state.ratings)
+      for (const match of observed.games) {
+        registerSourcedRosters(match, state, resolvedContext, leagueRatings)
+      }
+      applySourcedPlayerUpdates(observed.games, state, preUpdateRatings, resolvedContext, leagueRatings)
+      for (const match of observed.games) {
+        for (const { team, roster } of teamRosterEntries(match)) {
+          if (!roster) continue
+          lastObservedRosterByTeam.set(team, mergeRosterObservation(lastObservedRosterByTeam.get(team), {
+            ...roster,
+            evidenceBasis: roster.evidenceBasis ?? 'scored-series',
+            sourceSeriesId: observed.id,
+          })!)
+        }
+      }
+    }
     const firstMatch = series.games[0]!
     const teamARoster = lastObservedRosterByTeam.get(firstMatch.teamA)
     const teamBRoster = lastObservedRosterByTeam.get(firstMatch.teamB)
@@ -329,22 +358,22 @@ export function buildPregamePlayerRatingEdges(
       [firstMatch.teamA, {
         ...playerEdgeForRoster(
           teamARoster,
-          preSeriesRatings,
+          state.ratings,
           state.games,
           leagueForSide(firstMatch, 'A', resolvedContext),
           leagueRatings,
-          firstMatch.date,
+          series.date,
         ),
         roster: teamARoster,
       }],
       [firstMatch.teamB, {
         ...playerEdgeForRoster(
           teamBRoster,
-          preSeriesRatings,
+          state.ratings,
           state.games,
           leagueForSide(firstMatch, 'B', resolvedContext),
           leagueRatings,
-          firstMatch.date,
+          series.date,
         ),
         roster: teamBRoster,
       }],
@@ -366,27 +395,6 @@ export function buildPregamePlayerRatingEdges(
         teamAFreshnessWeight: teamAEdge.freshnessWeight,
         teamBFreshnessWeight: teamBEdge.freshnessWeight,
       })
-    }
-
-    for (const match of series.games) {
-      registerSourcedRosters(match, state, resolvedContext, leagueRatings)
-    }
-    applySourcedPlayerUpdates(series.games, state, preSeriesRatings, resolvedContext, leagueRatings)
-    for (const match of series.games) {
-      if (match.teamARoster) {
-        lastObservedRosterByTeam.set(match.teamA, mergeRosterObservation(lastObservedRosterByTeam.get(match.teamA), {
-          ...match.teamARoster,
-          evidenceBasis: match.teamARoster.evidenceBasis ?? 'scored-series',
-          sourceSeriesId: series.id,
-        })!)
-      }
-      if (match.teamBRoster) {
-        lastObservedRosterByTeam.set(match.teamB, mergeRosterObservation(lastObservedRosterByTeam.get(match.teamB), {
-          ...match.teamBRoster,
-          evidenceBasis: match.teamBRoster.evidenceBasis ?? 'scored-series',
-          sourceSeriesId: series.id,
-        })!)
-      }
     }
   }
 

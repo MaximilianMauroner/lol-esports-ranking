@@ -305,7 +305,7 @@ test('future player stats do not change earlier player-shadow predictions', () =
   )
 })
 
-test('a completed same-day series can inform a later distinct series', () => {
+test('same-day player observations wait until the next forecast date', () => {
   const backtest = buildWalkForwardBacktest([
     matchFixture({
       id: 'same-day-1',
@@ -335,11 +335,12 @@ test('a completed same-day series can inform a later distinct series', () => {
 
   assert.equal(first?.teamAPlayerRatingAdjustment, 0)
   assert.equal(first?.teamALineupEvidenceBasis, 'unavailable')
-  assert.ok((second?.teamAPlayerRatingAdjustment ?? 0) > 0)
-  assert.equal(second?.teamALineupEvidenceBasis, 'prior-observed')
-  assert.equal(second?.teamALineupObservedAt, '2026-01-01')
-  assert.ok((second?.teamAGameWinProbabilityPlayerAdjusted ?? 0) > (first?.teamAGameWinProbabilityPlayerAdjusted ?? 0))
+  assert.equal(second?.teamAPlayerRatingAdjustment, 0)
+  assert.equal(second?.teamALineupEvidenceBasis, 'unavailable')
+  assert.equal(second?.teamALineupObservedAt, undefined)
+  assert.equal(second?.teamAGameWinProbabilityPlayerAdjusted, first?.teamAGameWinProbabilityPlayerAdjusted)
   assert.ok((nextDay?.teamAPlayerRatingAdjustment ?? 0) > 0)
+  assert.equal(nextDay?.teamALineupObservedAt, '2026-01-01')
 })
 
 test('elite player-rating priors can exceed the old roster-strength hard cap', () => {
@@ -877,6 +878,7 @@ function matchFixture(overrides: Partial<MatchRecord>): MatchRecord {
     sourceGameId: 'fixture',
     dataCompleteness: 'scoreboard-game-stats',
     date: '2026-01-01',
+    gameCompletedAtUtc: `${overrides.date ?? '2026-01-01'}T12:30:00Z`,
     season: 2026,
     event: 'LCK 2026 Spring',
     phase: 'Regular season',
