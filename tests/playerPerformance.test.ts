@@ -30,6 +30,15 @@ function importStats(overrides: Record<string, string> = {}) {
   return importOraclesElixirCsv(csv).matches[0]
 }
 
+test('Oracle records completion from the sourced game start and positive duration only', () => {
+  assert.equal(importStats({ date: '2026-01-20 23:50:00', gamelength: '1800' }).gameCompletedAtUtc, '2026-01-21T00:20:00.000Z')
+  for (const gamelength of ['', '0', '-1', '-1:00', 'invalid']) {
+    assert.equal(importStats({ date: '2026-01-20 23:50:00', gamelength }).gameCompletedAtUtc, undefined)
+  }
+  assert.equal(importStats({ date: '2026-01-20', gamelength: '1800' }).gameCompletedAtUtc, undefined)
+})
+
+
 test('Oracle imports signed differences and real zeros while excluding missing and invalid rates', () => {
   const imported = importStats().teamARoster!.players[0].stats!
   assert.equal(imported.killParticipation, 0.5)

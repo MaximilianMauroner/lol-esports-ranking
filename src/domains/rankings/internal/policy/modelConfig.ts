@@ -77,8 +77,8 @@ export const sameDayPredictionBatching = true
 export const onlineRecencyDecay = 'entity-local-composable-half-life-regression-v1'
 export const ratingUpdateRecencyWeight = 1
 export const leagueExpectedScoreSource = 'pregame-neutral-series-team-power'
-export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-v24'
-export const lineupEvidencePolicy = 'prior-observed-series-evidence-with-90-day-half-life-v1'
+export const sourcePipelineVersion = 'canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-game-completion-v25'
+export const lineupEvidencePolicy = 'prior-date-observed-series-evidence-with-90-day-half-life-v2'
 export const partialLineupPolicy = 'role-weighted-known-player-evidence-v1'
 export const substituteEraPolicy = 'three-series-or-twenty-percent-split-share-v1'
 export const snapshotSeasonScopePolicy = 'calendar-aligned-season-ranking-profile-with-prior-baseline'
@@ -159,7 +159,7 @@ export const playerRatingPredictionPolicy = {
     requireNonNegativeRosterChangeDelta: true,
     requireNonNegativePatchTransitionDelta: true,
   },
-  description: 'Sourced prior-only player ratings are published because the walk-forward gate cleared after Oracle player-stat coverage was added.',
+  description: 'Prior-date sourced player ratings supply the roster prior. Each model configuration requires its own walk-forward assessment.',
 } as const satisfies PredictionFeaturePolicy
 export const playerRatingPredictionWeight = publishedFeatureWeight(playerRatingPredictionPolicy)
 export const playerRatingShadowWeight = shadowFeatureWeight(playerRatingPredictionPolicy)

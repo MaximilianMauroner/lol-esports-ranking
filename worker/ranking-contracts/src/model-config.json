@@ -61,8 +61,8 @@
   "onlineRecencyDecay": "entity-local-composable-half-life-regression-v1",
   "ratingUpdateRecencyWeight": 1,
   "leagueExpectedScoreSource": "pregame-neutral-series-team-power",
-  "sourcePipelineVersion": "canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-v24",
-  "lineupEvidencePolicy": "prior-observed-series-evidence-with-90-day-half-life-v1",
+  "sourcePipelineVersion": "canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-game-completion-v25",
+  "lineupEvidencePolicy": "prior-date-observed-series-evidence-with-90-day-half-life-v2",
   "partialLineupPolicy": "role-weighted-known-player-evidence-v1",
   "substituteEraPolicy": "three-series-or-twenty-percent-split-share-v1",
   "snapshotSeasonScopePolicy": "calendar-aligned-season-ranking-profile-with-prior-baseline",
@@ -157,7 +157,7 @@
       "requireNonNegativeRosterChangeDelta": true,
       "requireNonNegativePatchTransitionDelta": true
     },
-    "description": "Sourced prior-only player ratings are published because the walk-forward gate cleared after Oracle player-stat coverage was added."
+    "description": "Prior-date sourced player ratings supply the roster prior. Each model configuration requires its own walk-forward assessment."
   },
   "playerRatingPredictionPublishedWeight": 1,
   "playerRatingPredictionShadowWeight": 1,
@@ -277,6 +277,13 @@
       "version": "observed-player-performance-v1",
       "aggregation": "unweighted-per-game-mean",
       "ratingEffect": "none"
+    },
+    "playerPregameEvidencePolicy": {
+      "version": "prior-date-player-series-v3",
+      "cutoff": "strictly-before-series-start-utc-date",
+      "observation": "latest-game-imported-completion-or-roster-utc-date",
+      "unsupportedCompletion": "withhold-entire-series-from-forecast-player-state",
+      "seriesEdge": "frozen-at-series-start"
     }
   },
   "eligibility": {

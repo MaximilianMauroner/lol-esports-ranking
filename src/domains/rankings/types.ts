@@ -259,6 +259,7 @@ export type MatchRecord = {
   dataCompleteness?: string
   date: string
   datetimeUtc?: string
+  gameCompletedAtUtc?: string
   gameNumber?: number
   season: number
   event: string

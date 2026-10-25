@@ -1884,6 +1884,7 @@ function matchFixture(overrides: Partial<MatchRecord>): MatchRecord {
     sourceGameId: 'fixture',
     dataCompleteness: 'scoreboard-game-stats',
     date: '2026-01-01',
+    gameCompletedAtUtc: `${overrides.date ?? '2026-01-01'}T12:30:00Z`,
     season: 2026,
     event: 'LCK 2026 Spring',
     phase: 'Regular season',

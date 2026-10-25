@@ -35,8 +35,8 @@ test('corpus adapter reconstructs a detached production pre-state and preserves 
   assert.ok(prepared.basis.preStateId.includes(prepared.provenance.payloadDigest))
   assert.ok(prepared.basis.preStateId.includes(prepared.provenance.contextDigest))
   assert.equal(prepared.provenance.contextDigest, digestCausalValue(prepared.basis.context))
-  assert.deepEqual(prepared.provenance.historicalUnavailablePlayerPriorGameIds, ['prior-0'])
-  assert.match(prepared.assumptions.join(' '), /1 historical games have unavailable pregame player priors/)
+  assert.deepEqual(prepared.provenance.historicalUnavailablePlayerPriorGameIds, ['prior-0', 'prior-1', 'prior-2', 'prior-3', 'prior-4', 'prior-5'])
+  assert.match(prepared.assumptions.join(' '), /6 historical games have unavailable pregame player priors/)
 
   const input = { ...conditionalPowerFixture(), basis: prepared.basis }
   const result = evaluateConditionalPowerReplay(input)
@@ -56,6 +56,17 @@ test('corpus adapter reconstructs a detached production pre-state and preserves 
   prepared.basis.state.ratings.set('Alpha', 0)
   prepared.basis.context.authoritativeMatches[0]!.winner = 'Beta'
   prepared.provenance.corpusIdentity.rawLedgerPrefixHash = 'changed-copy'
+  assert.deepEqual(source, original)
+})
+
+test('corpus adapter preserves player priors from history with proven completion', () => {
+  const source = sourceFixture()
+  for (const match of source.historicalMatches) match.gameCompletedAtUtc = `${match.date}T12:30:00Z`
+  const original = structuredClone(source)
+  const prepared = prepareConditionalPowerReplayBasis(source)
+  if (prepared.status !== 'ready') throw new Error(prepared.detail)
+  assert.deepEqual(prepared.provenance.historicalUnavailablePlayerPriorGameIds, ['prior-0'])
+  assert.match(prepared.assumptions.join(' '), /1 historical games have unavailable pregame player priors/)
   assert.deepEqual(source, original)
 })
 
