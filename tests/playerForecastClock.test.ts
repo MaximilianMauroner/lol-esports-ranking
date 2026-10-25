@@ -127,6 +127,27 @@ test('unproven game completion cannot update forecast player state', () => {
   }
 })
 
+test('one unproven game withholds the entire series from forecast player state', () => {
+  const first = match('partly-proven-first', 20, strongEvidence, weakEvidence)
+  const last = match('partly-proven-last', 20, strongEvidence, weakEvidence)
+  for (const [index, row] of [first, last].entries()) {
+    row.officialMatchId = 'partly-proven-series'
+    row.bestOf = 3
+    row.bestOfBasis = 'official'
+    row.datetimeUtc = `2026-01-20T${12 + index}:00:00Z`
+    row.gameCompletedAtUtc = `2026-01-20T${12 + index}:30:00Z`
+  }
+  const supported = [...history(), first, last, match('next-midnight', 22)]
+  const unsupported = structuredClone(supported)
+  unsupported.find(row => row.id === last.id)!.gameCompletedAtUtc = undefined
+  const prediction = forecast(unsupported, 'next-midnight')
+  assert.deepEqual(playerEvidence(prediction), playerEvidence(forecast([...history(), match('next-midnight', 22)], 'next-midnight')))
+  assert.equal(prediction.teamALineupObservedAt, '2026-01-12')
+  const admitted = forecast(supported, 'next-midnight')
+  assert.equal(admitted.teamALineupObservedAt, '2026-01-20')
+  assert.notDeepEqual(playerEvidence(admitted), playerEvidence(prediction))
+})
+
 function history(a: Partial<PlayerGameStats> = {}, b: Partial<PlayerGameStats> = {}) {
   return Array.from({ length: 12 }, (_, index) => match(`history-${index + 1}`, index + 1, a, b))
 }
