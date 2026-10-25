@@ -7,7 +7,8 @@
       "teamHistoryIndexUrl": "required",
       "regionHistoryUrl": "required",
       "tournamentMovementIndexUrl": "required",
-      "matchHistoryIndexUrl": "required"
+      "matchHistoryIndexUrl": "required",
+      "replayPredictionsUrl": "required"
     },
     "records": ["snapshotIndex"]
   },

@@ -1,3 +1,4 @@
+import { createReplayEvidence } from './replayEvidence.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 import type {
   ChampionPicks, CompactPlayer, CompactPlayerRating, ComputedRankingSnapshot, DataCoverage, DataQualityAudit, DataQualityLeagueSummary, DataSourceInfo, EventSummary,
@@ -739,6 +740,7 @@ export function createStaticRankingSummaryData(
     regionHistoryUrl,
     tournamentMovementIndexUrl = '/data/history/tournament-moves/index.json',
     matchHistoryIndexUrl,
+    replayPredictionsUrl,
     snapshotUrlForKey = snapshotShardUrlPathForKey,
   }: {
     fullSnapshotUrl?: string
@@ -748,6 +750,7 @@ export function createStaticRankingSummaryData(
     regionHistoryUrl?: string
     tournamentMovementIndexUrl?: string
     matchHistoryIndexUrl?: string
+    replayPredictionsUrl?: string
     snapshotUrlForKey?: (key: string) => string
   } = {},
 ): {
@@ -778,6 +781,7 @@ export function createStaticRankingSummaryData(
     teams: _teams,
     matches: _matches,
     precomputedPlayerDirectory: _precomputedPlayerDirectory,
+    replayEvidence: _replayEvidence,
     ...manifestBase
   } = data
   void _artifactKind
@@ -786,6 +790,7 @@ export function createStaticRankingSummaryData(
   void _teams
   void _matches
   void _precomputedPlayerDirectory
+  void _replayEvidence
 
   return {
     manifest: {
@@ -805,6 +810,7 @@ export function createStaticRankingSummaryData(
       ...(regionHistoryUrl ? { regionHistoryUrl } : {}),
       tournamentMovementIndexUrl,
       ...(matchHistoryIndexUrl ? { matchHistoryIndexUrl } : {}),
+      ...(replayPredictionsUrl ? { replayPredictionsUrl } : {}),
       teamCount: Object.keys(data.teams).length,
       snapshotIndex,
     },
@@ -1306,6 +1312,8 @@ export function createStaticRankingData({
       },
       ratingProof: playerRatingProof,
     },
+    replayEvidence: createReplayEvidence({ matches, predictions: globalRanking.predictions,
+      model: { version: transparentGprModelMetadata.version, configHash: transparentGprModelMetadata.configHash }, dataMode: resolvedDataMode }),
     walkForward: {
       metrics: summarizePredictions(globalRanking.predictions),
     },

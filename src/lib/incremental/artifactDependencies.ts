@@ -28,6 +28,7 @@ export type PublicArtifactDependencyInventory = {
   teamHistoryIndexPath: string
   tournamentMovementIndexPath: string
   matchHistoryIndexPath: string
+  replayPredictionsPath: string
   scopes: readonly ArtifactScopeDependency[]
   teamHistoryPaths: Readonly<Record<string, readonly string[]>>
   playerPaths?: Readonly<Record<string, readonly string[]>>
@@ -75,6 +76,7 @@ export function affectedPublicArtifacts({
       add(inventory.manifestPath, 'metadata')
       continue
     }
+    add(inventory.replayPredictionsPath, 'complete-replay-evidence')
     const matches = [change.before, change.after].filter(isMatch)
     const teams = new Set(matches.flatMap((match) => [match.teamA, match.teamB]))
     const seriesIds = new Set(matches.flatMap((match) => [

@@ -1,3 +1,5 @@
+import { replayEvidenceArtifact } from './replayEvidence.ts'
+import { readReplayEvidence } from '../queries/replayEvidence.ts'
 import {
   createPlayerDirectory,
   createRegionHistory,
@@ -57,6 +59,7 @@ export const PUBLIC_ARTIFACT_BUDGETS = {
 
 export const PUBLIC_ARTIFACT_PATHS = {
   manifest: 'ranking-summary.json',
+  replayPredictions: 'evaluation/replay-predictions.json',
   players: 'entities/players.json',
   teams: 'entities/teams.json',
   teamHistoryIndex: 'history/team-series/index.json',
@@ -155,6 +158,7 @@ export function createPublicArtifactWritePlan(
     regionHistoryUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.regionHistory),
     tournamentMovementIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.tournamentMovementIndex),
     matchHistoryIndexUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.matchHistoryIndex),
+    replayPredictionsUrl: versionedUrlForPath(PUBLIC_ARTIFACT_PATHS.replayPredictions),
     snapshotUrlForKey: (key) => versionedUrlForPath(publicScopeArtifactPath(key)),
   })
   const mergedSummaryManifest = mergeRecordIndex(summary.manifest, previous(PUBLIC_ARTIFACT_PATHS.manifest), 'snapshotIndex')
@@ -164,6 +168,7 @@ export function createPublicArtifactWritePlan(
   const mergedRegionHistory = regionHistory ? mergeRecordIndex(regionHistory, previous(PUBLIC_ARTIFACT_PATHS.regionHistory), 'scopes') : undefined
 
   const allWrites: PublicArtifactWrite[] = [
+    ...(selected(PUBLIC_ARTIFACT_PATHS.replayPredictions) ? [write('history', PUBLIC_ARTIFACT_PATHS.replayPredictions, replayEvidenceArtifact(data.replayEvidence, data.generatedAt), readReplayEvidence)] : []),
     ...(playerDirectory ? [write('entity', PUBLIC_ARTIFACT_PATHS.players, playerDirectory, parsePublicPlayerDirectory)] : []),
     ...(teamDirectory ? [write('entity', PUBLIC_ARTIFACT_PATHS.teams, teamDirectory, parsePublicTeamDirectory)] : []),
     ...(selected(PUBLIC_ARTIFACT_PATHS.teamHistoryIndex) && mergedTeamHistoryIndex ? [write('history', PUBLIC_ARTIFACT_PATHS.teamHistoryIndex, mergedTeamHistoryIndex, parsePublicTeamHistoryIndex)] : []),

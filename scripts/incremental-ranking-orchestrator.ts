@@ -17,7 +17,7 @@ import { PUBLIC_ARTIFACT_PATHS, publicMatchHistoryPagePath, publicMatchHistorySh
 import { canonicalScheduleReferences, deriveTournamentInstances, tournamentInstanceForEvent, type TournamentInstanceId } from '../src/domains/rankings/evidence.ts'
 import type { MatchRecord } from '../src/domains/rankings/types.ts'
 import { isSeasonHistoryLeadIn } from '../src/domains/rankings/evidence.ts'
-import { prepareSemanticArtifact } from './public-artifact-storage.mjs'
+import { canonicalPublicLogicalPath, prepareSemanticArtifact } from './public-artifact-storage.mjs'
 import { buildStaticSnapshot, writeReconciliationOutput } from './build-static-snapshot.ts'
 import { importRankingSourceData, type RankingSourceImport } from './rankings/source-input.ts'
 import {
@@ -305,6 +305,12 @@ export async function buildRankingIncrementally({
   const memoryCollections: NonNullable<IncrementalBuildMetrics['memoryCollections']> = {}
   try {
     if (!restored) throw new Error('incremental-state-missing')
+    const replayPath = `/data/${PUBLIC_ARTIFACT_PATHS.replayPredictions}`
+    const replayUrl = restored.rootArtifact?.replayPredictionsUrl
+    if (typeof replayUrl !== 'string' || canonicalPublicLogicalPath(replayUrl) !== replayPath
+      || !Object.hasOwn(requiredRecord(restored.publicManifest.artifacts, 'public generation artifacts'), replayPath)) {
+      throw new Error('replay-evidence-capability-missing')
+    }
     let previousLedger: CanonicalMatchLedger | undefined = parseCanonicalMatchLedger(restored.canonicalLedger)
     classification = classifyRankingChange(previousLedger, ledger, ledger.compatibility)
     if (classification.kind === 'no-change' && !auditComparison) {
@@ -1206,7 +1212,7 @@ function scopedDependencyPlan(
   const inventory = dependencyInventory(rootArtifact, publicManifest, changes, artifacts)
   const plan = affectedPublicArtifacts({ changes, inventory })
   if (classification.reasons.some((reason) => reason.startsWith('schedule-context'))) {
-    const additions = [inventory.manifestPath, inventory.regionHistoryPath, inventory.tournamentMovementIndexPath,
+    const additions = [inventory.manifestPath, inventory.regionHistoryPath, inventory.tournamentMovementIndexPath, inventory.replayPredictionsPath,
       ...inventory.scopes.map((scope) => scope.rankingPath), ...Object.values(inventory.tournamentMovementPaths)]
     plan.logicalPaths = [...new Set([...plan.logicalPaths, ...additions])].sort()
   }
@@ -1279,7 +1285,7 @@ function dependencyInventory(
     manifestPath: '/data/ranking-summary.json', playerDirectoryPath: '/data/entities/players.json',
     teamDirectoryPath: '/data/entities/teams.json', regionHistoryPath: '/data/history/region-series.json',
     teamHistoryIndexPath: '/data/history/team-series/index.json', tournamentMovementIndexPath: '/data/history/tournament-moves/index.json',
-    matchHistoryIndexPath: '/data/matches/index.json', scopes,
+    matchHistoryIndexPath: '/data/matches/index.json', replayPredictionsPath: `/data/${PUBLIC_ARTIFACT_PATHS.replayPredictions}`, scopes,
     teamHistoryPaths: Object.fromEntries([...changedTeams].map((team) => [team, historyPaths])),
     tournamentMovementPaths,
   }

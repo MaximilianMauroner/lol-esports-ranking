@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto'
-import type { createRatingReplayContext } from '../../../src/domains/rankings/build'
+import { createReplayEvidence } from '../../../src/domains/rankings/build.ts'
+import { evaluationEventId, evaluationHomeLeague, requireReplayDate } from '../../../src/domains/rankings/published-read.ts'
+import type { createRatingReplayContext } from '../../../src/domains/rankings/build.ts'
 import { compareCodeUnits } from '../../../src/shared/codeUnitOrder.mjs'
-import { canonicalTeamNameFor } from '../../../src/domains/rankings/evidence'
-import type { MatchRecord, PregamePrediction, TeamProfile } from '../../../src/domains/rankings/types'
-import { binaryMetricContract } from '../../../src/domains/rankings/read'
-import { evaluationBaselineProbabilities } from './evaluationBaselines'
-import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from '../../../src/domains/rankings/evidence'
-import { seriesWinProbability } from '../../../src/domains/rankings/read'
-import { groupEvaluationBy, summarizeEvaluation, type EvaluationExport, type EvaluationRow, type ReplayInputDigest } from './rankingEvaluation'
+import { canonicalTeamNameFor } from '../../../src/domains/rankings/evidence.ts'
+import type { MatchRecord, PregamePrediction, TeamProfile } from '../../../src/domains/rankings/types.ts'
+import { binaryMetricContract } from '../../../src/domains/rankings/read.ts'
+import { evaluationBaselineProbabilities } from './evaluationBaselines.ts'
+import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from '../../../src/domains/rankings/evidence.ts'
+import { seriesWinProbability } from '../../../src/domains/rankings/read.ts'
+import { groupEvaluationBy, summarizeEvaluation, type EvaluationExport, type EvaluationRow, type ReplayInputDigest } from './rankingEvaluation.ts'
 
 export type ReplayInputs = {
   matches: MatchRecord[]
@@ -56,22 +58,17 @@ export function replayInputDigest(replays: readonly ReplayInputs[]): ReplayInput
   return `replay-inputs/v1:${createHash('sha256').update('lol-replay-inputs/v1\n').update(encode(payload)).digest('hex')}`
 }
 
-export function evaluationEventId(match: MatchRecord) {
-  return `${match.season}:${match.league}:${match.event}`
-}
-
-/** Explicit match-time membership only. Latest team profiles are not temporal evidence. */
-export function evaluationHomeLeague(match: MatchRecord, side: 'A' | 'B') {
-  return (side === 'A' ? match.teamAHomeLeague : match.teamBHomeLeague) ?? 'Unknown'
-}
+export { evaluationEventId, evaluationHomeLeague } from '../../../src/domains/rankings/published-read.ts'
 
 export function buildEvaluationData(replay: ReplayInputs, predictions: PregamePrediction[], {
   sourceIdentity, scoreStart = '0000-01-01',
 }: { sourceIdentity: string; scoreStart?: string }) {
+  requireReplayDate(scoreStart)
   const { matches } = replay
+  const replayEvidence = createReplayEvidence({ matches, predictions,
+    model: { version: predictions[0]?.modelVersion ?? 'unavailable', configHash: predictions[0]?.modelConfigHash ?? 'unavailable' },
+    dataMode: matches.some((match) => match.sourceProvider === 'seed') ? 'seeded-sample' : 'scheduled-public-data' })
   const replayInputs = replayInputDigest([replay])
-  if (new Set(matches.map((match) => match.id)).size !== matches.length) throw new Error('Duplicate source match identities')
-  if (new Set(predictions.map((prediction) => prediction.id)).size !== predictions.length) throw new Error('Duplicate prediction identities')
   const canonicalMatches = matches.map((match) => ({ ...match,
     teamA: canonicalTeamNameFor(match.teamA), teamB: canonicalTeamNameFor(match.teamB), winner: canonicalTeamNameFor(match.winner) }))
   const matchById = new Map(canonicalMatches.map((match) => [match.id, match]))
@@ -81,17 +78,7 @@ export function buildEvaluationData(replay: ReplayInputs, predictions: PregamePr
   const variants = new Map<string, EvaluationRow[]>()
   const missing: string[] = []
   for (const prediction of predictions) {
-    const match = matchById.get(prediction.id)
-    if (!match) throw new Error('Prediction has no source match')
-    if (canonicalTeamNameFor(prediction.teamA) !== match.teamA || canonicalTeamNameFor(prediction.teamB) !== match.teamB
-      || prediction.date !== match.date || prediction.event !== match.event
-      || canonicalTeamNameFor(prediction.actualWinner) !== match.winner
-      || (prediction.seriesId !== undefined && prediction.seriesId !== series.get(match.id)?.id)) {
-      throw new Error(`Prediction source or orientation differs for ${match.id}`)
-    }
-    if (prediction.modelVersion !== predictions[0].modelVersion || prediction.modelConfigHash !== predictions[0].modelConfigHash) {
-      throw new Error('Mixed prediction model identities')
-    }
+    const match = matchById.get(prediction.id)!
     if (match.date < scoreStart) continue
     if (match.winner !== match.teamA && match.winner !== match.teamB) { missing.push(match.id); continue }
     const actual = match.winner === match.teamA ? 1 : 0
@@ -108,6 +95,7 @@ export function buildEvaluationData(replay: ReplayInputs, predictions: PregamePr
       }
     }
   }
+  if (rows.length === 0) throw new Error('Replay score window has no binary outcomes')
   const identity = { schemaVersion: 2, replayInputs, target: 'game',
     modelVersion: predictions[0]?.modelVersion ?? 'unavailable', modelConfigHash: predictions[0]?.modelConfigHash ?? 'unavailable',
     sourceIdentity, temporalPolicy: 'latest-corrected-prior-replay', metricContract: binaryMetricContract } as const
@@ -134,8 +122,8 @@ export function buildEvaluationData(replay: ReplayInputs, predictions: PregamePr
     variants: Object.fromEntries([...variants].map(([key, variantRows]) => [key, { ...identity, modelVersion: key, rows: variantRows }])),
     summaries: { current: summarizeEvaluation(rows), ...Object.fromEntries([...variants].map(([key, variantRows]) => [key, summarizeEvaluation(variantRows)])) },
     exclusions: { missingOutcome: missing, series: seriesExclusions }, audit: auditEvaluationMatches(matches, scoreStart),
-    informationAvailability: { status: 'unknown', reason: 'source-observation-archives-not-supplied',
-      sameDayPolicy: 'current-engine-causal-series-batching; controls-freeze-whole-UTC-date', publishedForecastEvidence: false } }
+    replayEvidence,
+    informationAvailability: replayEvidence.informationAvailability }
 }
 
 export function auditEvaluationMatches(matches: MatchRecord[], scoreStart: string) {
