@@ -1,0 +1,7 @@
+{
+  "evidence": "Actual retained historical pilot receipt. Chronology rejection only, not successful parity.",
+  "exportSha256": "478735aaa24bcbe73d71517265dc1c0a9dbc2fd97520e4a714574169c58a2638",
+  "receiptSha256": "00ba4e957587932e02ace0551d9dc7effe66b6c62f8ff4e3d83487318460c390",
+  "archiveManifestSha256": "9a2bbdbda751da85e404a0e11ddebc81ef44f085dd4df794de6d92585393c2ca",
+  "source": "parent retained parity-pilot/rich.jsonl, first unmodified line"
+}

@@ -44,11 +44,15 @@ export async function importRankingSourceData({
   oracleCsvPaths = [],
   leaguepediaJsonPaths = [],
   lolEsportsJsonPaths = [],
+  sourceCapturedAt,
+  includeMatch,
 }: {
   manifestPath?: string
   oracleCsvPaths?: string[]
   leaguepediaJsonPaths?: string[]
   lolEsportsJsonPaths?: string[]
+  sourceCapturedAt?: ReadonlyMap<string, number>
+  includeMatch?: (match: MatchRecord) => boolean
 }): Promise<RankingSourceImport> {
   const resolvedManifestPath = manifestPath ? resolve(manifestPath) : undefined
   const manifest = resolvedManifestPath
@@ -67,7 +71,17 @@ export async function importRankingSourceData({
     leaguepediaImports.push(importLeaguepediaSnapshot(JSON.parse(await readFile(jsonPath, 'utf8')), { sourceFileName: basename(jsonPath) }))
   }
   for (const jsonPath of lolEsportsPaths) {
-    lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(await readFile(jsonPath, 'utf8')), { sourceFileName: basename(jsonPath) }))
+    const capturedAt = sourceCapturedAt?.get(resolve(jsonPath))
+    lolEsportsImports.push(importLolEsportsScheduleSnapshot(JSON.parse(await readFile(jsonPath, 'utf8')), {
+      sourceFileName: basename(jsonPath),
+      retrievedAt: capturedAt === undefined ? undefined : new Date(capturedAt).toISOString(),
+    }))
+  }
+  if (includeMatch) {
+    for (const result of [...oracleImports, ...leaguepediaImports]) {
+      result.matches = result.matches.filter(includeMatch)
+      result.teams = deriveTeamProfilesFromMatches(result.matches)
+    }
   }
   const oracleSourceOwners = sourceOwnersByMatchId(oracleImports)
   const leaguepediaSourceOwners = sourceOwnersByMatchId(leaguepediaImports)

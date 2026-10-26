@@ -1,0 +1,813 @@
+{
+  "config": {
+    "schemaVersion": "lol-bookmaker-comparison-config-v1",
+    "comparisonId": "synthetic-bookmaker-check",
+    "frozenAt": 1770631200000,
+    "scoringAsOf": 1770804000000,
+    "evidenceMode": "synthetic",
+    "candidateId": "synthetic-baseline",
+    "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bookmaker": "fixture-book",
+    "maxQuoteAgeMs": 60000,
+    "calibrationBinEdges": [
+      0,
+      0.25,
+      0.5,
+      0.75,
+      1
+    ],
+    "series": [
+      {
+        "seriesId": "paired-home",
+        "eventId": "event-a",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "paired-away",
+        "eventId": "event-a",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "stale",
+        "eventId": "event-b",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "missing",
+        "eventId": "event-b",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "wrong-event",
+        "eventId": "event-b",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "future-only",
+        "eventId": "event-b",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "incomplete",
+        "eventId": "event-b",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      },
+      {
+        "seriesId": "duplicate",
+        "eventId": "event-b",
+        "homeTeamId": "team-home",
+        "awayTeamId": "team-away",
+        "bestOf": 3,
+        "scheduleRevision": "schedule-1",
+        "scheduledStartAt": 1770721200000,
+        "decisionCutoff": 1770717600000
+      }
+    ]
+  },
+  "forecasts": [
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "paired-home",
+      "eventId": "event-a",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "paired-away",
+      "eventId": "event-a",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "stale",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "missing",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "wrong-event",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "future-only",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "incomplete",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "duplicate",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    },
+    {
+      "candidateId": "synthetic-baseline",
+      "parentCandidateId": null,
+      "modelCommit": "synthetic-fixture",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "seriesId": "duplicate",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "sideAssumption": "neutral",
+      "lineupAssumption": "prior-observed-roster",
+      "modelStateId": "fixture-state",
+      "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "inputDigests": [
+        {
+          "path": "synthetic.json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "generatedAt": 1770717600000,
+      "asOf": 1770717600000,
+      "validUntil": 1770719400000,
+      "sourceObservedAt": [
+        1770717599000
+      ],
+      "calibrationFit": null,
+      "evidenceMode": "synthetic",
+      "availability": "verified",
+      "schemaVersion": "lol-forecast-v1",
+      "target": "series-winner",
+      "calibratorVersion": "temperature-v1:game-before-series:T=1",
+      "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+      "homeSeriesWinProbability": 0.7,
+      "awaySeriesWinProbability": 0.3,
+      "componentGameProbabilities": [
+        0.6880898771220036,
+        0.6880898771220036,
+        0.6880898771220036
+      ],
+      "eligible": true,
+      "exclusions": []
+    }
+  ],
+  "results": [
+    {
+      "seriesId": "paired-home",
+      "eventId": "event-a",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "paired-away",
+      "eventId": "event-a",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-away",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "stale",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "missing",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "wrong-event",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "future-only",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "incomplete",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    },
+    {
+      "seriesId": "duplicate",
+      "eventId": "event-b",
+      "homeTeamId": "team-home",
+      "awayTeamId": "team-away",
+      "bestOf": 3,
+      "winnerTeamId": "team-home",
+      "completedAt": 1770724800000,
+      "resultAvailableAt": 1770724801000,
+      "evidenceMode": "synthetic"
+    }
+  ],
+  "quotes": [
+    {
+      "quoteId": "quote-paired-home",
+      "bookmaker": "fixture-book",
+      "seriesId": "paired-home",
+      "eventId": "event-a",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717599000,
+      "observedAt": 1770717599500,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "quote-paired-away",
+      "bookmaker": "fixture-book",
+      "seriesId": "paired-away",
+      "eventId": "event-a",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717599000,
+      "observedAt": 1770717599500,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "quote-stale",
+      "bookmaker": "fixture-book",
+      "seriesId": "stale",
+      "eventId": "event-b",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717499999,
+      "observedAt": 1770717500000,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "quote-wrong-event",
+      "bookmaker": "fixture-book",
+      "seriesId": "wrong-event",
+      "eventId": "similar-event",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717599000,
+      "observedAt": 1770717599500,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "quote-future-only",
+      "bookmaker": "fixture-book",
+      "seriesId": "future-only",
+      "eventId": "event-b",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717600001,
+      "observedAt": 1770717600002,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "quote-incomplete",
+      "bookmaker": "fixture-book",
+      "seriesId": "incomplete",
+      "eventId": "event-b",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717599000,
+      "observedAt": 1770717599500,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": null
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "quote-duplicate",
+      "bookmaker": "fixture-book",
+      "seriesId": "duplicate",
+      "eventId": "event-b",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717599000,
+      "observedAt": 1770717599500,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    },
+    {
+      "quoteId": "future-mutation",
+      "bookmaker": "fixture-book",
+      "seriesId": "paired-home",
+      "eventId": "event-a",
+      "bestOf": 3,
+      "scheduleRevision": "schedule-1",
+      "scheduledStartAt": 1770721200000,
+      "market": "series-winner",
+      "quotedAt": 1770717600100,
+      "observedAt": 1770717600101,
+      "evidenceMode": "synthetic",
+      "outcomes": [
+        {
+          "teamId": "team-away",
+          "decimalOdds": 3
+        },
+        {
+          "teamId": "team-home",
+          "decimalOdds": 1.5
+        }
+      ]
+    }
+  ]
+}

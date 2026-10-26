@@ -165,6 +165,7 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     const metadata = await run(root, 'metadata', metadataSource, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
     assert.equal(metadata.action, 'publish-incremental')
     assert.equal(metadata.metrics.classification, 'metadata-only')
+    assert.deepEqual(metadata.rootManifest?.model, fullBuild.snapshot.model, 'metadata-only refresh preserves the published model scale and probability calibration')
     assert.equal(outcomeForBuild(metadata), 'metadata-only')
     assert.equal(metadata.metrics.replayedMatchCount, 0)
     assert.deepEqual(metadata.metrics.changedPaths, ['/data/ranking-summary.json'])
@@ -175,6 +176,13 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
       assert.deepEqual((metadata.patch.previousManifest.artifacts as Record<string, unknown>)[path], (restored.publicManifest.artifacts as Record<string, unknown>)[path])
     }
     await assert.rejects(access(join(root, 'metadata-full.json')))
+
+    const truncated = structuredClone(restored)
+    truncated.rootArtifact!.model = { version: fullBuild.snapshot.model.version, configHash: fullBuild.snapshot.model.configHash }
+    const repaired = await run(root, 'metadata-repair', metadataSource, { mode: 'gated', cause: 'pending-match', enabled: true, restored: truncated })
+    assert.equal(repaired.action, 'publish-incremental')
+    if (repaired.action !== 'publish-incremental') return
+    assert.deepEqual(repaired.rootManifest?.model, fullBuild.snapshot.model, 'metadata-only refresh restores model metadata lost by an earlier refresh')
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }

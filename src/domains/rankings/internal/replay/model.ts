@@ -183,18 +183,11 @@ export type RatingUtcDateBoundaryInput = {
   onSeriesPassDate?: SeriesPassObserver
 }
 
-/**
- * Applies one complete UTC date atomically from the shared pre-date snapshot.
- * Callers must replay the whole date when any match on that date changes.
- */
-export function processRatingUtcDateBoundary({
+export function prepareRatingUtcDateBoundary({
   dateMatches,
   teams,
   state,
-  lastDate,
-  pregamePlayerRatingEdges,
-  onSeriesPassDate,
-}: RatingUtcDateBoundaryInput) {
+}: Pick<RatingUtcDateBoundaryInput, 'dateMatches' | 'teams' | 'state'>) {
   const firstMatch = dateMatches[0]
   if (!firstMatch) throw new Error('A rating UTC date boundary cannot be empty')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(firstMatch.date)) {
@@ -256,7 +249,12 @@ export function processRatingUtcDateBoundary({
   }
 
   startEventTrackersForDate(dateMatches, state.eventTrackers, teams, state.ratings, state.momentums, state.rosterPriorOffsets, state.uncertainties, state.leagueScores, state.leagueMatchCounts)
+}
 
+export function processRatingUtcDateBoundary(input: RatingUtcDateBoundaryInput) {
+  const { dateMatches, teams, state, lastDate, pregamePlayerRatingEdges, onSeriesPassDate } = input
+  prepareRatingUtcDateBoundary(input)
+  const firstMatch = dateMatches[0]
   const sideAdjustments = sideAdjustmentsFromSamples(state.sideAdjustmentSamples)
   emitPregamePredictionsForDate({
     matches: dateMatches,

@@ -19,6 +19,8 @@
     "data:team-branding": "node tools/assets/sync-team-branding.mjs",
     "data:crunch": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --manifest data/raw/manifest.json",
     "data:freshness": "tsx tools/audit/raw-manifest-freshness.ts data/raw/manifest.json",
+    "forecast:export": "tsx scripts/rankings/export-pregame-series.ts",
+    "calibration:fit-series": "tsx tools/calibration/fit-series-forecast.ts",
     "calibration:export": "tsx tools/calibration/export-ranking-predictions.ts",
     "calibration:paired": "tsx tools/calibration/paired-prediction-calibration.ts",
     "calibration:search": "tsx tools/calibration/search-ranking-model.ts",
