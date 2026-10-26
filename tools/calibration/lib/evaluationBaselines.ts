@@ -1,7 +1,7 @@
 import { replaySimpleElo } from '../../../src/domains/rankings/forecast.ts'
-import type { MatchRecord } from '../../../src/domains/rankings/types'
-import { groupEvaluationBy } from './rankingEvaluation'
-import { canonicalSeriesForMatches } from '../../../src/domains/rankings/evidence'
+import type { MatchRecord } from '../../../src/domains/rankings/types.ts'
+import { groupEvaluationBy } from './rankingEvaluation.ts'
+import { canonicalSeriesForMatches } from '../../../src/domains/rankings/evidence.ts'
 import { compareCodeUnits } from '../../../src/shared/codeUnitOrder.mjs'
 
 type Rating = { rating: number; deviation: number; lastDate: string }

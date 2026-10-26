@@ -170,6 +170,11 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
     assert.equal(metadata.metrics.replayedMatchCount, 0)
     assert.deepEqual(metadata.metrics.changedPaths, ['/data/ranking-summary.json'])
     assert.equal(metadata.action === 'publish-incremental' ? metadata.build : undefined, undefined)
+    if (metadata.action === 'publish-incremental') {
+      const path = '/data/evaluation/replay-predictions.json'
+      assert.ok(metadata.metrics.reusedPaths.includes(path))
+      assert.deepEqual((metadata.patch.previousManifest.artifacts as Record<string, unknown>)[path], (restored.publicManifest.artifacts as Record<string, unknown>)[path])
+    }
     await assert.rejects(access(join(root, 'metadata-full.json')))
 
     const truncated = structuredClone(restored)
@@ -181,6 +186,24 @@ test('feature/mode matrix preserves disabled and daily/manual force full while c
   } finally {
     if (process.env.KEEP_INCREMENTAL_TEST_TMP !== 'true') await rm(root, { recursive: true, force: true })
   }
+})
+
+test('retained generations without replay evidence bootstrap before no-change and metadata-only shortcuts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'incremental-replay-bootstrap-'))
+  try {
+    const source = fixtureSource(baseMatches())
+    const base = await run(root, 'baseline', source, { mode: 'gated', cause: 'pending-match', enabled: false })
+    const restored = restoreFrom(base)
+    delete restored.rootArtifact!.replayPredictionsUrl
+    delete (restored.publicManifest.artifacts as Record<string, unknown>)['/data/evaluation/replay-predictions.json']
+    for (const metadata of [false, true]) {
+      const input = metadata ? { ...source, externalSources: [providerReceipt('2026-07-23T00:00:00Z', '2026-01-04')] } : source
+      const result = await run(root, `bootstrap-${metadata}`, input, { mode: 'gated', cause: 'pending-match', enabled: true, restored })
+      assert.equal(result.action, 'publish-full')
+      assert.equal(result.metrics.fallbackReason, 'replay-evidence-capability-missing')
+      assert.ok(semanticMap(result)['/data/evaluation/replay-predictions.json'])
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
 })
 
 test('retry no-change reconciliation acknowledges a match after publish-to-parent crash', async () => {
@@ -363,6 +386,7 @@ test('append, same-day insertion, and historical correction use whole-date repla
       appendExistingEvent: [...baseMatches(), match('m5-existing', '2026-01-05', 'Event B')],
       sameDay: [...baseMatches(), match('m4b', '2026-01-04', 'Event B', { datetimeUtc: '2026-01-04T18:00:00.000Z' })],
       correction: baseMatches().map((entry) => entry.id === 'm3' ? { ...entry, winner: 'Beta' } : entry),
+      deletion: baseMatches().filter((entry) => entry.id !== 'm2'),
     }
     for (const [name, matches] of Object.entries(scenarios)) {
       const source = fixtureSource(matches)
@@ -375,6 +399,10 @@ test('append, same-day insertion, and historical correction use whole-date repla
       assertArtifactByteMetrics(incremental, incremental.patch.changedArtifacts.map((artifact) => artifact.value))
       const full = await run(root, `${name}-full`, source, { mode: 'gated', cause: 'daily-audit', enabled: false })
       assert.deepEqual(semanticMap(incremental), semanticMap(full), name)
+      const replayPath = '/data/evaluation/replay-predictions.json'
+      assert.equal(semanticMap(incremental)[replayPath], semanticMap(full)[replayPath], `${name} complete prediction evidence`)
+      const evidence = incremental.patch.changedArtifacts.find((artifact) => artifact.logicalPath === replayPath)?.value as { predictions: unknown[] } | undefined
+      assert.equal(evidence?.predictions.length, matches.length, `${name} checkpoint prefix and suffix coverage`)
       await assert.rejects(access(join(root, `${name}-incremental-full.json`)), name)
     }
   } finally {

@@ -23,6 +23,9 @@ const codecAdapters = [
   'scripts/railway-bucket.mjs', 'scripts/ranking-bucket-gc.mjs',
   'scripts/incremental-ranking-orchestrator.ts',
   'tools/calibration/compare-riot-gpr.ts',
+  'tools/calibration/lib/rankingEvaluationData.ts',
+  'tools/calibration/lib/rankingEvaluation.ts',
+  'tools/calibration/lib/replayEvidenceFiles.ts',
 ]
 const matches = (path, prefixes) => prefixes.some(prefix => prefix.endsWith('/') ? path.startsWith(prefix) : path === prefix)
 const sourcePath = /\.[cm]?[jt]sx?$/
@@ -50,6 +53,8 @@ const domainDefinitions = {
       'internal/players/playerResumeLedger.ts',
       'internal/projections/snapshot.ts',
       'internal/projections/predictionModel.ts',
+      'internal/projections/replayEvidence.ts',
+      'internal/published/replayEvidence.ts',
       'internal/projections/predictionVariants.ts',
       'internal/projections/deservedStandingModel.ts',
       'internal/scenarios/conditionalPower*',

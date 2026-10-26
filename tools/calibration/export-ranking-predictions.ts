@@ -39,6 +39,9 @@ void (async () => {
   const sourceIdentity = createHash('sha256').update(JSON.stringify(scoredMatches)).digest('hex')
   const data = evaluationModule.buildEvaluationData(replay, model.predictions, { sourceIdentity, scoreStart })
   await writeFile(resolve(outputArg), `${JSON.stringify({ ...data,
+    replaySource: { kind: 'retained-local-replay', manifestGeneratedAt: generatedAt,
+      manifestSha256: createHash('sha256').update(await readFile(resolve(manifestArg))).digest('hex'),
+      coverageStart: source.manifest?.start ?? null, coverageEnd: source.manifest?.end ?? null },
     provenance: { trainingSourceIdentity: createHash('sha256').update(JSON.stringify(matches)).digest('hex'),
       manifestIdentity: createHash('sha256').update(await readFile(resolve(manifestArg))).digest('hex'),
       coverage: { start: source.manifest?.start, end: source.manifest?.end },

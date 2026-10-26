@@ -94,7 +94,7 @@ test('export builder rejects stale source joins, duplicate identities and mixed 
     { teamA: 'Different team' }, { date: '2025-01-01' }, { event: 'Different event' },
     { actualWinner: first.teamB }, { seriesId: 'different-series' },
   ]
-  for (const mutation of mutations) assert.throws(() => exportPredictions([{ ...first, ...mutation }, predictions[1]]), /source or orientation differs/)
+  for (const mutation of mutations) assert.throws(() => exportPredictions([{ ...first, ...mutation }, predictions[1]]), /source or orientation differs|winner contradicts probability/)
   assert.throws(() => exportPredictions([first, first]), /Duplicate prediction identities/)
   assert.throws(() => exportPredictions(predictions, [matches[0], matches[0]]), /Duplicate source match identities/)
   assert.throws(() => exportPredictions([first, { ...predictions[1], modelVersion: 'different-model' }]), /Mixed prediction model identities/)
@@ -116,7 +116,10 @@ test('exported aliases and swapped raw sides keep game and series probabilities 
   const predictions = matches.map((match): PregamePrediction => ({ ...template,
     id: match.id, seriesId: undefined, date: match.date, event: match.event,
     teamA: match.teamA === alias ? 'LYON' : match.teamA, teamB: match.teamB,
-    actualWinner: match.winner, teamAGameWinProbability: match.teamA === 'Beta' ? .2 : .8 }))
+    actualWinner: match.winner, predictedWinner: match.teamA === 'Beta' ? match.teamB : 'LYON',
+    teamAGameWinProbability: match.teamA === 'Beta' ? .2 : .8, teamBGameWinProbability: match.teamA === 'Beta' ? .8 : .2,
+    variants: { ...template.variants, published: { ...template.variants.published,
+      teamAGameWinProbability: match.teamA === 'Beta' ? .2 : .8, teamBGameWinProbability: match.teamA === 'Beta' ? .8 : .2 } } }))
   const exported = buildEvaluationData({ matches, teams: templateContext.teams, tournamentLifecycles: null }, predictions, { sourceIdentity: 'synthetic-alias-fixture' })
   assert.deepEqual(exported.rows.map((row) => [row.teamA, row.teamB, row.actual, row.probability]), [
     ['LYON', 'Beta', 1, .8], ['Beta', 'LYON', 1, .2], ['LYON', 'Beta', 1, .8],

@@ -101,14 +101,17 @@ for (const repair of ['partial publication', 'missing marker'] as const) {
           if (publications === 1) {
             assert.ok(options.generationId && options.stateManifestAuthority)
             const rootManifest = JSON.parse(await readFile(join(options.publicDataDir, 'ranking-summary.json'), 'utf8'))
-            const artifact = prepareSemanticArtifact(rootManifest)
-            await client.send(new PutObjectCommand({
-              Bucket: config.bucket, Key: `rankings/objects/sha256/${artifact.digest}`, Body: artifact.compressed, ContentEncoding: 'gzip',
-              Metadata: { sha256: artifact.digest, 'semantic-bytes': String(artifact.bytes), encoding: 'gzip' },
-            }))
+            const entries = []
+            for (const relativePath of ['ranking-summary.json', 'evaluation/replay-predictions.json']) {
+              const artifact = prepareSemanticArtifact(JSON.parse(await readFile(join(options.publicDataDir, relativePath), 'utf8')))
+              await client.send(new PutObjectCommand({
+                Bucket: config.bucket, Key: `rankings/objects/sha256/${artifact.digest}`, Body: artifact.compressed, ContentEncoding: 'gzip',
+                Metadata: { sha256: artifact.digest, 'semantic-bytes': String(artifact.bytes), encoding: 'gzip' },
+              }))
+              entries.push({ logicalPath: `/data/${relativePath}`, digest: artifact.digest, bytes: artifact.bytes })
+            }
             const manifestBytes = Buffer.from(canonicalJsonFor({
-              ...createGenerationManifest({ generationId: options.generationId, rootManifest,
-                entries: [{ logicalPath: '/data/ranking-summary.json', digest: artifact.digest, bytes: artifact.bytes }] }),
+              ...createGenerationManifest({ generationId: options.generationId, rootManifest, entries }),
               schemaVersion: 1,
             }))
             const manifestDigest = createHash('sha256').update(manifestBytes).digest('hex')
