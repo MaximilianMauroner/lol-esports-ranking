@@ -1,0 +1,59 @@
+{
+  "state": {
+    "precision": "full",
+    "policy": "prior-date",
+    "throughDate": "2026-02-09",
+    "home": {
+      "team": "Gen.G",
+      "rating": 1612.123456789,
+      "uncertainty": 64.7654321,
+      "games": 20
+    },
+    "away": {
+      "team": "T1",
+      "rating": 1507.987654321,
+      "uncertainty": 72.1234567,
+      "games": 18
+    }
+  },
+  "transform": {
+    "temperature": 1,
+    "calibrationOrder": "game-before-series",
+    "dependence": 0
+  },
+  "metadata": {
+    "candidateId": "synthetic-baseline",
+    "parentCandidateId": null,
+    "modelCommit": "synthetic-fixture",
+    "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "seriesId": "fixture-series",
+    "eventId": "fixture-event",
+    "homeTeamId": "fixture-gen",
+    "awayTeamId": "fixture-t1",
+    "bestOf": 3,
+    "scheduleRevision": "fixture-schedule-1",
+    "scheduledStartAt": 1770721200000,
+    "sideAssumption": "neutral",
+    "lineupAssumption": "prior-observed-roster",
+    "modelStateId": "fixture-state",
+    "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "inputDigests": [
+      {
+        "path": "synthetic.json",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "generatedAt": 1770717600000,
+    "asOf": 1770717600000,
+    "validUntil": 1770719400000,
+    "sourceObservedAt": [
+      1770717599000
+    ],
+    "calibrationFit": null,
+    "evidenceMode": "synthetic",
+    "availability": "verified"
+  }
+}

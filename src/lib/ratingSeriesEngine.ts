@@ -1,3 +1,4 @@
+import type { ExactPregameProbabilityState } from '../domains/rankings/internal/projections/pregameForecastTypes.ts'
 import { effectiveLeagueRating, leaguePriorFor } from '../domains/rankings/internal/policy/leagueTiers.ts'
 import type {
   FactorBreakdown,
@@ -83,12 +84,14 @@ export function emitPregamePredictionsForDate({
   state,
   pregamePlayerRatingEdges,
   sideAdjustments,
+  onExactState,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
   state: RatingRunState
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
   sideAdjustments: Map<string, number>
+  onExactState?: (state: ExactPregameProbabilityState) => void
 }) {
   const batch = ratingBatchSnapshot(state)
   for (const series of resolveCanonicalSeries(matches)) {
@@ -101,6 +104,7 @@ export function emitPregamePredictionsForDate({
         batch,
         pregamePlayerRatingEdges,
         sideAdjustments,
+        onExactState,
       }))
     }
   }
@@ -150,6 +154,7 @@ function pregamePredictionForMatch({
   batch,
   pregamePlayerRatingEdges,
   sideAdjustments,
+  onExactState,
 }: {
   match: MatchRecord
   series: CanonicalSeries
@@ -158,6 +163,7 @@ function pregamePredictionForMatch({
   batch: RatingBatchSnapshot
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
   sideAdjustments: Map<string, number>
+  onExactState?: (state: ExactPregameProbabilityState) => void
 }): PregamePrediction {
   const leagueA = homeLeagueForMatch(match, 'A', teams)
   const leagueB = homeLeagueForMatch(match, 'B', teams)
@@ -223,6 +229,14 @@ function pregamePredictionForMatch({
     'execution-baseline': predictionVariantFromWinProbability(executionBaselinePrediction, noExecutionRatingA, noExecutionRatingB),
     'execution-adjusted': predictionVariantFromWinProbability(executionAdjustedPrediction, executionAdjustedRatingA, executionAdjustedRatingB),
   }
+
+  onExactState?.({
+    precision: 'full', policy: 'prior-date', throughDate: state.processedThroughUtcDate ?? '',
+    home: { team: match.teamA, rating: publishedRatingA, uncertainty: batch.uncertainties.get(match.teamA)!,
+      games: (state.wins.get(match.teamA) ?? 0) + (state.losses.get(match.teamA) ?? 0) },
+    away: { team: match.teamB, rating: publishedRatingB, uncertainty: batch.uncertainties.get(match.teamB)!,
+      games: (state.wins.get(match.teamB) ?? 0) + (state.losses.get(match.teamB) ?? 0) },
+  })
 
   return {
     id: match.id,

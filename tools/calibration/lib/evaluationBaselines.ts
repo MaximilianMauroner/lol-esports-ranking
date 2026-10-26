@@ -1,4 +1,4 @@
-import { eventTierConfig } from '../../../src/domains/rankings/policy'
+import { replaySimpleElo } from '../../../src/domains/rankings/forecast.ts'
 import type { MatchRecord } from '../../../src/domains/rankings/types'
 import { groupEvaluationBy } from './rankingEvaluation'
 import { canonicalSeriesForMatches } from '../../../src/domains/rankings/evidence'
@@ -10,14 +10,13 @@ const g = (deviation: number) => 1 / Math.sqrt(1 + 3 * q ** 2 * deviation ** 2 /
 
 /** Offline controls: one frozen UTC-date rating period; tournament K applies to Elo. */
 export function evaluationBaselineProbabilities(matches: readonly MatchRecord[]) {
-  const elo = new Map<string, number>()
+  const elo = replaySimpleElo(matches).probabilities
   const glicko = new Map<string, Rating>()
   const records = new Map<string, { wins: number; games: number }>()
   const series = canonicalSeriesForMatches(matches)
   const probabilities = new Map<string, { elo: number; glicko: number; winRate: number; coinFlip: number }>()
   const sorted = [...matches].sort((a, b) => compareCodeUnits(a.date, b.date) || compareCodeUnits(a.id, b.id))
   for (const [date, day] of groupEvaluationBy(sorted, (match) => match.date)) {
-    const eloDeltas = new Map<string, number>()
     const evidence = new Map<string, Array<{ opponent: Rating; outcome: number }>>()
     const period = new Map<string, Rating>()
     for (const team of new Set(day.flatMap((match) => [match.teamA, match.teamB]))) {
@@ -30,18 +29,14 @@ export function evaluationBaselineProbabilities(matches: readonly MatchRecord[])
       const recordB = records.get(match.teamB) ?? { wins: 0, games: 0 }
       const rateA = (recordA.wins + 1) / (recordA.games + 2)
       const rateB = (recordB.wins + 1) / (recordB.games + 2)
-      const p = 1 / (1 + 10 ** (((elo.get(match.teamB) ?? 1500) - (elo.get(match.teamA) ?? 1500)) / 400))
+      const p = elo.get(match.id)!
       probabilities.set(match.id, { elo: p, glicko: glickoProbability(a, b), winRate: rateA / (rateA + rateB), coinFlip: .5 })
       // Predict incomplete series, but do not update control state from an unverified prefix.
       if (series.get(match.id)?.state !== 'completed') continue
       const won = Number(match.winner === match.teamA)
-      const delta = eventTierConfig[match.tier].kFactor * (won - p)
-      eloDeltas.set(match.teamA, (eloDeltas.get(match.teamA) ?? 0) + delta)
-      eloDeltas.set(match.teamB, (eloDeltas.get(match.teamB) ?? 0) - delta)
       evidence.set(match.teamA, [...(evidence.get(match.teamA) ?? []), { opponent: b, outcome: won }])
       evidence.set(match.teamB, [...(evidence.get(match.teamB) ?? []), { opponent: a, outcome: 1 - won }])
     }
-    for (const [team, delta] of eloDeltas) elo.set(team, (elo.get(team) ?? 1500) + delta)
     for (const [team, outcomes] of evidence) glicko.set(team, updateGlicko(period.get(team)!, outcomes))
     for (const match of day) {
       if (series.get(match.id)?.state !== 'completed') continue

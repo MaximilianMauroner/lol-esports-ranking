@@ -1,0 +1,48 @@
+{
+  "candidateId": "synthetic-baseline",
+  "parentCandidateId": null,
+  "modelCommit": "synthetic-fixture",
+  "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "configurationHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "dependencyLockHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "seriesId": "fixture-series",
+  "eventId": "fixture-event",
+  "homeTeamId": "fixture-gen",
+  "awayTeamId": "fixture-t1",
+  "bestOf": 3,
+  "scheduleRevision": "fixture-schedule-1",
+  "scheduledStartAt": 1770721200000,
+  "sideAssumption": "neutral",
+  "lineupAssumption": "prior-observed-roster",
+  "modelStateId": "fixture-state",
+  "modelStateHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "inputManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "inputDigests": [
+    {
+      "path": "synthetic.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "generatedAt": 1770717600000,
+  "asOf": 1770717600000,
+  "validUntil": 1770719400000,
+  "sourceObservedAt": [
+    1770717599000
+  ],
+  "calibrationFit": null,
+  "evidenceMode": "synthetic",
+  "availability": "verified",
+  "schemaVersion": "lol-forecast-v1",
+  "target": "series-winner",
+  "calibratorVersion": "temperature-v1:game-before-series:T=1",
+  "seriesConversionVersion": "latent-logit-mixture-v1:dependence=0",
+  "homeSeriesWinProbability": 0.768826402867685,
+  "awaySeriesWinProbability": 0.231173597132315,
+  "componentGameProbabilities": [
+    0.6880898771220036,
+    0.6880898771220036,
+    0.6880898771220036
+  ],
+  "eligible": true,
+  "exclusions": []
+}

@@ -35,6 +35,7 @@ const domainDefinitions = {
       'policy.ts': { browserRuntime: true },
       'evidence.ts': { browserRuntime: true },
       'build.ts': {},
+      'forecast.ts': {},
       'artifact-write.ts': {},
       'published-read.ts': { browserRuntime: true, adapters: codecAdapters },
     },
