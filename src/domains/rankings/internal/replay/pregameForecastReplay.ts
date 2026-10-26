@@ -4,7 +4,6 @@ import { deriveTeamProfilesFromMatches } from '../evidence/teamProfiles.ts'
 import { createRatingReplayContext, prepareRatingUtcDateBoundary, replayRatingDates } from './model.ts'
 import { emitPregamePredictionsForDate } from '../../../../lib/ratingSeriesEngine.ts'
 import type { PlacementTournamentLifecycle } from './placementResiduals.ts'
-import type { RatingRunState } from './ratingRunState.ts'
 import type { ExactPregameProbabilityState } from '../projections/pregameForecastTypes.ts'
 
 export type PregameSeriesRequest = {
@@ -86,8 +85,9 @@ function replayHistory(usable: readonly AvailableRankingGame[], lifecycles: read
     observedAt: [...new Set([...usable, ...lifecycles].map(row => row.observedAt))] }
 }
 
-function forecastFromHistory(history: ReturnType<typeof replayHistory>, state: RatingRunState, request: PregameSeriesRequest, cutoffDate: string) {
+function forecastFromHistory(history: ReturnType<typeof replayHistory>, request: PregameSeriesRequest, cutoffDate: string) {
   const { teams } = history
+  const state = structuredClone(history.state)
   for (const team of [request.homeSourceTeam, request.awaySourceTeam]) {
     if (!teams[team] || !history.usable.some(({ match }) => match.teamA === team || match.teamB === team)) throw new Error(`No causal state for ${team}`)
   }
@@ -111,7 +111,7 @@ export function replayPregameSeriesState(inputs: readonly AvailableRankingGame[]
   const cutoffDate = validateRequest(request, availability)
   validateInputs(inputs)
   const history = replayHistory(availableInputs(inputs, request, cutoffDate, availability), availableLifecycles(lifecycles, request.asOf))
-  return forecastFromHistory(history, history.state, request, cutoffDate)
+  return forecastFromHistory(history, request, cutoffDate)
 }
 
 export function replayPregameSeriesBatch(inputs: readonly AvailableRankingGame[], requests: readonly PregameSeriesRequest[], availability: Availability, lifecycles: readonly AvailableTournamentLifecycle[] = []) {
@@ -134,8 +134,7 @@ export function replayPregameSeriesBatch(inputs: readonly AvailableRankingGame[]
       replayCount++
       replayedGames += history.state.processedMatchCount
     }
-    // Boundary preparation mutates event, patch and season state for this request.
-    results[index] = forecastFromHistory(cached.history, structuredClone(cached.history.state), request, cutoffDate)
+    results[index] = forecastFromHistory(cached.history, request, cutoffDate)
   }
   return { results, replayCount, replayedGames }
 }

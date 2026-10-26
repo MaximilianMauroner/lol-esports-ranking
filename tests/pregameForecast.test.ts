@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -12,6 +12,7 @@ import { seriesPathLikelihood } from '../tools/calibration/lib/ranking-experimen
 import { fitSeriesForecast } from '../tools/calibration/lib/fit-series-forecast.ts'
 import { sampleMatches } from './fixtures/rankingFixtures.ts'
 import { importRankingSourceData } from '../scripts/rankings/source-input.ts'
+import { rankingSourceProvenance } from '../scripts/rankings/source-provenance.ts'
 import { exportPregameSeries } from '../scripts/rankings/export-pregame-series.ts'
 
 const hash = 'a'.repeat(64)
@@ -167,7 +168,17 @@ test('offline CLI exports actual hashes and exact states without backdating gene
     await writeFile(protocol, JSON.stringify({ seed: 123, maximumJointFitTrials: 6, maximumRuntimeMs: 60000,
       folds: [{ fitThrough: '2026-01-20', validateThrough: '2026-02-11' }] }))
     const searchDir = join(dir, 'search')
+    const failChild = join(dir, 'fail-child.mjs')
+    await writeFile(failChild, "if (process.argv[1]?.endsWith('export-ranking-predictions.ts')) throw new Error('injected trial failure')")
+    assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts', manifest, protocol, searchDir, requests],
+      { encoding: 'utf8', stdio: 'pipe', timeout: 60000, env: { ...process.env, NODE_OPTIONS: `--import=${failChild}` } }), /Trial 0 exited 1/)
+    const failedAttempt = await readFile(join(searchDir, 'attempt-0.json'), 'utf8')
+    await writeFile(join(searchDir, 'attempt-0.json'), JSON.stringify({ ...JSON.parse(failedAttempt), identity: 'conflicting-run' }))
+    assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts', manifest, protocol, searchDir, requests],
+      { encoding: 'utf8', stdio: 'pipe', timeout: 60000 }), /Resume attempt identity differs/)
+    await writeFile(join(searchDir, 'attempt-0.json'), failedAttempt)
     execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts', manifest, protocol, searchDir, requests], { encoding: 'utf8', timeout: 60000 })
+    assert.equal(await readFile(join(searchDir, 'attempt-0.json'), 'utf8'), failedAttempt)
     const trial = JSON.parse((await readFile(join(searchDir, 'forecasts-0.jsonl'), 'utf8')).trim())
     assert.equal(trial.homeSeriesWinProbability, receipt.homeSeriesWinProbability)
     const search = JSON.parse(await readFile(join(searchDir, 'report.json'), 'utf8'))
@@ -175,9 +186,47 @@ test('offline CLI exports actual hashes and exact states without backdating gene
     assert.deepEqual(search.selection, [])
     assert.match(search.forecastSelection, /^not-performed/)
     assert.ok(search.trials.every((value: { forecastHash: string }) => /^[a-f0-9]{64}$/.test(value.forecastHash)))
+    await assert.rejects(readFile(join(searchDir, 'sandbox', 'package.json')), { code: 'ENOENT' })
+    const sourceRoots = new Set<string>()
+    for (const { index } of search.trials) {
+      const sidecar = JSON.parse(await readFile(join(searchDir, `forecasts-${index}.jsonl.manifest.json`), 'utf8'))
+      assert.equal(typeof sidecar.sourceRoot, 'string', 'each trial retains its applied source after sandbox cleanup')
+      sourceRoots.add(sidecar.sourceRoot)
+      for (const source of sidecar.sourceDigests) {
+        assert.equal(createHash('sha256').update(await readFile(join(sidecar.sourceRoot, source.path))).digest('hex'), source.sha256)
+      }
+      assert.equal(createHash('sha256').update(await readFile(join(sidecar.sourceRoot, 'pnpm-lock.yaml'))).digest('hex'), sidecar.dependencyLockHash)
+    }
+    assert.equal(sourceRoots.size, search.trials.length)
     const beforeResume = await readFile(join(searchDir, 'forecasts-0.jsonl'), 'utf8')
     execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts', manifest, protocol, searchDir, requests], { encoding: 'utf8', timeout: 60000 })
     assert.equal(await readFile(join(searchDir, 'forecasts-0.jsonl'), 'utf8'), beforeResume)
+    await rm(join(searchDir, 'trial-0.json'))
+    execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts', manifest, protocol, searchDir, requests], { encoding: 'utf8', timeout: 60000 })
+    const archives = (await readdir(searchDir)).filter(path => path.startsWith('incomplete-0-'))
+    assert.equal(archives.length, 2)
+    assert.ok((await Promise.all(archives.map(path => readdir(join(searchDir, path))))).some(paths => paths.includes('forecasts-0.jsonl')))
+    const retained = JSON.parse(await readFile(join(searchDir, 'forecasts-0.jsonl.manifest.json'), 'utf8'))
+    await writeFile(join(retained.sourceRoot, retained.sourceDigests[0].path), 'tampered trial source')
+    assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts',
+      manifest, protocol, searchDir, requests], { encoding: 'utf8', stdio: 'pipe', timeout: 60000 }), /Saved forecast source differs/)
+    const replacement = await rankingSourceProvenance(retained.sourceRoot, process.cwd())
+    await writeFile(join(searchDir, 'forecasts-0.jsonl.manifest.json'), JSON.stringify({ ...retained, ...replacement }))
+    assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts',
+      manifest, protocol, searchDir, requests], { encoding: 'utf8', stdio: 'pipe', timeout: 60000 }), /Saved forecast evidence differs/)
+    const trialPath = join(searchDir, 'trial-0.json')
+    const savedTrial = JSON.parse(await readFile(trialPath, 'utf8'))
+    await writeFile(trialPath, JSON.stringify({ ...savedTrial,
+      forecastManifestHash: createHash('sha256').update(await readFile(join(searchDir, 'forecasts-0.jsonl.manifest.json'))).digest('hex') }))
+    assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts',
+      manifest, protocol, searchDir, requests], { encoding: 'utf8', stdio: 'pipe', timeout: 60000 }), /Saved forecast provenance differs/)
+    await writeFile(join(searchDir, 'forecasts-0.jsonl.manifest.json'), JSON.stringify(retained))
+    await writeFile(trialPath, JSON.stringify({ ...savedTrial,
+      forecastManifestHash: createHash('sha256').update(await readFile(join(searchDir, 'forecasts-0.jsonl.manifest.json'))).digest('hex') }))
+    await writeFile(join(searchDir, 'forecasts-0.jsonl.states.jsonl'), '{}\n')
+    assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'tools/calibration/search-ranking-model.ts',
+      manifest, protocol, searchDir, requests], { encoding: 'utf8', stdio: 'pipe', timeout: 60000 }), /Saved forecast evidence differs/)
+
 
   } finally { await rm(dir, { recursive: true, force: true }) }
 })

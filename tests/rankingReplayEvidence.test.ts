@@ -67,7 +67,7 @@ test('actual Bo2 replay round trips game forecasts and preserves the draw probab
   assert.equal(exported.seriesExport.rows.length, 0)
 })
 
-test('actual same-day series retain emitted probabilities and report unverified within-day lineup timing', () => {
+test('actual same-day series retain emitted probabilities without admitting same-day lineups', () => {
   const template = sampleMatches[0]
   const roster = (team: string, side: 'blue' | 'red'): NonNullable<MatchRecord['teamARoster']> => ({
     sourceProvider: 'oracles-elixir', teamId: team, observedAt: template.date, completeness: 'complete-five-role',
@@ -81,15 +81,16 @@ test('actual same-day series retain emitted probabilities and report unverified 
     teamARoster: roster(template.teamA, 'blue'), teamBRoster: roster(template.teamB, 'red'), bestOf: 1,
   }))
   const replay = actualReplay(matches)
-  assert.equal(replay.predictions[1].teamALineupEvidenceBasis, 'prior-observed')
-  assert.equal(replay.predictions[1].teamALineupObservedAt, template.date)
+  assert.equal(replay.predictions[1].teamALineupEvidenceBasis, 'unavailable')
+  assert.equal(replay.predictions[1].teamALineupObservedAt, undefined)
   const data = createStaticRankingData({ matches, teams: { ...teams }, rosters: {}, generatedAt,
     dataMode: 'scheduled-public-data', source: 'Synthetic fixture, not official LoL Esports data' })
   assert.deepEqual(data.replayEvidence.predictions, replay.predictions)
   const exported = buildEvaluationData({ matches, teams, tournamentLifecycles: null }, replay.predictions, { sourceIdentity: 'synthetic-same-day' })
   assert.equal(exported.rows.length, 2)
   const report = compareStoredReplayPolicy(data.replayEvidence, { scoreStart: template.date, recentStart: template.date }, 100)
-  assert.equal(report.lineup.A.age['same-UTC-date'].current.count, 1)
+  assert.equal(report.lineup.A.age['same-UTC-date'].current.count, 0)
+  assert.equal(report.lineup.A.age.unavailable.current.count, 2)
   assert.equal(report.informationAvailability.playerSignalOrdering, 'prior-canonical-series;within-date-availability-unverified')
   assert.equal(report.publishedAccuracyClaim, false)
 })

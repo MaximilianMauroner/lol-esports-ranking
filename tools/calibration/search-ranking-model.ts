@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { cp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { manifestWithResolvedFiles } from '../../scripts/local-data-manifest.js'
 import { rankingSourceProvenance } from '../../scripts/rankings/source-provenance.ts'
@@ -40,7 +40,7 @@ await mkdir(sandbox)
 for (const file of ['src', 'scripts', 'tools', 'package.json', 'pnpm-lock.yaml', ...(await readdir(root)).filter(file => /^tsconfig.*\.json$/.test(file))]) await cp(join(root, file), join(sandbox, file), { recursive: true })
 await symlink(join(root, 'node_modules'), join(sandbox, 'node_modules'), 'dir')
 const results: Array<{ index: number; label: string; parameters: typeof trials[number]['parameters']; identity: string;
-  elapsedMs: number; modelConfigHash: string; forecastHash?: string; scores: ReturnType<typeof scoreTrial> }> = []
+  elapsedMs: number; modelConfigHash: string; forecastHash?: string; forecastManifestHash?: string; forecastStatesHash?: string; scores: ReturnType<typeof scoreTrial> }> = []
 try {
   for (const trial of trials) {
     const usedRuntime = results.reduce((sum, result) => sum + result.elapsedMs, 0)
@@ -53,12 +53,38 @@ try {
       if (saved.identity !== identity || JSON.stringify(saved.parameters) !== JSON.stringify(trial.parameters)) throw new Error('Resume identity differs; use a new output directory')
       const data = readEvaluationExport(JSON.parse(await readFile(predictions, 'utf8')))
       if (data.modelConfigHash !== saved.modelConfigHash || JSON.stringify(scoreTrial(data, protocol.folds)) !== JSON.stringify(saved.scores)) throw new Error('Saved prediction or scores differ')
-      if (forecastRequestsArg && saved.forecastHash !== createHash('sha256').update(await readFile(join(output, `forecasts-${trial.index}.jsonl`))).digest('hex')) throw new Error('Saved forecast differs')
+      if (forecastRequestsArg) {
+        const forecast = join(output, `forecasts-${trial.index}.jsonl`)
+        if (saved.forecastHash !== createHash('sha256').update(await readFile(forecast)).digest('hex')) throw new Error('Saved forecast differs')
+        if (saved.forecastManifestHash !== createHash('sha256').update(await readFile(`${forecast}.manifest.json`)).digest('hex')
+          || saved.forecastStatesHash !== createHash('sha256').update(await readFile(`${forecast}.states.jsonl`)).digest('hex')) throw new Error('Saved forecast evidence differs')
+        const sidecar = JSON.parse(await readFile(`${forecast}.manifest.json`, 'utf8'))
+        const forecasts = (await readFile(forecast, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+        if (forecasts.some(value => value.sourceHash !== sidecar.sourceHash || value.dependencyLockHash !== sidecar.dependencyLockHash)) {
+          throw new Error('Saved forecast provenance differs')
+        }
+        if (sidecar.sourceRoot !== `${forecast}.source`
+          || (await rankingSourceProvenance(sidecar.sourceRoot, root)).sourceHash !== sidecar.sourceHash
+          || createHash('sha256').update(await readFile(join(sidecar.sourceRoot, 'pnpm-lock.yaml'))).digest('hex') !== sidecar.dependencyLockHash) {
+          throw new Error('Saved forecast source differs')
+        }
+      }
       results.push(saved); continue
     }
     for (const [file, content] of applySearchValues(files, trial.parameters)) await writeFile(join(sandbox, file), content)
     const attempt = join(output, `attempt-${trial.index}.json`)
-    await writeFile(attempt, JSON.stringify({ identity, trial, startedAt: Date.now(), maximumRuntimeMs }) + '\n', { flag: 'wx' })
+    let previousAttempt: { identity: string; trial: typeof trial } | undefined
+    try { previousAttempt = JSON.parse(await readFile(attempt, 'utf8')) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    if (previousAttempt) {
+      if (previousAttempt.identity !== identity || JSON.stringify(previousAttempt.trial) !== JSON.stringify(trial)) throw new Error('Resume attempt identity differs; use a new output directory')
+      const archive = await mkdtemp(join(output, `incomplete-${trial.index}-`))
+      const forecast = join(output, `forecasts-${trial.index}.jsonl`)
+      for (const path of [predictions, join(output, `candidate-${trial.index}.json`), forecast, `${forecast}.manifest.json`, `${forecast}.states.jsonl`, `${forecast}.source`, `${receipt}.tmp`]) {
+        try { await rename(path, join(archive, basename(path))) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      }
+    } else {
+      await writeFile(attempt, JSON.stringify({ identity, trial, startedAt: Date.now(), maximumRuntimeMs }) + '\n', { flag: 'wx' })
+    }
     const start = performance.now()
     await new Promise<void>((done, reject) => {
       const child = spawn(process.execPath, ['--import', 'tsx', join(sandbox, 'tools/calibration/export-ranking-predictions.ts'), sandbox, manifest, predictions], { cwd: sandbox, stdio: 'inherit', timeout: Math.max(1, Math.floor(maximumRuntimeMs - usedRuntime)) })
@@ -72,17 +98,26 @@ try {
         calibrationFit: variant?.calibrationFit ?? null }
       const candidatePath = join(output, `candidate-${trial.index}.json`)
       await writeFile(candidatePath, JSON.stringify(candidate, null, 2) + '\n', { flag: 'wx' })
+      const forecast = join(output, `forecasts-${trial.index}.jsonl`)
+      const sourceRoot = `${forecast}.source`
+      await mkdir(sourceRoot)
+      await cp(sandbox, sourceRoot, { recursive: true, filter: path => path !== join(sandbox, 'node_modules') })
+      await symlink(join(root, 'node_modules'), join(sourceRoot, 'node_modules'), 'dir')
       await new Promise<void>((done, reject) => {
-        const child = spawn(process.execPath, ['--import', 'tsx', join(sandbox, 'scripts/rankings/export-pregame-series.ts'), manifest,
-          resolve(forecastRequestsArg), candidatePath, join(output, `forecasts-${trial.index}.jsonl`)],
-        { cwd: sandbox, stdio: 'inherit', env: { ...process.env, RANKING_REPOSITORY_ROOT: root }, timeout: Math.max(1, Math.floor(maximumRuntimeMs - usedRuntime - (performance.now() - start))) })
+        const child = spawn(process.execPath, ['--import', 'tsx', join(sourceRoot, 'scripts/rankings/export-pregame-series.ts'), manifest,
+          resolve(forecastRequestsArg), candidatePath, forecast],
+        { cwd: sourceRoot, stdio: 'inherit', env: { ...process.env, RANKING_REPOSITORY_ROOT: root }, timeout: Math.max(1, Math.floor(maximumRuntimeMs - usedRuntime - (performance.now() - start))) })
         child.once('error', reject)
         child.once('exit', code => code === 0 ? done() : reject(new Error(`Forecast trial ${trial.index} exited ${code}`)))
       })
+      const sidecar = JSON.parse(await readFile(`${forecast}.manifest.json`, 'utf8'))
+      await writeFile(`${forecast}.manifest.json`, JSON.stringify({ ...sidecar, sourceRoot }, null, 2) + '\n')
     }
     const data = readEvaluationExport(JSON.parse(await readFile(predictions, 'utf8')))
     const forecastHash = forecastRequestsArg ? createHash('sha256').update(await readFile(join(output, `forecasts-${trial.index}.jsonl`))).digest('hex') : undefined
-    const result = { ...trial, identity, forecastHash, elapsedMs: performance.now() - start, modelConfigHash: data.modelConfigHash, scores: scoreTrial(data, protocol.folds) }
+    const forecastManifestHash = forecastRequestsArg ? createHash('sha256').update(await readFile(join(output, `forecasts-${trial.index}.jsonl.manifest.json`))).digest('hex') : undefined
+    const forecastStatesHash = forecastRequestsArg ? createHash('sha256').update(await readFile(join(output, `forecasts-${trial.index}.jsonl.states.jsonl`))).digest('hex') : undefined
+    const result = { ...trial, identity, forecastHash, forecastManifestHash, forecastStatesHash, elapsedMs: performance.now() - start, modelConfigHash: data.modelConfigHash, scores: scoreTrial(data, protocol.folds) }
     await writeFile(`${receipt}.tmp`, `${JSON.stringify(result, null, 2)}\n`)
     await rename(`${receipt}.tmp`, receipt)
     results.push(result)
