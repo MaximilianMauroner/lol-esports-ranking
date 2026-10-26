@@ -1,0 +1,2629 @@
+{
+  "provenance": {
+    "description": "Published community game identities and official schedule references captured read-only on 2026-10-26. No game statistics or ranking outputs are invented.",
+    "publicUrl": "https://lol.lab4code.com",
+    "scheduleUrl": "https://esports-api.lolesports.com/persisted/gw/getSchedule",
+    "publicGamesSha256": "fe2cc21377028a6b6abf8fd7cd301701f138cd513509fe30461f6c61f7ca074f",
+    "scheduleSha256": "303441e19037d3818f9d66906b3775410e1d47031d5ff86752d0154cdd9a91ca"
+  },
+  "games": [
+    {
+      "id": "LOLTMNT02_479621",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T18:16:33.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 1,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479621",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:c9:cloud9"
+    },
+    {
+      "id": "LOLTMNT02_479631",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T19:14:54.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 2,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479631",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_479637",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T20:17:23.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 3,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479637",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:c9:cloud9"
+    },
+    {
+      "id": "LOLTMNT02_479642",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T21:14:05.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 4,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479642",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_4",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_479649",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T22:16:00.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 5,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479649",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_5",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_478715",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T23:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660588583040710",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_478715",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_2_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:mvk:mvk-esports"
+    },
+    {
+      "id": "LOLTMNT02_478718",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T23:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 2,
+      "seriesId": "official-match\u0000115660588583040710",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_478718",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_2_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:mvk:mvk-esports"
+    },
+    {
+      "id": "LOLTMNT02_478726",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T23:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 3,
+      "seriesId": "official-match\u0000115660588583040710",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_478726",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_2_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:mvk:mvk-esports"
+    },
+    {
+      "id": "LOLTMNT02_479982",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660588583171790",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479982",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_1_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_480014",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 2,
+      "seriesId": "official-match\u0000115660588583171790",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480014",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_1_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_480033",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 3,
+      "seriesId": "official-match\u0000115660588583171790",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480033",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_1_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_480078",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T20:53:42.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 1,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_3\u0000Cloud9\u0000FURIA",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480078",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_3_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "winnerId": "team:c9:cloud9"
+    },
+    {
+      "id": "LOLTMNT02_480094",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T21:52:45.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 2,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_3\u0000Cloud9\u0000FURIA",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480094",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_3_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "winnerId": "team:fur:furia"
+    },
+    {
+      "id": "LOLTMNT02_480113",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T22:47:30.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 3,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_3\u0000Cloud9\u0000FURIA",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480113",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_3_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "winnerId": "team:fur:furia"
+    },
+    {
+      "id": "LOLTMNT02_480123",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16T23:43:16.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 4,
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_3\u0000Cloud9\u0000FURIA",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480123",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_3_4",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "winnerId": "team:fur:furia"
+    },
+    {
+      "id": "LOLTMNT02_481268",
+      "date": "2026-10-17",
+      "datetimeUtc": "2026-10-17T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660588583171798",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_481268",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_2_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:mvk:mvk-esports"
+    },
+    {
+      "id": "LOLTMNT02_481282",
+      "date": "2026-10-17",
+      "datetimeUtc": "2026-10-17T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 2,
+      "seriesId": "official-match\u0000115660588583171798",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_481282",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_2_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:mvk:mvk-esports"
+    },
+    {
+      "id": "LOLTMNT02_481295",
+      "date": "2026-10-17",
+      "datetimeUtc": "2026-10-17T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 3,
+      "seriesId": "official-match\u0000115660588583171798",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_481295",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_2_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:fur:furia"
+    },
+    {
+      "id": "LOLTMNT02_481308",
+      "date": "2026-10-17",
+      "datetimeUtc": "2026-10-17T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 4,
+      "seriesId": "official-match\u0000115660588583171798",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_481308",
+        "matchId": "2026 Season World Championship/Play-In_Round 2_2_4",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "FUR",
+        "id": "team:fur:furia",
+        "name": "FURIA"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:mvk:mvk-esports"
+    },
+    {
+      "id": "LOLTMNT02_480507",
+      "date": "2026-10-18",
+      "datetimeUtc": "2026-10-18T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000116299649498303884",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480507",
+        "matchId": "2026 Season World Championship/Play-In_Round 3_1_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_480508",
+      "date": "2026-10-18",
+      "datetimeUtc": "2026-10-18T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 2,
+      "seriesId": "official-match\u0000116299649498303884",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480508",
+        "matchId": "2026 Season World Championship/Play-In_Round 3_1_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "LOLTMNT02_480511",
+      "date": "2026-10-18",
+      "datetimeUtc": "2026-10-18T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 5,
+      "gameNumber": 3,
+      "seriesId": "official-match\u0000116299649498303884",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_480511",
+        "matchId": "2026 Season World Championship/Play-In_Round 3_1_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MVK",
+        "id": "team:mvk:mvk-esports",
+        "name": "MVK Esports"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "115660540726095006",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T17:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095005",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482269",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_1_1",
+        "officialGameId": "115660540726095006",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "GEN",
+        "id": "team:gen:gen-g",
+        "name": "Gen.G"
+      },
+      "teamB": {
+        "code": "IG",
+        "id": "team:ig:invictus-gaming",
+        "name": "Invictus Gaming"
+      },
+      "winnerId": "team:gen:gen-g"
+    },
+    {
+      "id": "115660540726095014",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095013",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_483314",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_2_1",
+        "officialGameId": "115660540726095014",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "HLE",
+        "id": "team:hle:hanwha-life-esports",
+        "name": "Hanwha Life Esports"
+      },
+      "teamB": {
+        "code": "TES",
+        "id": "team:tes:top-esports",
+        "name": "Top Esports"
+      },
+      "winnerId": "team:hle:hanwha-life-esports"
+    },
+    {
+      "id": "115660540726095020",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T19:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095019",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_483342",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_3_1",
+        "officialGameId": "115660540726095020",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "BLG",
+        "id": "team:blg:bilibili-gaming",
+        "name": "Bilibili Gaming"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:mkoi:movistar-koi"
+    },
+    {
+      "id": "115660540726095010",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T20:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095009",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482292",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_4_1",
+        "officialGameId": "115660540726095010",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "AL",
+        "id": "team:al:anyone-s-legend",
+        "name": "Anyone's Legend"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "id": "115660540726095012",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T21:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095011",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482304",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_5_1",
+        "officialGameId": "115660540726095012",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "DK",
+        "id": "team:dk:dplus-kia",
+        "name": "Dplus KIA"
+      },
+      "teamB": {
+        "code": "G2",
+        "id": "team:g2:g2-esports",
+        "name": "G2 Esports"
+      },
+      "winnerId": "team:dk:dplus-kia"
+    },
+    {
+      "id": "LOLTMNT02_482313",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T22:17:20.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "source-match\u00002026 Season World Championship/Main Event_Round 1_6\u0000CTBC Flying Oyster\u0000Team Liquid",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482313",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_6_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "CFO",
+        "id": "team:cfo:ctbc-flying-oyster",
+        "name": "CTBC Flying Oyster"
+      },
+      "teamB": {
+        "code": "TLAW",
+        "id": "team:tlaw:team-liquid",
+        "name": "Team Liquid"
+      },
+      "winnerId": "team:cfo:ctbc-flying-oyster"
+    },
+    {
+      "id": "LOLTMNT02_482325",
+      "date": "2026-10-23",
+      "datetimeUtc": "2026-10-23T23:21:10.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "source-match\u00002026 Season World Championship/Main Event_Round 1_7\u0000LØS\u0000T1",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482325",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_7_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "LOS",
+        "id": "team:los:l-s",
+        "name": "LØS"
+      },
+      "teamB": {
+        "code": "T1",
+        "id": "team:t1:t1",
+        "name": "T1"
+      },
+      "winnerId": "team:t1:t1"
+    },
+    {
+      "id": "115660540726095018",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T00:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095017",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482335",
+        "matchId": "2026 Season World Championship/Main Event_Round 1_8_1",
+        "officialGameId": "115660540726095018",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "LYON",
+        "id": "team:lyon:lyon",
+        "name": "LYON"
+      },
+      "teamB": {
+        "code": "TSW",
+        "id": "team:tsw:team-secret-whales",
+        "name": "Team Secret Whales"
+      },
+      "winnerId": "team:lyon:lyon"
+    },
+    {
+      "id": "115660540726095030",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T17:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095029",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482539",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_1_1",
+        "officialGameId": "115660540726095030",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "AL",
+        "id": "team:al:anyone-s-legend",
+        "name": "Anyone's Legend"
+      },
+      "teamB": {
+        "code": "TES",
+        "id": "team:tes:top-esports",
+        "name": "Top Esports"
+      },
+      "winnerId": "team:tes:top-esports"
+    },
+    {
+      "id": "115660540726095022",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T18:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095021",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482559",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_2_1",
+        "officialGameId": "115660540726095022",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "CFO",
+        "id": "team:cfo:ctbc-flying-oyster",
+        "name": "CTBC Flying Oyster"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:mkoi:movistar-koi"
+    },
+    {
+      "id": "LOLTMNT02_482570",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T19:07:24.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "source-match\u00002026 Season World Championship/Main Event_Round 2_3\u0000G2 Esports\u0000LØS",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482570",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_3_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "G2",
+        "id": "team:g2:g2-esports",
+        "name": "G2 Esports"
+      },
+      "teamB": {
+        "code": "LOS",
+        "id": "team:los:l-s",
+        "name": "LØS"
+      },
+      "winnerId": "team:g2:g2-esports"
+    },
+    {
+      "id": "115660540726095024",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T20:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095023",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_483571",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_4_1",
+        "officialGameId": "115660540726095024",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "LYON",
+        "id": "team:lyon:lyon",
+        "name": "LYON"
+      },
+      "winnerId": "team:lyon:lyon"
+    },
+    {
+      "id": "115660540726095034",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T21:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095033",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482587",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_5_1",
+        "officialGameId": "115660540726095034",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "IG",
+        "id": "team:ig:invictus-gaming",
+        "name": "Invictus Gaming"
+      },
+      "teamB": {
+        "code": "TSW",
+        "id": "team:tsw:team-secret-whales",
+        "name": "Team Secret Whales"
+      },
+      "winnerId": "team:ig:invictus-gaming"
+    },
+    {
+      "id": "115660540726095026",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T22:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095025",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482599",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_6_1",
+        "officialGameId": "115660540726095026",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "GEN",
+        "id": "team:gen:gen-g",
+        "name": "Gen.G"
+      },
+      "teamB": {
+        "code": "HLE",
+        "id": "team:hle:hanwha-life-esports",
+        "name": "Hanwha Life Esports"
+      },
+      "winnerId": "team:gen:gen-g"
+    },
+    {
+      "id": "115660540726095028",
+      "date": "2026-10-24",
+      "datetimeUtc": "2026-10-24T23:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095027",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482606",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_7_1",
+        "officialGameId": "115660540726095028",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "DK",
+        "id": "team:dk:dplus-kia",
+        "name": "Dplus KIA"
+      },
+      "teamB": {
+        "code": "T1",
+        "id": "team:t1:t1",
+        "name": "T1"
+      },
+      "winnerId": "team:dk:dplus-kia"
+    },
+    {
+      "id": "LOLTMNT02_482620",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T00:34:10.000Z",
+      "event": "WLDs 2026",
+      "phase": "Regular season",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "source-match\u00002026 Season World Championship/Main Event_Round 2_8\u0000Bilibili Gaming\u0000Team Liquid",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_482620",
+        "matchId": "2026 Season World Championship/Main Event_Round 2_8_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "BLG",
+        "id": "team:blg:bilibili-gaming",
+        "name": "Bilibili Gaming"
+      },
+      "teamB": {
+        "code": "TLAW",
+        "id": "team:tlaw:team-liquid",
+        "name": "Team Liquid"
+      },
+      "winnerId": "team:blg:bilibili-gaming"
+    },
+    {
+      "id": "115660540726095046",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T17:00:00Z",
+      "event": "WLDs 2026",
+      "phase": "Swiss",
+      "league": "WLDs",
+      "region": "International",
+      "patch": "16.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095045",
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_483687",
+        "matchId": "2026 Season World Championship/Main Event_Round 3_1_1",
+        "officialGameId": "115660540726095046",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "HLE",
+        "id": "team:hle:hanwha-life-esports",
+        "name": "Hanwha Life Esports"
+      },
+      "teamB": {
+        "code": "IG",
+        "id": "team:ig:invictus-gaming",
+        "name": "Invictus Gaming"
+      },
+      "winnerId": "team:ig:invictus-gaming"
+    },
+    {
+      "id": "115660540726095048",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T18:00:00Z",
+      "event": "2026 Season World Championship/Main Event",
+      "phase": "Swiss",
+      "league": "Worlds",
+      "region": "International",
+      "patch": "26.20",
+      "bestOf": 1,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095047",
+      "source": {
+        "completeness": "scoreboard-game-stats",
+        "gameId": "2026 Season World Championship/Main Event_Round 3_2_1",
+        "officialGameId": "115660540726095048",
+        "provider": "leaguepedia-cargo",
+        "url": "https://lol.fandom.com/wiki/Special:CargoExport"
+      },
+      "teamA": {
+        "code": "G2",
+        "id": "team:g2:g2-esports",
+        "name": "G2 Esports"
+      },
+      "teamB": {
+        "code": "TES",
+        "id": "team:tes:top-esports",
+        "name": "Top Esports"
+      },
+      "winnerId": "team:tes:top-esports"
+    },
+    {
+      "id": "2026 Season World Championship/Main Event_Round 3_3_1",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T19:00:00Z",
+      "event": "2026 Season World Championship/Main Event",
+      "phase": "Swiss",
+      "league": "Worlds",
+      "region": "International",
+      "patch": "26.20",
+      "bestOf": 3,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095037",
+      "source": {
+        "completeness": "scoreboard-game-stats",
+        "gameId": "2026 Season World Championship/Main Event_Round 3_3_1",
+        "provider": "leaguepedia-cargo",
+        "url": "https://lol.fandom.com/wiki/Special:CargoExport"
+      },
+      "teamA": {
+        "code": "DK",
+        "id": "team:dk:dplus-kia",
+        "name": "Dplus KIA"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:dk:dplus-kia"
+    },
+    {
+      "id": "2026 Season World Championship/Main Event_Round 3_3_2",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T19:00:00Z",
+      "event": "2026 Season World Championship/Main Event",
+      "phase": "Swiss",
+      "league": "Worlds",
+      "region": "International",
+      "patch": "26.20",
+      "bestOf": 3,
+      "gameNumber": 2,
+      "seriesId": "official-match\u0000115660540726095037",
+      "source": {
+        "completeness": "scoreboard-game-stats",
+        "gameId": "2026 Season World Championship/Main Event_Round 3_3_2",
+        "provider": "leaguepedia-cargo",
+        "url": "https://lol.fandom.com/wiki/Special:CargoExport"
+      },
+      "teamA": {
+        "code": "DK",
+        "id": "team:dk:dplus-kia",
+        "name": "Dplus KIA"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:dk:dplus-kia"
+    },
+    {
+      "id": "2026 Season World Championship/Main Event_Round 3_4_1",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T22:00:00Z",
+      "event": "2026 Season World Championship/Main Event",
+      "phase": "Swiss",
+      "league": "Worlds",
+      "region": "International",
+      "patch": "26.20",
+      "bestOf": 3,
+      "gameNumber": 1,
+      "seriesId": "official-match\u0000115660540726095041",
+      "source": {
+        "completeness": "scoreboard-game-stats",
+        "gameId": "2026 Season World Championship/Main Event_Round 3_4_1",
+        "provider": "leaguepedia-cargo",
+        "url": "https://lol.fandom.com/wiki/Special:CargoExport"
+      },
+      "teamA": {
+        "code": "GEN",
+        "id": "team:gen:gen-g",
+        "name": "Gen.G"
+      },
+      "teamB": {
+        "code": "LYON",
+        "id": "team:lyon:lyon",
+        "name": "LYON"
+      },
+      "winnerId": "team:lyon:lyon"
+    },
+    {
+      "id": "2026 Season World Championship/Main Event_Round 3_4_2",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T22:00:00Z",
+      "event": "2026 Season World Championship/Main Event",
+      "phase": "Swiss",
+      "league": "Worlds",
+      "region": "International",
+      "patch": "26.20",
+      "bestOf": 3,
+      "gameNumber": 2,
+      "seriesId": "official-match\u0000115660540726095041",
+      "source": {
+        "completeness": "scoreboard-game-stats",
+        "gameId": "2026 Season World Championship/Main Event_Round 3_4_2",
+        "provider": "leaguepedia-cargo",
+        "url": "https://lol.fandom.com/wiki/Special:CargoExport"
+      },
+      "teamA": {
+        "code": "GEN",
+        "id": "team:gen:gen-g",
+        "name": "Gen.G"
+      },
+      "teamB": {
+        "code": "LYON",
+        "id": "team:lyon:lyon",
+        "name": "LYON"
+      },
+      "winnerId": "team:gen:gen-g"
+    },
+    {
+      "id": "2026 Season World Championship/Main Event_Round 3_4_3",
+      "date": "2026-10-25",
+      "datetimeUtc": "2026-10-25T22:00:00Z",
+      "event": "2026 Season World Championship/Main Event",
+      "phase": "Swiss",
+      "league": "Worlds",
+      "region": "International",
+      "patch": "26.20",
+      "bestOf": 3,
+      "gameNumber": 3,
+      "seriesId": "official-match\u0000115660540726095041",
+      "source": {
+        "completeness": "scoreboard-game-stats",
+        "gameId": "2026 Season World Championship/Main Event_Round 3_4_3",
+        "provider": "leaguepedia-cargo",
+        "url": "https://lol.fandom.com/wiki/Special:CargoExport"
+      },
+      "teamA": {
+        "code": "GEN",
+        "id": "team:gen:gen-g",
+        "name": "Gen.G"
+      },
+      "teamB": {
+        "code": "LYON",
+        "id": "team:lyon:lyon",
+        "name": "LYON"
+      },
+      "winnerId": "team:gen:gen-g"
+    }
+  ],
+  "events": [
+    {
+      "startTime": "2026-10-15T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Play-Ins",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660588583171786",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Karmine Corp",
+            "code": "KC",
+            "image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 3
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          },
+          {
+            "name": "Cloud9 Kia",
+            "code": "C9",
+            "image": "http://static.lolesports.com/teams/1736924120254_C9Kia_IconBlue_Transparent_2000x2000.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 2
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 5
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-15T23:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Play-Ins",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660588583040710",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "MVK Esports",
+            "code": "MVK",
+            "image": "http://static.lolesports.com/teams/1767089709161_White_Logo.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 3
+            },
+            "record": {
+              "wins": 2,
+              "losses": 2
+            }
+          },
+          {
+            "name": "FURIA",
+            "code": "FUR",
+            "image": "http://static.lolesports.com/teams/FURIA---black.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 5
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-16T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Play-Ins",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660588583171790",
+        "flags": [
+          "hasVod",
+          "isSpoiler"
+        ],
+        "teams": [
+          {
+            "name": "Karmine Corp",
+            "code": "KC",
+            "image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 3
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          },
+          {
+            "name": "MVK Esports",
+            "code": "MVK",
+            "image": "http://static.lolesports.com/teams/1767089709161_White_Logo.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 5
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-16T23:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Play-Ins",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660588583171794",
+        "flags": [
+          "hasVod",
+          "isSpoiler"
+        ],
+        "teams": [
+          {
+            "name": "FURIA",
+            "code": "FUR",
+            "image": "http://static.lolesports.com/teams/FURIA---black.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 3
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          },
+          {
+            "name": "Cloud9 Kia",
+            "code": "C9",
+            "image": "http://static.lolesports.com/teams/1736924120254_C9Kia_IconBlue_Transparent_2000x2000.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 5
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-17T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Play-Ins",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660588583171798",
+        "flags": [
+          "hasVod",
+          "isSpoiler"
+        ],
+        "teams": [
+          {
+            "name": "MVK Esports",
+            "code": "MVK",
+            "image": "http://static.lolesports.com/teams/1767089709161_White_Logo.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 3
+            },
+            "record": {
+              "wins": 2,
+              "losses": 2
+            }
+          },
+          {
+            "name": "FURIA",
+            "code": "FUR",
+            "image": "http://static.lolesports.com/teams/FURIA---black.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 5
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-18T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Play-Ins",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "116299649498303884",
+        "flags": [
+          "hasVod",
+          "isSpoiler"
+        ],
+        "teams": [
+          {
+            "name": "Karmine Corp",
+            "code": "KC",
+            "image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 3
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          },
+          {
+            "name": "MVK Esports",
+            "code": "MVK",
+            "image": "http://static.lolesports.com/teams/1767089709161_White_Logo.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 5
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T17:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095005",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Invictus Gaming",
+            "code": "IG",
+            "image": "http://static.lolesports.com/teams/1634762917340_300px-Invictus_Gaming_logo.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Gen.G Esports",
+            "code": "GEN",
+            "image": "http://static.lolesports.com/teams/1773829250929_GENGLOGO_GOLD.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095013",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "TOP ESPORTS",
+            "code": "TES",
+            "image": "http://static.lolesports.com/teams/1592592064571_TopEsportsTES-01-FullonDark.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Hanwha Life Esports",
+            "code": "HLE",
+            "image": "http://static.lolesports.com/teams/1631819564399_hle-2021-worlds.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T19:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095019",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Movistar KOI",
+            "code": "MKOI",
+            "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "BILIBILI GAMING",
+            "code": "BLG",
+            "image": "http://static.lolesports.com/teams/1682322954525_Bilibili_Gaming_logo_20211.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T20:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095009",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Karmine Corp",
+            "code": "KC",
+            "image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          },
+          {
+            "name": "Anyone's Legend",
+            "code": "AL",
+            "image": "http://static.lolesports.com/teams/1641199582689_.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T21:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095011",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Dplus KIA",
+            "code": "DK",
+            "image": "http://static.lolesports.com/teams/1673260049703_DPlusKIALOGO11.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          },
+          {
+            "name": "G2 Esports",
+            "code": "G2",
+            "image": "http://static.lolesports.com/teams/G2-FullonDark.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T22:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095007",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Team Liquid Alienware",
+            "code": "TLAW",
+            "image": "http://static.lolesports.com/teams/1769357207762_TLAlienware_Minimal_Bug-White.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          },
+          {
+            "name": "CTBC Flying Oyster",
+            "code": "CFO",
+            "image": "http://static.lolesports.com/teams/1656307849320_CFO_Logo.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-23T23:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095015",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "LOS",
+            "code": "LOS",
+            "image": "http://static.lolesports.com/teams/1784013312149_LOS-OLaranja.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          },
+          {
+            "name": "T1",
+            "code": "T1",
+            "image": "http://static.lolesports.com/teams/1726801573959_539px-T1_2019_full_allmode.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T00:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095017",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "LYON",
+            "code": "LYON",
+            "image": "http://static.lolesports.com/teams/1743717443673_isotypelyon-03.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Team Secret Whales",
+            "code": "TSW",
+            "image": "http://static.lolesports.com/teams/1774598000328_White_EyeText_600p.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T17:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095029",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "TOP ESPORTS",
+            "code": "TES",
+            "image": "http://static.lolesports.com/teams/1592592064571_TopEsportsTES-01-FullonDark.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Anyone's Legend",
+            "code": "AL",
+            "image": "http://static.lolesports.com/teams/1641199582689_.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095021",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Movistar KOI",
+            "code": "MKOI",
+            "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "CTBC Flying Oyster",
+            "code": "CFO",
+            "image": "http://static.lolesports.com/teams/1656307849320_CFO_Logo.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T19:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095031",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "LOS",
+            "code": "LOS",
+            "image": "http://static.lolesports.com/teams/1784013312149_LOS-OLaranja.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          },
+          {
+            "name": "G2 Esports",
+            "code": "G2",
+            "image": "http://static.lolesports.com/teams/G2-FullonDark.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T20:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095023",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Karmine Corp",
+            "code": "KC",
+            "image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          },
+          {
+            "name": "LYON",
+            "code": "LYON",
+            "image": "http://static.lolesports.com/teams/1743717443673_isotypelyon-03.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T21:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095033",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Team Secret Whales",
+            "code": "TSW",
+            "image": "http://static.lolesports.com/teams/1774598000328_White_EyeText_600p.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          },
+          {
+            "name": "Invictus Gaming",
+            "code": "IG",
+            "image": "http://static.lolesports.com/teams/1634762917340_300px-Invictus_Gaming_logo.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T22:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095025",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Hanwha Life Esports",
+            "code": "HLE",
+            "image": "http://static.lolesports.com/teams/1631819564399_hle-2021-worlds.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          },
+          {
+            "name": "Gen.G Esports",
+            "code": "GEN",
+            "image": "http://static.lolesports.com/teams/1773829250929_GENGLOGO_GOLD.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-24T23:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095027",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Dplus KIA",
+            "code": "DK",
+            "image": "http://static.lolesports.com/teams/1673260049703_DPlusKIALOGO11.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          },
+          {
+            "name": "T1",
+            "code": "T1",
+            "image": "http://static.lolesports.com/teams/1726801573959_539px-T1_2019_full_allmode.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-25T00:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095035",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Team Liquid Alienware",
+            "code": "TLAW",
+            "image": "http://static.lolesports.com/teams/1769357207762_TLAlienware_Minimal_Bug-White.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 0,
+              "losses": 2
+            }
+          },
+          {
+            "name": "BILIBILI GAMING",
+            "code": "BLG",
+            "image": "http://static.lolesports.com/teams/1682322954525_Bilibili_Gaming_logo_20211.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-25T17:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095045",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Invictus Gaming",
+            "code": "IG",
+            "image": "http://static.lolesports.com/teams/1634762917340_300px-Invictus_Gaming_logo.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Hanwha Life Esports",
+            "code": "HLE",
+            "image": "http://static.lolesports.com/teams/1631819564399_hle-2021-worlds.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-25T18:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095047",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "TOP ESPORTS",
+            "code": "TES",
+            "image": "http://static.lolesports.com/teams/1592592064571_TopEsportsTES-01-FullonDark.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "G2 Esports",
+            "code": "G2",
+            "image": "http://static.lolesports.com/teams/G2-FullonDark.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 1,
+              "losses": 2
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 1
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-25T19:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095037",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "Movistar KOI",
+            "code": "MKOI",
+            "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 0
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Dplus KIA",
+            "code": "DK",
+            "image": "http://static.lolesports.com/teams/1673260049703_DPlusKIALOGO11.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 2
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 3
+        }
+      }
+    },
+    {
+      "startTime": "2026-10-25T22:00:00Z",
+      "state": "completed",
+      "type": "match",
+      "blockName": "Swiss",
+      "league": {
+        "name": "Worlds",
+        "slug": "worlds"
+      },
+      "match": {
+        "id": "115660540726095041",
+        "flags": [
+          "hasVod"
+        ],
+        "teams": [
+          {
+            "name": "LYON",
+            "code": "LYON",
+            "image": "http://static.lolesports.com/teams/1743717443673_isotypelyon-03.png",
+            "result": {
+              "outcome": "loss",
+              "gameWins": 1
+            },
+            "record": {
+              "wins": 2,
+              "losses": 1
+            }
+          },
+          {
+            "name": "Gen.G Esports",
+            "code": "GEN",
+            "image": "http://static.lolesports.com/teams/1773829250929_GENGLOGO_GOLD.png",
+            "result": {
+              "outcome": "win",
+              "gameWins": 2
+            },
+            "record": {
+              "wins": 3,
+              "losses": 0
+            }
+          }
+        ],
+        "strategy": {
+          "type": "bestOf",
+          "count": 3
+        }
+      }
+    }
+  ]
+}

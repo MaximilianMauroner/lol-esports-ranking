@@ -21,10 +21,10 @@ export const eventTierConfig: Record<
     description: 'Highest leverage international knockout series and games.',
   },
   'worlds-main': {
-    label: 'Worlds main stage',
+    label: 'Worlds early stages',
     kFactor: 27,
     weight: 27 / 14,
-    description: 'World Championship games before the final bracket peak.',
+    description: 'World Championship play-in and Swiss/group games before the knockout bracket.',
   },
   'msi-bracket': {
     label: 'MSI / First Stand knockout',

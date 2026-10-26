@@ -50,6 +50,7 @@ const exactTeamAliases: Record<string, string> = {
   'Beijing JDG Esports': 'JD Gaming',
   'BILIBILI GAMING': 'Bilibili Gaming',
   BRION: 'HANJIN BRION',
+  'Cloud9 Kia': 'Cloud9',
   'DN Freecs': 'DN SOOPers',
   DRX: 'Kiwoom DRX',
   'Dplus Kia': 'Dplus KIA',
@@ -60,11 +61,14 @@ const exactTeamAliases: Record<string, string> = {
   GIANTX: 'GiantX',
   'Gen.G Esports': 'Gen.G',
   'LYON (2024 American Team)': 'LYON',
+  LOS: 'LØS',
   'MIBR.LOS': 'LØS',
   'Ninjas in Pyjamas.CN': 'Ninjas in Pyjamas',
   'OKSavingsBank BRION': 'HANJIN BRION',
   'Rogue (European Team)': 'Rogue',
   'Team Secret (Vietnamese Team)': 'Team Secret',
+  'Team Liquid Alienware': 'Team Liquid',
+  'TOP ESPORTS': 'Top Esports',
   'ZEN Esports (Vietnamese Team)': 'ZEN Esports',
 }
 

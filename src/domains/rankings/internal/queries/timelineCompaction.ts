@@ -162,3 +162,7 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T | undefin
   const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
   return entries.length > 0 ? Object.fromEntries(entries) as T : undefined
 }
+
+export function sumTimelineRatingDeltas(entries: readonly { delta: number }[]) {
+  return Number(entries.reduce((sum, entry) => sum + (Number.isFinite(entry.delta) ? entry.delta : 0), 0).toFixed(1))
+}

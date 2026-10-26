@@ -61,7 +61,7 @@
   "onlineRecencyDecay": "entity-local-composable-half-life-regression-v1",
   "ratingUpdateRecencyWeight": 1,
   "leagueExpectedScoreSource": "pregame-neutral-series-team-power",
-  "sourcePipelineVersion": "canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-game-completion-v25",
+  "sourcePipelineVersion": "canonical-identity-stat-dedupe-clock-corroboration-feasible-series-series-start-utc-date-player-performance-home-league-code-unit-order-game-completion-official-team-aliases-plural-play-ins-v26",
   "lineupEvidencePolicy": "prior-date-observed-series-evidence-with-90-day-half-life-v2",
   "partialLineupPolicy": "role-weighted-known-player-evidence-v1",
   "substituteEraPolicy": "three-series-or-twenty-percent-split-share-v1",

@@ -19,7 +19,7 @@ export const emptyEventWeightContext: EventWeightContext = {
 export function eventWeightContextForMatches(matches: readonly MatchRecord[]): EventWeightContext {
   const worldsEndDateByCalendarYear = new Map<number, string>()
   const finals = matches.filter((match) => isWorldsMatch(match)
-    && !/\bplay[ -]?in\b/i.test(match.event)
+    && !/\bplay[ -]?ins?\b/i.test(match.event)
     && /^(?:grand\s+)?finals?$/i.test(match.phase.trim()))
   for (const series of resolveCanonicalSeries(finals)) {
     if (series.state !== 'completed' || series.format !== 5 || series.outcomeA === 0.5) continue

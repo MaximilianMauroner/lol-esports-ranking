@@ -21,6 +21,7 @@ export type PublicRecentMatch = {
   result: 'W' | 'L' | 'T'
   rating: number
   delta: number
+  matchImpact?: number
   expectedWinProbability?: number
   wins?: number
   losses?: number

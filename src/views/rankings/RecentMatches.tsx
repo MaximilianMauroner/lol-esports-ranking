@@ -14,15 +14,14 @@ import { UPSET_CHANCE } from './upset'
 
 const RECENT_MATCH_PAGE_SIZE = 10
 
-type RecentMatchSource = PublicRecentMatch & {
+type RecentMatchSource = Omit<PublicRecentMatch, 'delta'> & {
   tier?: EventTier
   expectedWinProbability?: number
   eventWeight?: number
 }
 
 type RecentMatchListItem = RecentMatchSource & {
-  ratingMovement: number
-  modelDelta?: number
+  otherMovement?: number
 }
 
 type OpponentContext = {
@@ -49,10 +48,10 @@ export function RecentMatches({
   const opponentLookup = useMemo(() => opponentContextLookup(standings), [standings])
   const historyPending = !series && historyState.status === 'loading'
   const orderedMatches = useMemo(() => {
-    if (historyPending) return matchesWithRatingMovement(matches ?? []).toReversed().slice(0, 1)
+    if (historyPending) return matchesWithOtherMovement(matches ?? []).toReversed().slice(0, 1)
     const historyMatches = recentMatchesFromHistorySeries(series)
-    const sourceMatches = seriesOnly || historyMatches.length > (matches?.length ?? 0) ? historyMatches : matches ?? []
-    return matchesWithRatingMovement(sourceMatches).toReversed()
+    const sourceMatches = seriesOnly || historyMatches.length >= (matches?.length ?? 0) ? historyMatches : matches ?? []
+    return matchesWithOtherMovement(sourceMatches).toReversed()
   }, [historyPending, matches, series, seriesOnly])
   const totalMatches = orderedMatches.length
   const totalPages = Math.max(1, Math.ceil(totalMatches / RECENT_MATCH_PAGE_SIZE))
@@ -83,7 +82,7 @@ export function RecentMatches({
       <div className="grid grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-2xs font-bold tracking-label text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
-        <span>Rating after</span>
+        <span>Rating after / match impact</span>
       </div>
       {recentMatches.length > 0 ? (
         <div>
@@ -119,9 +118,16 @@ export function RecentMatches({
                 <div className="pt-px text-right tabular-nums [&_small]:mt-0.5 [&_small]:block [&_small]:text-xs [&_small]:font-bold [&_small]:text-muted-foreground [&_small.down]:text-[var(--down)] [&_small.flat]:text-[var(--faint)] [&_small.up]:text-[var(--up)] [&_strong]:block [&_strong]:text-md [&_strong]:font-bold [&_strong]:text-[var(--text-strong)] max-sm:col-start-2 max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:justify-self-start max-sm:gap-2 max-sm:text-left">
                   <span className="hidden text-xs text-muted-foreground max-sm:block">Post-match Power</span>
                   <strong>{formatRating(match.rating)}</strong>
-                  <small className={movementTone(match.ratingMovement)} title={formatRatingMovementTitle(match)}>
-                    {formatRatingMovement(match.ratingMovement)}
-                  </small>
+                  {typeof match.matchImpact === 'number' ? (
+                    <small className={movementTone(match.matchImpact)} title={`Recorded match impact ${formatRatingMovement(match.matchImpact)}`}>
+                      {formatRatingMovement(match.matchImpact)}
+                    </small>
+                  ) : <small>Match impact unavailable</small>}
+                  {typeof match.otherMovement === 'number' ? (
+                    <small title="Difference since the previous recorded rating, excluding this match's recorded impact. This also includes rounding differences.">
+                      Other changes {formatRatingMovement(match.otherMovement)}
+                    </small>
+                  ) : null}
                 </div>
               </div>
             )
@@ -187,19 +193,16 @@ function MatchHistorySkeleton({
   )
 }
 
-function matchesWithRatingMovement(matches: RecentMatchSource[]): RecentMatchListItem[] {
+function matchesWithOtherMovement(matches: RecentMatchSource[]): RecentMatchListItem[] {
   let previousRating: number | undefined
   return matches.map((match) => {
-    const ratingMovement = typeof previousRating === 'number' && Number.isFinite(match.rating)
-      ? match.rating - previousRating
-      : match.delta
+    const otherMovement = typeof previousRating === 'number' && Number.isFinite(match.rating) && typeof match.matchImpact === 'number'
+      ? match.rating - previousRating - match.matchImpact
+      : undefined
     previousRating = Number.isFinite(match.rating) ? match.rating : previousRating
-    const roundedMovement = Math.round(ratingMovement)
-    const roundedModelDelta = Math.round(match.delta)
     return {
       ...match,
-      ratingMovement,
-      ...(roundedMovement !== roundedModelDelta ? { modelDelta: match.delta } : {}),
+      ...(typeof otherMovement === 'number' && Math.round(otherMovement) !== 0 ? { otherMovement } : {}),
     }
   })
 }
@@ -215,7 +218,7 @@ function recentMatchesFromHistorySeries(series?: TeamHistorySeries): RecentMatch
         opponent: context.opponent,
         result: context.result,
         rating,
-        delta: typeof context.delta === 'number' && Number.isFinite(context.delta) ? context.delta : 0,
+        matchImpact: typeof context.delta === 'number' && Number.isFinite(context.delta) ? context.delta : undefined,
         ...(typeof context.wins === 'number' ? { wins: context.wins } : {}),
         ...(typeof context.losses === 'number' ? { losses: context.losses } : {}),
         ...(typeof context.games === 'number' ? { games: context.games } : {}),
@@ -228,22 +231,15 @@ function recentMatchesFromHistorySeries(series?: TeamHistorySeries): RecentMatch
     .filter((match): match is RecentMatchSource => match !== null)
 }
 
-function formatTeamMatchMeta(match: PublicRecentMatch) {
+function formatTeamMatchMeta(match: RecentMatchSource) {
   return [formatDate(match.date), match.event].filter(Boolean).join(' · ')
 }
 
-function formatTeamMatchDetail(match: PublicRecentMatch) {
+function formatTeamMatchDetail(match: RecentMatchSource) {
   if (typeof match.wins !== 'number' || typeof match.losses !== 'number') return undefined
   const score = `${match.wins}-${match.losses}`
   const bestOf = typeof match.bestOf === 'number' && match.bestOf > 1 ? `Bo${match.bestOf}` : undefined
   return [formatTeamMatchMeta(match), score, bestOf].filter(Boolean).join(' · ')
-}
-
-function formatRatingMovementTitle(match: RecentMatchListItem) {
-  const movement = `Rating movement ${formatRatingMovement(match.ratingMovement)}`
-  return typeof match.modelDelta === 'number'
-    ? `${movement} · model match impact ${formatRatingMovement(match.modelDelta)}`
-    : movement
 }
 
 function opponentContextLookup(standings: readonly RankingSummaryStanding[]) {

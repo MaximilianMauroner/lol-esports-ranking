@@ -1,4 +1,5 @@
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
+import { sumTimelineRatingDeltas } from '../queries/timelineCompaction.ts'
 import type {
   ArtifactMeta, DataSourceInfo, FactorBreakdown,
   LeagueStrength, PublicDeservedStandingComparison, PublicMatchHistoryCatalog, PublicMatchHistoryEntry, PublicMatchHistoryIndex, PublicMatchHistoryPage, PublicMatchHistoryTeam, PublicPlayerDirectory, PublicRankingManifest, PublicRankingShard, PublicRecentMatch, PublicRegionHistoryDirectory, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicRollingUpsetWin, PublicRollingWindow, PublicScoreFamilyInfo, PublicSnapshotIndexEntry, PublicStandingCompactionOptions, PublicTeamDirectory, PublicTeamEntity, PublicTeamHistoryIndex, PublicTeamHistoryIndexEntry, PublicTeamHistoryPoint, PublicTeamHistorySeries, PublicTeamHistoryShard, PublicTeamRollingMovement, PublicTeamStanding, PublicTournamentAppearance, PublicTournamentMovementIndex, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam, PublishedRatingScale,
@@ -318,6 +319,7 @@ function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', previou
     result,
     rating: Math.round(latest.rating),
     delta: previous ? Math.round(latest.rating) - Math.round(previous.rating) : group.entries.reduce((total, entry) => total + Math.round(entry.delta), 0),
+    matchImpact: sumTimelineRatingDeltas(group.entries),
     ...(expectedWinProbability !== undefined ? { expectedWinProbability } : {}),
     wins,
     losses,
@@ -1018,6 +1020,7 @@ function assertPublicRecentMatch(value: unknown, label: string): asserts value i
   assertNumber(value.rating, `${label} rating`)
   assertNumber(value.delta, `${label} delta`)
   assertOptionalNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
+  assertOptionalNumber(value.matchImpact, `${label} matchImpact`)
   if (typeof value.expectedWinProbability === 'number' && (value.expectedWinProbability < 0 || value.expectedWinProbability > 1)) {
     throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
   }

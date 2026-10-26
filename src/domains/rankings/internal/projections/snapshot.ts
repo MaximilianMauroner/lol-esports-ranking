@@ -43,6 +43,7 @@ import {
   inferBestOfForScore,
   isResolvedTimelineResult,
   summarizeTimelineResults,
+  sumTimelineRatingDeltas,
   timelineGroupKey,
   timelineSourceSummary,
   uniqueValues,
@@ -614,9 +615,7 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
   const result = latest.source?.seriesOutcome === 0.5 ? 'T' : resultSummary.result
   const bestOf = inferBestOfForScore(resultSummary.wins, resultSummary.losses, latest.source?.bestOf)
   const sourceSummary = timelineSourceSummary(group.entries, (entry) => entry.source)
-  const delta = group.entries.reduce((total, entry) => (
-    typeof entry.delta === 'number' && Number.isFinite(entry.delta) ? total + entry.delta : total
-  ), 0)
+  const delta = sumTimelineRatingDeltas(group.entries)
   const modelContext = compactTeamHistoryModelContext(group.entries, result)
 
   return [
@@ -1568,10 +1567,7 @@ function matchImpactLookup(standings: TeamStanding[]) {
       const update = latestInformativeRatingUpdate(points)
       const observed = points.filter((point) => point.result === 'W').length > points.length / 2 ? 1 : 0
       const residual = finiteNumber(update?.neutralResultResidual)
-      const displayDelta = points.reduce(
-        (sum, point) => sum + (Number.isFinite(point.delta) ? point.delta : 0),
-        0,
-      )
+      const displayDelta = sumTimelineRatingDeltas(points)
       lookup.set(`${canonicalTeamNameFor(standing.team)}\u0000${seriesId}`, {
         delta: Number(displayDelta.toFixed(1)),
         ...(typeof residual === 'number' ? { expected: Number((observed - residual).toFixed(3)) } : {}),

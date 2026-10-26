@@ -1,0 +1,711 @@
+{
+  "provenance": {
+    "description": "Unmodified summary rows, series history contexts and per-game published impacts captured from the same public generation. These are published replay artifacts, not raw provider data or pregame delivery proof.",
+    "url": "https://lol.lab4code.com"
+  },
+  "standing": {
+    "baseRating": 1966,
+    "code": "KC",
+    "confidence": 99,
+    "delta": 3,
+    "deservedStanding": {
+      "eligibility": "Eligible",
+      "gameDifferentialAboveExpectation": 3.26,
+      "incomingPlayerBridgeCredit": 0,
+      "leaderboard": "main-deserved-standings",
+      "rank": 5,
+      "rankDeltaFromPower": -1,
+      "resumePoints": 140,
+      "rosterValidity": 1,
+      "scheduleStrengthPoints": -3,
+      "score": 2187,
+      "scoreDeltaFromPower": 137,
+      "stagePoints": 0,
+      "winsAboveExpectation": 3.16
+    },
+    "eligibility": {
+      "eligible": true,
+      "reasons": []
+    },
+    "factors": {
+      "context": 0.359,
+      "execution": 0.622,
+      "league": 0.086,
+      "opponent": 0.405,
+      "recency": 0.657
+    },
+    "form": [
+      "W",
+      "W",
+      "W",
+      "W",
+      "L"
+    ],
+    "league": "LEC",
+    "leagueAdjustment": -153,
+    "leagueDelta": -3,
+    "leagueId": "league:lec:lec",
+    "leagueScore": 1647,
+    "losses": 17,
+    "movement": 0,
+    "previousRank": 4,
+    "previousRating": 2047,
+    "rank": 4,
+    "rating": 2050,
+    "ratingComponents": {
+      "contextAdjustment": 53.6,
+      "leagueAnchor": 1647,
+      "momentum": 2.3,
+      "rosterPriorOffset": 180.4,
+      "teamStableOffset": 165.8,
+      "uncertainty": 65
+    },
+    "recentEvents": [
+      "WLDs 2026"
+    ],
+    "recentMatches": [
+      {
+        "bestOf": 5,
+        "date": "2026-09-19",
+        "delta": -59,
+        "event": "LEC 2026 Summer",
+        "expectedWinProbability": 0.66,
+        "formatBasis": "official",
+        "formatConfidence": "high",
+        "games": 3,
+        "losses": 3,
+        "opponent": "Movistar KOI",
+        "rating": 1878,
+        "result": "L",
+        "seriesId": "official-match\u0000115548681803406327",
+        "wins": 0
+      },
+      {
+        "bestOf": 5,
+        "date": "2026-10-15",
+        "delta": -39,
+        "event": "WLDs 2026",
+        "expectedWinProbability": 0.553,
+        "formatBasis": "score-inferred",
+        "formatConfidence": "medium",
+        "games": 5,
+        "losses": 2,
+        "opponent": "Cloud9",
+        "rating": 1839,
+        "result": "W",
+        "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+        "wins": 3
+      }
+    ],
+    "recordBasis": "grouped-match-record-from-scope-history",
+    "region": "LEC",
+    "rollingMovement": {
+      "baselineRank": 14,
+      "baselineRating": 1878,
+      "biggestUpsetWin": {
+        "date": "2026-10-23",
+        "event": "WLDs 2026",
+        "expectedWinProbability": 0.442,
+        "opponent": "Anyone's Legend",
+        "ratingDelta": 39
+      },
+      "currentRank": 4,
+      "currentRating": 2002,
+      "rankMovement": 10,
+      "rankPoints": [
+        [
+          "2026-09-25",
+          14
+        ],
+        [
+          "2026-10-15",
+          19
+        ],
+        [
+          "2026-10-16",
+          12
+        ],
+        [
+          "2026-10-18",
+          11
+        ],
+        [
+          "2026-10-23",
+          4
+        ],
+        [
+          "2026-10-24",
+          6
+        ],
+        [
+          "2026-10-25",
+          4
+        ]
+      ],
+      "ratingDelta": 124,
+      "scoredSeries": 5,
+      "status": "active"
+    },
+    "rosterBasis": "sourced",
+    "rosterContinuity": 1,
+    "scoreFamily": "power-index",
+    "strongestFactor": "recency",
+    "team": "Karmine Corp",
+    "teamId": "team:kc:karmine-corp",
+    "tournamentAppearances": [
+      {
+        "event": "WLDs 2026",
+        "family": "worlds",
+        "lastDate": "2026-10-24",
+        "matchCount": 5
+      },
+      {
+        "event": "EWC 2026",
+        "family": "ewc",
+        "lastDate": "2026-07-19",
+        "matchCount": 6
+      },
+      {
+        "event": "MSI 2026",
+        "family": "msi",
+        "lastDate": "2026-06-30",
+        "matchCount": 3
+      }
+    ],
+    "uncertainty": 65,
+    "wins": 44
+  },
+  "history": {
+    "code": "KC",
+    "currentStanding": {
+      "adjustment": 48,
+      "asOf": "2026-10-24",
+      "lastMatchRating": 2002,
+      "model": {
+        "c": [
+          1647,
+          165.8,
+          180.4,
+          2.3,
+          53.6
+        ]
+      },
+      "rank": 4,
+      "rating": 2050
+    },
+    "points": [
+      [
+        "2026-09-19",
+        1878,
+        15,
+        {
+          "bestOf": 5,
+          "delta": -29,
+          "event": "LEC 2026 Summer",
+          "formatBasis": "official",
+          "formatConfidence": "high",
+          "games": 3,
+          "losses": 3,
+          "model": {
+            "c": [
+              1638,
+              123.5,
+              121.9,
+              -5.5,
+              0
+            ],
+            "e": 0.66,
+            "w": 1.571
+          },
+          "officialEventId": "115548681803406327",
+          "officialMatchId": "115548681803406327",
+          "opponent": "Movistar KOI",
+          "result": "L",
+          "seriesId": "official-match\u0000115548681803406327",
+          "seriesState": "completed",
+          "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
+          "sourceGameId": "LOLTMNT04_190160",
+          "sourceGameIds": [
+            "LOLTMNT04_190156",
+            "LOLTMNT04_191104",
+            "LOLTMNT04_190160"
+          ],
+          "sourceMatchId": "LEC/2026 Season/Summer Playoffs_Round 3_2_3",
+          "sourceProvider": "oracles-elixir",
+          "tier": "major-playoffs",
+          "wins": 0
+        }
+      ],
+      [
+        "2026-10-15",
+        1839,
+        19,
+        {
+          "bestOf": 5,
+          "delta": 33,
+          "event": "WLDs 2026",
+          "formatBasis": "score-inferred",
+          "formatConfidence": "medium",
+          "games": 5,
+          "losses": 2,
+          "model": {
+            "c": [
+              1644,
+              139.8,
+              53.3,
+              0.3,
+              0
+            ],
+            "e": 0.553,
+            "w": 1.929
+          },
+          "opponent": "Cloud9",
+          "result": "W",
+          "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+          "seriesState": "completed",
+          "sourceFileName": "2026_LoL_esports_match_data_from_OraclesElixir.csv",
+          "sourceGameId": "LOLTMNT02_479649",
+          "sourceGameIds": [
+            "LOLTMNT02_479621",
+            "LOLTMNT02_479631",
+            "LOLTMNT02_479637",
+            "LOLTMNT02_479642",
+            "LOLTMNT02_479649"
+          ],
+          "sourceMatchId": "2026 Season World Championship/Play-In_Round 1_1_5",
+          "sourceProvider": "oracles-elixir",
+          "tier": "worlds-main",
+          "wins": 3
+        }
+      ]
+    ],
+    "region": "LEC",
+    "team": "Karmine Corp"
+  },
+  "games": [
+    {
+      "bestOf": 5,
+      "date": "2026-09-19",
+      "datetimeUtc": "2026-09-19T15:00:00Z",
+      "event": "LEC 2026 Summer",
+      "gameNumber": 1,
+      "id": "LOLTMNT04_190156",
+      "impact": {
+        "unit": "held"
+      },
+      "league": "LEC",
+      "patch": "16.17",
+      "phase": "Playoffs",
+      "picks": {
+        "teamA": [
+          "Gragas",
+          "Skarner",
+          "Viktor",
+          "Zeri",
+          "Yuumi"
+        ],
+        "teamB": [
+          "Jayce",
+          "Lee Sin",
+          "Ahri",
+          "Ashe",
+          "Seraphine"
+        ]
+      },
+      "region": "LEC",
+      "seriesId": "official-match\u0000115548681803406327",
+      "seriesState": "completed",
+      "seriesWinsA": 0,
+      "seriesWinsB": 1,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT04_190156",
+        "matchId": "LEC/2026 Season/Summer Playoffs_Round 3_2_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:mkoi:movistar-koi"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-09-19",
+      "datetimeUtc": "2026-09-19T15:00:00Z",
+      "event": "LEC 2026 Summer",
+      "gameNumber": 2,
+      "id": "LOLTMNT04_191104",
+      "impact": {
+        "unit": "held"
+      },
+      "league": "LEC",
+      "patch": "16.17",
+      "phase": "Playoffs",
+      "picks": {
+        "teamA": [
+          "Rumble",
+          "Vi",
+          "Ryze",
+          "Jhin",
+          "Nautilus"
+        ],
+        "teamB": [
+          "Galio",
+          "Jarvan IV",
+          "Anivia",
+          "Caitlyn",
+          "Bard"
+        ]
+      },
+      "region": "LEC",
+      "seriesId": "official-match\u0000115548681803406327",
+      "seriesState": "completed",
+      "seriesWinsA": 0,
+      "seriesWinsB": 2,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT04_191104",
+        "matchId": "LEC/2026 Season/Summer Playoffs_Round 3_2_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:mkoi:movistar-koi"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-09-19",
+      "datetimeUtc": "2026-09-19T15:00:00Z",
+      "event": "LEC 2026 Summer",
+      "gameNumber": 3,
+      "id": "LOLTMNT04_190160",
+      "impact": {
+        "eventWeight": 1.571,
+        "expectedTeamA": 0.66,
+        "teamA": -29,
+        "teamB": 26,
+        "unit": "series-applied"
+      },
+      "league": "LEC",
+      "patch": "16.17",
+      "phase": "Playoffs",
+      "picks": {
+        "teamA": [
+          "Ambessa",
+          "Dr. Mundo",
+          "LeBlanc",
+          "Ezreal",
+          "Karma"
+        ],
+        "teamB": [
+          "Shyvana",
+          "Qiyana",
+          "Syndra",
+          "Sivir",
+          "Rakan"
+        ]
+      },
+      "region": "LEC",
+      "seriesId": "official-match\u0000115548681803406327",
+      "seriesState": "completed",
+      "seriesWinsA": 0,
+      "seriesWinsB": 3,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT04_190160",
+        "matchId": "LEC/2026 Season/Summer Playoffs_Round 3_2_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "teamB": {
+        "code": "MKOI",
+        "id": "team:mkoi:movistar-koi",
+        "name": "Movistar KOI"
+      },
+      "winnerId": "team:mkoi:movistar-koi"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T18:16:33.000Z",
+      "event": "WLDs 2026",
+      "gameNumber": 1,
+      "id": "LOLTMNT02_479621",
+      "impact": {
+        "unit": "held"
+      },
+      "league": "WLDs",
+      "patch": "16.20",
+      "phase": "Regular season",
+      "picks": {
+        "teamA": [
+          "Gnar",
+          "Xin Zhao",
+          "Locke",
+          "Ezreal",
+          "Karma"
+        ],
+        "teamB": [
+          "Rumble",
+          "Lee Sin",
+          "Syndra",
+          "Miss Fortune",
+          "Nautilus"
+        ]
+      },
+      "region": "International",
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "seriesState": "completed",
+      "seriesWinsA": 1,
+      "seriesWinsB": 0,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479621",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_1",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:c9:cloud9"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T19:14:54.000Z",
+      "event": "WLDs 2026",
+      "gameNumber": 2,
+      "id": "LOLTMNT02_479631",
+      "impact": {
+        "unit": "held"
+      },
+      "league": "WLDs",
+      "patch": "16.20",
+      "phase": "Regular season",
+      "picks": {
+        "teamA": [
+          "Camille",
+          "Wukong",
+          "Akali",
+          "Kalista",
+          "Renata Glasc"
+        ],
+        "teamB": [
+          "Jayce",
+          "Vi",
+          "Cassiopeia",
+          "Varus",
+          "Vel'Koz"
+        ]
+      },
+      "region": "International",
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "seriesState": "completed",
+      "seriesWinsA": 1,
+      "seriesWinsB": 1,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479631",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_2",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T20:17:23.000Z",
+      "event": "WLDs 2026",
+      "gameNumber": 3,
+      "id": "LOLTMNT02_479637",
+      "impact": {
+        "unit": "held"
+      },
+      "league": "WLDs",
+      "patch": "16.20",
+      "phase": "Regular season",
+      "picks": {
+        "teamA": [
+          "Olaf",
+          "Jarvan IV",
+          "Annie",
+          "Jhin",
+          "Alistar"
+        ],
+        "teamB": [
+          "Kled",
+          "Naafiri",
+          "Anivia",
+          "Lucian",
+          "Nami"
+        ]
+      },
+      "region": "International",
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "seriesState": "completed",
+      "seriesWinsA": 2,
+      "seriesWinsB": 1,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479637",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_3",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:c9:cloud9"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T21:14:05.000Z",
+      "event": "WLDs 2026",
+      "gameNumber": 4,
+      "id": "LOLTMNT02_479642",
+      "impact": {
+        "unit": "held"
+      },
+      "league": "WLDs",
+      "patch": "16.20",
+      "phase": "Regular season",
+      "picks": {
+        "teamA": [
+          "Zaahen",
+          "Sejuani",
+          "Sylas",
+          "Yunara",
+          "Lulu"
+        ],
+        "teamB": [
+          "Renekton",
+          "Qiyana",
+          "Orianna",
+          "Xayah",
+          "Rakan"
+        ]
+      },
+      "region": "International",
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "seriesState": "completed",
+      "seriesWinsA": 2,
+      "seriesWinsB": 2,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479642",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_4",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    },
+    {
+      "bestOf": 5,
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15T22:16:00.000Z",
+      "event": "WLDs 2026",
+      "gameNumber": 5,
+      "id": "LOLTMNT02_479649",
+      "impact": {
+        "eventWeight": 1.929,
+        "expectedTeamA": 0.447,
+        "teamA": -29,
+        "teamB": 33,
+        "unit": "series-applied"
+      },
+      "league": "WLDs",
+      "patch": "16.20",
+      "phase": "Regular season",
+      "picks": {
+        "teamA": [
+          "K'Sante",
+          "Lillia",
+          "Yone",
+          "Ziggs",
+          "Shen"
+        ],
+        "teamB": [
+          "Ambessa",
+          "Trundle",
+          "Ahri",
+          "Kai'Sa",
+          "Rell"
+        ]
+      },
+      "region": "International",
+      "seriesId": "source-match\u00002026 Season World Championship/Play-In_Round 1_1\u0000Cloud9\u0000Karmine Corp",
+      "seriesState": "completed",
+      "seriesWinsA": 2,
+      "seriesWinsB": 3,
+      "source": {
+        "completeness": "complete",
+        "gameId": "LOLTMNT02_479649",
+        "matchId": "2026 Season World Championship/Play-In_Round 1_1_5",
+        "provider": "oracles-elixir"
+      },
+      "teamA": {
+        "code": "C9",
+        "id": "team:c9:cloud9",
+        "name": "Cloud9"
+      },
+      "teamB": {
+        "code": "KC",
+        "id": "team:kc:karmine-corp",
+        "name": "Karmine Corp"
+      },
+      "winnerId": "team:kc:karmine-corp"
+    }
+  ]
+}

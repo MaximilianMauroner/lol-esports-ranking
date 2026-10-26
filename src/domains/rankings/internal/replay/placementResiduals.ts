@@ -399,7 +399,7 @@ export function normalizeTournamentPhase(input: string): NormalizedTournamentPha
   if (/\b(?:knockout|elimination|bracket)\b/.test(phase) || /\b(?:upper|lower) round\b/.test(phase)) return 'knockout'
   if (/\bswiss\b/.test(phase)) return 'swiss'
   if (/\b(?:group|main) stage\b/.test(phase) || /^groups?$/.test(phase)) return 'group'
-  if (/\bplay[ -]?in\b/.test(input.toLowerCase())) return 'play-in'
+  if (/\bplay[ -]?ins?\b/.test(input.toLowerCase())) return 'play-in'
   if (/\b(?:round|stage)\s*(?:of\s*)?\d+\b/.test(phase) || /^round\s+\w+$/.test(phase)) return 'participation'
   return 'unknown'
 }

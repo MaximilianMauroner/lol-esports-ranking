@@ -264,7 +264,7 @@ function enrichWithLolEsportsReference(
 function phaseSpecificity(phase: string) {
   const normalized = phase.toLowerCase()
   if (/\b(?:grand|upper|lower) final\b|\bsemi ?final\b|\bquarter ?final\b/.test(normalized)) return 4
-  if (/\bfinals?\b|\bswiss\b|\bknockout\b|\bbracket\b|\bplay[ -]?in\b/.test(normalized)) return 3
+  if (/\bfinals?\b|\bswiss\b|\bknockout\b|\bbracket\b|\bplay[ -]?ins?\b/.test(normalized)) return 3
   if (/\bgroup\b|\bmain stage\b|\b(?:round|stage)\s*(?:of\s*)?\d+\b/.test(normalized)) return 2
   return 1
 }
