@@ -10,6 +10,9 @@ import { fixtureFeed, mainId, rankingArtifacts, swissSeries, team } from './fixt
 test('on-demand hypothetical stats load, cancel, retry, and replace changed scenarios without stale estimates', { timeout: 120_000 }, async () => {
   const feed = fixtureFeed()
   const ratings = rankingArtifacts()
+  const manifest = JSON.parse(ratings.get('/data/ranking-summary.json')!)
+  manifest.model.ratingScale = Object.fromEntries(Object.entries(manifest.model.ratingScale).reverse())
+  ratings.set('/data/ranking-summary.json', JSON.stringify(manifest))
   const requests: string[] = []
   let ratingsAvailable = true
   let holdRatings = false
