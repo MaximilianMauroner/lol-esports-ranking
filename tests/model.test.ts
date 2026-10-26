@@ -1441,8 +1441,8 @@ test('same-day predictions use the latest previously observed roster prior', () 
   assert.ok((sourcedRosterPoint?.ratingComponents.rosterPriorOffset ?? 0) > 0)
 })
 
-test('matches missing roster snapshots carry the last known roster prior', () => {
-  const model = buildRankingModel([
+test('missing target roster snapshots do not change the prior-priced roster offset', () => {
+  const corpus = (gapFillRosters: Partial<MatchRecord>) => buildRankingModel([
     matchFixture({
       id: 'player-history',
       date: '2026-01-01',
@@ -1470,13 +1470,17 @@ test('matches missing roster snapshots carry the last known roster prior', () =>
       sourceProvider: 'leaguepedia-cargo',
       sourceGameId: 'missing-roster-gap-fill',
       winner: 'Alpha',
+      ...gapFillRosters,
     }),
   ], { ...teams })
-  const sourcedPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'sourced-roster-prior')
-  const missingRosterPoint = standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'missing-roster-gap-fill')
+  const gapFillOffset = (model: ReturnType<typeof corpus>) =>
+    standingFor(model, 'Alpha').history.find((point) => point.source.gameId === 'missing-roster-gap-fill')?.ratingComponents.rosterPriorOffset
+  const missingRosterModel = corpus({})
+  const rosteredModel = corpus({ teamARoster: sourcedRosterFixture('alpha', 'blue', true), teamBRoster: sourcedRosterFixture('beta', 'red', false) })
 
-  assert.ok((sourcedPoint?.ratingComponents.rosterPriorOffset ?? 0) > 0)
-  assert.equal(missingRosterPoint?.ratingComponents.rosterPriorOffset, sourcedPoint?.ratingComponents.rosterPriorOffset)
+  assert.equal(missingRosterModel.predictions.find((prediction) => prediction.id === 'missing-roster-gap-fill')?.teamALineupEvidenceBasis, 'prior-observed')
+  assert.ok((gapFillOffset(missingRosterModel) ?? 0) > 0)
+  assert.equal(gapFillOffset(missingRosterModel), gapFillOffset(rosteredModel))
 })
 
 test('individual residual separates same-team players with identical team win rate', () => {

@@ -83,14 +83,12 @@ export function emitPregamePredictionsForDate({
   teams,
   state,
   pregamePlayerRatingEdges,
-  sideAdjustments,
   onExactState,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
   state: RatingRunState
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
-  sideAdjustments: Map<string, number>
   onExactState?: (state: ExactPregameProbabilityState) => void
 }) {
   const batch = ratingBatchSnapshot(state)
@@ -103,7 +101,6 @@ export function emitPregamePredictionsForDate({
         state,
         batch,
         pregamePlayerRatingEdges,
-        sideAdjustments,
         onExactState,
       }))
     }
@@ -153,7 +150,6 @@ function pregamePredictionForMatch({
   state,
   batch,
   pregamePlayerRatingEdges,
-  sideAdjustments,
   onExactState,
 }: {
   match: MatchRecord
@@ -162,7 +158,6 @@ function pregamePredictionForMatch({
   state: RatingRunState
   batch: RatingBatchSnapshot
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
-  sideAdjustments: Map<string, number>
   onExactState?: (state: ExactPregameProbabilityState) => void
 }): PregamePrediction {
   const leagueA = homeLeagueForMatch(match, 'A', teams)
@@ -189,10 +184,6 @@ function pregamePredictionForMatch({
   const noExecutionRatingB = powerRatingB + rosterPriorOffsetB + momentumB
   const predictionRatingA = noExecutionRatingA + executionResidualAdjustmentA * executionResidualPredictionWeight
   const predictionRatingB = noExecutionRatingB + executionResidualAdjustmentB * executionResidualPredictionWeight
-  const sideAdjustmentA = sideAdjustmentFor(match, 'A', sideAdjustments)
-  const sideAdjustmentB = sideAdjustmentFor(match, 'B', sideAdjustments)
-  const publishedRatingA = predictionRatingA + sideAdjustmentA
-  const publishedRatingB = predictionRatingB + sideAdjustmentB
   const playerAdjustedRatingA = powerRatingA + playerRatingAdjustmentA * playerRatingShadowWeight + momentumA
   const playerAdjustedRatingB = powerRatingB + playerRatingAdjustmentB * playerRatingShadowWeight + momentumB
   const executionAdjustedRatingA = noExecutionRatingA + executionResidualAdjustmentA * executionResidualShadowWeight
@@ -208,8 +199,8 @@ function pregamePredictionForMatch({
     series.format,
   )
   const publishedPrediction = neutralWinProbability(
-    { team: match.teamA, rating: publishedRatingA, uncertainty: batch.uncertainties.get(match.teamA) ?? maximumUncertainty },
-    { team: match.teamB, rating: publishedRatingB, uncertainty: batch.uncertainties.get(match.teamB) ?? maximumUncertainty },
+    { team: match.teamA, rating: predictionRatingA, uncertainty: batch.uncertainties.get(match.teamA) ?? maximumUncertainty },
+    { team: match.teamB, rating: predictionRatingB, uncertainty: batch.uncertainties.get(match.teamB) ?? maximumUncertainty },
     series.format,
   )
   const playerAdjustedPrediction = neutralWinProbability(
@@ -223,7 +214,7 @@ function pregamePredictionForMatch({
     series.format,
   )
   const variants = {
-    published: predictionVariantFromWinProbability(publishedPrediction, publishedRatingA, publishedRatingB),
+    published: predictionVariantFromWinProbability(publishedPrediction, predictionRatingA, predictionRatingB),
     'team-only': predictionVariantFromWinProbability(teamOnlyPrediction, powerRatingA, powerRatingB),
     'player-adjusted': predictionVariantFromWinProbability(playerAdjustedPrediction, playerAdjustedRatingA, playerAdjustedRatingB),
     'execution-baseline': predictionVariantFromWinProbability(executionBaselinePrediction, noExecutionRatingA, noExecutionRatingB),
@@ -232,9 +223,9 @@ function pregamePredictionForMatch({
 
   onExactState?.({
     precision: 'full', policy: 'prior-date', throughDate: state.processedThroughUtcDate ?? '',
-    home: { team: match.teamA, rating: publishedRatingA, uncertainty: batch.uncertainties.get(match.teamA)!,
+    home: { team: match.teamA, rating: predictionRatingA, uncertainty: batch.uncertainties.get(match.teamA)!,
       games: (state.wins.get(match.teamA) ?? 0) + (state.losses.get(match.teamA) ?? 0) },
-    away: { team: match.teamB, rating: publishedRatingB, uncertainty: batch.uncertainties.get(match.teamB)!,
+    away: { team: match.teamB, rating: predictionRatingB, uncertainty: batch.uncertainties.get(match.teamB)!,
       games: (state.wins.get(match.teamB) ?? 0) + (state.losses.get(match.teamB) ?? 0) },
   })
 
@@ -280,8 +271,8 @@ function pregamePredictionForMatch({
     teamBRosterContinuity: roundedContinuity(state.currentRosterContinuity.get(match.teamB)),
     teamAPlayerRatingAdjustment: playerRatingAdjustmentA,
     teamBPlayerRatingAdjustment: playerRatingAdjustmentB,
-    teamASideAdjustment: Number(sideAdjustmentA.toFixed(1)),
-    teamBSideAdjustment: Number(sideAdjustmentB.toFixed(1)),
+    teamASideAdjustment: 0,
+    teamBSideAdjustment: 0,
     teamAPlayerRatingCoverage: playerRatingEdge?.teamACoverage ?? 0,
     teamBPlayerRatingCoverage: playerRatingEdge?.teamBCoverage ?? 0,
     teamALineupEvidenceBasis: playerRatingEdge?.teamAEvidenceBasis ?? 'unavailable',
@@ -328,18 +319,17 @@ function rosterPriorOffsetsForMatch(
 ) {
   const playerRatingEdge = pregamePlayerRatingEdges.get(match.id)
   return {
-    teamA: rosterPriorOffsetForSide(match.teamARoster, playerRatingEdge?.teamAAdjustment, previousRosterPriorOffsets.get(match.teamA)),
-    teamB: rosterPriorOffsetForSide(match.teamBRoster, playerRatingEdge?.teamBAdjustment, previousRosterPriorOffsets.get(match.teamB)),
+    teamA: rosterPriorOffsetForSide(playerRatingEdge?.teamAAdjustment, previousRosterPriorOffsets.get(match.teamA)),
+    teamB: rosterPriorOffsetForSide(playerRatingEdge?.teamBAdjustment, previousRosterPriorOffsets.get(match.teamB)),
   }
 }
 
 function rosterPriorOffsetForSide(
-  roster: MatchRecord['teamARoster'],
   playerRatingAdjustment: number | undefined,
   previousRosterPriorOffset: number | undefined,
 ) {
-  if (!roster) return previousRosterPriorOffset ?? 0
-  return (playerRatingAdjustment ?? 0) * playerRatingPredictionWeight
+  if (playerRatingAdjustment === undefined) return previousRosterPriorOffset ?? 0
+  return playerRatingAdjustment * playerRatingPredictionWeight
 }
 
 function processRatingSeries({

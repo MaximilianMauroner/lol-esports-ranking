@@ -387,7 +387,6 @@ impl<'f> Pass<'f> {
         let strength = strength_signal(games, series.best_of, series.wins);
         let final_offsets = final_member.sides.each_ref().map(|side| {
             model.roster_prior_offset(
-                side.roster.as_ref(),
                 bits(side.player_adjustment),
                 bits(frame.teams[side.team].roster_prior_offset),
             )

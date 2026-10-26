@@ -43,7 +43,7 @@ function production(games: MatchRecord[], evidence: AvailableTournamentLifecycle
     phase: '', patch: request.patch, bestOf: request.bestOf, winner: '', teamAKills: 0, teamBKills: 0, teamAGold: 0, teamBGold: 0 }
   prepareRatingUtcDateBoundary({ dateMatches: [target], teams, state })
   let exact: ExactPregameProbabilityState | undefined
-  emitPregamePredictionsForDate({ matches: [target], teams, state, pregamePlayerRatingEdges: new Map(), sideAdjustments: new Map(), onExactState: value => { exact = value } })
+  emitPregamePredictionsForDate({ matches: [target], teams, state, pregamePlayerRatingEdges: new Map(), onExactState: value => { exact = value } })
   return exact
 }
 

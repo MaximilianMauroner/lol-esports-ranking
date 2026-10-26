@@ -100,7 +100,7 @@ function forecastFromHistory(history: ReturnType<typeof replayHistory>, request:
   }
   prepareRatingUtcDateBoundary({ dateMatches: [target], teams, state })
   let exact: ExactPregameProbabilityState | undefined
-  emitPregamePredictionsForDate({ matches: [target], teams, state, pregamePlayerRatingEdges: new Map(), sideAdjustments: new Map(),
+  emitPregamePredictionsForDate({ matches: [target], teams, state, pregamePlayerRatingEdges: new Map(),
     onExactState: value => { exact = value } })
   if (!exact) throw new Error('Replay did not produce exact state')
   return { state: exact, sourceObservedAt: [...new Set([request.scheduleObservedAt, ...history.observedAt])].sort((a, b) => a - b),

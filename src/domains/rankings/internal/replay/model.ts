@@ -261,7 +261,6 @@ export function processRatingUtcDateBoundary(input: RatingUtcDateBoundaryInput) 
     teams,
     state,
     pregamePlayerRatingEdges,
-    sideAdjustments,
   })
   const capture = processRatingSeriesForDate({
     matches: dateMatches,

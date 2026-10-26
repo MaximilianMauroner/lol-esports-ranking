@@ -280,15 +280,12 @@ impl Model {
 
     pub(crate) fn roster_prior_offset(
         &self,
-        roster: Option<&Roster>,
         player_adjustment: Option<f64>,
         previous: Option<f64>,
     ) -> f64 {
-        match roster {
+        match player_adjustment {
             None => previous.unwrap_or(0.0),
-            Some(_) => {
-                player_adjustment.unwrap_or(0.0) * self.player_rating_prediction_published_weight
-            }
+            Some(adjustment) => adjustment * self.player_rating_prediction_published_weight,
         }
     }
 

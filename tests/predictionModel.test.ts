@@ -161,7 +161,7 @@ test('same-day matches are predicted as one batch before any same-day update', (
   assert.equal(second?.teamARating, first?.teamARating)
 })
 
-test('side priors are prior-only and published predictions are side-aware', () => {
+test('prior-date forecasts do not use the target game side after prior blue-side wins', () => {
   const backtest = buildWalkForwardBacktest([
     matchFixture({ id: 'same-day-side-1', date: '2026-01-01', teamASide: 'blue', teamBSide: 'red', winner: 'Alpha' }),
     matchFixture({ id: 'same-day-side-2', date: '2026-01-01', teamASide: 'blue', teamBSide: 'red', winner: 'Alpha' }),
@@ -183,21 +183,19 @@ test('side priors are prior-only and published predictions are side-aware', () =
   assert.equal(bluePrediction.trainingMatchCount, redPrediction.trainingMatchCount)
   assert.equal(bluePrediction.teamASide, 'blue')
   assert.equal(redPrediction.teamASide, 'red')
-  for (const key of ['team-only', 'player-adjusted', 'execution-baseline', 'execution-adjusted'] as const) {
+  for (const key of ['published', 'team-only', 'player-adjusted', 'execution-baseline', 'execution-adjusted'] as const) {
     assert.equal(
       bluePrediction.variants[key].teamAGameWinProbability,
       redPrediction.variants[key].teamAGameWinProbability,
     )
   }
-  assert.ok((bluePrediction.teamASideAdjustment ?? 0) > 0)
-  assert.ok((bluePrediction.teamBSideAdjustment ?? 0) < 0)
+  assert.equal(bluePrediction.teamASideAdjustment, 0)
+  assert.equal(bluePrediction.teamBSideAdjustment, 0)
   assert.equal(bluePrediction.variants.published.teamAGameWinProbability, bluePrediction.teamAGameWinProbability)
-  assert.ok(bluePrediction.teamAGameWinProbability > bluePrediction.variants['player-adjusted'].teamAGameWinProbability)
-  assert.ok((redPrediction.teamASideAdjustment ?? 0) < 0)
-  assert.ok((redPrediction.teamBSideAdjustment ?? 0) > 0)
+  assert.equal(redPrediction.teamASideAdjustment, 0)
+  assert.equal(redPrediction.teamBSideAdjustment, 0)
   assert.equal(redPrediction.variants.published.teamAGameWinProbability, redPrediction.teamAGameWinProbability)
-  assert.ok(redPrediction.teamAGameWinProbability < redPrediction.variants['player-adjusted'].teamAGameWinProbability)
-  assert.ok(bluePrediction.teamAGameWinProbability > redPrediction.teamAGameWinProbability)
+  assert.equal(bluePrediction.teamAGameWinProbability, redPrediction.teamAGameWinProbability)
 })
 
 test('current game player stats do not affect their own pre-game player edge', () => {
