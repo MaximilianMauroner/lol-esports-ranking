@@ -957,7 +957,7 @@ function metadataOnlyRootArtifact(previous: Record<string, unknown>, sourceData:
     source: sourceData.source,
     dataMode: sourceData.dataMode,
     sources: sourceData.externalSources,
-    model: { version: transparentGprModelMetadata.version, configHash: transparentGprModelMetadata.configHash },
+    model: transparentGprModelMetadata,
     artifactMeta: artifactMetaFor({
       generatedAt,
       modelVersion: transparentGprModelMetadata.version,
