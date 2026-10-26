@@ -112,7 +112,7 @@ export function forecastTournamentSeries(
   }
   if (!ratingScaleFromUnknown(basis.model.ratingScale) || !ratingScaleFromUnknown(basis.snapshot.ratingScale)) return unavailable('missing-rating-scale', 'The published rating scale is required.')
   if (basis.snapshot.modelVersion !== basis.model.version || basis.snapshot.modelConfigHash !== basis.model.configHash
-    || JSON.stringify(basis.snapshot.ratingScale) !== JSON.stringify(basis.model.ratingScale)) {
+    || JSON.stringify(ratingScaleFromUnknown(basis.snapshot.ratingScale)) !== JSON.stringify(ratingScaleFromUnknown(basis.model.ratingScale))) {
     return unavailable('stale-model-basis', 'The chosen snapshot and model metadata disagree.')
   }
   if (!basis.snapshotId || !validTime(basis.ratingDataAsOf) || !validTime(basis.ratingPublishedAt)) return unavailable('stale-model-basis', 'A dated, identified current rating snapshot is required.')
