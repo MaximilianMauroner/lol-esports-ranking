@@ -75,6 +75,16 @@ test('forecast matches public model for decisive formats, swapped teams and an e
   assert.equal(forecastTournamentSeries(series(5), basis(), { seriesSource: 'lolesports-persisted-site-api', sideAssumption: 'home-blue', sideBasis: 'fixture side assignment' }).status, 'unavailable')
 })
 
+test('forecast accepts equal rating scales in different field order but rejects changed values', () => {
+  const chosen = basis()
+  chosen.model.ratingScale = Object.fromEntries(Object.entries(customScale).reverse()) as typeof customScale
+  assert.equal(forecastTournamentSeries(series(), chosen, { seriesSource: 'lolesports-persisted-site-api' }).status, 'ready')
+  chosen.model.ratingScale.spreadMultiplier *= 2
+  const result = forecastTournamentSeries(series(), chosen, { seriesSource: 'lolesports-persisted-site-api' })
+  assert.equal(result.status, 'unavailable')
+  assert.equal(result.status === 'unavailable' && result.reason, 'stale-model-basis')
+})
+
 test('unknown and tie-capable formats, absent source IDs and unmapped aliases fail closed', () => {
   for (const bestOf of [null, 0, 2, 4, 7]) {
     const result = forecastTournamentSeries(series(bestOf), basis(), { seriesSource: 'lolesports-persisted-site-api' })

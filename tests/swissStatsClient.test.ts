@@ -90,6 +90,24 @@ test('unknown Play-In identity never fetches ratings, and failed reads can retry
   retry()
 })
 
+test('equal rating scales with different field order can start stats', async () => {
+  const states: SwissStatsState[] = []
+  const worker = ownedWorker()
+  const reordered: typeof fetch = async (input, init) => {
+    const response = await fetcher(input, init)
+    if (!String(input).includes('ranking-summary.json')) return response
+    const manifest = await response.json()
+    manifest.model.ratingScale = Object.fromEntries(Object.entries(manifest.model.ratingScale).reverse())
+    return Response.json(manifest)
+  }
+  const stop = startSwissStats(baseline.teams, scenario, (state) => states.push(state), reordered, () => worker)
+  try {
+    await waitFor(() => worker.request !== null || states.at(-1)?.status === 'error')
+    assert.equal(states.at(-1)?.status, 'running')
+    assert.ok(worker.request)
+  } finally { stop() }
+})
+
 test('a snapshot scale mismatch cannot start the worker or produce estimates', async () => {
   const states: SwissStatsState[] = []
   let created = false
