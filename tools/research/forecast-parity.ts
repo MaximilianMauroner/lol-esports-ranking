@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import ts from 'typescript'
+import { isBuiltin } from 'node:module'
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { ForecastCandidate, ForecastRequestFile } from '../../scripts/rankings/export-pregame-series.ts'
@@ -53,7 +55,7 @@ export function filePin(path: string): FilePin {
 }
 
 function sourcePath(root: string, path: string): string {
-  if (isAbsolute(path) || path.includes('\\') || path.split('/').some(part => !part || part === '.' || part === '..')) {
+  if (!/^(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(path)) {
     throw new Error('INVALID_RELATIVE_SOURCE_PATH')
   }
   const target = resolve(root, path)
@@ -65,6 +67,49 @@ function consumerPins(configuration: ParityConfiguration): FilePin[] {
   const pins = configuration.consumer.sourceDigests
   assert.deepEqual(pins.map(pin => pin.path).sort(), [...requiredConsumerFiles].sort(), 'CONSUMER_CLOSURE_MISMATCH')
   return pins.map(pin => ({ ...pin, path: sourcePath(configuration.consumer.root, pin.path) }))
+}
+
+function verifySourceClosure(entries: string[], pins: FilePin[]) {
+  const pinned = new Map(pins.map(pin => [pin.path, pin]))
+  assert.equal(pinned.size, pins.length, 'DUPLICATE_SOURCE_PIN')
+  const visited = new Set<string>()
+  const visit = (path: string) => {
+    if (visited.has(path)) return
+    const pin = pinned.get(path)
+    if (!pin) throw new Error(`UNPINNED_SOURCE_DEPENDENCY ${path}`)
+    const bytes = readPin(pin)
+    visited.add(path)
+    if (path.endsWith('.json')) return
+    const source = ts.createSourceFile(path, bytes.toString(), ts.ScriptTarget.Latest, true)
+    const dependency = (specifier: ts.Expression) => {
+      if (!ts.isStringLiteralLike(specifier)) throw new Error(`DYNAMIC_SOURCE_DEPENDENCY ${path}`)
+      if (isBuiltin(specifier.text)) return
+      if (!specifier.text.startsWith('.')) throw new Error(`UNRESOLVED_SOURCE_DEPENDENCY ${specifier.text} in ${path}`)
+      if (!/^\.{1,2}\/(?:(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*|\.\.)\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:[cm]?ts|[cm]js|json)$/.test(specifier.text)
+        || /\.d\.[cm]?ts$/.test(specifier.text)) {
+        throw new Error(`UNSUPPORTED_SOURCE_DEPENDENCY ${specifier.text} in ${path}`)
+      }
+      const target = resolve(dirname(path), specifier.text)
+      const replacement = target.endsWith('.mjs') ? target.slice(0, -4) + '.mts'
+        : target.endsWith('.cjs') ? target.slice(0, -4) + '.cts' : undefined
+      if (replacement && existsSync(replacement)) throw new Error(`AMBIGUOUS_SOURCE_DEPENDENCY ${specifier.text} in ${path}`)
+      visit(target)
+    }
+    const walk = (node: ts.Node) => {
+      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) dependency(node.moduleSpecifier)
+      if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && node.moduleReference.expression) {
+        dependency(node.moduleReference.expression)
+      }
+      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+        || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+        if (node.arguments.length !== 1) throw new Error(`DYNAMIC_SOURCE_DEPENDENCY ${path}`)
+        dependency(node.arguments[0])
+      }
+      ts.forEachChild(node, walk)
+    }
+    walk(source)
+  }
+  entries.forEach(visit)
 }
 
 export function loadParityConfiguration(path: string, expectedHash: string): ParityConfiguration {
@@ -85,8 +130,6 @@ export async function verifyForecastParity(configuration: ParityConfiguration) {
   const pins = [...consumerPins(configuration), exporter.entry, exporter.manifest, exporter.requests,
     exporter.candidate, ...Object.values(artifacts)]
   for (const pin of pins) readPin(pin)
-  const consumer = await import(pathToFileURL(resolve(configuration.consumer.root, 'src/lol/forecast-import.ts')).href) as Consumer
-  const imported = consumer.verifyForecastExport(exporter)
   const manifest = JSON.parse(readPin(artifacts.manifest).toString()) as ExportManifest
   const sourceRoot = manifest.sourceRoot ?? exporter.cwd
   const sourcePins = [...manifest.sourceDigests.map(pin => ({ ...pin, path: sourcePath(sourceRoot, pin.path) })),
@@ -96,6 +139,11 @@ export async function verifyForecastParity(configuration: ParityConfiguration) {
     if (!manifest.sourceDigests.some(pin => pin.path === path)) throw new Error('MISSING_CANONICAL_PUBLIC_SOURCE')
   }
   for (const pin of sourcePins) readPin(pin)
+  verifySourceClosure(['src/domains/rankings/forecast.ts', 'src/domains/rankings/build.ts'].map(path => sourcePath(sourceRoot, path)),
+    manifest.sourceDigests.map(pin => ({ ...pin, path: sourcePath(sourceRoot, pin.path) })))
+  verifySourceClosure([sourcePath(configuration.consumer.root, 'src/lol/forecast-import.ts')], consumerPins(configuration))
+  const consumer = await import(pathToFileURL(resolve(configuration.consumer.root, 'src/lol/forecast-import.ts')).href) as Consumer
+  const imported = consumer.verifyForecastExport(exporter)
   const api = await import(pathToFileURL(sourcePath(sourceRoot, 'src/domains/rankings/forecast.ts')).href) as typeof import('../../src/domains/rankings/forecast.ts')
   const model = await import(pathToFileURL(sourcePath(sourceRoot, 'src/domains/rankings/build.ts')).href) as typeof import('../../src/domains/rankings/build.ts')
   const candidate = JSON.parse(readPin(exporter.candidate).toString()) as ForecastCandidate

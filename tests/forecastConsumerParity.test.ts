@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import ts from 'typescript'
 import { after, before, test } from 'node:test'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { exportModelCandidate } from '../tools/calibration/export-model-candidate.ts'
 import { createSyntheticParity } from '../tools/research/synthetic-parity.ts'
@@ -165,4 +167,87 @@ test('actual retained acquired receipt remains NONCAUSAL_FORECAST without timest
   console.log(JSON.stringify({ check: 'actual-acquired-chronology-rejection', receiptSha256: origin.receiptSha256,
     error: 'NONCAUSAL_FORECAST', directPredictorCalls: 0, newRankingReplays: 0,
     scope: 'Chronology rejection precedes source and state verification. This test does not claim historical parity.' }))
+})
+
+
+test('unproven runtime source rejects before execution under the same configuration', { skip }, async () => {
+  const cases = [
+    { mode: 'missing-pin', pinned: null, executable: 'pregameForecast.ts', specifier: 'pregameForecast.ts',
+      pinnedContent: 'typescript', runtimeContent: 'typescript', expected: /UNPINNED_SOURCE_DEPENDENCY/ },
+    { mode: 'extensionless-declaration', pinned: 'pregameForecast.d.ts', executable: 'pregameForecast.js', specifier: 'pregameForecast',
+      pinnedContent: 'declaration', runtimeContent: 'javascript', expected: /UNSUPPORTED_SOURCE_DEPENDENCY/ },
+    { mode: 'mjs-typescript-sibling', pinned: 'pregameForecast.mjs', executable: 'pregameForecast.mts', specifier: 'pregameForecast.mjs',
+      pinnedContent: 'javascript', runtimeContent: 'typescript', expected: /AMBIGUOUS_SOURCE_DEPENDENCY/ },
+    { mode: 'percent-encoded', pinned: 'pregameForecas%74.ts', executable: 'pregameForecast.ts', specifier: 'pregameForecas%74.ts',
+      pinnedContent: 'typescript', runtimeContent: 'typescript', expected: /INVALID_RELATIVE_SOURCE_PATH/ },
+    { mode: 'percent-encoded-import', pinned: 'pregameForecast.d.ts', executable: 'pregameForecast.ts', specifier: 'pregameForecas%74.ts',
+      pinnedContent: 'declaration', runtimeContent: 'typescript', expected: /UNSUPPORTED_SOURCE_DEPENDENCY/ },
+  ] as const
+  for (const route of cases) {
+    const configuration = await derived(`incomplete-source-${route.mode}`)
+    const sourceRoot = join(directory, `incomplete-source-root-${route.mode}`)
+    const manifest = await read(configuration.artifacts.manifest.path)
+    for (const pin of manifest.sourceDigests as Array<{ path: string; sha256: string }>) {
+      const target = join(sourceRoot, pin.path)
+      await mkdir(resolve(target, '..'), { recursive: true })
+      await copyFile(join(configuration.exporter.cwd, pin.path), target)
+    }
+    await copyFile(join(configuration.exporter.cwd, 'pnpm-lock.yaml'), join(sourceRoot, 'pnpm-lock.yaml'))
+    const projection = 'src/domains/rankings/internal/projections/'
+    const omitted = `${projection}pregameForecast.ts`
+    const executable = projection + route.executable
+    manifest.sourceDigests = manifest.sourceDigests.filter((pin: { path: string }) => pin.path !== omitted)
+    if (route.pinned) {
+      const predictor = await readFile(join(sourceRoot, omitted), 'utf8')
+      const contents = {
+        typescript: predictor,
+        javascript: ts.transpileModule(predictor, { compilerOptions: {
+          module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023,
+        } }).outputText,
+        declaration: 'export declare function predictPregameSeries(input: unknown): unknown;\n',
+      }
+      const selected = projection + route.pinned
+      await writeFile(join(sourceRoot, selected), contents[route.pinnedContent])
+      await writeFile(join(sourceRoot, executable), contents[route.runtimeContent])
+      if (omitted !== selected && omitted !== executable) await rm(join(sourceRoot, omitted))
+      for (const path of ['src/domains/rankings/forecast.ts', 'src/domains/rankings/internal/replay/simpleEloReplay.ts']) {
+        const bytes = await readFile(join(sourceRoot, path), 'utf8')
+        await writeFile(join(sourceRoot, path), bytes.replace('projections/pregameForecast.ts', `projections/${route.specifier}`))
+      }
+      manifest.sourceDigests.push({ path: selected, sha256: filePin(join(sourceRoot, selected)).sha256 })
+      manifest.sourceDigests = manifest.sourceDigests.map((pin: { path: string }) => ({
+        path: pin.path, sha256: filePin(join(sourceRoot, pin.path)).sha256,
+      }))
+    }
+    configuration.exporter.cwd = sourceRoot
+    configuration.exporter.entry = filePin(join(sourceRoot, 'scripts/rankings/export-pregame-series.ts'))
+    manifest.sourceHash = sha256(JSON.stringify(manifest.sourceDigests))
+    await writeFile(configuration.artifacts.manifest.path, JSON.stringify(manifest))
+    configuration.artifacts.manifest = filePin(configuration.artifacts.manifest.path)
+    const receipts = (await readFile(configuration.exporter.output, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    for (const receipt of receipts) receipt.sourceHash = manifest.sourceHash
+    receipts[0].homeSeriesWinProbability += 0.001
+    receipts[0].awaySeriesWinProbability -= 0.001
+    await writeFile(configuration.exporter.output, lines(receipts))
+    configuration.artifacts.forecast = filePin(configuration.exporter.output)
+    const configPath = join(directory, `incomplete-source-config-${route.mode}.json`)
+    await writeFile(configPath, JSON.stringify(configuration))
+    const configPin = filePin(configPath)
+    const manifestPin = filePin(configuration.artifacts.manifest.path)
+    const argv = ['--import', resolve('node_modules/tsx/dist/loader.mjs'), resolve('tools/research/forecast-parity.ts'),
+      '--config', configPath, '--sha256', configPin.sha256]
+    const control = spawnSync(process.execPath, argv, { encoding: 'utf8' })
+    const marker = join(directory, `unpinned-predictor-executed-${route.mode}`)
+    await writeFile(join(sourceRoot, executable), `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(marker)}, 'executed')\nexport const predictPregameSeries = ({ metadata }) => metadata\n`)
+    const bypass = spawnSync(process.execPath, argv, { encoding: 'utf8' })
+    for (const result of [control, bypass]) {
+      assert.equal(result.status, 1, result.stdout + result.stderr)
+      assert.match(result.stderr, route.expected, result.stdout + result.stderr)
+    }
+    assert.deepEqual(filePin(configPath), configPin)
+    assert.deepEqual(filePin(configuration.artifacts.manifest.path), manifestPin)
+    assert.equal(existsSync(marker), false)
+  }
+  console.log(JSON.stringify({ check: 'runtime-source-closure', controls: cases.length * 2, sameConfigurations: true,
+    unpinnedPredictorExecuted: false, directPredictorCalls: 0 }))
 })

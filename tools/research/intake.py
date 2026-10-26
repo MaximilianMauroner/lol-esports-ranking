@@ -243,11 +243,31 @@ def references(files, dependencies):
     for name, record in files.items():
         if not name.endswith('.json'):
             continue
+        required = Path(name).name in ('input-pins.json', 'script-pins.json')
         try:
-            stack = [('', load(Path(record['original'])))]
+            value = load(Path(record['original']))
         except (json.JSONDecodeError, UnicodeDecodeError):
+            require(not required, f'Malformed required pin file {name}')
             unresolved.append({'from': name, 'reason': 'opaque-non-json-bytes'})
             continue
+        original_value = value
+        if required:
+            if isinstance(value, dict):
+                if Path(name).name == 'script-pins.json':
+                    scripts = value.get('scripts')
+                    require(isinstance(scripts, dict) and scripts, f'Invalid required script pins {name}')
+                    value = [{'path': path, 'sha256': digest} for path, digest in scripts.items()]
+                else:
+                    require(value and all(isinstance(entry, dict) for entry in value.values()), f'Invalid required input pins {name}')
+                    value = [{'path': path, 'sha256': entry.get('sha256')} for path, entry in value.items()]
+            require(isinstance(value, list) and value, f'Empty or invalid required pin file {name}')
+            for entry in value:
+                require(isinstance(entry, dict) and isinstance(entry.get('path'), str) and entry['path']
+                        and isinstance(entry.get('sha256'), str) and SHA.fullmatch(entry['sha256']),
+                        f'Invalid required pin record {name}')
+        stack = [('', original_value)]
+        if value is not original_value:
+            stack.append(('/required-pins', value))
         while stack:
             pointer, value = stack.pop()
             if isinstance(value, dict):
@@ -281,13 +301,6 @@ def freeze(root, spec_path, expected_sha):
     spec = pinned(spec_path, expected_sha)
     require(spec['schema'] == 'research-intake-spec-v1', 'Unknown intake spec')
     inventory = confined(root, 'inventory.json')
-    if inventory.exists():
-        manifest = load(inventory)
-        require(manifest['specSha256'] == expected_sha, 'Inventory spec conflict')
-        validate(manifest)
-        recover_staging(root, manifest)
-        check_originals(manifest)
-        return manifest
     dependencies = {label: verify(confined(root.parent, dep['siblingDirectory']), dep['manifestSha256'])['manifest']
                     for label, dep in spec.get('bundleDependencies', {}).items()}
     files = {}
@@ -309,6 +322,16 @@ def freeze(root, spec_path, expected_sha):
                 'documents': pins, 'dependencies': local, 'bundleDependencies': spec.get('bundleDependencies', {}),
                 'externalDependencies': external, 'sourceRepositories': {}, 'specSha256': expected_sha}
     validate(manifest)
+    if inventory.exists():
+        existing = load(inventory)
+        validate(existing)
+        require(set(existing) == set(manifest) and all(existing[key] == value for key, value in manifest.items()
+                if key != 'frozenAt'), 'INVENTORY_SPEC_MISMATCH')
+        recover_staging(root, existing)
+        check_originals(existing)
+        for name, expected in existing['documents'].items():
+            require(signature(confined(root, name)) == pin(expected), f'Frozen document conflict {name}')
+        return existing
     recover_staging(root, manifest)
     for name, value in documents.items():
         publish(root, name, data=encode(value))

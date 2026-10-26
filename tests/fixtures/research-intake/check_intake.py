@@ -176,6 +176,97 @@ class IntakeTest(unittest.TestCase):
         self.run_cli('freeze', '--spec', str(self.spec), sha=digest(self.spec), success=False)
         self.assertFalse((self.root / 'manifest.json').exists())
 
+    def test_required_pin_files_reject_malformed_json_and_records(self):
+        invalid = [b'{invalid-json', b'[]', b'[{"path":"result.json","sha256":"bad"}]',
+                   b'[{"sha256":"' + digest(self.original).encode() + b'"}]', b'{"scripts":[]}']
+        for index, body in enumerate(invalid):
+            with self.subTest(index=index):
+                self.root = self.home / f'invalid-required-{index}'
+                self.root.mkdir()
+                name = 'script-pins.json' if index == 4 else 'input-pins.json'
+                source = self.source / name
+                source.write_bytes(body)
+                self.spec_value['files'][f'archive/study/{name}'] = {'original': str(source),
+                    'bytes': len(body), 'sha256': digest(source)}
+                write(self.spec, self.spec_value)
+                self.run_cli('freeze', '--spec', str(self.spec), sha=digest(self.spec), success=False)
+                self.assertFalse((self.root / 'inventory.json').exists())
+                self.spec_value['files'].pop(f'archive/study/{name}')
+
+    def test_keyed_inputs_and_script_maps_have_real_dependency_edges(self):
+        for index, (name, value) in enumerate([
+            ('input-pins.json', {str(self.original): {'sha256': digest(self.original)}}),
+            ('script-pins.json', {'scripts': {'result.json': digest(self.original)}}),
+        ]):
+            with self.subTest(name=name):
+                self.root = self.home / f'keyed-required-{index}'
+                self.root.mkdir()
+                source = self.source / name
+                write(source, value)
+                self.spec_value['files'][f'archive/study/{name}'] = {'original': str(source),
+                    'bytes': source.stat().st_size, 'sha256': digest(source)}
+                write(self.spec, self.spec_value)
+                self.run_cli('freeze', '--spec', str(self.spec), sha=digest(self.spec))
+                inventory = json.loads((self.root / 'inventory.json').read_bytes())
+                self.assertEqual(len(inventory['dependencies']), 1)
+                self.anchor = digest(self.root / 'inventory.json')
+                self.import_bundle()
+                self.spec_value['files'].pop(f'archive/study/{name}')
+
+    def test_script_map_keeps_nested_required_input_records(self):
+        for index, present in enumerate([False, True]):
+            with self.subTest(present=present):
+                self.root = self.home / f'nested-script-input-{index}'
+                self.root.mkdir()
+                extra = self.source / 'extra.json'
+                write(extra, {'retained': True})
+                value = {'scripts': {'result.json': digest(self.original)},
+                         'inputs': [{'path': str(extra), 'sha256': digest(extra)}]}
+                source = self.source / 'script-pins.json'
+                write(source, value)
+                self.spec_value['files']['archive/study/script-pins.json'] = {'original': str(source),
+                    'bytes': source.stat().st_size, 'sha256': digest(source)}
+                if present:
+                    self.spec_value['files']['archive/study/extra.json'] = {'original': str(extra),
+                        'bytes': extra.stat().st_size, 'sha256': digest(extra)}
+                write(self.spec, self.spec_value)
+                self.run_cli('freeze', '--spec', str(self.spec), sha=digest(self.spec), success=present)
+                if present:
+                    inventory = json.loads((self.root / 'inventory.json').read_bytes())
+                    self.assertEqual({edge['to'] for edge in inventory['dependencies']},
+                                     {'archive/study/result.json', 'archive/study/extra.json'})
+                    self.anchor = digest(self.root / 'inventory.json')
+                    self.import_bundle()
+                else:
+                    self.assertFalse((self.root / 'inventory.json').exists())
+                self.spec_value['files'].pop('archive/study/script-pins.json')
+                self.spec_value['files'].pop('archive/study/extra.json', None)
+
+    def test_repeat_freeze_cannot_shrink_the_pinned_selection(self):
+        self.root = self.home / 'changed-inventory'
+        self.root.mkdir()
+        second = self.source / 'second.json'
+        write(second, {'retained': True})
+        self.spec_value['files']['archive/study/second.json'] = {'original': str(second),
+            'bytes': second.stat().st_size, 'sha256': digest(second)}
+        write(self.spec, self.spec_value)
+        self.run_cli('freeze', '--spec', str(self.spec), sha=digest(self.spec))
+        inventory_path = self.root / 'inventory.json'
+        inventory = json.loads(inventory_path.read_bytes())
+        inventory['files'].pop('archive/study/second.json')
+        relocation_path = self.root / 'relocation.json'
+        relocation = json.loads(relocation_path.read_bytes())
+        relocation['files'].pop(str(second))
+        relocation_path.chmod(0o644)
+        write(relocation_path, relocation)
+        inventory['documents']['relocation.json'] = {'bytes': relocation_path.stat().st_size,
+            'sha256': digest(relocation_path)}
+        inventory_path.chmod(0o644)
+        write(inventory_path, inventory)
+        before = inventory_path.read_bytes()
+        self.run_cli('freeze', '--spec', str(self.spec), sha=digest(self.spec), success=False)
+        self.assertEqual(inventory_path.read_bytes(), before)
+
 
 if __name__ == '__main__':
     unittest.main()
