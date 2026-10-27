@@ -1770,6 +1770,7 @@ function compactPlayersForSnapshot(
         latestObservedAt: player.source?.date,
         latestObservedEvent: player.source?.event,
         ...(detail === 'default' ? { appearance: compactPlayerAppearance(player.appearance) } : {}),
+        ...(player.statsPower ? { statsPower: player.statsPower } : {}),
       }
       return compact
     })

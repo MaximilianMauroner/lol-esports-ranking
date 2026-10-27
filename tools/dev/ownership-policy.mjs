@@ -50,6 +50,7 @@ const domainDefinitions = {
       'internal/replay/ratingCheckpointInventory.ts',
       'internal/replay/incremental/',
       'internal/players/playerModel.ts',
+      'internal/players/playerStatsPower.ts',
       'internal/players/playerResumeLedger.ts',
       'internal/projections/snapshot.ts',
       'internal/projections/predictionModel.ts',

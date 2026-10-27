@@ -11,7 +11,7 @@ import { Select } from '../../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { playerLeaderboardForScope } from '../../domains/rankings/read'
 import type { Role, SnapshotFilter } from '../../domains/rankings/types'
-import { formatNumber, formatRating } from '../../shared/display'
+import { formatDecimal, formatNumber, formatRating } from '../../shared/display'
 
 const ROLES: readonly Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 const ROLE_FILTERS = ['All', ...ROLES] as const
@@ -39,6 +39,8 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
   useHashSync('players', { player: filters.search, role: filters.role === 'All' ? '' : filters.role })
   const directory = state.status === 'ready' ? state.data : undefined
   const players = useMemo(() => playerLeaderboardForScope(directory, filter), [directory, filter])
+  const statsPowerVersion = players.find((player) => player.statsPower)?.statsPower?.version
+  const scoreLabel = statsPowerVersion ? 'Stats Power' : 'Role Power'
   const search = filters.search.trim().toLowerCase()
   const visible = players.filter((player) =>
     (filters.role === 'All' || player.role === filters.role)
@@ -99,26 +101,42 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
           ) : (
             <Card className="min-w-0 overflow-hidden p-0">
               <Table aria-label="Player rankings" tabIndex={0} className="focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--focus)]">
-                <caption className="sr-only">Player rankings for {scopeLabel}, ordered by score, highest first. Games show each player's sample size.</caption>
+                <caption className="sr-only">Player rankings for {scopeLabel}, ordered by {scoreLabel}, highest first. Equal scores share a rank.{statsPowerVersion ? ' Stat games count games with usable role stats in this scope, including previous teams.' : ''} Games count games credited to the displayed team where available, otherwise all rated games.</caption>
                 <TableHeader>
                   <TableRow>
                     <TableHead scope="col" className="pl-4">Rank</TableHead>
                     <TableHead scope="col">Player</TableHead>
                     <TableHead scope="col">Team</TableHead>
                     <TableHead scope="col">Role</TableHead>
-                    <TableHead scope="col" className="text-right" aria-sort="descending">Score</TableHead>
+                    <TableHead scope="col" className="text-right" aria-sort="descending">{scoreLabel}</TableHead>
+                    {statsPowerVersion ? (
+                      <>
+                        <TableHead scope="col" className="text-right">Stat games</TableHead>
+                        <TableHead scope="col" className="text-right">Role Power</TableHead>
+                      </>
+                    ) : null}
                     <TableHead scope="col" className="pr-4 text-right">Games</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visible.map((player) => (
                     <TableRow key={player.id}>
-                      <TableCell className="pl-4 font-mono text-muted-foreground">{player.rank}</TableCell>
+                      <TableCell className="pl-4 font-mono text-muted-foreground">{player.leaderboardRank}</TableCell>
                       <TableCell className="font-semibold text-[var(--text-strong)]">{player.name}</TableCell>
                       <TableCell className="max-w-44 whitespace-normal">{player.team}</TableCell>
                       <TableCell>{player.role}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold tabular-nums">{formatRating(player.rating)}</TableCell>
-                      <TableCell className="pr-4 text-right font-mono tabular-nums">{formatNumber(player.games)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold tabular-nums">
+                        {player.leaderboardScore.kind === 'stats-power' ? formatDecimal(player.leaderboardScore.value) : formatRating(player.leaderboardScore.value)}
+                        {statsPowerVersion && player.leaderboardScore.kind === 'role-power' ? <span className="block text-2xs font-normal text-muted-foreground">Role Power</span> : null}
+                        {player.statsPower?.priorOnly ? <span className="block text-2xs font-normal text-muted-foreground">League anchor</span> : null}
+                      </TableCell>
+                      {statsPowerVersion ? (
+                        <>
+                          <TableCell className="text-right font-mono tabular-nums">{formatNumber(player.statsPower?.sampleGames)}</TableCell>
+                          <TableCell className="text-right font-mono tabular-nums">{formatRating(player.rating)}</TableCell>
+                        </>
+                      ) : null}
+                      <TableCell className="pr-4 text-right font-mono tabular-nums">{formatNumber(player.teamGames ?? player.games)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -129,7 +147,11 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
       )}
       {directory ? (
         <p className="break-words text-xs leading-relaxed text-muted-foreground">
-          Source {directory.sourceProvider}. Score model {directory.modelVersion}, configuration {directory.modelConfigHash}. Scores include individual stats, results, opponent strength and event context. Games are the observed sample, not a measure of certainty.
+          Source {directory.sourceProvider}.{' '}
+          {statsPowerVersion
+            ? `Stats Power ${statsPowerVersion} scores lane leads at 15 minutes, kill participation and ward activity against each role's average. It weights each game by event and home-league strength, then halves its weight for every 90 days before the latest match date in the supplied history. It pulls small samples to the league anchor and excludes wins, KDA and gold share. It does not decay with wall-clock inactivity. Stat games count raw games with usable role stats in this scope, including previous teams. `
+            : ''}
+          Role Power uses model {directory.modelVersion}, configuration {directory.modelConfigHash}, and includes individual stats, results, opponent strength and event context. Its history and deltas still track Role Power. Games count games credited to the displayed team where available, otherwise all rated games. Game counts do not measure certainty.
         </p>
       ) : null}
     </section>

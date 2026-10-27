@@ -2,10 +2,6 @@ import {
   initialPlayerRating,
   sourcedPlayerKFactor,
   playerRatingScale,
-  playerLeagueAnchorRating,
-  playerLeagueBaselineCoefficient,
-  playerLeagueBaselineBounds,
-  playerLeagueSignalMultiplierByTier,
   playerPregameEdgeCoefficient,
   playerPregameEdgeSoftCap,
   playerPregameEdgeCap,
@@ -23,8 +19,9 @@ import {
   individualResidualMinimumRankedGames,
   roleStatBaselines,
   playerModelParameters,
+  playerBaselineForLeague,
+  playerSignalMultiplierForLeague,
 } from '../policy/playerPolicy.ts'
-import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from '../policy/leagueTiers.ts'
 import type {
   LeagueStrength,
   MatchRecord,
@@ -51,7 +48,8 @@ import {
 } from '../replay/eventWeighting.ts'
 import { homeLeagueForMatch, sourceTraceFor } from '../evidence/matchContext.ts'
 import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries, type CanonicalSeries } from '../evidence/seriesResolver.ts'
-import { mergeRosterObservation, rosterFingerprint } from './rosters.ts'
+import { isCompleteSourcedMatchup, mergeRosterObservation, rosterFingerprint } from './rosters.ts'
+import { buildPlayerStatsPower } from './playerStatsPower.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -238,6 +236,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
     }
   }
 
+  const statsPower = buildPlayerStatsPower(sortedMatches, context, leagueRatings)
   const players = Array.from(state.ratings.entries())
     .map(([id, rating]): PlayerStanding | null => {
       const profile = state.profiles.get(id)
@@ -246,6 +245,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
       const playerShare = finalShares.get(id) ?? fallbackPlayerShare(profile)
       const league = leagueForProfile(profile, context)
       const rolePowerRating = publishedPlayerRating(rating, league, leagueRatings)
+      const playerStatsPower = statsPower.get(id)?.get(profile.role)
       return {
         id,
         name: profile.name,
@@ -272,6 +272,7 @@ function buildSourcedPlayerModel(matches: MatchRecord[], context: PlayerRatingCo
         appearance: appearanceSummaryFor(id, profile, state),
         diagnostics: diagnosticsSummaryFor(id, state),
         individualResidual: individualResidualSummaryFor(id, profile, rolePowerRating, state),
+        ...(playerStatsPower ? { statsPower: playerStatsPower } : {}),
       }
     })
     .filter((player): player is PlayerStanding => player !== null)
@@ -1172,18 +1173,6 @@ function teamRosterEntries(match: MatchRecord) {
   ] as const
 }
 
-function isCompleteSourcedMatchup(
-  roster: MatchRecord['teamARoster'],
-  opponentRoster: MatchRecord['teamARoster'],
-) {
-  if (roster?.completeness !== 'complete-five-role' || opponentRoster?.completeness !== 'complete-five-role') {
-    return false
-  }
-  return roster.players.every((player) =>
-    player.stats && opponentRoster.players.some((opponent) => opponent.role === player.role && opponent.stats),
-  )
-}
-
 type ReferencePrice = Readonly<{
   adjustment: number
   coverage: number
@@ -1318,22 +1307,9 @@ function leagueForProfile(profile: PlayerProfile, context: PlayerRatingContext) 
   return context.teams?.[profile.team]?.league ?? 'Unknown'
 }
 
-function playerBaselineForLeague(league: string, leagueRatings: Map<string, number>) {
-  const leagueRating = cappedLeagueRatingForTier(league, leagueRatings.get(league) ?? leaguePriorFor(league))
-  return Number(clamp(
-    initialPlayerRating + (leagueRating - playerLeagueAnchorRating) * playerLeagueBaselineCoefficient,
-    playerLeagueBaselineBounds.min,
-    playerLeagueBaselineBounds.max,
-  ).toFixed(1))
-}
-
 function publishedPlayerRating(rawRating: number, league: string, leagueRatings: Map<string, number>) {
   const baseline = playerBaselineForLeague(league, leagueRatings)
   return Number((baseline + (rawRating - baseline) * playerSignalMultiplierForLeague(league)).toFixed(1))
-}
-
-function playerSignalMultiplierForLeague(league: string) {
-  return playerLeagueSignalMultiplierByTier[leagueTierFor(league).tier]
 }
 
 function statScore(value: number | undefined, baseline: number, spread: number) {

@@ -1,4 +1,4 @@
-import type { PublicPlayerDirectory, SnapshotFilter } from '../../types.ts'
+import type { CompactPlayer, PublicPlayerDirectory, SnapshotFilter } from '../../types.ts'
 import { snapshotKey } from '../published/schema.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
@@ -14,17 +14,40 @@ export function emptyPlayerScope(filter: SnapshotFilter): ResolvedPlayerScope {
   return { players: [], currentLineups: {}, label: playerScopeLabel(filter, 'current') }
 }
 
+export type PlayerLeaderboardScore = { kind: 'stats-power' | 'role-power'; value: number }
+
+type PlayerLeaderboardRow = CompactPlayer & { leaderboardRank: number; leaderboardScore: PlayerLeaderboardScore }
+
+/** The one score that orders the Players leaderboard: finite Stats Power, otherwise Role Power. */
+export function playerLeaderboardScore(player: Pick<CompactPlayer, 'rating' | 'statsPower'>): PlayerLeaderboardScore {
+  const score = player.statsPower?.score
+  return typeof score === 'number' && Number.isFinite(score)
+    ? { kind: 'stats-power', value: score }
+    : { kind: 'role-power', value: player.rating }
+}
+
+/**
+ * Orders one exact scope by its selected score. Equal scores share a leaderboard rank;
+ * stored strength rank and stable IDs only order those ties for display.
+ */
 export function playerLeaderboardForScope(
   directory: PublicPlayerDirectory | undefined,
   filter: SnapshotFilter,
-): PublicPlayerDirectory['players'] {
+): PlayerLeaderboardRow[] {
   if (!directory) return []
   const players = filter.season === 'All' && filter.event === 'All' && filter.region === 'All' && !filter.checkpoint
     ? directory.players
     : directory.scopedPlayers?.[snapshotKey(filter)] ?? []
-  return players.toSorted((left, right) =>
-    right.rating - left.rating || left.rank - right.rank || compareCodeUnits(left.id, right.id),
-  )
+  const ordered = players
+    .map((player) => ({ ...player, leaderboardRank: 0, leaderboardScore: playerLeaderboardScore(player) }))
+    .sort((left, right) =>
+      right.leaderboardScore.value - left.leaderboardScore.value || left.rank - right.rank || compareCodeUnits(left.id, right.id),
+    )
+  ordered.forEach((player, index) => {
+    const previous = ordered[index - 1]
+    player.leaderboardRank = previous?.leaderboardScore.value === player.leaderboardScore.value ? previous.leaderboardRank : index + 1
+  })
+  return ordered
 }
 
 export function resolvePlayerScope(

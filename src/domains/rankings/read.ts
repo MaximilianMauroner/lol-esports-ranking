@@ -44,6 +44,7 @@ export {
 export {
   emptyPlayerScope,
   playerLeaderboardForScope,
+  playerLeaderboardScore,
   resolvePlayerScope,
 } from './internal/queries/playerScopes.ts'
 export {

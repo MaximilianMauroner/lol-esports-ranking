@@ -14,6 +14,7 @@ import {
 } from '../evidence/internationalTournaments.ts'
 import { playerPerformanceMetricKeys } from '../players/playerPerformance.ts'
 import { playerPerformancePolicy } from '../policy/playerPerformancePolicy.ts'
+import { statsPowerPolicy } from '../policy/statsPowerPolicy.ts'
 import type { RegionStrength } from '../projections/regionStrength.ts'
 export type { ArtifactMeta, CompactPlayer, CompactPlayerRating, PlayerComparisonMetricInfo, PlayerDirectoryDiagnostics, PlayerMetricInfo, PlayerRatingProof, ProviderAliasMap, PublicCurrentLineup, PublicCurrentLineupPlayer, PublicDeservedStandingComparison, PublicMatchHistoryCatalog, PublicMatchHistoryEntry, PublicMatchHistoryImpact, PublicMatchHistoryIndex, PublicMatchHistoryPage, PublicMatchHistoryPageRef, PublicMatchHistoryScopeIndexEntry, PublicMatchHistorySeriesRef, PublicMatchHistoryTeam, PublicPlayerDirectory, PublicRankingManifest, PublicRankingShard, PublicRecentMatch, PublicRecordBasis, PublicRegionHistoryDirectory, PublicRegionHistoryPoint, PublicRegionHistoryPointContext, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicRollingMovementPoint, PublicRollingUpsetWin, PublicRollingWindow, PublicScoreFamilyId, PublicScoreFamilyInfo, PublicSnapshotIndexEntry, PublicStandingCompactionOptions, PublicTeamCurrentStanding, PublicTeamDirectory, PublicTeamEntity, PublicTeamHistoryAttribution, PublicTeamHistoryAttributionKey, PublicTeamHistoryComponentSnapshot, PublicTeamHistoryDirectory, PublicTeamHistoryIndex, PublicTeamHistoryIndexEntry, PublicTeamHistoryModelContext, PublicTeamHistoryPoint, PublicTeamHistoryPointContext, PublicTeamHistorySeries, PublicTeamHistoryShard, PublicTeamRollingMovement, PublicTeamStanding, PublicTournamentAppearance, PublicTournamentMovementIndex, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam, SameTeamTopFiveClusteringDiagnostic } from '../queries/publishedTypes.ts'
 
@@ -479,12 +480,12 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   if ('comparisonMetrics' in value) assertArray(value.comparisonMetrics, 'player directory comparisonMetrics')
   if ('diagnostics' in value) assertObject(value.diagnostics, 'player directory diagnostics')
   assertArray(value.players, 'player directory players')
-  value.players.forEach(assertPlayerPerformance)
+  value.players.forEach(assertCompactPlayer)
   if ('scopedPlayers' in value) {
     assertObject(value.scopedPlayers, 'player directory scopedPlayers')
     for (const rows of Object.values(value.scopedPlayers)) {
       assertArray(rows, 'player directory scoped players')
-      rows.forEach(assertPlayerPerformance)
+      rows.forEach(assertCompactPlayer)
     }
   }
   assertObject(value.currentLineups, 'player directory currentLineups')
@@ -494,8 +495,44 @@ export function parsePublicPlayerDirectory(value: unknown): PublicPlayerDirector
   return value as PublicPlayerDirectory
 }
 
-function assertPlayerPerformance(player: unknown) {
+function assertCompactPlayer(player: unknown) {
   assertObject(player, 'player')
+  assertPlayerStatsPower(player)
+  assertPlayerPerformance(player)
+}
+
+function assertPlayerStatsPower(player: Record<string, unknown>) {
+  const power = player.statsPower
+  if (power === undefined) return
+  assertObject(power, 'player statsPower')
+  assertEqual(power.version, statsPowerPolicy.version, 'statsPower version')
+  assertNumber(power.score, 'statsPower score')
+  assertNumber(power.leagueAnchor, 'statsPower leagueAnchor')
+  assertEqual(power.role, player.role, 'statsPower role')
+  assertEnum(power.role, Object.keys(statsPowerPolicy.roleMetrics) as Array<keyof typeof statsPowerPolicy.roleMetrics>, 'statsPower role')
+  assertNonNegativeInteger(power.eligibleGames, 'statsPower eligibleGames')
+  assertNonNegativeInteger(power.sampleGames, 'statsPower sampleGames')
+  if (power.eligibleGames === 0 || power.sampleGames > power.eligibleGames) throw new Error('Invalid public artifact: statsPower sampleGames must fit positive eligibleGames')
+  assertEqual(power.priorOnly, power.sampleGames === 0, 'statsPower priorOnly')
+  if (power.priorOnly && power.score !== power.leagueAnchor) throw new Error('Invalid public artifact: prior-only statsPower score must equal its leagueAnchor')
+  assertDateString(power.evidenceThrough, 'statsPower evidenceThrough')
+  assertObject(power.metrics, 'statsPower metrics')
+  const metrics: readonly string[] = statsPowerPolicy.roleMetrics[power.role]
+  if (Object.keys(power.metrics).length !== metrics.length) throw new Error('Invalid public artifact: statsPower metrics must match the role policy')
+  for (const key of metrics) {
+    const metric: unknown = power.metrics[key]
+    assertObject(metric, `statsPower ${key}`)
+    assertNonNegativeInteger(metric.observed, `statsPower ${key} observed`)
+    assertNonNegativeInteger(metric.missing, `statsPower ${key} missing`)
+    assertNonNegativeNumber(metric.effectiveGames, `statsPower ${key} effectiveGames`)
+    if (metric.observed + metric.missing !== power.eligibleGames) throw new Error(`Invalid public artifact: statsPower ${key} coverage must match eligibleGames`)
+    if (metric.effectiveGames > metric.observed || (metric.observed > 0) !== (metric.effectiveGames > 0)) {
+      throw new Error(`Invalid public artifact: statsPower ${key} effectiveGames must fit observed games`)
+    }
+  }
+}
+
+function assertPlayerPerformance(player: Record<string, unknown>) {
   if (player.diagnostics === undefined) return
   assertObject(player.diagnostics, 'player diagnostics')
   const { performance, sampleGames } = player.diagnostics

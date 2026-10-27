@@ -2,14 +2,22 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { initialModeFromLocation, showsManifestErrorInAppShell } from '../src/browser/bootstrap.ts'
 import { hashForModeAndScope } from '../src/browser/navigation.ts'
-import { playerLeaderboardForScope, resolvePlayerScope } from '../src/domains/rankings/read.ts'
-import type { CompactPlayer, PublicPlayerDirectory, SnapshotFilter } from '../src/domains/rankings/types.ts'
+import { playerLeaderboardForScope, playerLeaderboardScore, resolvePlayerScope } from '../src/domains/rankings/read.ts'
+import type { CompactPlayer, PlayerStatsPower, PublicPlayerDirectory, SnapshotFilter } from '../src/domains/rankings/types.ts'
 
 const all: SnapshotFilter = { season: 'All', event: 'All', region: 'All' }
 const season: SnapshotFilter = { ...all, season: '2026' }
 
 function player(id: string, rating: number, rank: number, team = 'Fixture Team'): CompactPlayer {
   return { id, name: id, team, role: 'Mid', rating, rank, games: 30, delta: 0, impactMultiplier: 1 }
+}
+
+function statsPower(score: number): PlayerStatsPower {
+  const evidence = { observed: 24, missing: 6, effectiveGames: 22.5 }
+  return {
+    version: 'stats-power-v3', score, role: 'Mid', sampleGames: 24, eligibleGames: 30, priorOnly: false, leagueAnchor: 100,
+    evidenceThrough: '2026-10-01', metrics: { goldDiffAt15: evidence, xpDiffAt15: evidence, csDiffAt15: evidence },
+  }
 }
 
 function directory(): PublicPlayerDirectory {
@@ -62,9 +70,32 @@ test('team drawers keep their real fallback while the leaderboard stays exact', 
 test('equal ratings use source rank and stable identity without changing either score or rank', () => {
   const data = directory()
   data.scopedPlayers!['2026__All__All'] = [player('B', 100, 2), player('C', 100, 1), player('A', 100, 2)]
-  assert.deepEqual(playerLeaderboardForScope(data, season).map((row) => [row.id, row.rank, row.rating]), [
-    ['C', 1, 100], ['A', 2, 100], ['B', 2, 100],
+  assert.deepEqual(playerLeaderboardForScope(data, season).map((row) => [row.id, row.rank, row.rating, row.leaderboardRank]), [
+    ['C', 1, 100, 1], ['A', 2, 100, 1], ['B', 2, 100, 1],
   ])
+})
+
+test('Stats Power orders the leaderboard against Role Power, and only exact selected-score ties share a rank', () => {
+  const data = directory()
+  data.scopedPlayers!['2026__All__All'] = [
+    { ...player('Ash', 300, 1), statsPower: statsPower(101.25) },
+    { ...player('Birch', 200, 2), statsPower: statsPower(104.5) },
+    { ...player('Cypress', 100, 3), statsPower: statsPower(104.5) },
+    player('Dune', 50, 4),
+    { ...player('Elm', 10, 5), statsPower: statsPower(104.5 + 1e-12) },
+  ]
+  const before = structuredClone(data)
+  const rows = playerLeaderboardForScope(data, season)
+  assert.deepEqual(rows.map((row) => [row.id, row.leaderboardRank, row.leaderboardScore.kind, row.leaderboardScore.value, row.rank, row.rating]), [
+    ['Elm', 1, 'stats-power', 104.5 + 1e-12, 5, 10],
+    ['Birch', 2, 'stats-power', 104.5, 2, 200],
+    ['Cypress', 2, 'stats-power', 104.5, 3, 100],
+    ['Ash', 4, 'stats-power', 101.25, 1, 300],
+    ['Dune', 5, 'role-power', 50, 4, 50],
+  ])
+  assert.deepEqual(data, before, 'Selecting a score must not rewrite stored rows')
+  assert.deepEqual(playerLeaderboardScore({ rating: 80, statsPower: { ...statsPower(120), score: Number.NaN } }), { kind: 'role-power', value: 80 })
+  assert.deepEqual(playerLeaderboardScore({ rating: 80, statsPower: statsPower(-3) }), { kind: 'stats-power', value: -3 })
 })
 
 test('Players addresses select the Players shell and preserve its query when the scope changes', () => {

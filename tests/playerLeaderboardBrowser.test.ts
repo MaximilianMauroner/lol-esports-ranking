@@ -5,6 +5,7 @@ import { chromium, type Page } from 'playwright-core'
 import { createServer, type Plugin } from 'vite'
 import { createStaticRankingData } from '../src/domains/rankings/internal/projections/snapshot.ts'
 import { createPublicArtifactWritePlan } from '../src/domains/rankings/internal/published/writePlan.ts'
+import { statsPowerPolicy } from '../src/domains/rankings/internal/policy/statsPowerPolicy.ts'
 import type { CompactPlayer, MatchRecord, PublicPlayerDirectory } from '../src/domains/rankings/types.ts'
 
 const playerPath = '/data/entities/players.json'
@@ -14,6 +15,19 @@ function player(name: string, team: string, role: CompactPlayer['role'], rating:
   return {
     id: `synthetic-${name}`, name, team, role, rating, rank, games: 30 + rank,
     delta: 0, impactMultiplier: 1, ratingBasis: 'sourced-player-stats', sourceProvider: 'synthetic-fixture',
+  }
+}
+
+function withStatsPower(row: CompactPlayer, score: number, sampleGames: number): CompactPlayer {
+  const evidence = { observed: sampleGames, missing: row.games - sampleGames, effectiveGames: sampleGames }
+  return {
+    ...row,
+    teamGames: 10 + row.rank,
+    statsPower: {
+      version: statsPowerPolicy.version, score, role: row.role, sampleGames, eligibleGames: row.games, priorOnly: sampleGames === 0,
+      leagueAnchor: 100, evidenceThrough: '2025-07-01',
+      metrics: Object.fromEntries(statsPowerPolicy.roleMetrics[row.role].map((metric) => [metric, evidence])),
+    },
   }
 }
 
@@ -42,12 +56,17 @@ function fixtureBodies() {
     player('Beacon', 'Fixture Alpha', 'Support', 260, 2),
   ]
   const legacy = player('Other-season only', 'Legacy Team', 'Top', 900, 1)
+  const statsSeason = [
+    withStatsPower(player('Delta', 'Legacy Team', 'Top', 400, 1), 101.2, 18),
+    withStatsPower(player('Echo', 'Legacy Team', 'Mid', 300, 2), 104.5, 22),
+    withStatsPower(player('Foxtrot', 'Legacy Team', 'Support', 200, 3), 104.5, 25),
+  ]
   const directory: PublicPlayerDirectory = {
     ...JSON.parse(original) as PublicPlayerDirectory,
-    sourceProvider: 'synthetic-fixture', ratedPlayerCount: 4, ratedTeamCount: 3,
+    sourceProvider: 'synthetic-fixture', ratedPlayerCount: 7, ratedTeamCount: 3,
     roles: ['Top', 'Mid', 'Support'], currentLineups: {},
     players: [legacy, ...seasonPlayers.map((row) => ({ ...row, rank: row.rank + 1 }))],
-    scopedPlayers: { '2026__All__All': seasonPlayers, '2025__All__All': [legacy], '2024__All__All': [] },
+    scopedPlayers: { '2026__All__All': seasonPlayers, '2025__All__All': statsSeason, '2024__All__All': [] },
   }
   bodies.set(playerPath, JSON.stringify(directory))
   return bodies
@@ -130,7 +149,8 @@ test('Players supports navigation, exact seasons, score order, addressed filters
     assert.deepEqual(await rows.locator('td:nth-child(6)').allTextContents(), ['31', '32', '33'])
     await page.getByRole('status').filter({ hasText: 'These are not official LoL Esports rankings.' }).waitFor()
     await page.getByText(/Source synthetic-fixture/).waitFor()
-    await page.getByText(/Individual stats with results, opponent strength and event context/).waitFor()
+    await page.getByText(/Role Power uses model .+ includes individual stats, results, opponent strength and event context/).waitFor()
+    assert.equal(await page.getByText(/Stats Power stats-power-v3 scores/).count(), 0, 'Role Power rows must not claim Stats Power')
 
     await page.keyboard.press('/')
     assert.equal(await search.evaluate((input) => input === document.activeElement), true)
@@ -165,7 +185,14 @@ test('Players supports navigation, exact seasons, score order, addressed filters
     await page.getByRole('button', { name: 'Clear filters', exact: true }).click()
     await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
     await page.getByRole('combobox', { name: 'Season', exact: true }).selectOption('2025')
-    await expectPlayers(page, ['Other-season only'])
+    await expectPlayers(page, ['Echo', 'Foxtrot', 'Delta'])
+    assert.deepEqual(await rows.locator('td:first-child').allTextContents(), ['1', '1', '3'], 'Equal Stats Power shares a rank')
+    assert.deepEqual(await rows.locator('td:nth-child(5)').allTextContents(), ['104.5', '104.5', '101.2'])
+    assert.deepEqual(await rows.locator('td:nth-child(6)').allTextContents(), ['22', '25', '18'], 'Stat games stay separate from games')
+    assert.deepEqual(await rows.locator('td:nth-child(7)').allTextContents(), ['300', '200', '400'], 'Role Power stays visible')
+    assert.deepEqual(await rows.locator('td:nth-child(8)').allTextContents(), ['12', '13', '11'], 'Credited-team games stay separate from raw stat games')
+    await page.getByRole('columnheader', { name: 'Stats Power', exact: true }).waitFor()
+    await page.getByText(/Stats Power stats-power-v3 scores lane leads/).waitFor()
     await page.getByRole('combobox', { name: 'Season', exact: true }).selectOption('2024')
     await page.getByRole('heading', { name: 'No ranked players in this scope', exact: true }).waitFor()
     assert.equal(await rows.count(), 0, 'An empty exact season must not borrow all-season players')
