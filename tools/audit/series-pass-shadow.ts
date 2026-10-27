@@ -46,6 +46,7 @@ function wireFrame(frame: SeriesPassFrame) {
         ...wireNumbers(member), winner: member.winner,
         sides: member.sides.map((side) => ({ ...wireNumbers(side), team: side.team, league: side.league })),
       })),
+      ...(series.continuityRetention ? { continuityRetention: series.continuityRetention } : {}),
     })),
   }
 }

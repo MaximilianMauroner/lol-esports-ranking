@@ -35,7 +35,7 @@ export function chartPointFromHistoryPoint(point: TeamHistoryPoint): ChartPoint 
 export function chartPointDetailFromHistoryPoint(point: TeamHistoryPoint): ChartPointDetail | undefined {
   const context = point[3]
   if (!context) return undefined
-  const model = chartModelDetailFromHistoryPoint(context.model, context.result)
+  const model = chartModelDetailFromHistoryPoint(context.model)
   return {
     kind: context.kind ?? 'match',
     event: context.event,
@@ -122,7 +122,6 @@ function chartPointDetailFromHistoryGroup(points: TeamHistoryPoint[]): ChartPoin
 
 function chartModelDetailFromHistoryPoint(
   model: TeamHistoryContext['model'],
-  result?: 'W' | 'L' | 'T',
 ): ChartModelDetail | undefined {
   if (!model) return undefined
   const attribution = model.a
@@ -131,14 +130,9 @@ function chartModelDetailFromHistoryPoint(
       return label && Number.isFinite(value) ? { ...label, value } : undefined
     })
     .filter((entry): entry is ChartAttributionEntry => Boolean(entry))
-  const residual = typeof model.r === 'number'
-    ? model.r
-    : typeof model.e === 'number'
-      ? residualFromExpected(model.e, result)
-      : undefined
   const detail: ChartModelDetail = {
-    expectedWinProbability: model.e,
-    residual,
+    expectedWinProbability: model.forecastSource?.basis === 'latest-corrected-prior-replay' && model.forecastSource.predictionId ? model.e : undefined,
+    residual: model.r,
     evidence: model.v,
     strengthSignal: model.s,
     components: chartComponentsFromHistoryPoint(model.c),
@@ -156,12 +150,6 @@ function chartComponentsFromHistoryPoint(components: TeamHistoryModelContext['c'
     })
     .filter((entry): entry is ChartAttributionEntry => Boolean(entry))
   return entries.length > 0 ? entries : undefined
-}
-
-function residualFromExpected(expected: number, result?: 'W' | 'L' | 'T') {
-  if (!Number.isFinite(expected) || !result) return undefined
-  const observed = result === 'W' ? 1 : result === 'T' ? 0.5 : 0
-  return roundOptional(observed - expected, 3)
 }
 
 function aggregateChartModelDetails(details: ChartPointDetail[]): ChartModelDetail | undefined {

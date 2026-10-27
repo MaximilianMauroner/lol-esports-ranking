@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { inferEventTier } from '../src/domains/rankings/internal/evidence/competitionTaxonomy.ts'
 import { dssSeriesWeight } from '../src/domains/rankings/internal/projections/deservedStanding.ts'
-import { eventWeightContextForMatches, eventWeightForMatch } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { eventKFactorForMatch, eventWeightContextForMatches, eventWeightForMatch } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
 import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { createRatingReplayContext, finalizeRatingRunStateAtUtcBoundary, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
 import { playerResumeCreditEntries } from '../src/domains/rankings/internal/players/playerResumeLedger.ts'
@@ -27,6 +27,18 @@ test('First Stand and domestic cup weights follow the sourced phase', () => {
   assert.ok(dssSeriesWeight(knockout.tier, 5) > dssSeriesWeight(groups.tier, 5))
   assert.equal(inferEventTier({ league: 'LCK', event: 'LCK 2025 Cup', phase: 'Grand Final', playoffs: false }), 'major-playoffs')
   assert.equal(inferEventTier({ league: 'CBLOL', event: 'CBLOL 2025 Cup', phase: 'Group Stage' }), 'regional-regular')
+})
+
+test('minor cups match major playoff evidence weight and outweigh regular season games', () => {
+  const cup = fixture({ date: '2026-07-20', league: 'KeSPA Cup', event: 'KeSPA Cup 2026' })
+  const playoffs = fixture({ date: cup.date, phase: 'Playoffs' })
+  const regular = fixture({ date: cup.date })
+  cup.tier = inferEventTier(cup)
+  playoffs.tier = inferEventTier(playoffs)
+  assert.equal(eventWeightForMatch(cup), eventWeightForMatch(playoffs))
+  assert.equal(eventKFactorForMatch(cup), eventKFactorForMatch(playoffs))
+  assert.ok(eventWeightForMatch(cup) > eventWeightForMatch(regular))
+  assert.ok(eventKFactorForMatch(cup) > eventKFactorForMatch(regular))
 })
 
 test('observed Worlds games, regional finals, upper finals and partial finals cannot start preseason', () => {

@@ -68,6 +68,23 @@ export const playerPregameEvidencePolicy = {
   seriesEdge: 'frozen-at-series-start',
 } as const
 
+export const completedLineupContinuityPolicy = {
+  version: 'completed-lineup-continuity-retention-v2',
+  consumer: 'roster-continuity-stable-and-execution-rating-step-only',
+  lineup: 'one-complete-five-role-played-lineup-identical-in-every-series-game',
+  playedEvidence: 'scored-series-roster-not-official-announcement-or-schedule',
+  availability: 'every-game-completion-and-roster-observation-utc-date-at-or-before-result-update-utc-date',
+  strengths: 'player-state-from-completion-proven-series-observed-strictly-before-series-start-utc-date',
+  freshness: 'positive-reference-and-completed-freshness-oldest-covered-player-game-count-increase-for-completed-price',
+  homeLeague: 'every-series-game-and-reference-price-share-the-resolved-team-home-league',
+  reference: 'forecast-edge-available-basis-pregame-min-coverage-positive-freshness',
+  proof: 'completed-unrounded-weighted-strength-and-priced-adjustment-both-strictly-greater-than-reference',
+  provenRetention: 'max-of-value-and-baseline-retained-value-for-stable-and-execution-rating',
+  otherwise: 'baseline-contraction',
+  forecastEmitter: 'forecast-edges-only',
+  implementation: 'builder-decision-consumed-by-node-and-native-series-pass',
+} as const
+
 export const playerModelParameters = {
   initialPlayerRating,
   sourcedPlayerKFactor,
@@ -94,4 +111,5 @@ export const playerModelParameters = {
   roleStatBaselines,
   playerPerformancePolicy,
   playerPregameEvidencePolicy,
+  completedLineupContinuityPolicy,
 } as const

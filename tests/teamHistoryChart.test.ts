@@ -20,6 +20,7 @@ test('chart point conversion expands compact model context for tooltip display',
       delta: 11,
       model: {
         e: 0.778,
+        forecastSource: { basis: 'latest-corrected-prior-replay', predictionId: 'recorded-game' },
         r: 0.222,
         v: 4.8,
         s: 1.12,
@@ -101,7 +102,7 @@ test('daily chart aggregation contains match results only', () => {
       '2026-06-02',
       1510,
       3,
-      { event: 'MSI 2026', opponent: 'Team Liquid', result: 'W', wins: 3, losses: 0, delta: 6, model: { e: 0.778, c: [1500, 6, 40, 4, 0] } },
+      { event: 'MSI 2026', opponent: 'Team Liquid', result: 'W', wins: 3, losses: 0, delta: 6, model: { e: 0.778, forecastSource: { basis: 'latest-corrected-prior-replay', predictionId: 'recorded-game' }, c: [1500, 6, 40, 4, 0] } },
     ],
   ]
 

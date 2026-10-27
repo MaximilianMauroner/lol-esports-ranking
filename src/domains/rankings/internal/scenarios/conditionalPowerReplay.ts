@@ -135,7 +135,7 @@ export function conditionalPowerBasisProblem(basis: ConditionalPowerReplayBasis)
     const { context, state } = basis
     const boundary = state.processedThroughUtcDate
     if (!nonemptyString(basis.preStateId) || !realUtcDate(boundary) || context.lastDate !== boundary || !completeStateContainers(state)
-      || !(context.pregamePlayerRatingEdges instanceof Map) || !(context.teamRosterBasis instanceof Map)
+      || !(context.pregamePlayerRatingEdges instanceof Map) || !(context.continuityRetention instanceof Map) || !(context.teamRosterBasis instanceof Map)
       || !(context.tournamentLifecycles instanceof Map) || !(context.eventWeightContext.worldsEndDateByCalendarYear instanceof Map)) {
       return unavailablePowerPreview('missing-pre-state', 'A dated, identified complete UTC-boundary state and all replay containers are required.')
     }

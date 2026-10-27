@@ -532,6 +532,7 @@ test('map and object insertion order does not change the pinned context or the p
     tournamentLifecycles: new Map([...context.tournamentLifecycles].reverse()),
     teamRosterBasis: new Map([...context.teamRosterBasis].reverse()),
     pregamePlayerRatingEdges: new Map([...context.pregamePlayerRatingEdges].reverse()),
+    continuityRetention: new Map([...context.continuityRetention].reverse()),
     teams, lastDate: context.lastDate,
     eventWeightContext: { worldsEndDateByCalendarYear: new Map([...context.eventWeightContext.worldsEndDateByCalendarYear].reverse()) },
     authoritativeMatches: context.authoritativeMatches,

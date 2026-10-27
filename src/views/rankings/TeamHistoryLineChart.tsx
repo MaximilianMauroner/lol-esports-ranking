@@ -117,7 +117,7 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
     <div className="ml-5 grid gap-1">
       {expected || residual ? (
         <div className="text-2xs leading-[1.35] text-[var(--faint)]">
-          {expected ? `Expected win ${expected}` : null}
+          {expected ? `Replay win ${expected} from earlier match dates` : null}
           {expected && residual ? ' / ' : null}
           {residual ? `Residual ${residual}` : null}
         </div>

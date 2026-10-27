@@ -20,7 +20,7 @@ import {
 import { eventKFactorForMatch, eventWeightForMatch } from '../domains/rankings/internal/replay/eventWeighting.ts'
 import { updateLeagueStrengthForSeries } from '../domains/rankings/internal/replay/leagueRatings.ts'
 import { homeLeagueForMatch, sourceTraceFor } from '../domains/rankings/internal/evidence/matchContext.ts'
-import type { PregamePlayerRatingEdge } from '../domains/rankings/internal/players/playerModel.ts'
+import type { FinalSideRetention, PregamePlayerRatingEdge } from '../domains/rankings/internal/players/playerModel.ts'
 import { trackMatchForPlacement } from '../domains/rankings/internal/replay/placementResiduals.ts'
 import { predictionSegmentsFor, recordTeamContext } from '../domains/rankings/internal/projections/predictionContext.ts'
 import { predictionVariantFromWinProbability } from '../domains/rankings/internal/projections/predictionVariants.ts'
@@ -61,6 +61,7 @@ import {
 } from '../domains/rankings/internal/policy/modelConfig.ts'
 
 type PregamePlayerRatingEdges = Map<string, PregamePlayerRatingEdge>
+type FinalSideRetentions = ReadonlyMap<string, FinalSideRetention>
 
 type RatingBatchSnapshot = Pick<RatingRunState,
   'ratings' | 'executionRatings' | 'momentums' | 'rosterPriorOffsets' | 'uncertainties' | 'leagueScores' | 'leagueMatchCounts'
@@ -114,6 +115,7 @@ export function processRatingSeriesForDate({
   sideAdjustments,
   lastDate,
   pregamePlayerRatingEdges,
+  continuityRetention,
   capture = false,
 }: {
   matches: MatchRecord[]
@@ -122,12 +124,14 @@ export function processRatingSeriesForDate({
   sideAdjustments: Map<string, number>
   lastDate: string
   pregamePlayerRatingEdges: PregamePlayerRatingEdges
+  continuityRetention: FinalSideRetentions
   capture?: boolean
 }) {
   const batch = ratingBatchSnapshot(state)
   const groups = ratingSeriesGroupsForDate(matches)
+  const retentions = groups.map((series) => continuityRetention.get(series.finalMatch.id))
   const recorder = capture ? new SeriesPassRecorder({
-    groups, matches, profiles: teams, state, lastDate, sideAdjustments, playerEdges: pregamePlayerRatingEdges,
+    groups, matches, profiles: teams, state, lastDate, sideAdjustments, playerEdges: pregamePlayerRatingEdges, retentions,
   }) : undefined
   for (const [seriesIndex, series] of groups.entries()) {
     applyRosterContinuityForSeries(
@@ -137,6 +141,7 @@ export function processRatingSeriesForDate({
       state.uncertainties,
       state.lastRosterByTeam,
       state.currentRosterContinuity,
+      retentions[seriesIndex],
     )
     processRatingSeries({ series, teams, state, batch, sideAdjustments, lastDate, pregamePlayerRatingEdges, recorder, seriesIndex })
   }

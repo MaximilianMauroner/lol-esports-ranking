@@ -50,8 +50,8 @@ import {
   type EventWeightContext,
 } from '../replay/eventWeighting.ts'
 import { homeLeagueForMatch, sourceTraceFor } from '../evidence/matchContext.ts'
-import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries } from '../evidence/seriesResolver.ts'
-import { mergeRosterObservation } from './rosters.ts'
+import { canonicalSeriesForMatches, canonicalSeriesOutcomeForTeam, resolveCanonicalSeries, type CanonicalSeries } from '../evidence/seriesResolver.ts'
+import { mergeRosterObservation, rosterFingerprint } from './rosters.ts'
 import {
   buildCausalContextIdentity,
   buildCausalPrefixSummary,
@@ -76,6 +76,14 @@ export type PregamePlayerRatingEdge = {
   teamAFreshnessWeight: number
   teamBFreshnessWeight: number
 }
+
+export type ContinuityRetention = 'baseline-contraction' | 'proven-stronger-lineup'
+export type FinalSideRetention = Readonly<{ teamA: ContinuityRetention; teamB: ContinuityRetention }>
+
+export type PlayerLineupEdges = Readonly<{
+  forecast: Map<string, PregamePlayerRatingEdge>
+  continuityRetention: ReadonlyMap<string, FinalSideRetention>
+}>
 
 export type PlayerRatingContext = {
   teams?: Record<string, TeamProfile>
@@ -307,16 +315,18 @@ function assignPlayerRanks(players: PlayerStanding[]) {
     })
 }
 
-export function buildPregamePlayerRatingEdges(
+export function buildPlayerLineupEdges(
   matches: MatchRecord[],
   context: PlayerRatingContext = {},
-): Map<string, PregamePlayerRatingEdge> {
+): PlayerLineupEdges {
   const resolvedContext = {
     ...context,
     eventWeightContext: context.eventWeightContext ?? eventWeightContextForMatches(matches),
   }
   const state = createSourcedPlayerState(false)
   const edges = new Map<string, PregamePlayerRatingEdge>()
+  const continuityRetention = new Map<string, FinalSideRetention>()
+  const strengthProvenThrough = new Map<string, string>()
   const leagueRatings = leagueRatingsFor(resolvedContext.leagueStrengths)
   const lastObservedRosterByTeam = new Map<string, MatchRosterSnapshot>()
   const seriesList = resolveCanonicalSeries(matches)
@@ -334,12 +344,18 @@ export function buildPregamePlayerRatingEdges(
 
   for (const series of seriesList) {
     while (observedSeriesCount < observations.length && observations[observedSeriesCount]!.observedThrough < series.date) {
-      const observed = observations[observedSeriesCount++]!.series
+      const { series: observed, observedThrough } = observations[observedSeriesCount++]!
       const preUpdateRatings = new Map(state.ratings)
       for (const match of observed.games) {
         registerSourcedRosters(match, state, resolvedContext, leagueRatings)
       }
+      const observedPlayerIds = new Set(observed.games.flatMap((match) =>
+        teamRosterEntries(match).flatMap(({ roster }) => roster?.players.map((player) => player.id) ?? [])))
+      const gamesBefore = new Map([...observedPlayerIds].map((id) => [id, state.games.get(id) ?? 0]))
       applySourcedPlayerUpdates(observed.games, state, preUpdateRatings, resolvedContext, leagueRatings)
+      for (const id of observedPlayerIds) {
+        if ((state.games.get(id) ?? 0) > gamesBefore.get(id)!) strengthProvenThrough.set(id, observedThrough)
+      }
       for (const match of observed.games) {
         for (const { team, roster } of teamRosterEntries(match)) {
           if (!roster) continue
@@ -354,28 +370,18 @@ export function buildPregamePlayerRatingEdges(
     const firstMatch = series.games[0]!
     const teamARoster = lastObservedRosterByTeam.get(firstMatch.teamA)
     const teamBRoster = lastObservedRosterByTeam.get(firstMatch.teamB)
+    const teamALeague = leagueForSide(firstMatch, 'A', resolvedContext)
+    const teamBLeague = leagueForSide(firstMatch, 'B', resolvedContext)
     const edgeByTeam = new Map([
       [firstMatch.teamA, {
-        ...playerEdgeForRoster(
-          teamARoster,
-          state.ratings,
-          state.games,
-          leagueForSide(firstMatch, 'A', resolvedContext),
-          leagueRatings,
-          series.date,
-        ),
+        ...referencePrice(teamARoster, state.ratings, state.games, teamALeague, leagueRatings, series.date),
         roster: teamARoster,
+        league: teamALeague,
       }],
       [firstMatch.teamB, {
-        ...playerEdgeForRoster(
-          teamBRoster,
-          state.ratings,
-          state.games,
-          leagueForSide(firstMatch, 'B', resolvedContext),
-          leagueRatings,
-          series.date,
-        ),
+        ...referencePrice(teamBRoster, state.ratings, state.games, teamBLeague, leagueRatings, series.date),
         roster: teamBRoster,
+        league: teamBLeague,
       }],
     ])
     for (const match of series.games) {
@@ -396,9 +402,56 @@ export function buildPregamePlayerRatingEdges(
         teamBFreshnessWeight: teamBEdge.freshnessWeight,
       })
     }
+    const finalMatch = series.finalMatch
+    const sideRetention = (side: 'A' | 'B'): ContinuityRetention => {
+      const team = side === 'A' ? finalMatch.teamA : finalMatch.teamB
+      const reference = edgeByTeam.get(team)!
+      const lineup = availablePlayedSeriesLineup(series, team, finalMatch.date)
+      if (!lineup || series.games.some((match) =>
+        leagueForSide(match, match.teamA === team ? 'A' : 'B', resolvedContext) !== reference.league,
+      )) return 'baseline-contraction'
+      if (rosterFingerprint(lineup) === rosterFingerprint(reference.roster)) return 'baseline-contraction'
+      if (reference.price.kind !== 'priced') return 'baseline-contraction'
+      const strength = lineupStrength(lineup, state.ratings, state.games, reference.league, leagueRatings)
+      const provenDates = strength.coveredPlayerIds.flatMap((id) => strengthProvenThrough.get(id) ?? [])
+      const provenThrough = provenDates.length === strength.coveredPlayerIds.length ? provenDates.sort(compareCodeUnits)[0] : undefined
+      if (strength.coverage < playerPregameMinCoverage || provenThrough === undefined) return 'baseline-contraction'
+      const freshnessWeight = lineupFreshnessWeight(provenThrough, series.date)
+      if (freshnessWeight <= 0) return 'baseline-contraction'
+      return strength.weightedRatingEdge > reference.price.strength.weightedRatingEdge
+        && pricedPlayerEdge(strength, freshnessWeight) > reference.adjustment
+        ? 'proven-stronger-lineup' : 'baseline-contraction'
+    }
+    continuityRetention.set(finalMatch.id, { teamA: sideRetention('A'), teamB: sideRetention('B') })
   }
 
-  return edges
+  return { forecast: edges, continuityRetention }
+}
+
+function availablePlayedSeriesLineup(series: CanonicalSeries, team: string, updateUtcDate: string) {
+  let lineup: MatchRosterSnapshot | undefined
+  for (const match of series.games) {
+    const roster = match.teamA === team ? match.teamARoster : match.teamB === team ? match.teamBRoster : undefined
+    if (!isAvailableAtUtcDate(match.gameCompletedAtUtc, updateUtcDate) || !isAvailablePlayedLineup(roster, updateUtcDate)) return undefined
+    if (lineup && rosterFingerprint(lineup) !== rosterFingerprint(roster)) return undefined
+    lineup ??= roster
+  }
+  return lineup
+}
+
+function isAvailablePlayedLineup(roster: MatchRosterSnapshot | undefined, updateUtcDate: string): roster is MatchRosterSnapshot {
+  if (!roster || (roster.evidenceBasis ?? 'scored-series') !== 'scored-series' || roster.completeness !== 'complete-five-role') return false
+  if (!isAvailableAtUtcDate(roster.observedAt, updateUtcDate)) return false
+  if (roster.knownAt !== undefined && !isAvailableAtUtcDate(roster.knownAt, updateUtcDate)) return false
+  const roles = new Set(roster.players.map((player) => player.role))
+  const ids = new Set(roster.players.map((player) => player.id))
+  return roster.players.length === 5 && roles.size === 5 && ids.size === 5
+    && roster.players.every((player) => player.role in baseRoleShares && typeof player.id === 'string' && player.id.length > 0)
+}
+
+function isAvailableAtUtcDate(timestamp: string | undefined, utcDate: string) {
+  const parsed = Date.parse(timestamp ?? '')
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) <= utcDate
 }
 
 export function sourcedPlayerCausalInputs(
@@ -475,9 +528,11 @@ export function recomputeSourcedPlayerCausalOutputs(
   matches: MatchRecord[],
   { rosters, ratingContext }: SourcedPlayerCausalContext,
 ) {
+  const { forecast, continuityRetention } = buildPlayerLineupEdges(matches, ratingContext)
   return {
     players: buildPlayerModel(matches, rosters, ratingContext),
-    pregameEdges: buildPregamePlayerRatingEdges(matches, ratingContext),
+    pregameEdges: forecast,
+    continuityRetention,
   }
 }
 
@@ -1129,41 +1184,67 @@ function isCompleteSourcedMatchup(
   )
 }
 
-function playerEdgeForRoster(
+type ReferencePrice = Readonly<{
+  adjustment: number
+  coverage: number
+  freshnessWeight: number
+  price: Readonly<{ kind: 'unpriced' }> | Readonly<{ kind: 'priced'; strength: ReturnType<typeof lineupStrength> }>
+}>
+
+function referencePrice(
   roster: MatchRecord['teamARoster'],
   ratings: Map<string, number>,
   games: Map<string, number>,
   league: string,
   leagueRatings: Map<string, number>,
   asOfDate: string,
-) {
-  if (!roster || roster.players.length === 0) return { adjustment: 0, coverage: 0, freshnessWeight: 0 }
+): ReferencePrice {
+  if (!roster || roster.players.length === 0) {
+    return { adjustment: 0, coverage: 0, freshnessWeight: 0, price: { kind: 'unpriced' } }
+  }
 
+  const strength = lineupStrength(roster, ratings, games, league, leagueRatings)
+  const freshnessWeight = lineupFreshnessWeight(roster.observedAt, asOfDate)
+  const forecast = {
+    adjustment: strength.coverage < playerPregameMinCoverage ? 0 : pricedPlayerEdge(strength, freshnessWeight),
+    coverage: roundShare(strength.coverage),
+    freshnessWeight,
+  }
+  return {
+    ...forecast,
+    price: forecast.coverage >= playerPregameMinCoverage && freshnessWeight > 0
+      ? { kind: 'priced', strength }
+      : { kind: 'unpriced' },
+  }
+}
+
+function lineupStrength(
+  roster: MatchRosterSnapshot,
+  ratings: Map<string, number>,
+  games: Map<string, number>,
+  league: string,
+  leagueRatings: Map<string, number>,
+) {
   const leagueBaseline = playerBaselineForLeague(league, leagueRatings)
   const leagueSignalMultiplier = playerSignalMultiplierForLeague(league)
   let coverage = 0
   let weightedRatingEdge = 0
+  const coveredPlayerIds: string[] = []
 
   for (const player of roster.players) {
     if ((games.get(player.id) ?? 0) < playerPregameMinGames) continue
     const roleShare = baseRoleShares[player.role]
     coverage += roleShare
     weightedRatingEdge += roleShare * ((ratings.get(player.id) ?? leagueBaseline) - leagueBaseline) * leagueSignalMultiplier
+    coveredPlayerIds.push(player.id)
   }
 
-  if (coverage < playerPregameMinCoverage) {
-    return { adjustment: 0, coverage: roundShare(coverage), freshnessWeight: lineupFreshnessWeight(roster.observedAt, asOfDate) }
-  }
+  return { coverage, weightedRatingEdge, coveredPlayerIds }
+}
 
+function pricedPlayerEdge({ coverage, weightedRatingEdge }: ReturnType<typeof lineupStrength>, freshnessWeight: number) {
   const weightedMeanEdge = weightedRatingEdge / coverage
-  const freshnessWeight = lineupFreshnessWeight(roster.observedAt, asOfDate)
-  const adjustment = cappedPlayerPregameEdge(playerPregameEdgeCoefficient * weightedMeanEdge * coverage * freshnessWeight)
-
-  return {
-    adjustment: Number(adjustment.toFixed(1)),
-    coverage: roundShare(coverage),
-    freshnessWeight,
-  }
+  return Number(cappedPlayerPregameEdge(playerPregameEdgeCoefficient * weightedMeanEdge * coverage * freshnessWeight).toFixed(1))
 }
 
 function lineupFreshnessWeight(observedAt: string, asOfDate: string) {

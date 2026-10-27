@@ -284,6 +284,22 @@
       "observation": "latest-game-imported-completion-or-roster-utc-date",
       "unsupportedCompletion": "withhold-entire-series-from-forecast-player-state",
       "seriesEdge": "frozen-at-series-start"
+    },
+    "completedLineupContinuityPolicy": {
+      "version": "completed-lineup-continuity-retention-v2",
+      "consumer": "roster-continuity-stable-and-execution-rating-step-only",
+      "lineup": "one-complete-five-role-played-lineup-identical-in-every-series-game",
+      "playedEvidence": "scored-series-roster-not-official-announcement-or-schedule",
+      "availability": "every-game-completion-and-roster-observation-utc-date-at-or-before-result-update-utc-date",
+      "strengths": "player-state-from-completion-proven-series-observed-strictly-before-series-start-utc-date",
+      "freshness": "positive-reference-and-completed-freshness-oldest-covered-player-game-count-increase-for-completed-price",
+      "homeLeague": "every-series-game-and-reference-price-share-the-resolved-team-home-league",
+      "reference": "forecast-edge-available-basis-pregame-min-coverage-positive-freshness",
+      "proof": "completed-unrounded-weighted-strength-and-priced-adjustment-both-strictly-greater-than-reference",
+      "provenRetention": "max-of-value-and-baseline-retained-value-for-stable-and-execution-rating",
+      "otherwise": "baseline-contraction",
+      "forecastEmitter": "forecast-edges-only",
+      "implementation": "builder-decision-consumed-by-node-and-native-series-pass"
     }
   },
   "eligibility": {
@@ -484,7 +500,7 @@
     "msi-play-in": 27,
     "major-playoffs": 22,
     "regional-regular": 14,
-    "minor-international": 23,
+    "minor-international": 22,
     "qualifier": 12
   },
   "eventWeights": {
@@ -494,7 +510,7 @@
     "msi-play-in": 1.9285714285714286,
     "major-playoffs": 1.5714285714285714,
     "regional-regular": 1,
-    "minor-international": 1.6428571428571428,
+    "minor-international": 1.5714285714285714,
     "qualifier": 0.8571428571428571
   }
 }

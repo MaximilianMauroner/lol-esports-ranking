@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import test from 'node:test'
 import type { ExactPregameProbabilityState } from '../src/domains/rankings/forecast.ts'
 import { playerRatingPredictionWeight } from '../src/domains/rankings/internal/policy/modelConfig.ts'
-import { buildPregamePlayerRatingEdges, type PregamePlayerRatingEdge } from '../src/domains/rankings/internal/players/playerModel.ts'
+import { buildPlayerLineupEdges, type PregamePlayerRatingEdge } from '../src/domains/rankings/internal/players/playerModel.ts'
 import { createRatingReplayContext, prepareRatingUtcDateBoundary, replayRatingDates } from '../src/domains/rankings/internal/replay/model.ts'
 import { sideAdjustmentsFromSamples } from '../src/domains/rankings/internal/replay/sideAdjustments.ts'
 import type { MatchRecord, MatchRosterSnapshot, PregamePrediction, Role, Side, TeamProfile } from '../src/domains/rankings/types.ts'
@@ -41,7 +41,7 @@ function predictorOutput(prediction: PregamePrediction) {
 }
 
 function sourceBuilt(corpus: MatchRecord[]) {
-  return forecast(corpus.filter(match => match.date === targetDate), () => buildPregamePlayerRatingEdges(corpus, { teams }))
+  return forecast(corpus.filter(match => match.date === targetDate), () => buildPlayerLineupEdges(corpus, { teams }).forecast)
 }
 
 test('source-built forecasts ignore target roster, side, identities, stats, winner and future games', () => {

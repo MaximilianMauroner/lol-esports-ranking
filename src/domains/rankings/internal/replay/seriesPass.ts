@@ -1,4 +1,5 @@
 import type { FactorBreakdown, LeagueStrengthHistoryPoint, RatingComponents, RatingUpdateLedger, Role, SeriesFormat } from '../../types.ts'
+import type { ContinuityRetention } from '../players/playerModel.ts'
 import type { SeriesResultUpdate } from './seriesResultUpdate.ts'
 
 export type Pair<T> = readonly [T, T]
@@ -81,6 +82,7 @@ export type SeriesPassSeries = Readonly<{
   bestOf: SeriesFormat
   wins: Pair<number>
   members: readonly SeriesPassMember[]
+  continuityRetention?: Pair<ContinuityRetention>
 }>
 export type SeriesPassFrame = Readonly<{
   utcDate: string

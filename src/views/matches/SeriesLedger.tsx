@@ -273,14 +273,14 @@ function RatingDelta({ delta }: { delta: number }) {
 function ChanceLine({ change, match }: { change: Extract<SeriesRatingChange, { kind: 'applied' }>; match: PublicMatchHistoryEntry }) {
   const team = change.chanceSide === 'A' ? match.teamA : match.teamB
   const parts = [
-    change.chance !== undefined ? `${team.code} ${formatRatio(change.chance)} pre-match` : '',
+    change.chance !== undefined ? `${team.code} ${formatRatio(change.chance)} replay win` : '',
     change.eventWeight !== undefined ? `${formatDecimal(change.eventWeight)}× event weight` : '',
   ].filter(Boolean)
   if (parts.length === 0) return null
   return (
     <span
       className="text-2xs text-[var(--faint)]"
-      title={change.chance !== undefined ? `Model's pre-match chance for ${team.name}` : undefined}
+      title={change.chance !== undefined ? `Replay win estimate for ${team.name} from earlier match dates` : undefined}
     >
       {parts.join(' · ')}
     </span>
@@ -291,7 +291,7 @@ function UpsetTag({ change, match }: { change: Extract<SeriesRatingChange, { kin
   const team = change.chanceSide === 'A' ? match.teamA : match.teamB
   const chance = formatRatio(change.chance)
   return (
-    <Badge variant="warning" className="shrink-0" title={`${team.name} won with a ${chance} pre-match chance`}>
+    <Badge variant="warning" className="shrink-0" title={`${team.name} won with a ${chance} replay win estimate from earlier match dates`}>
       Upset · {chance}
     </Badge>
   )

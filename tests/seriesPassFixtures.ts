@@ -72,6 +72,48 @@ export function variedGames(): MatchRecord[] {
   ]
 }
 
+function playedRoster(prefix: string, won: boolean, observedAt: string): MatchRosterSnapshot {
+  return {
+    sourceProvider: 'oracles-elixir', teamId: prefix, observedAt, completeness: 'complete-five-role',
+    players: (['Top', 'Jungle', 'Mid', 'Bot', 'Support'] as const).map((role) => ({
+      id: `${prefix}-${role}`, name: `${prefix}-${role}`, role,
+      stats: { side: 'blue', won, kills: won ? 6 : 1, deaths: won ? 1 : 6, assists: won ? 9 : 2,
+        damageShare: 0.2, earnedGoldShare: 0.2, vspm: 1 },
+    })),
+  }
+}
+function playedGame(id: string, date: string, alphaLineup: string, overrides: Partial<MatchRecord> = {}): MatchRecord {
+  return game(id, {
+    date, datetimeUtc: `${date}T10:00:00Z`, gameCompletedAtUtc: `${date}T11:00:00Z`,
+    teamARoster: playedRoster(alphaLineup, true, date), teamBRoster: playedRoster('beta', false, date), ...overrides,
+  })
+}
+
+export function protectedDate() {
+  const targetDate = '2026-01-10'
+  const matches = [
+    playedGame('main-1', '2026-01-02', 'main'),
+    playedGame('main-2', '2026-01-04', 'main'),
+    playedGame('main-3', '2026-01-06', 'main'),
+    playedGame('academy', '2026-01-08', 'academy'),
+    playedGame('swapped-1', targetDate, 'main', { sourceMatchId: 'swapped', gameNumber: 1, bestOf: 3 }),
+    playedGame('swapped-2', targetDate, 'main', {
+      sourceMatchId: 'swapped', gameNumber: 2, bestOf: 3, datetimeUtc: `${targetDate}T12:00:00Z`,
+      gameCompletedAtUtc: `${targetDate}T13:00:00Z`, teamA: 'Beta', teamB: 'Alpha', teamASide: 'blue', teamBSide: 'red',
+      teamARoster: playedRoster('beta', false, targetDate), teamBRoster: playedRoster('main', true, targetDate),
+    }),
+  ]
+  const context = createRatingReplayContext(matches, structuredClone(profiles))
+  const state = replayRatingDates({ context, replayMatches: context.authoritativeMatches.filter((match) => match.date < targetDate) })
+  state.ratings.set('Alpha', 1600.375)
+  state.executionRatings.set('Alpha', 1420.625)
+  const captures: SeriesPassCapture[] = []
+  replayRatingDates({ context, state, replayMatches: context.authoritativeMatches.filter((match) => match.date === targetDate),
+    onSeriesPassDate: (capture) => captures.push(capture) })
+  if (captures.length !== 1) throw new Error('The protected series pass did not emit one capture')
+  return captures[0]
+}
+
 export function sparseDate() {
   const match = game('sparse', {
     bestOf: 3, patch: '', winner: 'Beta', teamARoster: undefined, teamBRoster: undefined,
@@ -81,7 +123,7 @@ export function sparseDate() {
   state.executionRatings.set('Beta', 1816)
   const capture = processRatingSeriesForDate({
     matches: [match], teams: structuredClone(profiles), state, sideAdjustments: new Map(),
-    lastDate: match.date, pregamePlayerRatingEdges: new Map(), capture: true,
+    lastDate: match.date, pregamePlayerRatingEdges: new Map(), continuityRetention: new Map(), capture: true,
   })
   if (!capture) throw new Error('The synthetic series pass did not emit a capture')
   return capture

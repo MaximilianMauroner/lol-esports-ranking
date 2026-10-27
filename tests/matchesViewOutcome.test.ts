@@ -21,13 +21,13 @@ function series(overrides: Partial<PublicMatchHistoryEntry>): PublicMatchHistory
     teamA: { id: 'gen', name: 'Gen.G', code: 'GEN' },
     teamB: { id: 'bro', name: 'HANJIN BRION', code: 'BRO' },
     winnerId: 'bro',
-    impact: { unit: 'series-applied', teamA: -45, teamB: 46, expectedTeamA: 0.78, eventWeight: 1.643 },
+    impact: { unit: 'series-applied', teamA: -45, teamB: 46, expectedTeamA: 0.78, expectedTeamB: 0.22, forecastSource: { basis: 'latest-corrected-prior-replay', predictionId: 'g1' }, eventWeight: 1.643 },
     source: { provider: 'leaguepedia-cargo' },
     ...overrides,
   }
 }
 
-test('reports the pre-match chance of the series winner and flags upsets', () => {
+test('reports the recorded replay chance of the series winner and flags upsets', () => {
   const change = seriesRatingChange(series({}))
   assert.equal(change.kind, 'applied')
   if (change.kind !== 'applied') return

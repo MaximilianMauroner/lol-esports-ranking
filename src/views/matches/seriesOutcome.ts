@@ -15,7 +15,6 @@ export type SeriesRatingChange =
     kind: 'applied'
     teamA: number
     teamB: number
-    /** Pre-match chance of the team named in `chanceSide`, on a 0-1 scale. */
     chance?: number
     chanceSide: SeriesSide
     eventWeight?: number
@@ -28,21 +27,16 @@ export function seriesWinner(match: Pick<PublicMatchHistoryEntry, 'seriesWinsA' 
   return match.seriesWinsA > match.seriesWinsB ? 'A' : 'B'
 }
 
-/**
- * Reads the series-level rating change from the summary game. The pre-match
- * chance is reported for the winner, because that is the number an upset is
- * judged by. Series whose deltas do not reconcile report `missing`, and show no
- * chance or upset, because their inputs are not trustworthy.
- */
 export function seriesRatingChange(match: PublicMatchHistoryEntry): SeriesRatingChange {
   if (match.impact.unit === 'held') return { kind: 'held' }
-  const { teamA, teamB, expectedTeamA, eventWeight } = match.impact
+  const { teamA, teamB, expectedTeamA, expectedTeamB, forecastSource, eventWeight } = match.impact
   if (!hasConsistentImpactDirection(match) || typeof teamA !== 'number' || typeof teamB !== 'number') return { kind: 'missing' }
   const winner = seriesWinner(match)
   const chanceSide = winner ?? 'A'
-  const chance = typeof expectedTeamA === 'number' && Number.isFinite(expectedTeamA)
-    ? chanceSide === 'A' ? expectedTeamA : 1 - expectedTeamA
-    : undefined
+  const probability = chanceSide === 'A' ? expectedTeamA : expectedTeamB
+  const chance = forecastSource?.basis === 'latest-corrected-prior-replay' && forecastSource.predictionId
+    && typeof probability === 'number' && Number.isFinite(probability) && probability >= 0 && probability <= 1
+    ? probability : undefined
   return {
     kind: 'applied',
     teamA,

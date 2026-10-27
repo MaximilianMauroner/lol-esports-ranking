@@ -31,7 +31,7 @@ test('result component matches production stable updates and frozen-state public
         }]))
         processRatingSeriesForDate({
           matches: structuredClone(fixture.games), teams: structuredClone(fixture.basis.context.teams), state: production,
-          sideAdjustments: new Map(), lastDate: fixture.games[0]!.date, pregamePlayerRatingEdges: edges,
+          sideAdjustments: new Map(), lastDate: fixture.games[0]!.date, pregamePlayerRatingEdges: edges, continuityRetention: new Map(),
         })
         const projected = structuredClone(baseline)
         for (const team of fixture.basis.teamNames) {
@@ -74,7 +74,7 @@ test('historical pending placements finalize the frozen baseline before result e
     teamBAdjustment: baseline.rosterPriorOffsets.get(game.teamB)! / playerRatingPredictionWeight,
   }]))
   processRatingSeriesForDate({ matches: fixture.games, teams: fixture.basis.context.teams, state: production,
-    sideAdjustments: new Map(), lastDate: fixture.games[0]!.date, pregamePlayerRatingEdges: edges })
+    sideAdjustments: new Map(), lastDate: fixture.games[0]!.date, pregamePlayerRatingEdges: edges, continuityRetention: new Map() })
   const projected = structuredClone(baseline)
   for (const team of fixture.basis.teamNames) projected.ratings.set(team, production.ratings.get(team)!)
   const after = materializeRankingModel({ context: structuredClone(fixture.basis.context), state: projected })
