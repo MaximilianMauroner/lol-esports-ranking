@@ -1,0 +1,69 @@
+{
+  "oracle": {
+    "path": "/Users/maximilianmauroner/Documents/GitHub/lol-esports-ranking/.agents/artifacts/hill-climb/20261026-ranking-accuracy/evidence/oracle/current-2026.csv",
+    "sha256": "4eccb6fd01ef3dc05513fa5574b71c08d1b18cd9802268829c785510253f4758"
+  },
+  "cargo": {
+    "path": "/Users/maximilianmauroner/Documents/GitHub/lol-esports-ranking/.agents/artifacts/hill-climb/20261026-ranking-accuracy/evidence/cargo/replay-2026.json",
+    "sha256": "af575b4a60d204558610bcae41b7b571ab21ec9acc0ae2f76aeca194761814c7"
+  },
+  "oracleGameIds": [
+    "13057-13057_game_1",
+    "13058-13058_game_1",
+    "13059-13059_game_1",
+    "13398-13398_game_1",
+    "13398-13398_game_2",
+    "LOLTMNT01_433652",
+    "LOLTMNT01_434666",
+    "LOLTMNT01_439279",
+    "LOLTMNT01_440253",
+    "LOLTMNT01_440580",
+    "LOLTMNT01_440586",
+    "LOLTMNT01_440592",
+    "LOLTMNT01_441403",
+    "LOLTMNT01_441410",
+    "LOLTMNT01_443254",
+    "LOLTMNT01_443312",
+    "LOLTMNT01_444226",
+    "LOLTMNT01_444240",
+    "LOLTMNT02_450870",
+    "LOLTMNT02_450875",
+    "LOLTMNT02_450878"
+  ],
+  "oracleRows": 252,
+  "midnightCargoIds": [
+    "LCS/2026 Season/Summer Season_Week 2_2_1",
+    "LCS/2026 Season/Summer Season_Week 2_2_2",
+    "CBLOL/2026 Season/Split 2_Week 3_2_1",
+    "CBLOL/2026 Season/Split 2_Week 3_2_2",
+    "LCS/2026 Season/Summer Season_Week 3_2_1",
+    "LCS/2026 Season/Summer Season_Week 3_2_2",
+    "LCS/2026 Season/Summer Season_Week 3_2_3",
+    "CBLOL/2026 Season/Split 2_Week 3_8_1",
+    "CBLOL/2026 Season/Split 2_Week 3_8_2",
+    "LCS/2026 Season/Summer Season_Week 4_4_1",
+    "LCS/2026 Season/Summer Season_Week 4_4_2",
+    "LCS/2026 Season/Summer Season_Week 4_4_3"
+  ],
+  "fixtureSha256": {
+    "physical-oracle.csv": "3850737e504fc5b1259f742e3029879b046badefeda14d0082c66303caa06cad",
+    "home-league-oracle.csv": "2bde6afd958f06e963db57c898ed94e796fc728fa2fceb948d2d4fcbbde587fa",
+    "midnight-cargo.json": "f78c3ac3e873863062319bd60b7a848b181a6331f586fe4e09de751cff195e1e",
+    "cases.json": "1ab8fe53c3e2e9f801ee496bf2d18816ccbc679d54272e4992e558d43555ae3d",
+    "case-cargo.json": "d0e2c13deed00024ad5d99132da94d8f4d606b3403500a93644fe1803b8dbf67",
+    "case-oracle.csv": "237ed94a7192cc31f2373bb52d25a46d8c50589efd1fd9a92d54656f2285dd23"
+  },
+  "purpose": "Retained provider rows for ten corroborated physical series. Full Oracle rows preserve player observations. The team excerpt and first Cargo excerpt are byte-identical to the parent evidence.",
+  "homeLeagueOracle": {
+    "path": "/Users/maximilianmauroner/Documents/GitHub/lol-esports-ranking/data/raw/oracles-elixir/2025_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "0689b26feeebc049ac6cf05f5a9336b83c339e7899868e45dc5e3125f962bb34",
+    "gameIds": [
+      "12636-12636_game_2",
+      "12798-12798_game_3",
+      "12808-12808_game_3",
+      "12810-12810_game_3"
+    ],
+    "rows": 48,
+    "purpose": "Prior LPL observations used by the existing home-league resolver for the Demacia snapshot test."
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "source": "Retained Leaguepedia fixture excerpt",
+  "matches": [
+    {
+      "id": "2026 Season World Championship/Play-In_Round 1_2_1",
+      "event": "2026 Season World Championship/Play-In",
+      "date": "2026-10-15",
+      "datetimeUtc": "2026-10-15 23:11:00",
+      "patch": "26.20",
+      "teamA": "MVK Esports",
+      "teamB": "FURIA",
+      "winner": "MVK Esports"
+    },
+    {
+      "id": "2026 Season World Championship/Play-In_Round 1_2_2",
+      "event": "2026 Season World Championship/Play-In",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16 00:06:00",
+      "patch": "26.20",
+      "teamA": "MVK Esports",
+      "teamB": "FURIA",
+      "winner": "MVK Esports"
+    },
+    {
+      "id": "2026 Season World Championship/Play-In_Round 1_2_3",
+      "event": "2026 Season World Championship/Play-In",
+      "date": "2026-10-16",
+      "datetimeUtc": "2026-10-16 01:01:00",
+      "patch": "26.20",
+      "teamA": "MVK Esports",
+      "teamB": "FURIA",
+      "winner": "MVK Esports"
+    }
+  ]
+}
