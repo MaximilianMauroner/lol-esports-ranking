@@ -38,7 +38,7 @@ import {
 import { CompareDock, type CompareDockEntity } from './CompareDock'
 import { RegionCompareDrawer, TeamCompareDrawer } from './CompareDrawer'
 import { HeadToHead } from './HeadToHead'
-import { MatchesView, preloadComparison, preloadView, RegionCompareAnalysis, RegionsView, TeamCompareAnalysis } from './routeLoading'
+import { MatchesView, PlayersView, preloadComparison, preloadView, RegionCompareAnalysis, RegionsView, TeamCompareAnalysis } from './routeLoading'
 import { ScopeBar } from './ScopeBar'
 import { TeamsView } from './TeamsView'
 import type { PlayerLoadState } from './types'
@@ -54,7 +54,7 @@ const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 export function RankingRoute() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
   const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
-  const [loadPlayers, setLoadPlayers] = useState(false)
+  const [loadPlayers, setLoadPlayers] = useState(() => readModeFromHash() === 'players')
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
   const [teamPicks, setTeamPicks] = useState<RankingSummaryStanding[]>([])
@@ -100,6 +100,7 @@ export function RankingRoute() {
   const [teamSearch, setTeamSearch] = useState(() => hashParam('team') ?? '')
   const [boardHashQuery, setBoardHashQuery] = useState(currentHashQuery)
   const [matchesHashQuery, setMatchesHashQuery] = useState(currentHashQuery)
+  const [playersHashQuery, setPlayersHashQuery] = useState(currentHashQuery)
   const mainRef = useRef<HTMLElement | null>(null)
   const didMountModeRef = useRef(false)
   const selectScope = useCallback((nextScope: string) => {
@@ -154,8 +155,10 @@ export function RankingRoute() {
       setMode(nextMode)
       setMatchYear(hashParam('matchesYear'))
       if (nextMode === 'regions') setLoadRegionHistory(true)
+      if (nextMode === 'players') setLoadPlayers(true)
       if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
       if (nextMode === 'matches') setMatchesHashQuery(currentHashQuery())
+      if (nextMode === 'players') setPlayersHashQuery(currentHashQuery())
       const nextScope = readScopeFromHash()
       if (nextScope) selectScope(nextScope)
       // Every board filter is read in this one listener. React renders after
@@ -229,6 +232,7 @@ export function RankingRoute() {
   const requestRegionHistory = useCallback(() => setLoadRegionHistory(true), [])
   const prepareMode = useCallback((nextMode: Mode) => {
     preloadView(nextMode)
+    if (nextMode === 'players') setLoadPlayers(true)
     if (nextMode === 'regions') setLoadRegionHistory(true)
     if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
   }, [])
@@ -335,7 +339,7 @@ export function RankingRoute() {
   return (
     <div className="flex min-h-full flex-col">
       <a className="fixed top-[-56px] left-3 z-80 rounded-md border border-[var(--accent-line)] bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold text-[var(--text-strong)] no-underline shadow-[var(--shadow-2)] transition-[top] duration-120 ease-out focus-visible:top-3" href="#main-content" onClick={(event) => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView({ block: 'start' }) }}>Skip to content</a>
-      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={mode === 'matches' ? undefined : searchTeams} searchRef={searchRef} onIntent={prepareMode} />
+      <AppNavigation mode={mode} scope={effectiveScope} onGoHome={goHome} search={teamSearch} onSearch={mode === 'matches' || mode === 'players' ? undefined : searchTeams} searchRef={searchRef} onIntent={prepareMode} />
 
       {/* Space is reserved for the fixed compare tray on the two views that have
           one, and for the bottom tab bar on phones. */}
@@ -354,7 +358,7 @@ export function RankingRoute() {
         <ScopeBar
           seasons={seasonTabs}
           activeSeason={activeSeason}
-          checkpoints={checkpointTabs}
+          checkpoints={mode === 'players' ? [] : checkpointTabs}
           activeCheckpoint={activeCheckpoint}
           pendingCheckpoint={pendingCheckpoint}
           throughDate={loadedData.coverage?.latestMatchDate}
@@ -420,6 +424,9 @@ export function RankingRoute() {
         ) : (
           <RouteErrorBoundary key={mode}>
             <Suspense fallback={<LoadingState presentation="page" layout={PAGE_LAYOUTS[mode]} label={`Loading ${MODE_TITLES[mode].title}`} />}>
+              {mode === 'players' ? (
+                <PlayersView state={playersState} filter={filter} scopeLabel={scopeLabel(effectiveScope)} hashQuery={playersHashQuery} searchRef={searchRef} />
+              ) : null}
               {mode === 'regions' ? (
                 <RegionsView
                   regions={regions}

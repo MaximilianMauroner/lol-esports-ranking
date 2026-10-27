@@ -1,5 +1,6 @@
 import type { PublicPlayerDirectory, SnapshotFilter } from '../../types.ts'
 import { snapshotKey } from '../published/schema.ts'
+import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
 export type PlayerScopeBasis = 'current' | 'season-fallback' | 'all-seasons-fallback'
 
@@ -11,6 +12,19 @@ export type ResolvedPlayerScope = {
 
 export function emptyPlayerScope(filter: SnapshotFilter): ResolvedPlayerScope {
   return { players: [], currentLineups: {}, label: playerScopeLabel(filter, 'current') }
+}
+
+export function playerLeaderboardForScope(
+  directory: PublicPlayerDirectory | undefined,
+  filter: SnapshotFilter,
+): PublicPlayerDirectory['players'] {
+  if (!directory) return []
+  const players = filter.season === 'All' && filter.event === 'All' && filter.region === 'All' && !filter.checkpoint
+    ? directory.players
+    : directory.scopedPlayers?.[snapshotKey(filter)] ?? []
+  return players.toSorted((left, right) =>
+    right.rating - left.rating || left.rank - right.rank || compareCodeUnits(left.id, right.id),
+  )
 }
 
 export function resolvePlayerScope(

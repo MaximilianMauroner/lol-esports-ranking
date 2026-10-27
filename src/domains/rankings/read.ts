@@ -43,6 +43,7 @@ export {
 } from './internal/queries/nearTies.ts'
 export {
   emptyPlayerScope,
+  playerLeaderboardForScope,
   resolvePlayerScope,
 } from './internal/queries/playerScopes.ts'
 export {
