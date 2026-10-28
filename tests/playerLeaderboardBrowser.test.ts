@@ -184,6 +184,34 @@ test('Players supports navigation, exact seasons, score order, addressed filters
     await page.reload()
     await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
 
+    for (const query of ['', '?scope=', '?scope=invalid']) {
+      await setHash('#rankings?scope=season%3A2026%3Acheckpoint%3Asplit-2&eligibility=all')
+      await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
+      await page.locator('table tbody tr').first().waitFor()
+      await setHash(`#players${query}`)
+      await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
+      await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026', null, { timeout: 5_000 })
+    }
+    for (const requested of ['season:2019:checkpoint:split-2', 'season:2019', 'season:2099:split-2']) {
+      await setHash(`${playersAddress}&player=Fixture&role=Mid&keep=untouched`)
+      await expectPlayers(page, ['Aster', 'Cedar'])
+      await setHash(`#players?scope=${encodeURIComponent(requested)}&player=Fixture&role=Mid&keep=untouched`)
+      await expectPlayers(page, ['Aster', 'Cedar'])
+      await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026', null, { timeout: 5_000 })
+      assert.equal(await search.inputValue(), 'Fixture')
+      assert.equal(await role.inputValue(), 'Mid')
+      assert.equal(await page.evaluate(() => new URLSearchParams(location.hash.split('?')[1]).get('keep')), 'untouched')
+    }
+    await setHash('#players?scope=season%3A2025')
+    await expectPlayers(page, ['Echo', 'Foxtrot', 'Delta'])
+    await setHash('#players')
+    await expectPlayers(page, ['Echo', 'Foxtrot', 'Delta'])
+    await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2025', null, { timeout: 5_000 })
+    await page.goto('about:blank')
+    await page.goto(`${base}#players?scope=season%3A2019%3Acheckpoint%3Asplit-2`)
+    await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
+    await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026', null, { timeout: 5_000 })
+
     await page.keyboard.press('/')
     assert.equal(await search.evaluate((input) => input === document.activeElement), true)
     await search.fill('Fixture')

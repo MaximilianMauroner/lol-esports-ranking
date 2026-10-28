@@ -7,6 +7,7 @@ import {
   checkpointFromScope,
   checkpointOptionsForSeason,
   checkpointScope,
+  normalizeScopeForData,
   scopeLabel,
   seasonFromScope,
   usePublicArtifacts,
@@ -163,11 +164,14 @@ export function RankingRoute() {
       if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
       if (nextMode === 'matches') setMatchesHashQuery(currentHashQuery())
       const nextScope = readScopeFromHash()
-      if (nextScope) {
-        const normalizedScope = scopeForMode(nextMode, nextScope)
+      if (nextMode === 'players') {
+        const requestedScope = scopeForMode(nextMode, nextScope ?? effectiveScope)
+        const normalizedScope = manifestState.status === 'ready'
+          ? normalizeScopeForData(requestedScope, manifestState.data)
+          : requestedScope
         selectScope(normalizedScope)
-        if (normalizedScope !== nextScope) replaceHashForModeAndScope(nextMode, normalizedScope)
-      }
+        replaceHashForModeAndScope(nextMode, normalizedScope)
+      } else if (nextScope) selectScope(nextScope)
       if (nextMode === 'players') setPlayersHashQuery(currentHashQuery())
       // Every board filter is read in this one listener. React renders after
       // each hashchange listener, and that render would write the old board
@@ -182,7 +186,7 @@ export function RankingRoute() {
     const transition = () => startTransition(onHashChange)
     window.addEventListener('hashchange', transition)
     return () => window.removeEventListener('hashchange', transition)
-  }, [selectScope])
+  }, [effectiveScope, manifestState, selectScope])
 
   useEffect(() => {
     replaceHashForModeAndScope(mode, effectiveScope)
