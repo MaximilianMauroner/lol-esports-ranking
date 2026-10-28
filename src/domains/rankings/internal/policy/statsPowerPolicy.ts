@@ -1,9 +1,5 @@
 import type { EventTier, PlayerPerformanceMetric, Role } from '../../types.ts'
 
-/**
- * Display-score policy only. It changes no replay or forecast state, so it is
- * versioned on each summary and stays out of the player and team model parameters.
- */
 export const statsPowerPolicy = {
   version: 'stats-power-v3',
   halfLifeDays: 90,

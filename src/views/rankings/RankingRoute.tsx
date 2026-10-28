@@ -66,6 +66,7 @@ export function RankingRoute() {
   // the ones TeamsView owns are: a shared or reloaded board must come back.
   const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>(() => readTournamentFilterFromHash())
   const tournamentId = tournamentIdFromFilter(tournamentFilter)
+  const requestedScope = mode === 'players' && checkpointFromScope(scope) ? `season:${seasonFromScope(scope)}` : scope
   const {
     manifestState,
     effectiveScope,
@@ -86,7 +87,7 @@ export function RankingRoute() {
     retryTournamentMovements,
     prefetchScope,
     prefetchTournament,
-  } = usePublicArtifacts(scope, {
+  } = usePublicArtifacts(requestedScope, {
     loadPlayers,
     loadTeamHistory,
     teamHistoryTeams: drawerOpen && mode === 'rankings' ? teamPicks.map(teamKey) : historyTeams,
@@ -178,7 +179,7 @@ export function RankingRoute() {
 
   useEffect(() => {
     replaceHashForModeAndScope(mode, effectiveScope)
-  }, [effectiveScope, mode])
+  }, [effectiveScope, mode, scope])
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })

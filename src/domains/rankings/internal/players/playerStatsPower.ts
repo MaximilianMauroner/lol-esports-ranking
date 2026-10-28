@@ -22,11 +22,6 @@ type PlayerRoleEvidence = {
 
 type Normalization = { center: number; scale: number } | undefined
 
-/**
- * Scores every player and role seen in a complete sourced role matchup. Centers,
- * scales and league anchors come only from the supplied matches, so a prefix caller
- * gets a prefix-only score. Results, KDA, gold share and player strength never enter.
- */
 export function buildPlayerStatsPower(
   matches: readonly MatchRecord[],
   context: { teams?: Record<string, TeamProfile>; eventWeightContext?: EventWeightContext },

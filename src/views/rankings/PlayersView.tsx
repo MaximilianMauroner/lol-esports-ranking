@@ -149,7 +149,7 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
         <p className="break-words text-xs leading-relaxed text-muted-foreground">
           Source {directory.sourceProvider}.{' '}
           {statsPowerVersion
-            ? `Stats Power ${statsPowerVersion} scores lane leads at 15 minutes, kill participation and ward activity against each role's average. It weights each game by event and home-league strength, then halves its weight for every 90 days before the latest match date in the supplied history. It pulls small samples to the league anchor and excludes wins, KDA and gold share. It does not decay with wall-clock inactivity. Stat games count raw games with usable role stats in this scope, including previous teams. `
+            ? `Stats Power ${statsPowerVersion} scores lane leads at 15 minutes, kill participation and ward activity against each role's average. It weights each game by event and home-league strength, then gives a game half the weight of a game 90 days later in the supplied history. It pulls small samples to the league anchor and excludes wins, KDA and gold share. For each player, newer games get more weight than older games. Inactivity alone does not lower the score. Stat games count raw games with usable role stats in this scope, including previous teams. `
             : ''}
           Role Power uses model {directory.modelVersion}, configuration {directory.modelConfigHash}, and includes individual stats, results, opponent strength and event context. Its history and deltas still track Role Power. Games count games credited to the displayed team where available, otherwise all rated games. Game counts do not measure certainty.
         </p>

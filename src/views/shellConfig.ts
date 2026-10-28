@@ -23,7 +23,7 @@ export const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
   },
   players: {
     title: 'Player rankings',
-    intro: 'Stats Power ranks role stats against the role average, weighted by event, league strength and match age with a fixed 90-day half-life. Rows without it show Role Power, which also uses results. Higher is stronger.',
+    intro: 'Stats Power ranks role stats against the role average, weighted by event and league strength. Newer games get more weight, with a 90-day half-life. Inactivity alone does not lower the score. Rows without it show Role Power, which also uses results. Higher is stronger.',
   },
   regions: {
     title: 'Region power',
