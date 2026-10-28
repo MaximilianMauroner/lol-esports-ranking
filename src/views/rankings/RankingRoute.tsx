@@ -51,9 +51,13 @@ const COMPARE_LIMIT = 4
 
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 
+function scopeForMode(mode: Mode, scope: string) {
+  return mode === 'players' && checkpointFromScope(scope) ? `season:${seasonFromScope(scope)}` : scope
+}
+
 export function RankingRoute() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
-  const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
+  const [scope, setScope] = useState(() => scopeForMode(readModeFromHash(), readScopeFromHash() ?? currentSeasonScope()))
   const [loadPlayers, setLoadPlayers] = useState(() => readModeFromHash() === 'players')
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
@@ -66,7 +70,6 @@ export function RankingRoute() {
   // the ones TeamsView owns are: a shared or reloaded board must come back.
   const [tournamentFilter, setTournamentFilter] = useState<TournamentFilterValue>(() => readTournamentFilterFromHash())
   const tournamentId = tournamentIdFromFilter(tournamentFilter)
-  const requestedScope = mode === 'players' && checkpointFromScope(scope) ? `season:${seasonFromScope(scope)}` : scope
   const {
     manifestState,
     effectiveScope,
@@ -87,7 +90,7 @@ export function RankingRoute() {
     retryTournamentMovements,
     prefetchScope,
     prefetchTournament,
-  } = usePublicArtifacts(requestedScope, {
+  } = usePublicArtifacts(scope, {
     loadPlayers,
     loadTeamHistory,
     teamHistoryTeams: drawerOpen && mode === 'rankings' ? teamPicks.map(teamKey) : historyTeams,
@@ -159,9 +162,13 @@ export function RankingRoute() {
       if (nextMode === 'players') setLoadPlayers(true)
       if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
       if (nextMode === 'matches') setMatchesHashQuery(currentHashQuery())
-      if (nextMode === 'players') setPlayersHashQuery(currentHashQuery())
       const nextScope = readScopeFromHash()
-      if (nextScope) selectScope(nextScope)
+      if (nextScope) {
+        const normalizedScope = scopeForMode(nextMode, nextScope)
+        selectScope(normalizedScope)
+        if (normalizedScope !== nextScope) replaceHashForModeAndScope(nextMode, normalizedScope)
+      }
+      if (nextMode === 'players') setPlayersHashQuery(currentHashQuery())
       // Every board filter is read in this one listener. React renders after
       // each hashchange listener, and that render would write the old board
       // filters back to the hash before a second listener could read them.
@@ -179,7 +186,7 @@ export function RankingRoute() {
 
   useEffect(() => {
     replaceHashForModeAndScope(mode, effectiveScope)
-  }, [effectiveScope, mode, scope])
+  }, [effectiveScope, mode])
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })

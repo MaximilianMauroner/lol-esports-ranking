@@ -162,6 +162,13 @@ test('Players supports navigation, exact seasons, score order, addressed filters
     await navigation.getByRole('link', { name: 'Players', exact: true }).click()
     await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
     await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026')
+    for (const checkpoint of ['checkpoint%3Asplit-2', 'split-2']) {
+      await page.goto(`${base}#players?scope=season%3A2026%3A${checkpoint}`)
+      await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
+      await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026', null, { timeout: 5_000 })
+      await page.goBack()
+      await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
+    }
     await page.goBack()
     await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
     assert.equal(await page.evaluate(() => new URLSearchParams(location.hash.split('?')[1]).get('scope')), 'season:2026:checkpoint:split-2')
@@ -170,6 +177,7 @@ test('Players supports navigation, exact seasons, score order, addressed filters
     await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026')
     await page.reload()
     await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
+    await page.goto('about:blank')
     await page.goto(`${base}#players?scope=season%3A2026%3Acheckpoint%3Asplit-2`)
     await expectPlayers(page, ['Aster', 'Beacon', 'Cedar'])
     await page.waitForFunction(() => new URLSearchParams(location.hash.split('?')[1]).get('scope') === 'season:2026')
