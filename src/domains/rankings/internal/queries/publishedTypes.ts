@@ -1,4 +1,4 @@
-import type { ChampionPicks, DeservedStandingEligibilityLabel, DeservedStandingLeaderboard, FactorBreakdown, LeagueStrength, MatchRecord, PlayerAppearanceSummary, PlayerDiagnostics, PlayerIndividualResidual, PlayerStanding, PublishedRatingScale, RatingComponents, RatingUpdateLedger, Region, Role, RosterBasis, SeriesState, SourceTrace, TeamEligibility } from '../../types.ts'
+import type { ChampionPicks, DeservedStandingEligibilityLabel, DeservedStandingLeaderboard, FactorBreakdown, LeagueStrength, MatchRecord, PlayerAppearanceSummary, PlayerDiagnostics, PlayerIndividualResidual, PlayerStanding, PlayerStatsPower, PublishedRatingScale, RatingComponents, RatingUpdateLedger, Region, Role, RosterBasis, SeriesState, SourceTrace, TeamEligibility } from '../../types.ts'
 import type { InternationalTournamentFamilyId, TournamentInstanceId, TournamentLifecycleStatus } from '../evidence/internationalTournaments.ts'
 import type { WalkForwardMetrics } from '../projections/predictionModel.ts'
 import type { RegionStrength } from '../projections/regionStrength.ts'
@@ -308,6 +308,7 @@ export type CompactPlayer = {
   latestObservedAt?: string
   latestObservedEvent?: string
   appearance?: PlayerAppearanceSummary
+  statsPower?: PlayerStatsPower
 }
 
 export type PublicPlayerDirectory = {

@@ -6,11 +6,15 @@ const loadRegionsView = () => import('../regions/RegionsView').then((module) => 
 
 const loadMatchesView = () => import('../matches/MatchesView').then((module) => ({ default: module.MatchesView }))
 
+const loadPlayersView = () => import('./PlayersView').then((module) => ({ default: module.PlayersView }))
+
 const loadCompareAnalysis = () => import('./CompareAnalysis')
 
 export const RegionsView = lazy(loadRegionsView)
 
 export const MatchesView = lazy(loadMatchesView)
+
+export const PlayersView = lazy(loadPlayersView)
 
 export const RegionCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.RegionCompareAnalysis })))
 
@@ -18,6 +22,7 @@ export const TeamCompareAnalysis = lazy(() => loadCompareAnalysis().then((module
 
 const VIEW_LOADERS = {
   rankings: undefined,
+  players: loadPlayersView,
   regions: loadRegionsView,
   matches: loadMatchesView,
   tournaments: loadTournamentsView,

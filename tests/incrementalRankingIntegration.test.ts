@@ -85,10 +85,15 @@ test('releasing import audit rows before snapshot preserves roster/player public
     )
     const normalIdentities = identities(normal.publicPlan.writes)
     assert.deepEqual(identities(lean.publicPlan.writes), normalIdentities)
+    const legacyPlayers = buildPlayerModel(normalSource.matches, {}, { teams: normalSource.teams }).map((player) => {
+      const legacy = { ...player }
+      delete legacy.statsPower
+      return legacy
+    })
     assert.equal(
       prepareSemanticArtifact({
         artifactKind: 'player-model-regression',
-        players: buildPlayerModel(normalSource.matches, {}, { teams: normalSource.teams }),
+        players: legacyPlayers,
       }).digest,
       'bd576291c3b6ae3ad1109ea784529949df21f162237bff7d8510de0d7a3226d3',
     )

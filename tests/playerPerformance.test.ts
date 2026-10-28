@@ -109,17 +109,18 @@ function sourcedMatches(observed: boolean): MatchRecord[] {
   })
 }
 
-test('new stats affect diagnostics but never player/team ranks, residuals, or predictions', () => {
+test('new stats affect diagnostics and Stats Power but never legacy player/team ranks, residuals, or predictions', () => {
   const missing = sourcedMatches(false)
   const observed = sourcedMatches(true)
   const missingPlayers = buildPlayerModel(missing, {}, { teams })
   const observedPlayers = buildPlayerModel(observed, {}, { teams })
-  const omitDiagnostics = (player: (typeof missingPlayers)[number]) => {
+  const legacyFields = (player: (typeof missingPlayers)[number]) => {
     const copy = { ...player }
     delete copy.diagnostics
+    delete copy.statsPower
     return copy
   }
-  assert.deepEqual(observedPlayers.map(omitDiagnostics), missingPlayers.map(omitDiagnostics))
+  assert.deepEqual(observedPlayers.map(legacyFields), missingPlayers.map(legacyFields))
   assert.equal(observedPlayers[0].diagnostics!.performance!.metrics.goldDiffAt15.games, 24)
   assert.equal(missingPlayers[0].diagnostics!.performance!.metrics.goldDiffAt15.value, null)
   const baseline = buildRankingModel(missing, teams)
