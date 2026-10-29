@@ -1,5 +1,5 @@
 import { COMBO_PRESETS, actionAvailable } from "../../browser/dps/presets.ts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ProgressionApiResponse } from "../../domains/dps/datasets.ts";
 import {
   buildDiff,
@@ -568,10 +568,16 @@ export default function Home() {
     ],
   );
 
+  const autoKey = JSON.stringify({
+    level, duration, metric, targetMode, region, rank, phase, role,
+    buildAItems, buildBItems, ranks, actions, continueAutos, yunTalStacks,
+    manual, selectedTargetId,
+  });
+  const runAutomatically = useEffectEvent(() => void run());
   useEffect(() => {
-    const timer = setTimeout(() => void run(), 280);
+    const timer = setTimeout(runAutomatically, 280);
     return () => clearTimeout(timer);
-  }, [run]);
+  }, [autoKey]);
 
   function markBuildsEdited() {
     buildsEditedRef.current = true;

@@ -47,7 +47,7 @@ export async function handleDpsRequest(request: IncomingMessage, response: Serve
     send(response, Response.json({ error: 'Method not allowed.' }, { status: 405, headers: { allow: route?.method ?? 'POST' } }))
     return true
   }
-  if (request.method === 'POST' && request.headers.origin && new URL(request.headers.origin).host !== url.host) {
+  if (request.method === 'POST' && request.headers.origin && (!URL.canParse(request.headers.origin) || new URL(request.headers.origin).host !== url.host)) {
     send(response, Response.json({ error: 'Same-origin request required.' }, { status: 403 }))
     return true
   }

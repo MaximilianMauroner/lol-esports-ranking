@@ -113,7 +113,7 @@ if (process.env.ARCHIVE_REQUIRED === "false")
   throw new Error("ARCHIVE_REQUIRED=false is unsupported: archive-first ingestion is mandatory.");
 if (!archiveEnabled())
   throw new Error(
-    "Railway bucket S3 variables are required for ingestion. Configure BUCKET, ENDPOINT, REGION, ACCESS_KEY_ID, and SECRET_ACCESS_KEY.",
+    "DPS archive variables are required for ingestion. Configure DPS_ARCHIVE_BUCKET, DPS_ARCHIVE_ENDPOINT, DPS_ARCHIVE_REGION, DPS_ARCHIVE_ACCESS_KEY_ID, and DPS_ARCHIVE_SECRET_ACCESS_KEY.",
   );
 
 const platformHost = `${platform.toLowerCase()}.api.riotgames.com`;

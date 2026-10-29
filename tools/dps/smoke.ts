@@ -66,7 +66,7 @@ try {
   const call = (path: string, body?: unknown) => fetch(`${base}/api/dps/${path}`, { method: body ? 'POST' : 'GET', headers: { cookie, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
   const cohort = await call('cohort', { phase: 'yunara-level', level: 13 })
   assert.equal(cohort.status, 200)
-  const cohortData = await cohort.json() as { dataset: { provenance: string; targets: unknown[] } }
+  const cohortData = await cohort.json() as { dataset: { provenance: string; targets: Array<{ champion: string }> } }
   assert.equal(cohortData.dataset.provenance, 'fixture')
   assert.ok(cohortData.dataset.targets.length > 0)
   const progression = await call('progression?champion=Yunara&level=13')
@@ -119,6 +119,12 @@ try {
   assert.equal(await page.locator('.dps-surface .error').count(), 0)
   await page.locator('summary').filter({ hasText: 'Damage trace' }).click()
   await page.locator('table.trace').first().waitFor()
+  const foldStyle = await page.evaluate(`(() => {
+    const style = getComputedStyle(document.querySelector('.dps-surface .fold-body'))
+    return { fontSize: style.fontSize, paddingRight: style.paddingRight }
+  })()`) as { fontSize: string; paddingRight: string }
+  assert.equal(foldStyle.fontSize, '13px')
+  assert.ok(['12px', '18px'].includes(foldStyle.paddingRight))
   assert.ok(await page.locator('table.trace tbody tr').count() > 0)
   const targetId = await page.locator('#target-sel option').nth(1).getAttribute('value')
   assert.ok(targetId)
@@ -132,6 +138,19 @@ try {
   assert.ok(workers.some((url) => /optimizer\.worker/.test(url)))
   await page.getByLabel('Build B item 1', { exact: true }).selectOption('3031')
   await page.getByRole('heading', { name: 'Both builds are identical', exact: true }).waitFor()
+  let filteredCohortRequests = 0
+  await page.route('**/api/dps/cohort', async (route) => {
+    filteredCohortRequests++
+    await new Promise((done) => setTimeout(done, 600))
+    await route.continue()
+  })
+  await page.getByPlaceholder('Any champion').fill(cohortData.dataset.targets[0].champion)
+  const filteredResponse = page.waitForResponse((response) => response.url() === `${base}/api/dps/cohort`)
+  await page.getByRole('button', { name: 'Apply', exact: true }).click()
+  await filteredResponse
+  await page.getByRole('button', { name: 'Run again', exact: true }).waitFor()
+  assert.equal(filteredCohortRequests, 1, 'one champion commit must make one slow cohort request')
+  await page.unroute('**/api/dps/cohort')
   await page.screenshot({ path: '.agents/artifacts/rift-delta/lab.png', fullPage: true })
   await page.getByRole('navigation', { name: 'rift-delta', exact: true }).getByRole('link', { name: 'Rankings', exact: true }).click()
   await page.getByRole('heading', { name: 'Team Power Index', exact: true }).waitFor()
@@ -153,7 +172,7 @@ try {
   const logout = await fetch(`${base}/api/dps/auth/logout`, { method: 'POST', headers: { cookie } })
   assert.equal(logout.status, 200)
   assert.match(logout.headers.get('set-cookie') ?? '', /Max-Age=0/)
-  await writeFile('.agents/artifacts/rift-delta/smoke.json', JSON.stringify({ mode: 'fixture', rankingSource: 'frozen reference corpus', patch: '26.18', dataVersion: '16.18.1', workers, pageErrors, expectedImageFailures, cancelledRankingPreloads, completedRankingManifests, mobileLayout, checks: ['private APIs', 'login', 'cohort', 'progression', 'simulate', 'request limits', 'cross-origin rejection', 'selected trace', 'optimizer', 'worker assets', 'shared navigation', 'ranking search', 'mobile navigation', 'logout'] }, null, 2))
+  await writeFile('.agents/artifacts/rift-delta/smoke.json', JSON.stringify({ mode: 'fixture', rankingSource: 'frozen reference corpus', patch: '26.18', dataVersion: '16.18.1', workers, pageErrors, expectedImageFailures, cancelledRankingPreloads, completedRankingManifests, mobileLayout, checks: ['private APIs', 'login', 'cohort', 'progression', 'simulate', 'request limits', 'cross-origin rejection', 'selected trace', 'disclosure styles', 'single champion request', 'optimizer', 'worker assets', 'shared navigation', 'ranking search', 'mobile navigation', 'logout'] }, null, 2))
   console.log('rift-delta production browser and API smoke passed with fixture DPS and reference rankings')
 } catch (error) {
   if (debugPage) {

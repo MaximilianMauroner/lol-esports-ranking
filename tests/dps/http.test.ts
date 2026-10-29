@@ -150,3 +150,14 @@ test('private pages and API errors retain the DPS security headers', async () =>
     }
   }
 })
+
+
+test('opaque and malformed origins are rejected without a server error', async () => {
+  for (const origin of ['null', 'not-a-url']) {
+    const response = await fetch(`${base}/api/dps/auth/login`, {
+      method: 'POST', headers: { origin }, body: JSON.stringify({ password }),
+    })
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'Same-origin request required.' })
+  }
+})

@@ -149,18 +149,18 @@ export function parseRawArchiveKey(
 }
 
 export function archiveConfig() {
-  const bucket = process.env.BUCKET ?? process.env.RAILWAY_BUCKET ?? process.env.S3_BUCKET;
-  const endpoint = process.env.ENDPOINT ?? process.env.S3_ENDPOINT;
-  const accessKeyId = process.env.ACCESS_KEY_ID ?? process.env.S3_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.SECRET_ACCESS_KEY ?? process.env.S3_SECRET_ACCESS_KEY;
-  const region = process.env.REGION ?? process.env.S3_REGION ?? "auto";
+  const bucket = process.env.DPS_ARCHIVE_BUCKET;
+  const endpoint = process.env.DPS_ARCHIVE_ENDPOINT;
+  const accessKeyId = process.env.DPS_ARCHIVE_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.DPS_ARCHIVE_SECRET_ACCESS_KEY;
+  const region = process.env.DPS_ARCHIVE_REGION ?? "auto";
   if (!bucket || !endpoint || !accessKeyId || !secretAccessKey) return null;
   return { bucket, endpoint, accessKeyId, secretAccessKey, region };
 }
 
 function client() {
   const config = archiveConfig();
-  if (!config) throw new Error("Railway bucket S3 variables are not configured");
+  if (!config) throw new Error("DPS archive bucket variables are not configured");
   return {
     config,
     s3: new S3Client({
