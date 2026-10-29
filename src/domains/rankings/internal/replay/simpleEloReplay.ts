@@ -72,8 +72,7 @@ function validateInputs(inputs: readonly AvailableRankingGame[]) {
       || new Date(match.date).toISOString().slice(0, 10) !== match.date
       || !Number.isSafeInteger(observedAt) || observedAt < 0
       || (resultAvailableAt !== null && (!Number.isSafeInteger(resultAvailableAt)
-        || resultAvailableAt < Date.parse(match.datetimeUtc ?? match.date)
-        || resultAvailableAt < Date.parse(match.gameCompletedAtUtc ?? match.datetimeUtc ?? match.date) || resultAvailableAt > observedAt))) {
+        || resultAvailableAt < Date.parse(match.datetimeUtc ?? match.date) || resultAvailableAt > observedAt))) {
       throw new Error('Missing or invalid Elo source provenance')
     }
   }
@@ -103,7 +102,6 @@ export function replaySimpleEloSeriesBatch(inputs: readonly AvailableRankingGame
   let replayedGames = 0
   for (const { request, index, cutoffDate } of ordered) {
     const usable = inputs.filter(({ match, observedAt, resultAvailableAt }) => match.date < cutoffDate
-      && (match.gameCompletedAtUtc === undefined || Date.parse(match.gameCompletedAtUtc) <= request.asOf)
       && (availability === 'verified' ? resultAvailableAt !== null && resultAvailableAt <= request.asOf && observedAt <= request.asOf
         : resultAvailableAt === null || resultAvailableAt <= request.asOf))
     if (!cached || cached.cutoffDate !== cutoffDate || cached.usable.length !== usable.length

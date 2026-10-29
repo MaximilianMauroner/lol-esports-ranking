@@ -79,7 +79,7 @@ export function RecentMatches({
 
   return (
     <section className="mt-3.5 overflow-hidden rounded-sm border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
-      <div className="grid grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-2xs font-bold tracking-label text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
+      <div className="grid grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-xs font-medium text-muted-foreground [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
         <span>Rating after / match impact</span>
@@ -105,8 +105,8 @@ export function RecentMatches({
                   <span className="mt-1.5 flex flex-wrap items-center gap-1 [&>span]:inline-flex [&>span]:min-h-[18px] [&>span]:max-w-full [&>span]:items-center [&>span]:whitespace-nowrap [&>span]:rounded-full [&>span]:border [&>span]:border-border [&>span]:bg-[color-mix(in_oklch,var(--detail-surface-2,var(--surface-2))_72%,transparent)] [&>span]:px-1.5 [&>span]:py-0.5 [&>span]:text-2xs [&>span]:font-bold [&>span]:leading-none [&>span]:text-muted-foreground [&>span.miss]:border-[color-mix(in_oklch,var(--down)_44%,var(--line))] [&>span.miss]:text-[var(--down)] [&>span.upset]:border-transparent [&>span.upset]:bg-[var(--warn-soft)] [&>span.upset]:text-[var(--warn)]" aria-label="Match context">
                     {tierChip ? <span title={tierChip.title}>{tierChip.label}</span> : null}
                     {typeof match.expectedWinProbability === 'number' ? (
-                      <span title="Replay series win estimate from earlier match dates. This does not show that a forecast was delivered before the match.">
-                        Replay win {formatRatio(match.expectedWinProbability)}
+                      <span title="Pregame expected series win probability for this team">
+                        Expected {formatRatio(match.expectedWinProbability)}
                       </span>
                     ) : null}
                     {outcomeSignal ? <span className={outcomeSignal.tone} title={outcomeSignal.title}>{outcomeSignal.label}</span> : null}
@@ -200,10 +200,8 @@ function matchesWithOtherMovement(matches: RecentMatchSource[]): RecentMatchList
       ? match.rating - previousRating - match.matchImpact
       : undefined
     previousRating = Number.isFinite(match.rating) ? match.rating : previousRating
-    const recorded = match.forecastSource?.basis === 'latest-corrected-prior-replay' && Boolean(match.forecastSource.predictionId)
     return {
       ...match,
-      expectedWinProbability: recorded ? match.expectedWinProbability : undefined,
       ...(typeof otherMovement === 'number' && Math.round(otherMovement) !== 0 ? { otherMovement } : {}),
     }
   })
@@ -226,9 +224,7 @@ function recentMatchesFromHistorySeries(series?: TeamHistorySeries): RecentMatch
         ...(typeof context.games === 'number' ? { games: context.games } : {}),
         ...(typeof context.bestOf === 'number' ? { bestOf: context.bestOf } : {}),
         ...(isEventTier(context.tier) ? { tier: context.tier } : {}),
-        ...(context.model?.forecastSource?.basis === 'latest-corrected-prior-replay' && context.model.forecastSource.predictionId
-          && typeof context.model.e === 'number' && Number.isFinite(context.model.e)
-          ? { expectedWinProbability: context.model.e, forecastSource: context.model.forecastSource } : {}),
+        ...(typeof context.model?.e === 'number' && Number.isFinite(context.model.e) ? { expectedWinProbability: context.model.e } : {}),
         ...(typeof context.model?.w === 'number' && Number.isFinite(context.model.w) ? { eventWeight: context.model.w } : {}),
       }
     })
@@ -290,14 +286,14 @@ function matchOutcomeSignal(match: RecentMatchSource) {
     return {
       label: 'Upset',
       tone: 'upset',
-      title: `Won with ${formatRatio(expected)} replay win estimate from earlier match dates.`,
+      title: `Won with ${formatRatio(expected)} expected win probability.`,
     }
   }
   if (match.result === 'L' && expected > 1 - UPSET_CHANCE) {
     return {
       label: 'Miss',
       tone: 'miss',
-      title: `Lost with ${formatRatio(expected)} replay win estimate from earlier match dates.`,
+      title: `Lost with ${formatRatio(expected)} expected win probability.`,
     }
   }
   return null

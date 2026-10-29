@@ -6,7 +6,6 @@ import {
   rosterChangeUncertaintyPenalty,
   rosterContinuityFloor,
 } from '../policy/modelConfig.ts'
-import type { ContinuityRetention, FinalSideRetention } from '../players/playerModel.ts'
 import { clamp } from './ratingCalculations.ts'
 import { rosterContinuity } from '../players/rosters.ts'
 
@@ -17,13 +16,11 @@ export function applyRosterContinuityForSeries(
   uncertainties: Map<string, number>,
   lastRosterByTeam: Map<string, MatchRosterSnapshot>,
   currentRosterContinuity: Map<string, number>,
-  retention: FinalSideRetention | undefined,
 ) {
   const processedTeams = new Set<string>()
   applyRosterContinuityForTeam({
     team: match.teamA,
     observedRoster: match.teamARoster,
-    retention: retention?.teamA ?? 'baseline-contraction',
     processedTeams,
     ratings,
     executionRatings,
@@ -34,7 +31,6 @@ export function applyRosterContinuityForSeries(
   applyRosterContinuityForTeam({
     team: match.teamB,
     observedRoster: match.teamBRoster,
-    retention: retention?.teamB ?? 'baseline-contraction',
     processedTeams,
     ratings,
     executionRatings,
@@ -51,7 +47,6 @@ export function roundedContinuity(value?: number) {
 function applyRosterContinuityForTeam({
   team,
   observedRoster,
-  retention,
   processedTeams,
   ratings,
   executionRatings,
@@ -61,7 +56,6 @@ function applyRosterContinuityForTeam({
 }: {
   team: string
   observedRoster?: MatchRosterSnapshot
-  retention: ContinuityRetention
   processedTeams: Set<string>
   ratings: Map<string, number>
   executionRatings: Map<string, number>
@@ -76,13 +70,11 @@ function applyRosterContinuityForTeam({
   if (continuity === undefined) return
 
   currentRosterContinuity.set(team, continuity)
-  const share = rosterContinuityFloor + (1 - rosterContinuityFloor) * continuity
-  const retained = (value: number) => {
-    const contracted = initialTeamRating + share * (value - initialTeamRating)
-    return retention === 'proven-stronger-lineup' ? Math.max(value, contracted) : contracted
-  }
-  ratings.set(team, retained(ratings.get(team) ?? initialTeamRating))
-  executionRatings.set(team, retained(executionRatings.get(team) ?? initialTeamRating))
+  const retention = rosterContinuityFloor + (1 - rosterContinuityFloor) * continuity
+  const rating = ratings.get(team) ?? initialTeamRating
+  const executionRating = executionRatings.get(team) ?? initialTeamRating
+  ratings.set(team, initialTeamRating + retention * (rating - initialTeamRating))
+  executionRatings.set(team, initialTeamRating + retention * (executionRating - initialTeamRating))
 
   if (continuity < 1) {
     const uncertainty = uncertainties.get(team) ?? maximumUncertainty

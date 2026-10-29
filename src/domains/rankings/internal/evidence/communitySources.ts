@@ -156,15 +156,7 @@ function reconcileSharedSeriesGames(matches: MatchRecord[], verifiedLinks: Map<M
     }
 
     const strongestBestOf = Math.max(...group.map((match) => match.bestOf))
-    const oracleGames = group.filter((match) => match.sourceProvider === 'oracles-elixir')
-      .sort((left, right) => compareCodeUnits(left.date, right.date)
-        || compareCodeUnits(left.datetimeUtc ?? '', right.datetimeUtc ?? '')
-        || compareCodeUnits(left.id, right.id))
-    const seriesReference = oracleGames[0] ?? group[0]
-    const calendarAligned = oracleGames.every((match) => match.season === Number(match.date.slice(0, 4)))
-    const oracleSeasons = new Set(oracleGames.map((match) => match.season))
-    const season = calendarAligned ? Math.min(...group.map((match) => Number(match.date.slice(0, 4))))
-      : oracleSeasons.size === 1 ? oracleGames[0]?.season : undefined
+    const seriesReference = group.find((match) => match.sourceProvider === 'oracles-elixir') ?? group[0]
     const phase = group.map((match) => match.phase).sort((left, right) => phaseSpecificity(right) - phaseSpecificity(left))[0] ?? seriesReference.phase
     const byGame = new Map<number, MatchRecord>()
     for (const match of group) {
@@ -185,7 +177,6 @@ function reconcileSharedSeriesGames(matches: MatchRecord[], verifiedLinks: Map<M
         sourceMatchId: identity.gameId,
         gameNumber: identity.gameNumber,
         event: seriesReference.event,
-        season: season ?? match.season,
         phase,
         region: seriesReference.region,
         league: seriesReference.league,
@@ -361,8 +352,7 @@ function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMat
     }
     for (const match of leaguepediaMatches) {
       const key = keyFor(match)
-      if (key && !reservedIdentities.has(match.sourceGameId ?? match.id)
-        && (keyFor === declaredGameSlotKey || !isResultOnlyGapFill(match))) {
+      if (key && !reservedIdentities.has(match.sourceGameId ?? match.id) && !isResultOnlyGapFill(match)) {
         appendMatch(leaguepediaByKey, key, match)
       }
     }
@@ -389,10 +379,9 @@ function uniqueLeaguepediaGameLinks(oracleMatches: MatchRecord[], leaguepediaMat
 
 function declaredGameSlotKey(match: MatchRecord) {
   const gameNumber = match.sourceProvider === 'oracles-elixir' ? match.gameNumber : sharedSeriesIdentity(match)?.gameNumber
-  const league = tournamentFamilyForEvent(match.league) ?? normalizeText(match.league)
-  if (!gameNumber || !Number.isInteger(gameNumber) || gameNumber < 1 || gameNumber > 5 || !league || league === 'unknown'
-    || !Number.isFinite(Date.parse(match.datetimeUtc ?? ''))) return undefined
-  return `${matchOutcomeKey(match)}::${league}::${gameNumber}`
+  const league = normalizeText(match.league)
+  if (!gameNumber || !Number.isInteger(gameNumber) || gameNumber < 1 || gameNumber > 5 || !league || league === 'unknown') return undefined
+  return `${matchOutcomeKey(match)}::${league}::${match.season}::${gameNumber}`
 }
 
 function gameTimesCompatible(left: MatchRecord, right: MatchRecord) {

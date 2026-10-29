@@ -1,6 +1,5 @@
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 import { sumTimelineRatingDeltas } from '../queries/timelineCompaction.ts'
-import type { RecordedSeriesForecastLookup } from './recordedSeriesForecast.ts'
 import type {
   ArtifactMeta, DataSourceInfo, FactorBreakdown,
   LeagueStrength, PublicDeservedStandingComparison, PublicMatchHistoryCatalog, PublicMatchHistoryEntry, PublicMatchHistoryIndex, PublicMatchHistoryPage, PublicMatchHistoryTeam, PublicPlayerDirectory, PublicRankingManifest, PublicRankingShard, PublicRecentMatch, PublicRegionHistoryDirectory, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicRollingUpsetWin, PublicRollingWindow, PublicScoreFamilyInfo, PublicSnapshotIndexEntry, PublicStandingCompactionOptions, PublicTeamDirectory, PublicTeamEntity, PublicTeamHistoryIndex, PublicTeamHistoryIndexEntry, PublicTeamHistoryPoint, PublicTeamHistorySeries, PublicTeamHistoryShard, PublicTeamRollingMovement, PublicTeamStanding, PublicTournamentAppearance, PublicTournamentMovementIndex, PublicTournamentMovementIndexEntry, PublicTournamentMovementShard, PublicTournamentMovementTeam, PublishedRatingScale,
@@ -49,7 +48,7 @@ type PublicTeamStandingInput = Omit<PublicTeamStanding, 'recentMatches' | 'teamI
 }
 
 // Compact browser-history model context. Short keys keep team-history.json inside
-// the public data budget: e=recorded replay win probability, r=result residual,
+// the public data budget: e=expected win probability, r=result residual,
 // v=result evidence, s=series strength signal, w=applied event weight, a=update attribution entries,
 // c=current rating components [league, stable, roster, form, context].
 
@@ -157,9 +156,8 @@ export function compactStanding(
     includeRecentMatches = true,
     includeRatingUpdate = true,
   }: PublicStandingCompactionOptions = {},
-  forecasts?: RecordedSeriesForecastLookup,
 ): PublicTeamStanding {
-  const matchRecord = standing.history ? teamMatchRecord(standing.history, standing.team, forecasts) : undefined
+  const matchRecord = standing.history ? teamMatchRecord(standing.history) : undefined
   const tournamentAppearances = matchRecord?.tournamentAppearances ?? standing.tournamentAppearances ?? []
   return {
     teamId: standing.teamId ?? teamIdFor(standing),
@@ -232,13 +230,13 @@ function compactRatingUpdate(update?: Partial<RatingUpdateLedger>): Partial<Rati
   }
 }
 
-function teamMatchRecord(history: TeamHistoryPoint[], team: string, forecasts?: RecordedSeriesForecastLookup) {
+function teamMatchRecord(history: TeamHistoryPoint[] = []) {
   const matches = groupTeamHistoryIntoMatches(history.filter((point) => Boolean(point.date) && Boolean(point.event) && Boolean(point.opponent)))
   const resolvedMatches = matches
     .map((match) => ({ match, result: teamMatchResult(match) }))
     .filter((record): record is { match: TeamMatchGroup; result: 'W' | 'L' | 'T' } => Boolean(record.result))
   const recentMatches = resolvedMatches
-    .map(({ match, result }, index) => teamRecentMatch(match, result, team, forecasts, resolvedMatches[index - 1]?.match))
+    .map(({ match, result }, index) => teamRecentMatch(match, result, resolvedMatches[index - 1]?.match))
     .slice(-PUBLIC_TEAM_RECENT_MATCH_LIMIT)
   const wins = resolvedMatches.filter((match) => match.result === 'W').length
   const losses = resolvedMatches.filter((match) => match.result === 'L').length
@@ -303,13 +301,17 @@ function teamHistoryMatchKey(point: TeamHistoryPoint) {
   ].join('\u0000')
 }
 
-function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', team: string, forecasts?: RecordedSeriesForecastLookup, previousGroup?: TeamMatchGroup): PublicRecentMatch {
+function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', previousGroup?: TeamMatchGroup): PublicRecentMatch {
   const latest = group.entries.at(-1)!
   const previous = previousGroup?.entries.at(-1)
   const wins = group.entries.filter((entry) => entry.result === 'W').length
   const losses = group.entries.length - wins
   const bestOf = bestOfForScore(wins, losses, latest.source.bestOf)
-  const forecast = forecasts?.(latest.source.seriesId, team, latest.opponent)
+  const observedOutcome = latest.source.seriesOutcome
+  const residual = latest.ratingUpdate?.neutralResultResidual
+  const expectedWinProbability = typeof observedOutcome === 'number' && typeof residual === 'number'
+    ? Math.max(0, Math.min(1, Number((observedOutcome - residual).toFixed(4))))
+    : undefined
 
   return {
     date: latest.date,
@@ -319,7 +321,7 @@ function teamRecentMatch(group: TeamMatchGroup, result: 'W' | 'L' | 'T', team: s
     rating: Math.round(latest.rating),
     delta: previous ? Math.round(latest.rating) - Math.round(previous.rating) : group.entries.reduce((total, entry) => total + Math.round(entry.delta), 0),
     matchImpact: sumTimelineRatingDeltas(group.entries),
-    ...(forecast ? { expectedWinProbability: forecast.probability, forecastSource: forecast.source } : {}),
+    ...(expectedWinProbability !== undefined ? { expectedWinProbability } : {}),
     wins,
     losses,
     games: group.entries.length,
@@ -821,14 +823,6 @@ function assertPublicMatchHistoryEntry(value: unknown, label: string) {
   assertOptionalNumber(value.impact.teamA, `${label} impact teamA`)
   assertOptionalNumber(value.impact.teamB, `${label} impact teamB`)
   assertOptionalNumber(value.impact.expectedTeamA, `${label} impact expectedTeamA`)
-  assertOptionalNumber(value.impact.expectedTeamB, `${label} impact expectedTeamB`)
-  assertForecastSource(value.impact.forecastSource, `${label} impact forecastSource`)
-  for (const key of ['expectedTeamA', 'expectedTeamB'] as const) {
-    const probability = value.impact[key]
-    if (value.impact.forecastSource !== undefined && typeof probability === 'number' && (probability < 0 || probability > 1)) {
-      throw new Error(`Invalid public artifact: ${label} impact ${key} must be between 0 and 1`)
-    }
-  }
   assertOptionalNumber(value.impact.eventWeight, `${label} impact eventWeight`)
   assertObject(value.source, `${label} source`)
   assertEnum(value.source.provider, ['oracles-elixir', 'leaguepedia-cargo', 'seed'], `${label} source provider`)
@@ -947,7 +941,6 @@ function assertPublicRollingUpsetWin(value: unknown, label: string): asserts val
   assertDateString(value.date, `${label} date`)
   assertString(value.event, `${label} event`)
   assertString(value.opponent, `${label} opponent`)
-  assertForecastSource(value.forecastSource, `${label} forecastSource`)
   assertNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
   if (value.expectedWinProbability < 0 || value.expectedWinProbability > 1) {
     throw new Error(`Invalid public artifact: ${label} expectedWinProbability must be between 0 and 1`)
@@ -1063,7 +1056,6 @@ function assertPublicRecentMatch(value: unknown, label: string): asserts value i
   assertEnum(value.result, ['W', 'L', 'T'], `${label} result`)
   assertNumber(value.rating, `${label} rating`)
   assertNumber(value.delta, `${label} delta`)
-  assertForecastSource(value.forecastSource, `${label} forecastSource`)
   assertOptionalNumber(value.expectedWinProbability, `${label} expectedWinProbability`)
   assertOptionalNumber(value.matchImpact, `${label} matchImpact`)
   if (typeof value.expectedWinProbability === 'number' && (value.expectedWinProbability < 0 || value.expectedWinProbability > 1)) {
@@ -1335,17 +1327,8 @@ function assertTeamHistoryPointContext(value: Record<string, unknown>, label: st
   if (value.model !== undefined) assertTeamHistoryModelContext(value.model, `${label} model`)
 }
 
-function assertForecastSource(value: unknown, label: string) {
-  if (value === undefined) return
-  assertObject(value, label)
-  assertEqual(value.basis, 'latest-corrected-prior-replay', `${label} basis`)
-  assertString(value.predictionId, `${label} predictionId`)
-  if (!value.predictionId) throw new Error(`Invalid public artifact: ${label} predictionId is empty`)
-}
-
 function assertTeamHistoryModelContext(value: unknown, label: string) {
   assertObject(value, label)
-  assertForecastSource(value.forecastSource, `${label} forecastSource`)
   assertOptionalNumber(value.e, `${label} e`)
   assertOptionalNumber(value.r, `${label} r`)
   assertOptionalNumber(value.v, `${label} v`)

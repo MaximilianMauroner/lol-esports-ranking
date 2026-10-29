@@ -4,10 +4,10 @@ use crate::engine::{
     Model, SeriesInput, SideStats, clamp, expected_score, fixed, js_max, js_min, normalize,
 };
 use crate::wire::{
-    Bits, Colour, Components, ContinuityRetention, ContinuityState, DateResult, Factors, Frame,
-    HistoryValues, Inserted, League, LeagueInsertions, LeaguePoint, Ledger, Member, MemberTrail,
-    Outcome, Role, Roster, SeriesFrame, SeriesInputTrail, SeriesResult, SeriesState, SeriesTrail,
-    Side, SideSample, SideTrail, Source, TeamAfter, TeamInsertions,
+    Bits, Colour, Components, ContinuityState, DateResult, Factors, Frame, HistoryValues, Inserted,
+    League, LeagueInsertions, LeaguePoint, Ledger, Member, MemberTrail, Outcome, Role, Roster,
+    SeriesFrame, SeriesInputTrail, SeriesResult, SeriesState, SeriesTrail, Side, SideSample,
+    SideTrail, Source, TeamAfter, TeamInsertions,
 };
 use chrono::{Datelike, NaiveDate};
 use ranking_contracts::{Result, js_round};
@@ -324,12 +324,7 @@ impl<'f> Pass<'f> {
         }
     }
 
-    fn continuity(
-        &mut self,
-        team: usize,
-        observed: Option<&Roster>,
-        retention: ContinuityRetention,
-    ) {
+    fn continuity(&mut self, team: usize, observed: Option<&Roster>) {
         let (Some(observed), Some((_, prior))) = (observed, self.teams.last_roster.get(team))
         else {
             return;
@@ -340,19 +335,16 @@ impl<'f> Pass<'f> {
         let model = self.model;
         let initial = model.initial_team_rating;
         self.teams.continuity.set(team, continuity);
-        let share =
+        let retention =
             model.roster_continuity_floor + (1.0 - model.roster_continuity_floor) * continuity;
-        let retained = |value: f64| {
-            let contracted = initial + share * (value - initial);
-            match retention {
-                ContinuityRetention::ProvenStrongerLineup => js_max(value, contracted),
-                ContinuityRetention::BaselineContraction => contracted,
-            }
-        };
-        let rating = retained(self.teams.rating.num(team).unwrap_or(initial));
-        self.teams.rating.set(team, rating);
-        let execution = retained(self.teams.execution.num(team).unwrap_or(initial));
-        self.teams.execution.set(team, execution);
+        let rating = self.teams.rating.num(team).unwrap_or(initial);
+        let execution = self.teams.execution.num(team).unwrap_or(initial);
+        self.teams
+            .rating
+            .set(team, initial + retention * (rating - initial));
+        self.teams
+            .execution
+            .set(team, initial + retention * (execution - initial));
         if continuity < 1.0 {
             let uncertainty = self
                 .teams
@@ -375,11 +367,8 @@ impl<'f> Pass<'f> {
         let frame = self.frame;
         let last = series.members.len() - 1;
         let final_member = &series.members[last];
-        let retention = series
-            .continuity_retention
-            .unwrap_or([ContinuityRetention::BaselineContraction; 2]);
-        for (side, retention) in final_member.sides.iter().zip(retention) {
-            self.continuity(side.team, side.roster.as_ref(), retention);
+        for side in &final_member.sides {
+            self.continuity(side.team, side.roster.as_ref());
         }
         let continuity = final_member.sides.each_ref().map(|side| ContinuityState {
             roster_continuity: self.teams.continuity.bits(side.team),
@@ -398,6 +387,7 @@ impl<'f> Pass<'f> {
         let strength = strength_signal(games, series.best_of, series.wins);
         let final_offsets = final_member.sides.each_ref().map(|side| {
             model.roster_prior_offset(
+                side.roster.as_ref(),
                 bits(side.player_adjustment),
                 bits(frame.teams[side.team].roster_prior_offset),
             )

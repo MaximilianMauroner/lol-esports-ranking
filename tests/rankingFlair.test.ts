@@ -176,14 +176,14 @@ test('derives upset headline from lowest pre-series expectation in the rolling w
       code: 'FAV',
       rank: 1,
       rating: 1800,
-      rollingMovement: { ...rolling(1800, 1, 12, 0), biggestUpsetWin: { date: '2026-05-01', event: 'LCK', opponent: 'Mid', expectedWinProbability: 0.4, forecastSource: { basis: 'latest-corrected-prior-replay', predictionId: 'favorite-game' }, ratingDelta: 12 } },
+      rollingMovement: { ...rolling(1800, 1, 12, 0), biggestUpsetWin: { date: '2026-05-01', event: 'LCK', opponent: 'Mid', expectedWinProbability: 0.4, ratingDelta: 12 } },
     }),
     standing({
       team: 'Underdog',
       code: 'DOG',
       rank: 9,
       rating: 1580,
-      rollingMovement: { ...rolling(1580, 9, 24, 0), biggestUpsetWin: { date: '2026-05-01', event: 'MSI 2026', opponent: 'Favorite', expectedWinProbability: 0.22, forecastSource: { basis: 'latest-corrected-prior-replay', predictionId: 'underdog-game' }, ratingDelta: 24 } },
+      rollingMovement: { ...rolling(1580, 9, 24, 0), biggestUpsetWin: { date: '2026-05-01', event: 'MSI 2026', opponent: 'Favorite', expectedWinProbability: 0.22, ratingDelta: 24 } },
     }),
     standing({ team: 'Mid', code: 'MID', rank: 5, rating: 1680 }),
   ], { kind: 'rolling-power-movement', days: 30, startDate: '2026-04-01', endDate: '2026-05-01', modelVersion: 'test', modelConfigHash: 'test' })

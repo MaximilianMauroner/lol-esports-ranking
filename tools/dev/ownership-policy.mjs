@@ -31,6 +31,14 @@ const matches = (path, prefixes) => prefixes.some(prefix => prefix.endsWith('/')
 const sourcePath = /\.[cm]?[jt]sx?$/
 
 const domainDefinitions = {
+  style: {
+    dependencies: ['rankings'],
+    entries: {
+      'profile.ts': { browserRuntime: true },
+      'build.ts': {},
+    },
+    producers: ['build.ts'],
+  },
   rankings: {
     entries: {
       'types.ts': { browserRuntime: true },

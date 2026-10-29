@@ -13,6 +13,10 @@
   background: var(--surface-2);
 }
 
+.ranking-table thead th > button {
+  padding-inline: 12px;
+}
+
 .ranking-table tbody td {
   padding: 12px;
   border-bottom: 1px solid var(--line);
@@ -487,9 +491,6 @@ table.ranking-table.board-grid tbody td {
   .player-rank-table td:nth-child(5)::before {
     content: "Games ";
     color: var(--faint);
-    font-size: var(--t-1);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
   }
 
   .player-rank-table .ent b,
@@ -556,17 +557,20 @@ table.ranking-table.board-grid tbody td {
 
 .compare-table thead th b {
   font-size: var(--t-5);
+  font-weight: var(--w-emph);
 }
+
+.compare-entity-heading { display: grid; gap: 2px; }
+.compare-entity-heading > span { white-space: normal; }
+.compare-entity-heading small { white-space: normal; }
 
 .compare-table th[scope="row"] {
   position: sticky;
   left: 0;
   background: var(--surface);
-  color: var(--faint);
+  color: var(--muted);
   font-size: var(--t-2);
-  font-weight: var(--w-emph);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  font-weight: var(--w-label);
   white-space: nowrap;
 }
 
@@ -612,17 +616,162 @@ table.ranking-table.board-grid tbody td {
 
   .compare-table[data-compare-count="2"] thead th:first-child,
   .compare-table[data-compare-count="2"] th[scope="row"] {
-    width: 36%;
+    width: 30%;
   }
 
   .compare-table[data-compare-count="2"] thead th:not(:first-child) {
-    width: 32%;
+    width: 35%;
   }
 
   .compare-table[data-compare-count="2"] th[scope="row"] {
     font-size: var(--t-1);
-    letter-spacing: var(--track-label);
     white-space: normal;
     overflow-wrap: anywhere;
   }
+}
+
+.players-view { gap: 16px; padding-top: 20px; }
+.players-experiment {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.85fr) minmax(0, 1.45fr);
+  gap: 10px 24px;
+  border-color: var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-2);
+  background: var(--rail);
+}
+.players-experiment > * { margin: 0; }
+.players-experiment > p:first-child { grid-column: 1 / -1; color: var(--text-strong); }
+.players-experiment > label { grid-column: 1; grid-row: 2; max-width: none; font-size: var(--t-2); color: var(--muted); }
+.players-experiment > p:not(:first-child) { grid-column: 2; font-size: var(--t-2); line-height: 1.55; }
+@media (min-width: 1200px) {
+  .players-experiment {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr) minmax(0, 1.1fr);
+    align-items: center;
+  }
+  .players-experiment > p:first-child { grid-column: 1; grid-row: 1; line-height: 1.5; }
+  .players-experiment > label { grid-column: 2; grid-row: 1; }
+  .players-experiment > p:not(:first-child) { grid-column: 3; grid-row: 1; }
+}
+.players-filters { padding-block: 4px; }
+.players-table { font-size: var(--t-3); }
+.players-table thead { background: var(--surface-2); }
+.players-table th { padding-block: 12px; }
+.players-table td { padding-block: 10px; }
+.player-score-figure { display: inline-grid; grid-template-columns: auto 2ch; text-align: right; font-variant-numeric: tabular-nums; }
+.player-score-figure > span:last-child { text-align: left; }
+.player-score-key, .player-score-position { display: none; }
+@media (min-width: 1000px) {
+  .player-score-key { display: inline; color: var(--text); }
+  .player-score-position { display: inline-block; position: relative; width: 80px; height: 3px; margin-right: 16px; vertical-align: middle; background: var(--line-strong); }
+  .player-score-position > i { position: absolute; top: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); transform: translateX(-50%); }
+}
+.player-team { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.player-team img { display: block; flex: 0 0 24px; width: 24px; height: 24px; object-fit: contain; }
+.player-identity { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.player-identity-mark { display: none; }
+.players-scroll-cue { display: none; }
+.players-method { color: var(--muted); font-size: var(--t-2); }
+.players-method > summary { width: fit-content; min-height: 36px; align-content: center; cursor: pointer; color: var(--accent); }
+.players-method > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-1); }
+.players-method[open] > summary { margin-bottom: 8px; }
+.players-method > p { margin-top: 8px; }
+.players-method[open] > :is(div, p) { font-size: var(--t-3); line-height: 1.65; }
+@media (min-width: 640px) {
+  .players-method > :is(div, p) { max-width: 75ch; }
+}
+.player-role { display: inline-flex; padding: 2px 7px; border: 1px solid var(--line); border-radius: var(--r-1); font-size: var(--t-2); line-height: 1.4; }
+.compare-sheet .compare-table thead th { padding-block: 10px; }
+.compare-sheet .compare-table tbody tr:nth-child(even) td { background: color-mix(in oklch, var(--surface-2) 35%, var(--surface)); }
+@media (max-width: 760px) {
+  .players-experiment { display: flex; flex-direction: column; gap: 10px; }
+  .players-table { min-width: 680px; }
+}
+
+@media (max-width: 639px) {
+  .rankings-view { gap: 12px; padding-top: 12px; }
+  .board-headline { font-size: var(--t-5); line-height: 1.4; }
+  .ranking-board > [data-slot="panel-header"] { align-items: center; padding-block: 12px; }
+  .ranking-board > [data-slot="panel-header"] > div:first-child { flex: 1 1 0; }
+  .ranking-board > [data-slot="panel-header"] h2 { font-size: var(--t-5); }
+  .ranking-board > [data-slot="panel-body"] { gap: 8px; padding-block: 10px; }
+  .board-legend { gap: 6px; }
+  .players-view { gap: 12px; padding-top: 12px; }
+  .players-empty-result { padding-block: 0; }
+  .players-empty-result > div { padding-block: 24px; }
+  .players-reading-tools { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; column-gap: 12px; }
+  .players-reading-tools .players-method[open] { grid-column: 1 / -1; }
+  .players-method > summary { min-height: 44px; }
+  .players-scroll-cue { display: flex; align-items: center; justify-self: end; gap: 6px; min-height: 44px; color: var(--muted); font-size: var(--t-1); line-height: 1.4; }
+  .players-scroll-cue > svg { flex: 0 0 16px; }
+  .players-method[open] + .players-scroll-cue { grid-column: 1 / -1; min-height: 28px; }
+  .player-identity-mark { display: block; flex: 0 0 20px; width: 20px; height: 20px; object-fit: contain; }
+  .player-identity > span { min-width: 0; overflow-wrap: anywhere; }
+  .players-experiment { gap: 8px; padding: 12px; }
+  .players-experiment > p { font-size: var(--t-2); line-height: 1.45; }
+  .players-experiment > label { gap: 4px; }
+  .players-filters { display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; padding-block: 0; }
+  .players-filters > label { min-width: 0; }
+  .players-filters [data-slot="select"] { width: 100%; min-width: 0; max-width: none; }
+}
+
+@media (max-width: 639px) {
+  .players-board { container-type: inline-size; }
+  .players-table {
+    --players-name-width: calc(100cqw - 152px);
+    --players-secondary-columns: 88px;
+    display: block;
+    width: max-content;
+    min-width: 100%;
+    padding-right: 108px;
+  }
+  .players-table[data-stat-games="true"] { --players-secondary-columns: 100px 108px 88px; }
+  .players-table :is(thead, tbody) { display: block; }
+  .players-table tr {
+    display: grid;
+    grid-template-columns: 44px calc(var(--players-name-width) - 72px) 72px 108px var(--players-secondary-columns);
+    align-items: stretch;
+  }
+  .players-table :is(th, td) { display: flex; align-items: center; min-width: 0; }
+  .players-table .player-col-rank { grid-column: 1; grid-row: 1 / 3; padding-inline: 8px; }
+  .players-table .player-col-name { grid-column: 2 / 4; grid-row: 1; white-space: normal; overflow-wrap: anywhere; }
+  .players-table .player-col-team { grid-column: 2; grid-row: 2; max-width: none; }
+  .players-table .player-col-role { grid-column: 3; grid-row: 2; padding-inline: 4px; }
+  .players-table .player-col-score { grid-column: 4; grid-row: 1 / 3; justify-content: flex-end; }
+  .players-table .player-col-stat-games { grid-column: 5; grid-row: 1 / 3; }
+  .players-table .player-col-role-power { grid-column: 6; grid-row: 1 / 3; }
+  .players-table .player-col-games { grid-column: -2; grid-row: 1 / 3; }
+  .players-table :is(.player-col-stat-games, .player-col-role-power, .player-col-games) { justify-content: flex-end; }
+  .players-table .player-col-score {
+    position: sticky;
+    left: calc(100cqw - 108px);
+    right: 0;
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: -1px 0 var(--line);
+  }
+  .players-table th { height: auto; padding-block: 4px; font-size: var(--t-2); line-height: 1.25; }
+  .players-table th.player-col-name { grid-row: 1 / 3; }
+  .players-table th.player-col-score { white-space: normal; background: var(--surface-2); }
+  .players-table th:is(.player-col-team, .player-col-role) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .players-table td { padding-block: 0; }
+  .players-table td.player-col-name { padding-top: 3px; }
+  .players-table td:is(.player-col-team, .player-col-role) { padding-bottom: 3px; }
+  .players-table td.player-col-team { color: var(--muted); font-size: var(--t-2); }
+  .players-table td.player-col-role { align-items: flex-start; line-height: 16px; }
+  .players-table td.player-col-score { flex-direction: column; align-items: flex-end; justify-content: flex-start; padding-top: 8px; }
+  .players-table td.player-col-rank { align-items: flex-start; padding-top: 8px; }
+  .players-table td:is(.player-col-stat-games, .player-col-role-power, .player-col-games) { padding-block: 8px; }
+  .players-table .player-role { max-width: 100%; padding: 0; border: 0; font-size: var(--t-2); white-space: normal; overflow-wrap: anywhere; }
+  .players-table .player-team { width: 100%; min-height: 16px; line-height: 16px; }
+  .players-table .player-team img { display: none; }
+  .players-table .player-team > span { min-width: 0; overflow-wrap: anywhere; }
 }

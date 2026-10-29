@@ -70,18 +70,6 @@ pub(crate) enum Outcome {
     W,
     L,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum ContinuityRetention {
-    BaselineContraction,
-    ProvenStrongerLineup,
-}
-/// A frame stored before the decision existed omits it, which means baseline. An explicit `null` is not that frame.
-fn legacy_retention<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> std::result::Result<Option<[ContinuityRetention; 2]>, D::Error> {
-    <[ContinuityRetention; 2]>::deserialize(deserializer).map(Some)
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum SeriesState {
@@ -215,12 +203,6 @@ pub(crate) struct SeriesFrame {
     pub(crate) best_of: u8,
     pub(crate) wins: [u32; 2],
     pub(crate) members: Vec<Member>,
-    #[serde(
-        default,
-        deserialize_with = "legacy_retention",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub(crate) continuity_retention: Option<[ContinuityRetention; 2]>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

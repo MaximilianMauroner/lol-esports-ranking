@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildPlayerLineupEdges } from '../src/domains/rankings/internal/players/playerModel.ts'
+import { eventTierConfig } from '../src/domains/rankings/internal/policy/rankingConfig.ts'
+import { statsPowerPolicy } from '../src/domains/rankings/internal/policy/statsPowerPolicy.ts'
+import { eventWeightForMatch } from '../src/domains/rankings/internal/replay/eventWeighting.ts'
+import { buildPregamePlayerRatingEdges } from '../src/domains/rankings/internal/players/playerModel.ts'
 import { buildPlayerStatsPower } from '../src/domains/rankings/internal/players/playerStatsPower.ts'
 import { playerBaselineForLeague, playerSignalMultiplierForLeague } from '../src/domains/rankings/internal/policy/playerPolicy.ts'
 import { parsePublicPlayerDirectory } from '../src/domains/rankings/internal/published/schema.ts'
@@ -114,7 +117,7 @@ test('stronger lane evidence moves Stats Power order while every legacy strength
   assert.ok(power(weakPlayers, 'Ember-Mid').score > power(weakPlayers, 'Alpha-Mid').score)
   assert.ok(power(strongPlayers, 'Alpha-Mid').score > power(strongPlayers, 'Ember-Mid').score)
   assert.deepEqual(strongPlayers.map(legacy), weakPlayers.map(legacy))
-  assert.deepEqual(buildPlayerLineupEdges(strong, { teams }), buildPlayerLineupEdges(weak, { teams }))
+  assert.deepEqual(buildPregamePlayerRatingEdges(strong, { teams }), buildPregamePlayerRatingEdges(weak, { teams }))
   const weakModel = buildRankingModel(weak, teams)
   const strongModel = buildRankingModel(strong, teams)
   assert.deepEqual(strongModel.predictions, weakModel.predictions)
@@ -125,7 +128,7 @@ test('equal standardized evidence scores the same in every role, whatever the me
   const matches = series('ab', 30, () => evenEdge('Alpha', true), () => evenEdge('Beta', false), () => ({ date: '2026-03-01' }))
   const standings = players(matches)
   const anchor = playerBaselineForLeague('LCK', noRatings)
-  const expectedLead = 30 * Math.tanh(0.5 * 30 / 50)
+  const expectedLead = 30 * Math.tanh(30 / 50)
   for (const role of roles) {
     const leader = power(standings, `Alpha-${role}`)
     const trailer = power(standings, `Beta-${role}`)
@@ -220,7 +223,7 @@ test('opposite older and newer lines order equal raw samples by recent form, and
   const improving = power(standings, 'Alpha-Mid')
   const declining = power(standings, 'Beta-Mid')
   const anchor = playerBaselineForLeague('LCK', noRatings)
-  const expectedEdge = 30 * Math.tanh((1 / 6) * (1.8 / 21.8))
+  const expectedEdge = 30 * Math.tanh((1 / 3) * (1.8 / 21.8))
   near(improving.score, anchor + expectedEdge, 'one half-weight loss followed by one full-weight lead')
   near(declining.score, anchor - expectedEdge, 'opposite recent form')
   assert.equal(improving.sampleGames, 2)
@@ -275,11 +278,11 @@ test('recency and original league weights govern anchors, signal means and effec
   const meanSignal = (0.5 + signal ** 2) / weight
   const effective = weight ** 2 / (0.25 + signal ** 2)
   near(summary.leagueAnchor, anchor, 'original league anchor with half-weight older game')
-  near(summary.score, anchor + 30 * meanSignal * Math.tanh(0.5 * effective / (effective + 20)), 'weighted signal and shrinkage')
+  near(summary.score, anchor + 30 * meanSignal * Math.tanh(effective / (effective + 20)), 'weighted signal and shrinkage')
   assert.equal(summary.metrics.goldDiffAt15!.effectiveGames, Number(effective.toFixed(2)))
 })
 
-test('zero paired scales remain unavailable while observed counts stay raw', () => {
+test('constant own-metric scales remain unavailable while observed counts stay raw', () => {
   const matches = series('flat', 3, () => evenEdge('Alpha', true), () => evenEdge('Beta', true))
   const summary = power(players(matches), 'Alpha-Mid')
   assert.equal(summary.priorOnly, true)
@@ -415,4 +418,32 @@ test('published default and season rows keep the unrounded summary, old rows sti
   corrupt('season', (summary) => { summary.priorOnly = true }, /statsPower priorOnly/)
   corrupt('players', (summary) => { firstMetric(summary).effectiveGames = 99 }, /effectiveGames must fit/)
   corrupt('season', (summary) => { summary.role = summary.role === 'Top' ? 'Mid' : 'Top' }, /statsPower role/)
+})
+
+
+test('fixed player event weights keep the production team defaults', () => {
+  const minor = game('minor-weight', '2026-03-01', evenEdge('Alpha', true), evenEdge('Beta', false), {
+    tier: 'minor-international', event: 'Regional cup',
+  })
+  near(eventWeightForMatch(minor), 23 / 14, 'production minor-international weight')
+  near(eventWeightForMatch(minor, undefined, statsPowerPolicy.eventWeights), 22 / 14, 'accepted player minor-international weight')
+  const worlds = { ...minor, tier: 'worlds-playoffs' as const, event: 'Worlds', league: 'Worlds' }
+  near(eventWeightForMatch(worlds), 39 / 14, 'production Worlds weight')
+  near(eventWeightForMatch(worlds, undefined, statsPowerPolicy.eventWeights), 39 / 14, 'player Worlds weight')
+})
+
+test('player scoring ignores ambient team event-weight changes', () => {
+  const matches = [
+    game('minor-lead', '2026-03-01', evenEdge('Alpha', true), evenEdge('Beta', false), { tier: 'minor-international' }),
+    game('regular-loss', '2026-03-02', evenEdge('Alpha', false), evenEdge('Beta', true)),
+  ]
+  const expected = buildPlayerStatsPower(matches, { teams }, noRatings)
+  const original = eventTierConfig['minor-international'].weight
+  try {
+    eventTierConfig['minor-international'].weight = original * 10
+    near(eventWeightForMatch(matches[0]!), original * 10, 'ordinary team weight changes')
+    assert.deepEqual(buildPlayerStatsPower(matches, { teams }, noRatings), expected)
+  } finally {
+    eventTierConfig['minor-international'].weight = original
+  }
 })

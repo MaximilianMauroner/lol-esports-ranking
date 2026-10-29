@@ -210,12 +210,17 @@ export function TeamDetailDrawer({
           </section>
 
           <section className="overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--detail-surface-2,var(--surface))]" aria-label="Power over time">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-5 pt-4 pb-3">
-              <h3 className="text-base font-semibold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
-              {trendSummary ? (
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  From {formatRating(trendSummary.opening)} on {formatDate(trendSummary.startDate)} · net <b className={cn('font-semibold', trendSummary.netChange >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{formatRatingMovement(trendSummary.netChange)}</b> · peak {formatRating(trendSummary.peak.value)}{typeof trendSummary.bestRank === 'number' ? ` · best #${trendSummary.bestRank}` : ''}
-                </p>
+            <div className="grid gap-2 border-b border-border px-5 pt-4 pb-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-base font-semibold text-[var(--text-strong)]">{tournament ? `${tournament.label} movement` : 'Power this season'}</h3>
+                {trendSummary ? (
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    From {formatRating(trendSummary.opening)} on {formatDate(trendSummary.startDate)} · net <b className={cn('font-semibold', trendSummary.netChange >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]')}>{formatRatingMovement(trendSummary.netChange)}</b> · peak {formatRating(trendSummary.peak.value)}{typeof trendSummary.bestRank === 'number' ? ` · best #${trendSummary.bestRank}` : ''}
+                  </p>
+                ) : null}
+              </div>
+              {trendSeries.length > 0 ? (
+                <p className="text-xs leading-[1.5] text-muted-foreground">Power is a model rating. Hover, tap or use arrow keys to inspect the recorded evidence below.</p>
               ) : null}
             </div>
             {trendSeries.length > 0 ? (

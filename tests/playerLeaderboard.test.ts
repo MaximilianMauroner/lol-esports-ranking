@@ -15,7 +15,7 @@ function player(id: string, rating: number, rank: number, team = 'Fixture Team')
 function statsPower(score: number): PlayerStatsPower {
   const evidence = { observed: 24, missing: 6, effectiveGames: 22.5 }
   return {
-    version: 'stats-power-v3', score, role: 'Mid', sampleGames: 24, eligibleGames: 30, priorOnly: false, leagueAnchor: 100,
+    version: 'stats-power-v4-prototype-ownmetric-scale', score, role: 'Mid', sampleGames: 24, eligibleGames: 30, priorOnly: false, leagueAnchor: 100,
     evidenceThrough: '2026-10-01', metrics: { goldDiffAt15: evidence, xpDiffAt15: evidence, csDiffAt15: evidence },
   }
 }

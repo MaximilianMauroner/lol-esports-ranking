@@ -18,7 +18,7 @@ import { eventWeightContextForMatches } from './eventWeighting.ts'
 import { ensureLeague } from './leagueRatings.ts'
 import { homeLeagueForMatch, matchesByDate } from '../evidence/matchContext.ts'
 import { buildEventSummaries, buildLeagueStrengths, buildSeasonSummaries } from '../projections/modelSummaries.ts'
-import { buildPlayerLineupEdges, type FinalSideRetention, type PregamePlayerRatingEdge } from '../players/playerModel.ts'
+import { buildPregamePlayerRatingEdges, type PregamePlayerRatingEdge } from '../players/playerModel.ts'
 import {
   applyCompletedPlacementResiduals,
   startEventTrackersForDate,
@@ -83,7 +83,6 @@ export type RatingEventContext = {
 export type RatingReplayContext = RatingEventContext & {
   teams: Record<string, TeamProfile>
   pregamePlayerRatingEdges: Map<string, PregamePlayerRatingEdge>
-  continuityRetention: ReadonlyMap<string, FinalSideRetention>
   teamRosterBasis: Map<string, RosterBasis>
   tournamentLifecycles: ReadonlyMap<string, PlacementTournamentLifecycle>
 }
@@ -103,12 +102,10 @@ export function createRatingReplayContext(
   { tournamentLifecycles = new Map() }: { tournamentLifecycles?: ReadonlyMap<string, PlacementTournamentLifecycle> } = {},
 ): RatingReplayContext {
   const eventContext = createRatingEventContext(authoritativeMatches)
-  const lineupEdges = buildPlayerLineupEdges(eventContext.authoritativeMatches, { teams, eventWeightContext: eventContext.eventWeightContext })
   return {
     ...eventContext,
     teams,
-    pregamePlayerRatingEdges: lineupEdges.forecast,
-    continuityRetention: lineupEdges.continuityRetention,
+    pregamePlayerRatingEdges: buildPregamePlayerRatingEdges(eventContext.authoritativeMatches, { teams, eventWeightContext: eventContext.eventWeightContext }),
     teamRosterBasis: rosterBasisByTeam(eventContext.authoritativeMatches),
     tournamentLifecycles,
   }
@@ -160,7 +157,6 @@ export function replayRatingDates({
       state,
       lastDate: context.lastDate,
       pregamePlayerRatingEdges: context.pregamePlayerRatingEdges,
-      continuityRetention: context.continuityRetention,
       onSeriesPassDate,
     })
   }
@@ -184,7 +180,6 @@ export type RatingUtcDateBoundaryInput = {
   state: RatingRunState
   lastDate: string
   pregamePlayerRatingEdges: Map<string, PregamePlayerRatingEdge>
-  continuityRetention: ReadonlyMap<string, FinalSideRetention>
   onSeriesPassDate?: SeriesPassObserver
 }
 
@@ -257,7 +252,7 @@ export function prepareRatingUtcDateBoundary({
 }
 
 export function processRatingUtcDateBoundary(input: RatingUtcDateBoundaryInput) {
-  const { dateMatches, teams, state, lastDate, pregamePlayerRatingEdges, continuityRetention, onSeriesPassDate } = input
+  const { dateMatches, teams, state, lastDate, pregamePlayerRatingEdges, onSeriesPassDate } = input
   prepareRatingUtcDateBoundary(input)
   const firstMatch = dateMatches[0]
   const sideAdjustments = sideAdjustmentsFromSamples(state.sideAdjustmentSamples)
@@ -266,6 +261,7 @@ export function processRatingUtcDateBoundary(input: RatingUtcDateBoundaryInput) 
     teams,
     state,
     pregamePlayerRatingEdges,
+    sideAdjustments,
   })
   const capture = processRatingSeriesForDate({
     matches: dateMatches,
@@ -274,7 +270,6 @@ export function processRatingUtcDateBoundary(input: RatingUtcDateBoundaryInput) 
     sideAdjustments,
     lastDate,
     pregamePlayerRatingEdges,
-    continuityRetention,
     capture: onSeriesPassDate !== undefined,
   })
   state.processedThroughUtcDate = firstMatch.date

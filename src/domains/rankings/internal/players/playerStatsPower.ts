@@ -7,7 +7,7 @@ import { playerPerformanceValues } from './playerPerformance.ts'
 import { isCompleteSourcedMatchup } from './rosters.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 
-type MetricFit = { weight: number; weightedValue: number; squaredDifference: number; pairs: number }
+type MetricFit = { weight: number; weightedValue: number; rawMean: number; centeredSquared: number; observations: number }
 
 type MetricEvidence = { observed: number; weight: number; squaredWeight: number; weightedValue: number }
 
@@ -22,11 +22,6 @@ type PlayerRoleEvidence = {
 
 type Normalization = { center: number; scale: number } | undefined
 
-/**
- * Scores every player and role seen in a complete sourced role matchup. Centers,
- * scales and league anchors come only from the supplied matches, so a prefix caller
- * gets a prefix-only score. Results, KDA, gold share and player strength never enter.
- */
 export function buildPlayerStatsPower(
   matches: readonly MatchRecord[],
   context: { teams?: Record<string, TeamProfile>; eventWeightContext?: EventWeightContext },
@@ -38,7 +33,7 @@ export function buildPlayerStatsPower(
 
   for (const match of matches) {
     const recency = 2 ** (-(referenceDay - utcDay(match.date)) / statsPowerPolicy.halfLifeDays)
-    const eventWeight = eventWeightForMatch(match, context.eventWeightContext)
+    const eventWeight = eventWeightForMatch(match, context.eventWeightContext, statsPowerPolicy.eventWeights)
     for (const [side, roster, opponentRoster] of [
       ['A', match.teamARoster, match.teamBRoster],
       ['B', match.teamBRoster, match.teamARoster],
@@ -52,7 +47,7 @@ export function buildPlayerStatsPower(
         const opponent = opponentRoster.players.find((candidate) => candidate.role === player.role)
         if (!player.stats || !opponent?.stats) continue
         const metrics = statsPowerPolicy.roleMetrics[player.role]
-        const fit = mapEntry(fits, player.role, () => metrics.map(() => ({ weight: 0, weightedValue: 0, squaredDifference: 0, pairs: 0 })))
+        const fit = mapEntry(fits, player.role, () => metrics.map(() => ({ weight: 0, weightedValue: 0, rawMean: 0, centeredSquared: 0, observations: 0 })))
         const current = mapEntry(mapEntry(evidence, player.id, () => new Map()), player.role, () => ({
           weight: 0,
           weightedBaseline: 0,
@@ -62,7 +57,6 @@ export function buildPlayerStatsPower(
           evidenceThrough: match.date,
         }))
         const values = playerPerformanceValues(player.stats)
-        const opponentValues = playerPerformanceValues(opponent.stats)
         let observedMask = 0
         metrics.forEach((metric, index) => {
           const value = values[metric]
@@ -70,11 +64,11 @@ export function buildPlayerStatsPower(
           observedMask |= 1 << index
           fit[index]!.weight += weight
           fit[index]!.weightedValue += weight * value
-          const opponentValue = opponentValues[metric]
-          if (opponentValue !== undefined) {
-            fit[index]!.squaredDifference += (value - opponentValue) ** 2
-            fit[index]!.pairs += 1
-          }
+          const cell = fit[index]!
+          cell.observations += 1
+          const difference = value - cell.rawMean
+          cell.rawMean += difference / cell.observations
+          cell.centeredSquared += difference * (value - cell.rawMean)
           const metricEvidence = current.metrics[index]!
           metricEvidence.observed += 1
           metricEvidence.weight += weight
@@ -90,9 +84,10 @@ export function buildPlayerStatsPower(
     }
   }
 
-  const normalization = new Map([...fits].map(([role, fit]) => [role, fit.map(({ weight, weightedValue, squaredDifference, pairs }): Normalization => {
-    const scale = pairs > 0 ? Math.sqrt(squaredDifference / pairs) : 0
-    return scale > 0 ? { center: weightedValue / weight, scale } : undefined
+  const normalization = new Map([...fits].map(([role, fit]) => [role, fit.map(({ weight, weightedValue, rawMean, centeredSquared, observations }): Normalization => {
+    const center = weightedValue / weight
+    const scale = observations > 0 && centeredSquared > 0 ? Math.sqrt(centeredSquared / observations + (rawMean - center) ** 2) : 0
+    return scale > 0 ? { center, scale } : undefined
   })]))
 
   return new Map([...evidence].map(([playerId, roles]) => [playerId, new Map([...roles].map(([role, roleEvidence]) => [

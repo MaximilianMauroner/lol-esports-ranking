@@ -113,12 +113,6 @@ export function Segmented<T extends string>({
       role="group"
       aria-label={ariaLabel}
       className={cn(
-        // The segments are clipped by the container's radius instead of
-        // carrying their own. A rounded child inset inside a rounded parent
-        // only looks right when its radius is exactly outer minus the inset,
-        // which here is 8px - (1px border + 4px padding) = 3px, off the scale.
-        // Removing the inset removes the problem: there is one radius, and the
-        // active segment inherits its corners from the container.
         'inline-flex h-[var(--control-h)] max-w-full items-stretch overflow-hidden rounded-md border border-[var(--line-strong)] bg-[var(--surface-2)] max-sm:w-full',
         className,
       )}
@@ -136,12 +130,8 @@ export function Segmented<T extends string>({
           onPointerEnter={onIntent ? () => onIntent(option.value) : undefined}
           onFocus={onIntent ? () => onIntent(option.value) : undefined}
           className={cn(
-            // Fill and text carry the selection, with no ring. An inset ring on
-            // a square-cornered child inside a clipped rounded parent gets its
-            // corners sliced off by the clip rather than following the curve,
-            // which reads as a square ring inside a rounded box.
             'h-auto min-h-0 flex-1 gap-1.5 rounded-none border-y-0 border-r-0 border-l border-l-border px-3 whitespace-nowrap max-sm:min-w-0 max-sm:px-2',
-            'disabled:opacity-60',
+            'aria-pressed:font-semibold aria-pressed:shadow-[inset_0_-2px_0_var(--accent)] disabled:opacity-60',
             index === 0 && 'border-l-0',
           )}
         >
@@ -165,8 +155,8 @@ export function DataState({
   children?: ReactNode
 }) {
   return (
-    <div className="grid place-items-center gap-3 px-6 py-16 text-center text-muted-foreground [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-sm [&>svg]:text-[var(--faint)]">
-      {icon}
+    <div className="grid place-items-center gap-2 px-6 py-8 text-center text-muted-foreground sm:py-10 [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-[var(--text-strong)] [&>p]:max-w-[46ch] [&>p]:text-sm [&>p]:leading-relaxed">
+      <span className="mb-1 grid size-10 place-items-center rounded-lg border border-border bg-[var(--surface-2)] text-muted-foreground" aria-hidden="true">{icon}</span>
       <h3>{title}</h3>
       {children ? <p>{children}</p> : null}
       {action ? <div className="mt-1 flex flex-wrap justify-center gap-2">{action}</div> : null}
@@ -222,7 +212,7 @@ export function SortHeader({
         variant="ghost"
         size="sm"
         className={cn(
-          'min-h-10 w-full cursor-pointer justify-start gap-1 border-0 bg-transparent px-3.5 py-3 text-2xs font-semibold tracking-label text-[inherit] uppercase hover:bg-transparent hover:text-foreground focus-visible:rounded-none focus-visible:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--focus)] max-sm:px-1 max-sm:leading-[1.15] max-sm:whitespace-normal',
+          'min-h-10 w-full cursor-pointer justify-start gap-1 border-0 bg-transparent px-3.5 py-3 text-xs font-[number:var(--w-label)] text-[inherit] hover:bg-transparent hover:text-foreground focus-visible:rounded-none focus-visible:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--focus)] max-sm:px-1 max-sm:leading-[1.15] max-sm:whitespace-normal',
           align === 'right' && 'justify-end',
           align === 'center' && 'justify-center',
         )}
