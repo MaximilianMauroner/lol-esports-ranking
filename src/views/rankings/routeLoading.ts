@@ -8,6 +8,8 @@ const loadMatchesView = () => import('../matches/MatchesView').then((module) => 
 
 const loadPlayersView = () => import('./PlayersView').then((module) => ({ default: module.PlayersView }))
 
+const loadProfilesView = () => import('../style/StyleProfileRoute').then((module) => ({ default: module.StyleProfileRoute }))
+
 const loadCompareAnalysis = () => import('./CompareAnalysis')
 
 export const RegionsView = lazy(loadRegionsView)
@@ -16,6 +18,8 @@ export const MatchesView = lazy(loadMatchesView)
 
 export const PlayersView = lazy(loadPlayersView)
 
+export const StyleProfileRoute = lazy(loadProfilesView)
+
 export const RegionCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.RegionCompareAnalysis })))
 
 export const TeamCompareAnalysis = lazy(() => loadCompareAnalysis().then((module) => ({ default: module.TeamCompareAnalysis })))
@@ -23,6 +27,7 @@ export const TeamCompareAnalysis = lazy(() => loadCompareAnalysis().then((module
 const VIEW_LOADERS = {
   rankings: undefined,
   players: loadPlayersView,
+  profiles: loadProfilesView,
   regions: loadRegionsView,
   matches: loadMatchesView,
   tournaments: loadTournamentsView,

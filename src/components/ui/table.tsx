@@ -8,13 +8,16 @@ function Table({
   className,
   containerClassName,
   containerRef,
+  containerProps,
   ...props
 }: React.ComponentProps<"table"> & {
   containerClassName?: string
   containerRef?: React.Ref<HTMLDivElement>
+  containerProps?: Omit<React.ComponentProps<"div">, "children" | "className" | "ref">
 }) {
   return (
     <div
+      {...containerProps}
       data-slot="table-container"
       ref={containerRef}
       className={cn("relative w-full overflow-x-auto", containerClassName)}
@@ -74,9 +77,8 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
-/** The one column-label style, shared with sortable heads in `SortHeader`. */
 const tableHeadClassName =
-  "h-10 px-2 text-left align-middle text-2xs font-semibold tracking-label whitespace-nowrap text-[var(--faint)] uppercase [&:has([role=checkbox])]:pr-0"
+  "h-10 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0 [thead_&_button]:[font:inherit] [thead_&_button]:[letter-spacing:inherit] [thead_&_button]:[text-transform:inherit]"
 
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (

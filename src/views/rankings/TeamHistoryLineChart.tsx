@@ -10,10 +10,11 @@ import {
   type ChartPointDetail,
 } from '../../shared/chartPoints'
 import { formatChartTimestamp } from '../../shared/chartTime'
+import { formatNumber } from '../../shared/display'
 
 export type TeamHistoryLineChartProps = Omit<LineChartProps, 'details'>
 
-const defaultValueFormat = (value: number) => String(Math.round(value))
+const defaultValueFormat = (value: number) => formatNumber(Math.round(value))
 
 export function TeamHistoryLineChart({ yFormat, ...props }: TeamHistoryLineChartProps) {
   const formatValue = yFormat ?? defaultValueFormat

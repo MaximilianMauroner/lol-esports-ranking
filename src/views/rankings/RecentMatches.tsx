@@ -79,7 +79,7 @@ export function RecentMatches({
 
   return (
     <section className="mt-3.5 overflow-hidden rounded-sm border border-[var(--line-strong)] bg-[var(--detail-surface,var(--surface))]" aria-label="Recent form matches">
-      <div className="grid grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-2xs font-bold tracking-label text-[var(--faint)] uppercase [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
+      <div className="grid grid-cols-[64px_minmax(0,1fr)_minmax(92px,auto)] items-center gap-2.5 border-b border-border px-3.5 py-2 text-xs font-medium text-muted-foreground [&>span:last-child]:text-right max-sm:hidden" aria-hidden="true">
         <span>Result</span>
         <span>Opponent</span>
         <span>Rating after / match impact</span>

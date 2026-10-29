@@ -31,7 +31,7 @@ export function ManifestRouteShell({
       <AppNavigation mode={mode} scope={scope} onGoHome={onGoHome} />
       <main id="main-content" className="flex min-w-0 flex-col" tabIndex={-1}>
         <ModeHeader mode={mode} />
-        {mode !== 'tournaments' ? <div className="flex min-h-[57px] items-center border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-sm text-muted-foreground max-sm:min-h-[141px]">
+        {mode !== 'tournaments' && mode !== 'profiles' ? <div className="flex min-h-[57px] items-center border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2 text-sm text-muted-foreground max-sm:min-h-[141px]">
           Requested scope: <b className="ml-2 text-foreground">{scopeLabel(scope)}</b>
         </div> : null}
         {error ? (
@@ -65,7 +65,7 @@ export function ManifestRouteShell({
  */
 export function ModeHeader({ mode }: { mode: Mode }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-[var(--page-x)] pt-4 pb-3">
+    <div className="mode-header flex flex-wrap items-baseline gap-x-4 gap-y-1 px-[var(--page-x)] pt-4 pb-3">
       <h1 className="text-xl font-semibold tracking-normal text-[var(--text-strong)]">{MODE_TITLES[mode].title}</h1>
       <p className="max-w-[80ch] text-sm leading-[1.5] text-muted-foreground">{MODE_TITLES[mode].intro}</p>
     </div>
@@ -112,18 +112,14 @@ export function AppNavigation({
 
   return (
     <>
-      <header className="sticky top-0 z-50 flex min-h-[var(--app-nav-h)] items-center gap-x-4 border-b border-border bg-[var(--rail)]/98 px-[var(--page-x)] py-2.5 max-[900px]:px-3">
-        <a className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-md py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
+      <header className="app-header sticky top-0 z-50 flex min-h-[var(--app-nav-h)] items-center gap-x-4 border-b border-border bg-[var(--rail)]/98 px-[var(--page-x)] py-2.5 max-[900px]:px-3">
+        <a className="app-wordmark flex min-w-0 shrink-0 items-center gap-2.5 rounded-md py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
           <img className="block size-9 shrink-0 rounded-md" src="/logo.svg" alt="" aria-hidden="true" width={36} height={36} />
-          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] max-[420px]:sr-only sm:max-lg:sr-only">Power Index</b>
+          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] sm:max-lg:sr-only">Power Index</b>
         </a>
-        {/* The active tab uses the shared selected treatment. Gold stays
-            reserved for rank quality. The tabs never shrink: the search gives
-            way instead, and between the phone tab bar and desktop the
-            wordmark, tab icons and shortcut hint make room for it. */}
-        <nav className="flex shrink-0 items-center gap-1.5 max-sm:hidden" aria-label="Primary">{tabs}</nav>
+        <nav className="app-nav-desktop flex shrink-0 items-center gap-1.5 max-sm:hidden" aria-label="Primary">{tabs}</nav>
         {onSearch ? (
-          <label className="relative ml-auto w-[min(280px,100%)] min-w-0 max-sm:flex-1">
+          <label className="app-header-search relative ml-auto w-[min(280px,100%)] min-w-0 max-sm:flex-1">
             <span className="sr-only">Find a team</span>
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
             <Input
@@ -142,7 +138,7 @@ export function AppNavigation({
       {/* Phones get the views as a bottom tab bar, so the top of the screen
           holds data instead of three full-width buttons. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] items-stretch border-t border-border bg-[var(--rail)] pb-[env(safe-area-inset-bottom)] sm:hidden"
+        className="app-nav-mobile fixed inset-x-0 bottom-0 z-50 flex h-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] items-stretch border-t border-border bg-[var(--rail)] pb-[env(safe-area-inset-bottom)] sm:hidden"
         aria-label="Primary"
       >
         {tabs}

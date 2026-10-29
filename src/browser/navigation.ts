@@ -1,5 +1,6 @@
 import { initialModeFromLocation, type AppMode } from './bootstrap'
 import type { TournamentFilterValue } from '../domains/rankings/evidence'
+import { STYLE_SCOPES, type StyleScope } from '../domains/style/profile'
 import { useEffect } from 'react'
 
 /**
@@ -91,9 +92,14 @@ export function replaceHashForModeAndScope(mode: AppMode, scope: string) {
 
 export function hashForModeAndScope(mode: AppMode, scope: string, currentHash = '') {
   const query = new URLSearchParams(currentHash.split('?', 2)[1] ?? '')
-  query.set('scope', scope)
+  query.set('scope', mode === 'profiles' ? profileScope(scope) : scope)
   const queryString = query.toString()
   return `#${mode}${queryString ? `?${queryString}` : ''}`
+}
+
+export function profileScope(value: string | null | undefined): StyleScope {
+  const scope = /^season:\d{4}(?=:|$)/.exec(value ?? '')?.[0] ?? value
+  return STYLE_SCOPES.find(candidate => candidate === scope) ?? STYLE_SCOPES[STYLE_SCOPES.length - 1]!
 }
 
 export function isKnownScope(value: string | null): value is string {

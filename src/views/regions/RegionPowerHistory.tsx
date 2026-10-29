@@ -37,7 +37,7 @@ export function RegionPowerHistory({
   const withoutHistory = lines.filter((line) => !shown.has(line.region)).map((line) => line.region)
 
   return (
-    <div className="grid min-w-0 gap-1">
+    <div className="grid min-w-0 gap-1 min-[1000px]:grid-cols-[minmax(0,1fr)_minmax(220px,24%)] min-[1000px]:items-start min-[1000px]:gap-4">
       {series.length > 0 ? (
         <LineChart
           series={series}
@@ -47,7 +47,7 @@ export function RegionPowerHistory({
           details={(active) => <RegionPowerDetails active={active} codes={codes} />}
         />
       ) : null}
-      <p className="px-4 pb-1 text-xs text-muted-foreground">
+      <p className="px-4 pb-1 text-xs text-muted-foreground min-[1000px]:pt-3 min-[1000px]:pl-0 min-[1000px]:leading-relaxed">
         The field uses teams eligible at the selected snapshot, not eligibility on each past date. Days without updates keep the last published value.
         Region power in the table also includes current context adjustments, so the end of a line can differ from it.
         {withoutHistory.length > 0 ? ` No rated history in this scope for ${withoutHistory.join(', ')}.` : null}

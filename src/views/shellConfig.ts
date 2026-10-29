@@ -14,16 +14,20 @@ export const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
 
 /** One title per view and one short line that says what the numbers are. */
 /** The skeleton each view shows while its data loads. */
-export const PAGE_LAYOUTS: Record<Mode, PageLayout> = { rankings: 'board', players: 'board', regions: 'regions', matches: 'ledger', tournaments: 'schedule' }
+export const PAGE_LAYOUTS: Record<Mode, PageLayout> = { rankings: 'board', players: 'board', profiles: 'board', regions: 'regions', matches: 'ledger', tournaments: 'schedule' }
 
 export const MODE_TITLES: Record<Mode, { title: string; intro: string }> = {
+  profiles: {
+    title: 'Style profiles',
+    intro: 'Observed measures, not strength scores.',
+  },
   rankings: {
     title: 'Team Power Index',
     intro: 'Match results weighted by opponent and event. Higher is stronger.',
   },
   players: {
     title: 'Player rankings',
-    intro: 'Stats Power ranks role stats against the role average, weighted by event and league strength. Newer games get more weight, with a 90-day half-life. Inactivity alone does not lower the score. Rows without it show Role Power, which also uses results. Higher is stronger.',
+    intro: 'Stats Power ranks role stats against the role average, weighted by event and league strength. Higher is stronger.',
   },
   regions: {
     title: 'Region power',

@@ -14,7 +14,7 @@ export function DataSourcesDisclosure({ model, data }: { model?: Pick<ModelInfo,
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-[var(--text-strong)] after:ml-auto after:text-base after:leading-none after:text-muted-foreground after:content-['+'] group-open:border-b group-open:border-border group-open:after:content-['-'] [&::-webkit-details-marker]:hidden">
         <span className="text-base font-semibold">Data and sources</span>
       </summary>
-      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border last:mb-3 [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-2xs [&_small]:tracking-label [&_small]:text-[var(--faint)] [&_small]:uppercase">
+      <div className="mx-3 mt-3.5 grid grid-cols-2 gap-px bg-border last:mb-3 [&>span]:grid [&>span]:min-w-0 [&>span]:gap-1 [&>span]:bg-[var(--rail)] [&>span]:px-3 [&>span]:py-2.5 [&_b]:overflow-hidden [&_b]:text-ellipsis [&_b]:whitespace-nowrap [&_b]:text-sm [&_b]:text-[var(--text-strong)] [&_b]:tabular-nums [&_small]:text-xs [&_small]:text-muted-foreground">
         <span>
           <small>Model</small>
           <b>{formatModelVersion(model?.version)}</b>

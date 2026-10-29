@@ -65,7 +65,7 @@ export function PowerLadder({
   return (
     <div>
       <p className="mb-2 text-xs text-muted-foreground">100 pts ≈ {gapExample}% game win</p>
-      <p className="mb-2 text-2xs text-muted-foreground">Dot: Power · line: uncertainty · bracket: near tie</p>
+      <p className="mb-2 text-xs leading-relaxed text-muted-foreground">Dot: Power · line: uncertainty · bracket: near tie</p>
       <svg
         className="block h-auto w-full min-w-[240px]"
         viewBox={`0 0 ${WIDTH} ${height}`}
@@ -76,7 +76,7 @@ export function PowerLadder({
           <g key={tick}>
             <line x1={x(tick)} x2={x(tick)} y1={TOP - 4} y2={height - BOTTOM + 4} className="stroke-border" />
             {index % labelEvery === 0 ? (
-              <text x={x(tick)} y={height - 8} textAnchor="middle" className="fill-[var(--faint)] text-2xs tabular-nums">{formatRating(tick)}</text>
+              <text x={x(tick)} y={height - 8} textAnchor="middle" className="fill-[var(--faint)] text-xs tabular-nums">{formatRating(tick)}</text>
             ) : null}
           </g>
         ))}
@@ -98,9 +98,9 @@ export function PowerLadder({
                   onKeyDown={(event) => onKeyDown(event, team)}
                 >
                   <rect x={0} y={y - ROW_HEIGHT / 2} width={WIDTH} height={ROW_HEIGHT} className="fill-transparent group-hover:fill-[var(--surface-2)] group-focus-visible:fill-[var(--surface-3)]" />
-                  <text x={4} y={y + 3.5} className="fill-muted-foreground font-mono text-2xs font-bold tabular-nums">{team.rank}</text>
-                  {tier ? <text x={24} y={y + 3.5} className="font-mono text-2xs font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
-                  <text x={36} y={y + 3.5} className="fill-foreground font-mono text-2xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
+                  <text x={4} y={y + 3.5} className="fill-muted-foreground font-mono text-xs font-bold tabular-nums">{team.rank}</text>
+                  {tier ? <text x={24} y={y + 3.5} className="font-mono text-xs font-bold" fill={TIER_FILL[tier]}>{tier}</text> : null}
+                  <text x={36} y={y + 3.5} className="fill-foreground font-mono text-xs font-bold">{team.code ?? team.team.slice(0, 4)}</text>
                   <line x1={x(team.rating - uncertainty)} x2={x(team.rating + uncertainty)} y1={y} y2={y} className="stroke-[var(--line-strong)]" strokeWidth={2} strokeLinecap="round" />
                   <circle cx={x(team.rating)} cy={y} r={4.5} fill={tier ? TIER_FILL[tier] : 'var(--muted)'} className="stroke-card" strokeWidth={2} />
                 </g>

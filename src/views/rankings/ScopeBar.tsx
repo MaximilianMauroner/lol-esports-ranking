@@ -68,7 +68,7 @@ export function ScopeBar({
 
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2.5"
+      className="ranking-period flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-[color-mix(in_oklch,var(--surface)_76%,var(--bg))] px-[var(--page-x)] py-2.5"
       role="group"
       aria-label="Ranking period"
     >

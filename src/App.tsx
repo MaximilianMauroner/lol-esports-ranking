@@ -4,6 +4,7 @@ import { TooltipProvider } from './components/ui/tooltip'
 import { currentSeasonScope } from './domains/rankings/read'
 import { ManifestRouteShell } from './views/AppShell'
 import { RankingRoute } from './views/rankings/RankingRoute'
+import { StyleProfileRoute } from './views/rankings/routeLoading'
 import { type Mode } from './views/shellConfig'
 import { TournamentRoute } from './views/tournaments/TournamentRoute'
 
@@ -16,7 +17,7 @@ function App() {
   }, [])
   return <TooltipProvider>
     <Suspense fallback={<ManifestRouteShell mode={route} scope={readScopeFromHash() ?? currentSeasonScope()} />}>
-      {route === 'tournaments' ? <TournamentRoute /> : <RankingRoute />}
+      {route === 'tournaments' ? <TournamentRoute /> : route === 'profiles' ? <StyleProfileRoute /> : <RankingRoute />}
     </Suspense>
   </TooltipProvider>
 }

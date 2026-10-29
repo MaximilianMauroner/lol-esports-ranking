@@ -93,9 +93,14 @@ export function RegionsView({
   return (
     <PageShell
       ribbon={
-        <StatRibbon label="Region summary">
+        <StatRibbon label="Region summary" className="regions-summary">
           <StatCell icon={<Trophy aria-hidden="true" />} label="Strongest region" value={strongest?.region ?? '—'} detail={`Region power ${formatRating(strongest ? displayRegionPowerScore(strongest) : undefined)}`} />
-          <StatCell icon={<Globe2 aria-hidden="true" />} label="Regions" value={String(regions.length)} />
+          <StatCell
+            icon={<Globe2 aria-hidden="true" />}
+            label="Regions"
+            value={String(regions.length)}
+            detail={<span className="block whitespace-normal">{regions.map((region) => region.region).join(' · ')}</span>}
+          />
           <StatCell
             icon={<Swords aria-hidden="true" />}
             label="Best international record"
@@ -121,6 +126,7 @@ export function RegionsView({
         <PanelHeader title="Region depth" />
         <PanelBody className="grid gap-3">
           <RegionDepthLegend />
+          <p className="max-w-[78ch] text-sm leading-relaxed text-muted-foreground">Each dot is a team. Dots with similar Power stack down so each team stays reachable. Only horizontal position shows Power.</p>
           <RegionDepthChart regions={regions} />
         </PanelBody>
       </Panel>
@@ -154,7 +160,7 @@ export function RegionsView({
                   onPointerEnter={onRequestRegionHistory}
                 >
                   <span className="text-center text-lg font-bold text-[var(--text-strong)] max-sm:row-span-2 max-sm:text-left">{region.rank}</span>
-                  <span className="flex min-w-0 items-center gap-3 [&>span]:min-w-0 [&_b]:text-base [&_b]:font-semibold [&_b]:tracking-normal [&_b]:text-[var(--text-strong)] [&_small]:mt-px [&_small]:block [&_small]:text-xs [&_small]:text-muted-foreground max-sm:gap-2 max-sm:[&_b]:overflow-hidden max-sm:[&_b]:text-ellipsis max-sm:[&_b]:whitespace-nowrap">
+                  <span className="flex min-w-0 items-center gap-3 [&>span]:min-w-0 [&_b]:text-base [&_b]:font-semibold [&_b]:tracking-normal [&_b]:text-[var(--text-strong)] [&_small]:mt-px [&_small]:block [&_small]:text-sm [&_small]:text-muted-foreground max-sm:gap-2 max-sm:[&_b]:overflow-hidden max-sm:[&_b]:text-ellipsis max-sm:[&_b]:whitespace-nowrap">
                     <RegionBadge region={region.region} />
                     <span>
                       <b>{region.region}</b>
@@ -163,9 +169,9 @@ export function RegionsView({
                       </small>
                     </span>
                   </span>
-                  <span className="grid min-w-0 gap-0.5 text-xs leading-[1.3] text-muted-foreground tabular-nums max-sm:col-start-2">
+                  <span className="grid min-w-0 gap-0.5 text-sm leading-[1.3] text-muted-foreground tabular-nums max-sm:col-start-2">
                     <strong className="text-sm font-semibold text-[var(--text-strong)]">Region power {formatRating(displayRegionPowerScore(region))}</strong>
-                    <small className="text-xs text-[var(--faint)]" title={`All-team average ${formatRating(displayRegionTotalTeamRating(region))}`}>
+                    <small className="text-sm text-[var(--faint)]" title={`All-team average ${formatRating(displayRegionTotalTeamRating(region))}`}>
                       Depth gap {formatRating(displayRegionPowerScore(region) - displayRegionTotalTeamRating(region))}
                     </small>
                     <span className="hidden max-[1180px]:block">{formatSignedDecimal(region.winsOverExpected)} wins vs expected</span>
@@ -242,7 +248,7 @@ function RegionPowerTrend({ series, region }: { series?: PublicRegionHistorySeri
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 pt-3 max-[560px]:px-3">
         <h3 className="text-base font-semibold text-[var(--text-strong)]">Power trajectory</h3>
         {first && last && chartSeries.length > 0 ? (
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-sm text-muted-foreground tabular-nums">
             <b className={deltaTone === 'up' ? 'text-[var(--up)]' : deltaTone === 'down' ? 'text-[var(--down)]' : 'text-[var(--text-strong)]'}>{formatSignedDecimal(delta)}</b>
             {' '}from {formatDate(first[0])} to {formatDate(last[0])}
           </span>
@@ -306,7 +312,7 @@ function RegionDetailDrawer({
               </div>
               <strong className="grid justify-items-end gap-1 text-2xl leading-none text-[var(--text-strong)] tabular-nums max-[560px]:justify-items-start">
                 {formatRating(displayRegionPowerScore(region))}
-                <span className="text-2xs font-semibold tracking-label text-[var(--faint)] uppercase">Region power</span>
+                <span className="text-sm font-medium text-muted-foreground">Region power</span>
               </strong>
             </section>
 
@@ -361,11 +367,11 @@ function RegionDetailDrawer({
                 {displayedTeams.length > 0 ? (
                   displayedTeams.map((team, index) => (
                     <div className="grid grid-cols-[52px_36px_minmax(0,1fr)_auto] items-center gap-3 border-t border-border py-3 first:border-t-0 max-[560px]:grid-cols-[38px_32px_minmax(0,1fr)_auto] max-[560px]:gap-2" key={team.team}>
-                      <span className="font-mono text-xs text-[var(--faint)]">{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
+                      <span className="font-mono text-sm text-[var(--faint)]">{team.rank ? `#${team.rank}` : `#${index + 1}`}</span>
                       <TeamMark team={team.team} code={team.code} className="size-9 max-[560px]:size-8" />
                       <div>
                         <b className="block text-md text-[var(--text-strong)] [overflow-wrap:anywhere]">{team.team}</b>
-                        {team.code ? <small className="mt-0.5 block text-xs text-muted-foreground">{team.code}</small> : null}
+                        {team.code ? <small className="mt-0.5 block text-sm text-muted-foreground">{team.code}</small> : null}
                       </div>
                       <strong className="text-[var(--text-strong)] tabular-nums">{formatRating(team.rating)}</strong>
                     </div>
@@ -520,12 +526,12 @@ function RegionMatchRow({
 
   return (
     <article className="grid grid-cols-[108px_minmax(0,1.45fr)_minmax(150px,0.8fr)_minmax(170px,0.9fr)] items-center gap-4 border-t border-border px-4 py-3.5 first:border-t-0 max-[820px]:grid-cols-[90px_minmax(0,1fr)_minmax(140px,auto)] max-[820px]:[&>div:last-child]:col-start-2 max-[820px]:[&>div:last-child]:col-end-4 max-[560px]:grid-cols-1 max-[560px]:gap-2.5 max-[560px]:px-3 max-[560px]:[&>div:last-child]:col-start-1 max-[560px]:[&>div:last-child]:col-end-2">
-      <div className="text-xs text-[var(--faint)]">
+      <div className="text-sm text-[var(--faint)]">
         <span className="block">{formatDate(summary.datetimeUtc ?? summary.date)}</span>
         <span className="mt-1 block">Bo{summary.bestOf} · {match.games.length} {match.games.length === 1 ? 'game' : 'games'}</span>
       </div>
       <div className="min-w-0">
-        <p className="truncate text-xs text-muted-foreground" title={summary.event}>{summary.event}</p>
+        <p className="truncate text-sm text-muted-foreground" title={summary.event}>{summary.event}</p>
         <div className="mt-1.5 flex min-w-0 items-center gap-2 text-sm">
           <strong className={cn('truncate', teamAIsRegional && 'text-[var(--text-strong)]')} title={summary.teamA.name}>{summary.teamA.name}</strong>
           <span className="shrink-0 font-extrabold text-[var(--text-strong)] tabular-nums">{summary.seriesWinsA}–{summary.seriesWinsB}</span>
@@ -539,7 +545,7 @@ function RegionMatchRow({
         )}>
           {outcomeLabel}
         </span>
-        <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+        <p className="mt-1.5 text-sm text-muted-foreground tabular-nums">
           {impactParts.length > 0 ? `Team Power ${impactParts.join(' · ')}` : '—'}
         </p>
       </div>
@@ -615,9 +621,9 @@ function flagshipTeamsForRegion(region: RegionStrength, standings: RegionStandin
 function DetailStat({ label, value, description }: { label: string; value: string; description?: string }) {
   return (
     <div className="grid min-w-0 gap-1 border-r border-b border-border px-4 py-3.5">
-      <span className="text-xs font-semibold text-[var(--faint)]">{label}</span>
+      <span className="text-sm font-semibold text-[var(--faint)]">{label}</span>
       <strong className="text-base text-[var(--text-strong)] tabular-nums [overflow-wrap:anywhere]">{value}</strong>
-      {description ? <p className="text-xs leading-relaxed text-muted-foreground">{description}</p> : null}
+      {description ? <p className="text-sm leading-relaxed text-muted-foreground">{description}</p> : null}
     </div>
   )
 }
@@ -637,7 +643,7 @@ function formatCountWithUnit(value: number | undefined, singular: string) {
 
 function RegionDepthLegend() {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Chart legend">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground" aria-label="Chart legend">
       <li className="inline-flex items-center gap-1.5">
         <span className="size-2.5 rounded-full bg-[var(--series-1)]" aria-hidden="true" />
         Top three

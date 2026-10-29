@@ -20,7 +20,7 @@ export function PageShell({
   className?: string
 } & Omit<React.ComponentProps<'div'>, 'children'>) {
   return (
-    <div className={cn('flex min-w-0 flex-col gap-6 px-[var(--page-x)] pt-6', className)} {...props}>
+    <div className={cn('page-shell flex min-w-0 flex-col gap-6 px-[var(--page-x)] pt-6', className)} {...props}>
       {ribbon}
       {children}
     </div>
@@ -32,10 +32,10 @@ export function PageShell({
  * itself (a 1px grid gap over a `--line` background) rather than by their own
  * borders, so the strip reads as one object.
  */
-export function StatRibbon({ children, label }: { children: ReactNode; label: string }) {
+export function StatRibbon({ children, label, className }: { children: ReactNode; label: string; className?: string }) {
   return (
     <div
-      className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border"
+      className={cn('grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border', className)}
       aria-label={label}
     >
       {children}
@@ -55,7 +55,7 @@ export function StatCell({
   detail?: ReactNode
 }) {
   return (
-    <div className="grid min-w-0 gap-0.5 bg-card px-4 py-3">
+    <div className="grid min-w-0 content-start gap-0.5 bg-card px-4 py-3">
       <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-[var(--faint)]">
         {icon}
         {label}
