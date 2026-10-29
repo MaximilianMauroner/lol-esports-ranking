@@ -13,7 +13,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
   const title = page === 'legal' ? 'Legal notice' : page === 'privacy' ? 'Privacy policy' : 'Licenses & sources'
 
   useEffect(() => {
-    document.title = `${title} · LoL Esports Power Index`
+    document.title = `${title} · rift-delta`
   }, [title])
 
   return (
@@ -21,7 +21,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
       <div className="mx-auto grid w-full max-w-[900px] gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div>
-            <a className="text-xs tracking-label text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
+            <a className="text-xs tracking-label text-[var(--accent)] uppercase" href="/">rift-delta</a>
             <h1 className="mt-2 text-xl font-semibold text-[var(--text-strong)]">{title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Last updated: {UPDATED_AT}</p>
           </div>
@@ -49,7 +49,7 @@ function LegalNotice() {
         <p>{OPERATOR_NAME}</p>
         <p>Private individual · Italy</p>
         <p><EmailLink /></p>
-        <p className="mt-3">LoL Esports Power Index and Lab4Code are project names, not separate legal entities or registered companies. No company-register, REA, VAT, or professional-register details apply.</p>
+        <p className="mt-3">rift-delta and Lab4Code are project names, not separate legal entities or registered companies. No company-register, REA, VAT, or professional-register details apply.</p>
       </Section>
       <Section title="Nature of the project">
         <p>This is a privately operated, free, non-commercial esports analytics project. It has no advertising, subscriptions, sales, gambling, or betting functionality. Rankings are independent model outputs, not official standings, professional advice, or guarantees of future results.</p>
@@ -107,7 +107,7 @@ function Licenses() {
         <p>Original project source code is available under the MIT License in the <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/LICENSE`}>repository</ExternalLink>. That license does not override third-party data, asset, font, icon, or trademark terms.</p>
       </Section>
       <Section title="Third-party software">
-        <p>The application uses open-source packages including React, Recharts, Base UI, Lucide, Tailwind CSS, and JetBrains Mono. Their MIT, ISC, Apache-2.0, BSD, and SIL Open Font License terms remain with the respective authors. Package names and exact versions are recorded in the repository's <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/package.json`}>package manifest</ExternalLink> and lockfile.</p>
+        <p>The application uses open-source packages including React, Recharts, Base UI, Lucide, Tailwind CSS, Inter, and JetBrains Mono. Their MIT, ISC, Apache-2.0, BSD, and SIL Open Font License terms remain with the respective authors. The <LegalLink href="/licenses/inter-OFL.txt">Inter copyright and license</LegalLink> is included with the bundled font. Package names and exact versions are recorded in the repository's <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/package.json`}>package manifest</ExternalLink> and lockfile.</p>
       </Section>
     </div>
   )

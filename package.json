@@ -1,5 +1,5 @@
 {
-  "name": "lol-esports-power-index",
+  "name": "rift-delta",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -33,7 +33,7 @@
     "data:build:leaguepedia": "tsx scripts/build-static-snapshot.ts --output data/derived/ranking-snapshot.full.json --public-data-dir public/data --leaguepedia-json",
     "typecheck": "tsc -b",
     "lint": "node tools/dev/check-dependencies.mjs && node tools/dev/migrate-platform.mjs --check && eslint .",
-    "test": "node tools/dev/run-tests.mjs",
+    "test": "pnpm run test:dps && pnpm run test:ranking",
     "test:release": "RANKING_TEST_PUBLIC_DIR=public node tools/dev/run-tests.mjs",
     "test:browser": "tsx --tsconfig tsconfig.app.json --test tests/tournamentBrowser.test.ts",
     "benchmark:riot-gpr": "tsx tools/calibration/compare-riot-gpr.ts",
@@ -57,7 +57,20 @@
     "rollout:shadow-gate": "node scripts/rollout-shadow-gate.mjs",
     "rollout:gate": "node scripts/validate-rollout-gate.mjs",
     "ranking:baseline": "node scripts/ranking-restart-baseline.mjs verify",
-    "data:pull": "tsx scripts/download-reference-public-data.ts"
+    "data:pull": "tsx scripts/download-reference-public-data.ts",
+    "test:dps": "vitest run --config tools/dps/vitest.config.ts",
+    "test:ranking": "node tools/dev/run-tests.mjs",
+    "dps:db:migrate": "tsx scripts/dps/migrate.ts",
+    "dps:data:sync": "tsx scripts/dps/sync-static.ts",
+    "dps:archive:reconcile": "tsx scripts/dps/reconcile-archive.ts",
+    "dps:archive:rebuild": "tsx scripts/dps/rebuild-from-archives.ts",
+    "dps:archive:verify-rebuild": "tsx scripts/dps/verify-archive-rebuild.ts",
+    "dps:storage:audit": "tsx scripts/dps/storage-audit.ts",
+    "dps:storage:status": "tsx scripts/dps/storage-status.ts",
+    "dps:ingest:euw": "tsx scripts/dps/ingest.ts --region EUW1 --routing EUROPE --tiers CHALLENGER,GRANDMASTER,MASTER",
+    "dps:benchmark:optimizer": "tsx tools/dps/benchmark-optimizer.ts",
+    "test:integration": "tsx tools/dps/smoke.ts",
+    "test:integration:dev": "tsx tools/dps/dev-smoke.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1092.0",
@@ -72,7 +85,12 @@
     "react-dom": "^19.2.8",
     "recharts": "^3.10.0",
     "tailwind-merge": "^3.6.0",
-    "tsx": "^4.23.1"
+    "tsx": "^4.23.1",
+    "pg": "^8.16.3",
+    "zod": "^4.1.8",
+    "htmlparser2": "^10.1.0",
+    "domhandler": "^5.0.3",
+    "@fontsource-variable/inter": "^5.2.8"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -90,6 +108,8 @@
     "tw-animate-css": "^1.4.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.65.0",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "@types/pg": "^8.15.5",
+    "vitest": "^4.1.0"
   }
 }

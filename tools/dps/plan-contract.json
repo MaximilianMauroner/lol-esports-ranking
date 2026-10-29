@@ -1,0 +1,783 @@
+{
+  "schemaVersion": 2,
+  "repository": "MaximilianMauroner/dps.lol",
+  "baselineCommit": "f2747db43ca89d12338982b0e7ed2f700ee2b591",
+  "baselineTree": "c009c80956c8eb844dbbd8e75f6c820b89530d2b",
+  "roadmapIssue": {
+    "number": 3,
+    "url": "https://github.com/MaximilianMauroner/dps.lol/issues/3"
+  },
+  "tasks": [
+    {
+      "id": "P00",
+      "issue": 4,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/4",
+      "prerequisites": [],
+      "ownedPaths": [
+        {
+          "path": "docs/implementation/baseline.md",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/regressions/legacy-characterization/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "benchmarks/baseline/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "docs/implementation/planning/**",
+          "existsAtAuditedBaseline": false,
+          "excludes": [
+            "docs/implementation/planning/CONTENT_TASKS.json",
+            "docs/implementation/planning/CONTENT_MANIFEST.json"
+          ],
+          "handoffTo": ["P02"]
+        },
+        {
+          "path": "scripts/check-plan.ts",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P01",
+      "issue": 5,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/5",
+      "prerequisites": ["P00"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/contracts/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "docs/architecture/combat-contracts.md",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/contracts/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P02",
+      "issue": 6,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/6",
+      "prerequisites": ["P01"],
+      "ownedPaths": [
+        {
+          "path": "docs/implementation/planning/CONTENT_TASKS.json",
+          "existsAtAuditedBaseline": false,
+          "handoffFrom": ["P00"]
+        },
+        {
+          "path": "docs/implementation/planning/CONTENT_MANIFEST.json",
+          "existsAtAuditedBaseline": false,
+          "handoffFrom": ["P00"]
+        },
+        {
+          "path": "src/domain/rulesets/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "scripts/sync-static.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "scripts/rulesets/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/rulesets/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P03",
+      "issue": 7,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/7",
+      "prerequisites": ["P01"],
+      "ownedPaths": [
+        {
+          "path": "tests/engine-harness/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/observations/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "scripts/validate-mechanics.ts",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "docs/validation/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P04",
+      "issue": 8,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/8",
+      "prerequisites": ["P01"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/kernel/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/kernel/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P05",
+      "issue": 9,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/9",
+      "prerequisites": ["P02", "P04"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/stats/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/engine/damage/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/stats/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/damage/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P06",
+      "issue": 10,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/10",
+      "prerequisites": ["P04"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/resources/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/engine/cooldowns/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/engine/buffs/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/lifecycles/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P07",
+      "issue": 11,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/11",
+      "prerequisites": ["P02", "P04"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/spatial/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/engine/targeting/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/spatial/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P08",
+      "issue": 12,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/12",
+      "prerequisites": ["P05", "P06", "P07"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/actions/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/scenarios/policies/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/actions/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P09",
+      "issue": 13,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/13",
+      "prerequisites": ["P05", "P06", "P07"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/survival/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/engine/control/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/survival/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P10",
+      "issue": 14,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/14",
+      "prerequisites": ["P05", "P06", "P09"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/triggers/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/engine/triggers/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P11",
+      "issue": 15,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/15",
+      "prerequisites": ["P03", "P08", "P09", "P10"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/engine/random/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/scenarios/evaluation/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/evaluation/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P12",
+      "issue": 16,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/16",
+      "prerequisites": ["P02"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/inventory/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/inventory/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P13",
+      "issue": 17,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/17",
+      "prerequisites": ["P10", "P11", "P12"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/mechanics/items/initial/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/mechanics/items/initial/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P14",
+      "issue": 18,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/18",
+      "prerequisites": ["P07", "P08", "P13"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/mechanics/items/catalog/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/mechanics/items/catalog/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "docs/coverage/items/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P15",
+      "issue": 19,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/19",
+      "prerequisites": ["P02", "P08", "P09", "P10", "P11"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/mechanics/runes/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/mechanics/summoners/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/mechanics/environment/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/mechanics/auxiliary/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P16",
+      "issue": 20,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/20",
+      "prerequisites": ["P03", "P08", "P13"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/mechanics/champions/804/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/mechanics/champions/804/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/adapters/legacy-yunara.ts",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/engine/create-engine.ts",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P17",
+      "issue": 21,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/21",
+      "prerequisites": ["P02", "P03", "P11", "P16"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/mechanics/champions/<id>/**",
+          "existsAtAuditedBaseline": false,
+          "excludes": ["src/domain/mechanics/champions/804/**"]
+        },
+        {
+          "path": "tests/mechanics/champions/<id>/**",
+          "existsAtAuditedBaseline": false,
+          "excludes": ["tests/mechanics/champions/804/**"]
+        },
+        {
+          "path": "docs/coverage/champions/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P18",
+      "issue": 22,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/22",
+      "prerequisites": ["P02"],
+      "ownedPaths": [
+        {
+          "path": "src/ingestion/**",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "scripts/ingest.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "scripts/rebuild-from-archives.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/db/projections/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "migrations/<reserved-ingestion>_*.sql",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/ingestion/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P19",
+      "issue": 23,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/23",
+      "prerequisites": ["P18"],
+      "ownedPaths": [
+        {
+          "path": "src/data/progression.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/data/skill-progression.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/data/level-targets.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/data/realistic-targets.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/progression.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/scenarios/defaults/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/app/api/cohort/route.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/app/api/progression/route.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "tests/cohorts/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P20",
+      "issue": 24,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/24",
+      "prerequisites": ["P12"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/optimization/candidates/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/optimization/candidates/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P21",
+      "issue": 25,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/25",
+      "prerequisites": ["P11", "P16", "P19", "P20"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/optimization/evaluate/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/domain/optimization/search/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/optimization/evaluate/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/optimization/search/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P22",
+      "issue": 26,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/26",
+      "prerequisites": ["P21"],
+      "ownedPaths": [
+        {
+          "path": "src/workers/optimizer-protocol.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/workers/optimizer.worker.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/workers/simulation.worker.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/workers/runtime/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/workers/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P23",
+      "issue": 27,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/27",
+      "prerequisites": ["P01"],
+      "ownedPaths": [
+        {
+          "path": "src/components/lab/scenario/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/components/lab/inventory/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/components/lab/state/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/ui/state/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P24",
+      "issue": 28,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/28",
+      "prerequisites": ["P16", "P19", "P22", "P23"],
+      "ownedPaths": [
+        {
+          "path": "src/app/page.tsx",
+          "existsAtAuditedBaseline": true,
+          "handoffTo": ["P29"]
+        },
+        {
+          "path": "src/components/lab/optimizer.tsx",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/components/lab/results/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/components/lab/compare-adapter/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/ui/flows/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P25",
+      "issue": 29,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/29",
+      "prerequisites": ["P11", "P21"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/explanations/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/components/lab/explanations/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/explanations/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P26",
+      "issue": 30,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/30",
+      "prerequisites": ["P02", "P18", "P22"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/reproducibility/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/jobs/optimization/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "scripts/optimize.ts",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "scripts/replay-simulation.ts",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "src/db/jobs/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "migrations/<reserved-jobs>_*.sql",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/replay/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/jobs/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P27",
+      "issue": 31,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/31",
+      "prerequisites": ["P03", "P11", "P14", "P15", "P17"],
+      "ownedPaths": [
+        {
+          "path": "docs/coverage/release/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/interactions/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "scripts/check-combat-coverage.ts",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P28",
+      "issue": 32,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/32",
+      "prerequisites": ["P21", "P22", "P26", "P27"],
+      "ownedPaths": [
+        {
+          "path": "scripts/benchmark-optimizer.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "scripts/benchmarks/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "benchmarks/release/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "tests/performance/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    },
+    {
+      "id": "P29",
+      "issue": 33,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/33",
+      "prerequisites": ["P19", "P24", "P25", "P26", "P27", "P28"],
+      "ownedPaths": [
+        {
+          "path": "src/domain/simulator.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/types.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/optimizer.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/optimizer-engine.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/champions/yunara.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/domain/items.ts",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "src/app/page.tsx",
+          "existsAtAuditedBaseline": true,
+          "handoffFrom": ["P24"]
+        },
+        {
+          "path": "tests/e2e/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "docs/implementation/final-validation.md",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "README.md",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "docs/PRODUCT.md",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "docs/mechanics.md",
+          "existsAtAuditedBaseline": true
+        }
+      ]
+    },
+    {
+      "id": "P30",
+      "issue": 34,
+      "url": "https://github.com/MaximilianMauroner/dps.lol/issues/34",
+      "prerequisites": ["P29"],
+      "ownedPaths": [
+        {
+          "path": "docs/release/**",
+          "existsAtAuditedBaseline": false
+        },
+        {
+          "path": "docs/storage-safety.md",
+          "existsAtAuditedBaseline": true
+        },
+        {
+          "path": "docs/operations/**",
+          "existsAtAuditedBaseline": false
+        }
+      ]
+    }
+  ]
+}

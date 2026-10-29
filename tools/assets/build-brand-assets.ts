@@ -5,11 +5,11 @@ import { join } from 'node:path'
 import { POWER_INDEX_MARK, POWER_INDEX_HEADER_MARK, POWER_INDEX_FAVICON, POWER_INDEX_MASKABLE_MARK } from '../../src/data/brandMark.ts'
 
 // Run manually when the master mark changes. Requires ffmpeg with librsvg.
-const temporary = mkdtempSync(join(tmpdir(), 'power-index-brand-'))
+const temporary = mkdtempSync(join(tmpdir(), 'rift-delta-brand-'))
 const shapes = POWER_INDEX_MARK.slice(POWER_INDEX_MARK.indexOf('>') + 1, POWER_INDEX_MARK.lastIndexOf('</svg>'))
 const fullTile = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#15181b"/>${shapes}</svg>`
 const maskable = POWER_INDEX_MASKABLE_MARK
-const og = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#060708"/><g transform="translate(96 96) scale(2)">${shapes}</g><g font-family="DejaVu Sans, sans-serif"><text x="260" y="135" fill="#a2adb4" font-size="24">LoL Esports</text><text x="260" y="195" fill="#f0f3f5" font-size="52" font-weight="bold">Power Index</text><text x="96" y="360" fill="#f0f3f5" font-size="44">Every team. One Power scale.</text><text x="96" y="416" fill="#a2adb4" font-size="24">Team rankings and region strength, built from match results.</text><text x="96" y="550" fill="#78d6ea" font-size="20">lol.lab4code.com</text></g><g transform="translate(914 144) scale(3.8)" opacity=".13">${shapes}</g></svg>`
+const og = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#060708"/><g transform="translate(96 96) scale(2)">${shapes}</g><g font-family="DejaVu Sans, sans-serif"><text x="260" y="135" fill="#a2adb4" font-size="24">League of Legends</text><text x="260" y="195" fill="#f0f3f5" font-size="52" font-weight="bold">rift-delta</text><text x="96" y="360" fill="#f0f3f5" font-size="44">Rankings. Builds. Inspectable evidence.</text><text x="96" y="416" fill="#a2adb4" font-size="24">Esports power rankings and a patch-pinned damage lab.</text><text x="96" y="550" fill="#78d6ea" font-size="20">lol.lab4code.com</text></g><g transform="translate(914 144) scale(3.8)" opacity=".13">${shapes}</g></svg>`
 
 function raster(svg: string, size: number, output: string) {
   const input = join(temporary, 'input.svg')

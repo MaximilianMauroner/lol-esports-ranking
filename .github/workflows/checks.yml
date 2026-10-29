@@ -234,7 +234,7 @@ jobs:
         with:
           context: ${{ runner.temp }}/web-image
           file: ${{ runner.temp }}/web-image/worker/Dockerfile.web
-          tags: ranking-web
+          tags: rift-delta-web
           load: true
           push: false
           cache-from: type=gha,scope=checks-web-${{ runner.os }}-${{ runner.arch }}-node24-rust1.98.0
@@ -244,10 +244,10 @@ jobs:
           DOCKER_BUILD_RECORD_UPLOAD: 'false'
       - name: Verify image data delivery and shutdown
         run: |
-          docker run -d --name ranking-web-check -e PORT=8080 -p 127.0.0.1:4174:8080 ranking-web
-          trap 'docker logs ranking-web-check; docker rm -f ranking-web-check' EXIT
+          docker run -d --name rift-delta-web-check -e PORT=8080 -p 127.0.0.1:4174:8080 rift-delta-web
+          trap 'docker logs rift-delta-web-check; docker rm -f rift-delta-web-check' EXIT
           curl --fail --connect-timeout 2 --max-time 5 --retry 20 --retry-all-errors --retry-delay 1 http://127.0.0.1:4174/api/live
           curl --fail --dump-header "$RUNNER_TEMP/native-headers" --output /dev/null http://127.0.0.1:4174/data/ranking-summary.json
           grep -i '^x-ranking-runtime: rust' "$RUNNER_TEMP/native-headers"
-          docker stop --time 15 ranking-web-check
-          test "$(docker inspect --format '{{.State.ExitCode}}' ranking-web-check)" = 0
+          docker stop --time 15 rift-delta-web-check
+          test "$(docker inspect --format '{{.State.ExitCode}}' rift-delta-web-check)" = 0

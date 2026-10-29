@@ -10,7 +10,7 @@ import { showsManifestErrorInAppShell } from '../src/browser/bootstrap.ts'
 test('homepage prerender includes ranking snapshot content from public artifacts', async () => {
   const html = await renderHomepagePrerenderFromPublicData(join(referencePublicDir, '..'))
 
-  assert.match(html, /<h1>LoL Esports Power Index<\/h1>/)
+  assert.match(html, /<h1>rift-delta<\/h1>/)
   assert.match(html, /Top teams/)
   assert.match(html, /Region power/)
   assert.match(html, /Bilibili Gaming|Gen\.G|T1|Hanwha Life Esports/)
