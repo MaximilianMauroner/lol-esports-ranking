@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, Globe2, History, Radar, Users } from 'lucide-react'
+import { BarChart3, CalendarDays, Globe2, History, Users } from 'lucide-react'
 import { type AppMode } from '../browser/bootstrap'
 import { type PageLayout } from '../components/ui/loading'
 
@@ -7,7 +7,6 @@ export type Mode = AppMode
 export const MODES: { id: Mode; label: string; icon: typeof BarChart3 }[] = [
   { id: 'rankings', label: 'Rankings', icon: BarChart3 },
   { id: 'players', label: 'Players', icon: Users },
-  { id: 'profiles', label: 'Profiles', icon: Radar },
   { id: 'regions', label: 'Regions', icon: Globe2 },
   { id: 'matches', label: 'Matches', icon: History },
   { id: 'tournaments', label: 'Tournaments', icon: CalendarDays },

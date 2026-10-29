@@ -1,6 +1,6 @@
 import { initialModeFromLocation, type AppMode } from './bootstrap'
 import type { TournamentFilterValue } from '../domains/rankings/evidence'
-import type { StyleScope } from '../domains/style/profile'
+import { STYLE_SCOPES, type StyleScope } from '../domains/style/profile'
 import { useEffect } from 'react'
 
 /**
@@ -98,9 +98,8 @@ export function hashForModeAndScope(mode: AppMode, scope: string, currentHash = 
 }
 
 export function profileScope(value: string | null | undefined): StyleScope {
-  if (value === 'all') return 'all'
-  const season = /^season:(2025|2026)(?::.*)?$/.exec(value ?? '')?.[1]
-  return season ? `season:${season}` as StyleScope : 'season:2026'
+  const scope = /^season:\d{4}(?=:|$)/.exec(value ?? '')?.[0] ?? value
+  return STYLE_SCOPES.find(candidate => candidate === scope) ?? STYLE_SCOPES[STYLE_SCOPES.length - 1]!
 }
 
 export function isKnownScope(value: string | null): value is string {

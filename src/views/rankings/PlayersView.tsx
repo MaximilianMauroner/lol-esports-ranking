@@ -11,24 +11,14 @@ import { Select } from '../../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { teamBrandingFor } from '../../data/teamBranding'
 import { playerLeaderboardForScope } from '../../domains/rankings/read'
-import type { CompactPlayer, Role, SnapshotFilter } from '../../domains/rankings/types'
+import type { Role, SnapshotFilter } from '../../domains/rankings/types'
 import { formatDecimal, formatNumber, formatRating } from '../../shared/display'
 
 const ROLES: readonly Role[] = ['Top', 'Jungle', 'Mid', 'Bot', 'Support']
 const ROLE_FILTERS = ['All', ...ROLES] as const
-const CANDIDATES = ['role-anchor', 'role-scale', 'baseline'] as const
-type Candidate = typeof CANDIDATES[number]
-type PreviewPlayer = CompactPlayer & { previewScores?: Record<Candidate, number> }
-function previewPlayer(player: CompactPlayer, candidate: Candidate): CompactPlayer {
-  const score = (player as PreviewPlayer).previewScores?.[candidate]
-  if (!Number.isFinite(score)) throw new Error('Experimental preview score is missing')
-  return player.statsPower ? { ...player, statsPower: { ...player.statsPower, score: score! } } : { ...player, rating: score! }
-}
-
 function readFilters(query: URLSearchParams) {
   return {
     search: hashParam('player', query) ?? '',
-    candidate: hashEnum('candidate', CANDIDATES, 'role-anchor', query),
     role: hashEnum('role', ROLE_FILTERS, 'All', query),
   }
 }
@@ -46,30 +36,15 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
     setAppliedQuery(hashQuery)
     setFilters(readFilters(hashQuery))
   }
-  useHashSync('players', { player: filters.search, role: filters.role === 'All' ? '' : filters.role, candidate: filters.candidate })
-  const sourceDirectory = state.status === 'ready' ? state.data : undefined
-  const directory = useMemo(() => sourceDirectory ? { ...sourceDirectory, players: sourceDirectory.players.map(player => previewPlayer(player, filters.candidate)), scopedPlayers: Object.fromEntries(Object.entries(sourceDirectory.scopedPlayers ?? {}).map(([key, rows]) => [key, rows.map(player => previewPlayer(player, filters.candidate))])) } : undefined, [sourceDirectory, filters.candidate])
+  useHashSync('players', { player: filters.search, role: filters.role === 'All' ? '' : filters.role })
+  const directory = state.status === 'ready' ? state.data : undefined
   const players = useMemo(() => playerLeaderboardForScope(directory, filter), [directory, filter])
   const scoreRange = useMemo(() => {
     const values = players.map((player) => player.leaderboardScore.value)
     return values.length ? { min: Math.min(...values), max: Math.max(...values) } : undefined
   }, [players])
   const statsPowerVersion = players.find((player) => player.statsPower)?.statsPower?.version
-  const scoreLabel = 'Experimental Power'
-  const candidateDetail = {
-    'role-anchor': {
-      accuracy: 'Historical proxy accuracy is 57.55%, below the 59.81% control. This candidate is rejected.',
-      explanation: 'Uses Role Power plus the existing stat adjustment for players with stat evidence. In 2026, the five Gen.G players lead, so shared team credit remains a concern.',
-    },
-    'role-scale': {
-      accuracy: 'Historical proxy accuracy is 60.03%, above the 59.81% control. This does not establish overall player strength.',
-      explanation: 'Uses the same normalization convention for every metric. In 2026, Effort and Aiming remain near the top.',
-    },
-    baseline: {
-      accuracy: 'Historical proxy accuracy is 59.87%.',
-      explanation: 'The original preview score. In 2026, Effort is first and Aiming is ninth.',
-    },
-  }[filters.candidate]
+  const scoreLabel = statsPowerVersion ? 'Stats Power' : 'Role Power'
   const search = filters.search.trim().toLowerCase()
   const visible = players.filter((player) =>
     (filters.role === 'All' || player.role === filters.role)
@@ -78,37 +53,15 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
 
   const methodDisclosure = (
     <details className="players-method">
-      <summary>Method and source</summary>
+      <summary>Method</summary>
       <div className="grid gap-1.5 text-xs leading-relaxed text-muted-foreground">
         <p>Newer games get more weight, with a 90-day half-life. Inactivity alone does not lower the score. Rows without a stat score show Role Power, which also uses results.</p>
-        <p>{candidateDetail.explanation}</p>
-        <a className="w-fit underline" href="http://lapitopi.tailbc92d.ts.net:43129/#players?scope=season%3A2026">Open the retained preview</a>
       </div>
-      {directory ? (
-        <p className="break-words text-xs leading-relaxed text-muted-foreground">
-          Source {directory.sourceProvider}.{' '}
-          {statsPowerVersion
-            ? `The stat adjustment uses lane leads at 15 minutes, kill participation and ward activity. All three comparisons retain the original event, league and 90-day game weights. The result-informed candidate also uses Role Power as its baseline. The common-scale candidate changes metric normalization. Neither candidate is verified as overall player strength. Inactivity alone does not lower the stat score. Stat games count raw games with usable role stats, including previous teams. `
-            : ''}
-          Role Power uses model {directory.modelVersion}, configuration {directory.modelConfigHash}, and includes individual stats, results, opponent strength and event context. Its history and deltas still track Role Power. Games count games credited to the displayed team where available, otherwise all rated games. Game counts do not measure certainty.
-        </p>
-      ) : null}
     </details>
   )
 
   return (
     <section className="players-view flex min-w-0 flex-col gap-4 px-[var(--page-x)] pt-5" aria-label="Player leaderboard">
-      <Card role="note" aria-label="Experimental score comparison" className="players-experiment p-4">
-        <p className="font-semibold">Local scoring experiment. This is not a released ranking.</p>
-        <label className="flex max-w-md flex-col gap-1.5 text-sm">Score model
-          <Select data-wrap className="w-full max-w-none" aria-label="Score model" value={filters.candidate} onChange={event => setFilters({ ...filters, candidate: event.target.value as Candidate })}>
-            <option value="role-anchor">Result-informed player baseline. Rejected by accuracy gate.</option>
-            <option value="role-scale">Common metric scale. Proxy gate passes, strength unverified.</option>
-            <option value="baseline">Original Stats Power. Unchanged comparison.</option>
-          </Select>
-        </label>
-        <p className="text-sm text-muted-foreground">{candidateDetail.accuracy}</p>
-      </Card>
       <div className="players-filters flex flex-wrap items-end gap-3">
         <label className="flex min-w-0 flex-1 basis-56 flex-col gap-1.5 text-xs text-muted-foreground">
           Find a player or team
@@ -159,7 +112,7 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
           <p className="players-count flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground" role="status">
             <span>{formatNumber(visible.length)} of {formatNumber(players.length)} players in {scopeLabel}. Ranks stay tied to this scope when filtered.</span>
             {scoreRange && visible.length > 0 ? (
-              <span className="player-score-key" title="Markers show position in the full scope's Experimental Power range. Filters keep the same scale.">
+              <span className="player-score-key" title="Markers show position in the full scope's score range. Filters keep the same scale.">
                 Scope range {formatDecimal(scoreRange.min)} to {formatDecimal(scoreRange.max)}
               </span>
             ) : null}
@@ -234,6 +187,15 @@ export function PlayersView({ state, filter, scopeLabel, hashQuery, searchRef }:
         </>
       )}
       {visible.length === 0 ? methodDisclosure : null}
+      {directory ? (
+        <p className="players-source break-words text-xs leading-relaxed text-muted-foreground">
+          Source {directory.sourceProvider}.{' '}
+          {statsPowerVersion
+            ? `Stats Power ${statsPowerVersion} scores lane leads at 15 minutes, kill participation and ward activity against each role's average. It weights each game by event and home-league strength, then gives a game half the weight of a game 90 days later in the supplied history. It pulls small samples to the league anchor and excludes wins, KDA and gold share. For each player, newer games get more weight than older games. Inactivity alone does not lower the score. Stat games count raw games with usable role stats in this scope, including previous teams. `
+            : ''}
+          Role Power uses model {directory.modelVersion}, configuration {directory.modelConfigHash}, and includes individual stats, results, opponent strength and event context. Its history and deltas still track Role Power. Games count games credited to the displayed team where available, otherwise all rated games. Game counts do not measure certainty.
+        </p>
+      ) : null}
     </section>
   )
 }

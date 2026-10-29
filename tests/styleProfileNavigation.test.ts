@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { initialModeFromLocation } from '../src/browser/bootstrap.ts'
-import { hashForModeAndScope } from '../src/browser/navigation.ts'
+import { hashForModeAndScope, profileScope } from '../src/browser/navigation.ts'
 import { canonicalProfileQuery, profileSelection } from '../src/browser/style/navigation.ts'
+import { STYLE_SCOPES } from '../src/domains/style/profile.ts'
 import { buildStyleProfiles } from '../src/domains/style/build.ts'
 import { styleGame } from './styleProfileFixtures.ts'
 
@@ -51,4 +52,22 @@ test('league and scope changes correct both entity options and addressed compari
   assert.equal(empty.get('role'), null)
   assert.equal(empty.get('ta'), null)
   assert.equal(empty.get('tb'), null)
+})
+
+test('scope validation accepts every artifact scope and does not truncate invalid years', () => {
+  for (const scope of STYLE_SCOPES) assert.equal(profileScope(scope), scope)
+  assert.equal(profileScope('season:20250'), 'season:2026')
+})
+
+test('default profile entities use observed games and stable identities instead of names', () => {
+  const value = structuredClone(artifact)
+  const table = value.scopes['season:2026']
+  for (const player of table.players) player.name = 'Tarzan'
+  for (const team of table.teams) team.name = 'Gen.G'
+  const before = profileSelection(value, new URLSearchParams())
+  table.players.reverse()
+  table.teams.reverse()
+  const after = profileSelection(value, new URLSearchParams())
+  assert.equal(before.pa?.id, after.pa?.id)
+  assert.equal(before.ta?.id, after.ta?.id)
 })

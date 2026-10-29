@@ -114,15 +114,15 @@
   /* Radius. Three steps plus a pill. Panels are visibly rounder than the
      controls inside them, which is what makes the surface hierarchy readable. */
   --r-1: 4px;   /* chips, badges, inline controls */
-  --r-2: 6px;   /* buttons, inputs, cells */
-  --r-3: 10px;  /* panels, cards, drawers */
+  --r-2: 6px;
+  --r-3: 10px;
   --r-pill: 999px;
 
   /* Type scale. Do not introduce arbitrary rem sizes. */
   --t-0: 0.6rem;  /* dense mobile chrome only. Never body text. */
-  --t-1: 0.75rem; /* eyebrows, table meta, chips */
-  --t-2: 0.8125rem; /* secondary and caption text */
-  --t-3: 0.875rem; /* default UI and table body */
+  --t-1: 0.75rem;
+  --t-2: 0.8125rem;
+  --t-3: 0.875rem;
   --t-4: 0.92rem; /* emphasised row text */
   --t-5: 1.05rem; /* panel title */
   --t-6: 1.25rem; /* section title, headline figure inside a panel */
@@ -386,7 +386,7 @@ body {
   .mode-header h1 { font-size: var(--t-6); }
   .mode-header p { font-size: var(--t-2); line-height: 1.45; }
   .ranking-period:not(:has([role="group"])) > p { flex: 1 1 0; min-width: 0; }
-  .app-nav-mobile { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(76px, 1.25fr); }
+  .app-nav-mobile { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(76px, 1.25fr); }
   .app-nav-mobile a { width: 100%; padding-inline: 2px; font-size: 0.625rem; font-weight: var(--w-label); letter-spacing: -0.015em; }
   .app-nav-mobile a[aria-current="page"] { color: var(--accent); border-top: 2px solid var(--accent); }
   .page-shell { gap: 16px; padding-top: 16px; }

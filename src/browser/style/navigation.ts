@@ -3,8 +3,7 @@ import {
   type StyleProfileArtifact,
 } from '../../domains/style/profile'
 import { currentHashQuery, profileScope, writeNavigationHash } from '../navigation'
-
-export { profileScope } from '../navigation'
+import { compareCodeUnits } from '../../shared/codeUnitOrder.mjs'
 
 export function profileSelection(artifact: StyleProfileArtifact, query: URLSearchParams) {
   const scope = profileScope(query.get('scope'))
@@ -14,13 +13,13 @@ export function profileSelection(artifact: StyleProfileArtifact, query: URLSearc
   const role = roles.find(role => role === query.get('role')) ?? requested?.role ?? (roles.includes('Jungle') ? 'Jungle' : roles[0])
   const players = table.players.filter(player => player.role === role)
   const pa = players.find(player => playerKey(player) === query.get('pa'))
-    ?? players.find(player => player.name === 'Tarzan') ?? [...players].sort((a, b) => b.games - a.games)[0]
+    ?? [...players].sort((a, b) => b.games - a.games || compareCodeUnits(playerKey(a), playerKey(b)))[0]
   const pb = players.find(player => playerKey(player) === query.get('pb') && playerKey(player) !== (pa && playerKey(pa)))
   const leagues = [...new Set(table.teams.flatMap(team => team.league === null ? [] : [team.league]))].sort()
   const league = leagues.includes(query.get('league') ?? '') ? query.get('league')! : ''
   const teams = table.teams.filter(team => !league || team.league === league)
-  const ta = teams.find(team => team.id === query.get('ta')) ?? teams.find(team => team.name === 'Gen.G')
-    ?? [...teams].sort((a, b) => b.games - a.games)[0]
+  const ta = teams.find(team => team.id === query.get('ta'))
+    ?? [...teams].sort((a, b) => b.games - a.games || compareCodeUnits(a.id, b.id))[0]
   const tb = teams.find(team => team.id === query.get('tb') && team.id !== ta?.id)
   const paxis = PLAYER_METRICS.find(metric => metric.key === query.get('paxis'))?.key ?? PLAYER_METRICS[0].key
   const taxis = TEAM_METRICS.find(metric => metric.key === query.get('taxis'))?.key ?? TEAM_METRICS[0].key

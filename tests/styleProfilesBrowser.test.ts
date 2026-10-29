@@ -25,7 +25,7 @@ test('Profiles restores URL state, compares peers, excludes missing axes, filter
   const artifact = buildStyleProfiles([...games, old], 'a'.repeat(64))
   const requests: string[] = []
   const errors: string[] = []
-  let artifactStatus = 503
+  let artifactStatus = 404
   const executablePath = chromium.executablePath()
   assert.ok(existsSync(executablePath), 'Use an already installed Chromium')
   const browser = await chromium.launch({ executablePath, headless: true })
@@ -54,6 +54,11 @@ test('Profiles restores URL state, compares peers, excludes missing axes, filter
       await route.fulfill({ status: 200, contentType, body: await readFile(file) })
     })
     await page.goto('http://profiles.test/#profiles?scope=season:2026:checkpoint:split-2&view=player&role=Support&pa=a-4%7CSupport&pb=b-4%7CSupport&paxis=goldDiffAt15&future=keep')
+    await page.getByRole('heading', { name: 'Style profiles are not published' }).waitFor()
+    assert.equal(await page.getByRole('link', { name: 'Profiles', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: 'Retry', exact: true }).count(), 0)
+    artifactStatus = 503
+    await page.reload()
     await page.getByRole('heading', { name: 'Style profiles could not be loaded' }).waitFor()
     artifactStatus = 200
     await page.getByRole('button', { name: 'Retry', exact: true }).click()

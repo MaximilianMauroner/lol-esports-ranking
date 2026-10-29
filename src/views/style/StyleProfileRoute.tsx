@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { currentHashQuery, readModeFromHash, writeNavigationHash } from '../../browser/navigation'
-import { canonicalProfileQuery, changeProfileQuery, profileScope, profileSelection } from '../../browser/style/navigation'
+import { currentHashQuery, profileScope, readModeFromHash, writeNavigationHash } from '../../browser/navigation'
+import { canonicalProfileQuery, changeProfileQuery, profileSelection } from '../../browser/style/navigation'
 import { useStyleProfiles } from '../../browser/style/useStyleProfiles'
 import { Button } from '../../components/ui/button'
 import { DataState, Segmented, type SegmentedOption } from '../../components/ui'
@@ -10,7 +10,7 @@ import { Select } from '../../components/ui/select'
 import { RouteErrorBoundary } from '../../components/RouteErrorBoundary'
 import { RIOT_PROJECT_NOTICE } from '../../data/legal'
 import {
-  buildStyleCohorts, MIN_GAMES, playerKey, styleMeasures, stylePeers, stylePopulation,
+  buildStyleCohorts, MIN_GAMES, STYLE_SCOPES, playerKey, styleMeasures, stylePeers, stylePopulation,
   type StyleEntity, type StyleProfileArtifact,
 } from '../../domains/style/profile'
 import { AppNavigation, ModeHeader } from '../AppShell'
@@ -63,7 +63,7 @@ function Profiles({ artifact, query }: { artifact: StyleProfileArtifact; query: 
       <div className="style-field style-field-view"><span aria-hidden="true">View</span>
         <Segmented ariaLabel="Profile view" value={view} options={VIEW_OPTIONS} onChange={next => change({ view: next })} /></div>
       <label className="style-field"><span>Scope</span><Select data-wrap aria-label="Scope" value={scope} onChange={e => change({ scope: e.target.value })}>
-        <option value="all">All recorded years</option><option value="season:2025">2025</option><option value="season:2026">2026</option>
+        {STYLE_SCOPES.map(scope => <option key={scope} value={scope}>{scope === 'all' ? 'All recorded years' : scope.slice(7)}</option>)}
       </Select></label>
       {view === 'player' ? <label className="style-field"><span>Role</span><Select aria-label="Role" value={role ?? ''} disabled={!state.roles.length} onChange={e => change({ role: e.target.value })}>
         {state.roles.map(role => <option key={role}>{role}</option>)}
@@ -141,6 +141,7 @@ export function StyleProfileRoute() {
       <ModeHeader mode="profiles" />
       <RouteErrorBoundary>
         {state.status === 'loading' ? <LoadingState presentation="page" layout="board" label="Loading style profiles" />
+          : state.status === 'missing' ? <section className="px-[var(--page-x)] pt-6"><Panel><DataState icon={null} title="Style profiles are not published">Style profiles are not available yet. Use Rankings to view the available data.</DataState></Panel></section>
           : state.status === 'error' ? <section className="px-[var(--page-x)] pt-6"><Panel><DataState icon={null} title="Style profiles could not be loaded"
             action={<Button onClick={retry}>Retry</Button>}>{state.message}</DataState></Panel></section>
             : <Profiles artifact={state.data} query={query} />}

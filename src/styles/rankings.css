@@ -631,28 +631,6 @@ table.ranking-table.board-grid tbody td {
 }
 
 .players-view { gap: 16px; padding-top: 20px; }
-.players-experiment {
-  display: grid;
-  grid-template-columns: minmax(240px, 0.85fr) minmax(0, 1.45fr);
-  gap: 10px 24px;
-  border-color: var(--line);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--r-2);
-  background: var(--rail);
-}
-.players-experiment > * { margin: 0; }
-.players-experiment > p:first-child { grid-column: 1 / -1; color: var(--text-strong); }
-.players-experiment > label { grid-column: 1; grid-row: 2; max-width: none; font-size: var(--t-2); color: var(--muted); }
-.players-experiment > p:not(:first-child) { grid-column: 2; font-size: var(--t-2); line-height: 1.55; }
-@media (min-width: 1200px) {
-  .players-experiment {
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr) minmax(0, 1.1fr);
-    align-items: center;
-  }
-  .players-experiment > p:first-child { grid-column: 1; grid-row: 1; line-height: 1.5; }
-  .players-experiment > label { grid-column: 2; grid-row: 1; }
-  .players-experiment > p:not(:first-child) { grid-column: 3; grid-row: 1; }
-}
 .players-filters { padding-block: 4px; }
 .players-table { font-size: var(--t-3); }
 .players-table thead { background: var(--surface-2); }
@@ -671,11 +649,11 @@ table.ranking-table.board-grid tbody td {
 .player-identity { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .player-identity-mark { display: none; }
 .players-scroll-cue { display: none; }
+.players-source { max-width: 75ch; }
 .players-method { color: var(--muted); font-size: var(--t-2); }
 .players-method > summary { width: fit-content; min-height: 36px; align-content: center; cursor: pointer; color: var(--accent); }
 .players-method > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-1); }
 .players-method[open] > summary { margin-bottom: 8px; }
-.players-method > p { margin-top: 8px; }
 .players-method[open] > :is(div, p) { font-size: var(--t-3); line-height: 1.65; }
 @media (min-width: 640px) {
   .players-method > :is(div, p) { max-width: 75ch; }
@@ -684,7 +662,6 @@ table.ranking-table.board-grid tbody td {
 .compare-sheet .compare-table thead th { padding-block: 10px; }
 .compare-sheet .compare-table tbody tr:nth-child(even) td { background: color-mix(in oklch, var(--surface-2) 35%, var(--surface)); }
 @media (max-width: 760px) {
-  .players-experiment { display: flex; flex-direction: column; gap: 10px; }
   .players-table { min-width: 680px; }
 }
 
@@ -707,9 +684,6 @@ table.ranking-table.board-grid tbody td {
   .players-method[open] + .players-scroll-cue { grid-column: 1 / -1; min-height: 28px; }
   .player-identity-mark { display: block; flex: 0 0 20px; width: 20px; height: 20px; object-fit: contain; }
   .player-identity > span { min-width: 0; overflow-wrap: anywhere; }
-  .players-experiment { gap: 8px; padding: 12px; }
-  .players-experiment > p { font-size: var(--t-2); line-height: 1.45; }
-  .players-experiment > label { gap: 4px; }
   .players-filters { display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 10px; padding-block: 0; }
   .players-filters > label { min-width: 0; }
   .players-filters [data-slot="select"] { width: 100%; min-width: 0; max-width: none; }

@@ -23,7 +23,7 @@ export function SwissStatsBar({ stats }: { stats: SwissStats }) {
           ? <Button variant="outline" size="sm" className="min-w-28" onClick={stats.cancel}>Cancel stats</Button>
           : result ? <Button variant="outline" size="sm" className="min-w-28" onClick={stats.cancel}>Hide stats</Button>
           : <Button variant={state.status === 'idle' ? 'default' : 'outline'} size="sm" className="min-w-28" onClick={stats.start}>{state.status === 'error' || state.status === 'cancelled' ? 'Retry stats' : 'Preview stats'}</Button>}
-        <div className="flex min-h-8 min-w-56 flex-1 items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex min-h-[max(2rem,2lh)] min-w-56 flex-1 items-center gap-2 text-xs text-muted-foreground">
           {stats.blocked ? null
             : state.status === 'idle' ? <p>Shows each team’s chance to advance. Ratings load on request.</p>
               : state.status === 'loading' ? <LoadingState label="Loading published Power ratings." presentation="inline" delay={false} />

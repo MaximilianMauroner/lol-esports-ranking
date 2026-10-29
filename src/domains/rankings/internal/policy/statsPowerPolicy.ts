@@ -1,7 +1,7 @@
 import type { EventTier, PlayerPerformanceMetric, Role } from '../../types.ts'
 
 export const statsPowerPolicy = {
-  version: 'stats-power-v4-prototype-ownmetric-scale',
+  version: 'stats-power-v3',
   halfLifeDays: 90,
   priorGames: 20,
   amplitude: 30,

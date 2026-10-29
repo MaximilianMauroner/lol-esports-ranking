@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { parseStyleProfileArtifact, type StyleProfileArtifact } from '../../domains/style/profile'
 
-type StyleArtifactState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: StyleProfileArtifact }
+type StyleArtifactState = { status: 'loading' } | { status: 'missing' } | { status: 'error'; message: string } | { status: 'ready'; data: StyleProfileArtifact }
 
 export function useStyleProfiles() {
   const [attempt, setAttempt] = useState(0)
@@ -11,6 +11,10 @@ export function useStyleProfiles() {
     async function load() {
       try {
         const response = await fetch('/data/style-profiles.json', { signal: controller.signal })
+        if (response.status === 404 || response.status === 410) {
+          if (!controller.signal.aborted) setState({ status: 'missing' })
+          return
+        }
         if (!response.ok) throw new Error(`Style profiles are unavailable. HTTP ${response.status}.`)
         const data = parseStyleProfileArtifact(await response.json())
         if (!controller.signal.aborted) setState({ status: 'ready', data })

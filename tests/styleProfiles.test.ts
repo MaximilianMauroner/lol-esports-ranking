@@ -97,7 +97,6 @@ test('strict parsing rejects broken identity, coverage, metric data, versions an
   const artifact = buildStyleProfiles([game()], hash)
   const changes = [
     (a: typeof artifact) => { a.version = 'other' as typeof a.version },
-    (a: typeof artifact) => { a.sampleRules.minCohort = 1 as 2 },
     (a: typeof artifact) => { a.scopes.all.players[0].observed.csPerMinute = { mean: Infinity, games: 1 } },
     (a: typeof artifact) => { a.scopes.all.players[0].observed.csPerMinute = { mean: 0, games: 2 } },
     (a: typeof artifact) => { a.scopes.all.players.push(a.scopes.all.players[0]) },
@@ -109,6 +108,7 @@ test('strict parsing rejects broken identity, coverage, metric data, versions an
     change(copy)
     assert.throws(() => parseStyleProfileArtifact(copy), /Invalid style/)
   }
+  assert.throws(() => parseStyleProfileArtifact({ ...artifact, sampleRules: { ...artifact.sampleRules, minCohort: 1 } }), /Invalid style/)
   assert.throws(() => parseStyleProfileArtifact({ ...artifact, score: 50 }), /Invalid style/)
 })
 

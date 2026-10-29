@@ -128,7 +128,7 @@ test('equal standardized evidence scores the same in every role, whatever the me
   const matches = series('ab', 30, () => evenEdge('Alpha', true), () => evenEdge('Beta', false), () => ({ date: '2026-03-01' }))
   const standings = players(matches)
   const anchor = playerBaselineForLeague('LCK', noRatings)
-  const expectedLead = 30 * Math.tanh(30 / 50)
+  const expectedLead = 30 * Math.tanh(0.5 * 30 / 50)
   for (const role of roles) {
     const leader = power(standings, `Alpha-${role}`)
     const trailer = power(standings, `Beta-${role}`)
@@ -223,7 +223,7 @@ test('opposite older and newer lines order equal raw samples by recent form, and
   const improving = power(standings, 'Alpha-Mid')
   const declining = power(standings, 'Beta-Mid')
   const anchor = playerBaselineForLeague('LCK', noRatings)
-  const expectedEdge = 30 * Math.tanh((1 / 3) * (1.8 / 21.8))
+  const expectedEdge = 30 * Math.tanh((1 / 6) * (1.8 / 21.8))
   near(improving.score, anchor + expectedEdge, 'one half-weight loss followed by one full-weight lead')
   near(declining.score, anchor - expectedEdge, 'opposite recent form')
   assert.equal(improving.sampleGames, 2)
@@ -278,11 +278,11 @@ test('recency and original league weights govern anchors, signal means and effec
   const meanSignal = (0.5 + signal ** 2) / weight
   const effective = weight ** 2 / (0.25 + signal ** 2)
   near(summary.leagueAnchor, anchor, 'original league anchor with half-weight older game')
-  near(summary.score, anchor + 30 * meanSignal * Math.tanh(effective / (effective + 20)), 'weighted signal and shrinkage')
+  near(summary.score, anchor + 30 * meanSignal * Math.tanh(0.5 * effective / (effective + 20)), 'weighted signal and shrinkage')
   assert.equal(summary.metrics.goldDiffAt15!.effectiveGames, Number(effective.toFixed(2)))
 })
 
-test('constant own-metric scales remain unavailable while observed counts stay raw', () => {
+test('zero paired scales remain unavailable while observed counts stay raw', () => {
   const matches = series('flat', 3, () => evenEdge('Alpha', true), () => evenEdge('Beta', true))
   const summary = power(players(matches), 'Alpha-Mid')
   assert.equal(summary.priorOnly, true)
