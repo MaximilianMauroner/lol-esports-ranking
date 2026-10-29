@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { archiveConfig } from '../../scripts/dps/storage/archive.ts'
+import { getYunaraSkillProgression } from '../../scripts/dps/data/skill-progression.ts'
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -36,4 +37,14 @@ test('complete DPS archive configuration selects only the explicit private bucke
   })
   vi.stubEnv('DPS_ARCHIVE_REGION', 'ams')
   expect(archiveConfig()?.region).toBe('ams')
+})
+
+
+test('missing private archive configuration explains the web progression fallback', async () => {
+  setArchiveEnvironment()
+  const progression = await getYunaraSkillProgression(13)
+  expect(progression.provenance).toBe('legal-fallback')
+  expect(progression.sampleCount).toBe(0)
+  expect(progression.note).toContain('archive access is not configured')
+  expect(progression.note).not.toContain('not expose enough usable')
 })

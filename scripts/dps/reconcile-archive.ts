@@ -27,7 +27,7 @@ const repairMode: RepairMode = process.argv.includes("--repair-orphans") ? "safe
 const gameVersionPrefix = process.env.DDRAGON_VERSION?.replace(/\.1$/, "") ?? "16.18";
 const routing = process.env.ROUTING_REGION ?? "EUROPE";
 
-if (!archiveEnabled()) throw new Error("Railway bucket S3 variables are not configured.");
+if (!archiveEnabled()) throw new Error("DPS archive bucket variables are not configured.");
 
 interface ManifestToCheck extends ArchiveManifestRow {
   source_match_id: string | null;

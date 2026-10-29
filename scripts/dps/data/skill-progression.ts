@@ -23,7 +23,10 @@ let cached: { expiresAt: number; observations: SkillObservation[] } | null = nul
 export async function getYunaraSkillProgression(level: number): Promise<SkillProgression> {
   const requestedLevel = Math.max(1, Math.min(18, Math.round(level)));
   const fallback = fallbackSkillProgression(requestedLevel);
-  if (!archiveEnabled()) return fallback;
+  if (!archiveEnabled()) return {
+    ...fallback,
+    note: "DPS archive access is not configured; this is a deterministic legal rank fallback, not an observed skill order.",
+  };
   try {
     const observations = await loadObservations();
     if (observations.length === 0) return fallback;
