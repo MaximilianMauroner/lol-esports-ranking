@@ -9,6 +9,7 @@ The original `lol_dps` schema, archive keys, provenance, and format versions sta
 
 The lab at `/lab` requires `PROTOTYPE_ACCESS_PASSWORD` and `PROTOTYPE_SESSION_SECRET` on the server.
 See `env.example` for the retained environment names. Do not set `DATABASE_URL` for fixture use.
+Behind a trusted reverse proxy, set `DPS_TRUST_PROXY=true` only when that proxy overwrites or appends the client IP in `X-Forwarded-For`. The login limiter uses the nearest forwarded IP. Keep this setting off for direct public connections.
 Fixtures do not contain live Riot observations. Never use browser-prefixed variables for private credentials.
 
 Developer ruleset and retained-source commands live in `tools/dps/rulesets`.

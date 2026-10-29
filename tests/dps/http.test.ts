@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { handleDpsRequest } from '../../scripts/dps/http.ts'
+import { handleDpsRequest, loginClientAddress } from '../../scripts/dps/http.ts'
 import { sessionCookie } from '../../scripts/dps/auth/login.ts'
 import { createSessionToken, SESSION_COOKIE } from '../../scripts/dps/auth/session.ts'
 
@@ -99,5 +99,54 @@ test('production cookies are Secure even when NODE_ENV is unset', () => {
   } finally {
     if (saved === undefined) delete process.env.NODE_ENV
     else process.env.NODE_ENV = saved
+  }
+})
+
+
+test('forwarded identities require explicit trust and select the nearest valid IP', () => {
+  const savedTrust = process.env.DPS_TRUST_PROXY
+  try {
+    delete process.env.DPS_TRUST_PROXY
+    expect(loginClientAddress('203.0.113.10', '127.0.0.1')).toBe('127.0.0.1')
+    process.env.DPS_TRUST_PROXY = 'true'
+    expect(loginClientAddress('198.51.100.1, 203.0.113.10', '127.0.0.1')).toBe('203.0.113.10')
+    expect(loginClientAddress('not-an-ip', '127.0.0.1')).toBe('127.0.0.1')
+    expect(loginClientAddress(undefined, '127.0.0.1')).toBe('127.0.0.1')
+  } finally {
+    if (savedTrust === undefined) delete process.env.DPS_TRUST_PROXY
+    else process.env.DPS_TRUST_PROXY = savedTrust
+  }
+})
+
+test('trusted proxy clients have separate limits and cannot spoof an earlier address', async () => {
+  const savedTrust = process.env.DPS_TRUST_PROXY
+  process.env.DPS_TRUST_PROXY = 'true'
+  const attempt = (forwarded: string, supplied: string) => fetch(`${base}/api/dps/auth/login`, {
+    method: 'POST', headers: { 'x-forwarded-for': forwarded }, body: JSON.stringify({ password: supplied }),
+  })
+  try {
+    for (let index = 0; index < 5; index++) {
+      expect((await attempt(`198.51.100.${index + 1}, 203.0.113.20`, 'wrong')).status).toBe(401)
+    }
+    expect((await attempt('198.51.100.99, 203.0.113.20', password)).status).toBe(429)
+    expect((await attempt('203.0.113.21', password)).status).toBe(200)
+  } finally {
+    if (savedTrust === undefined) delete process.env.DPS_TRUST_PROXY
+    else process.env.DPS_TRUST_PROXY = savedTrust
+  }
+})
+
+test('private pages and API errors retain the DPS security headers', async () => {
+  const token = await createSessionToken()
+  for (const path of ['/lab', '/lab/login', '/api/dps/cohort']) {
+    for (const session of ['', token]) {
+      const headers: Record<string, string> = session ? { cookie: `${SESSION_COOKIE}=${session}` } : {}
+      const response = await fetch(`${base}${path}`, { redirect: 'manual', headers })
+      expect(response.headers.get('x-frame-options')).toBe('DENY')
+      expect(response.headers.get('referrer-policy')).toBe('same-origin')
+      expect(response.headers.get('permissions-policy')).toBe('camera=(), microphone=(), geolocation=()')
+      expect(response.headers.get('cross-origin-opener-policy')).toBe('same-origin')
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    }
   }
 })

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { isIP } from 'node:net'
 import { SESSION_COOKIE, verifySessionToken } from './auth/session.ts'
 import { login, sessionCookie } from './auth/login.ts'
 import { POST as cohort } from './api/cohort/route.ts'
@@ -19,6 +20,10 @@ export async function handleDpsRequest(request: IncomingMessage, response: Serve
   if (!isApi && !isLab) return false
   response.setHeader('cache-control', 'private, no-store')
   response.setHeader('x-content-type-options', 'nosniff')
+  response.setHeader('x-frame-options', 'DENY')
+  response.setHeader('referrer-policy', 'same-origin')
+  response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()')
+  response.setHeader('cross-origin-opener-policy', 'same-origin')
   if (isLab && path === '/lab/login') return false
   const token = request.headers.cookie?.split(';').map((cookie) => cookie.trim()).find((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1)
   const authenticated = await verifySessionToken(token)
@@ -65,7 +70,7 @@ export async function handleDpsRequest(request: IncomingMessage, response: Serve
     }
     const webRequest = new Request(url, { method: request.method, headers, ...(request.method === 'POST' ? { body: Buffer.concat(chunks) } : {}) })
     const result = path === '/api/dps/auth/login'
-      ? await login(webRequest, request.socket.remoteAddress ?? 'unknown')
+      ? await login(webRequest, loginClientAddress(request.headers['x-forwarded-for'], request.socket.remoteAddress))
       : path === '/api/dps/auth/logout'
         ? Response.json({ ok: true }, { headers: { 'set-cookie': sessionCookie('', 0) } })
         : await route.run(webRequest)
@@ -82,4 +87,10 @@ function send(response: ServerResponse, result: Response) {
   response.statusCode = result.status
   result.headers.forEach((value, key) => response.setHeader(key, value))
   void result.text().then((body) => response.end(body))
+}
+
+export function loginClientAddress(forwarded: string | string[] | undefined, remoteAddress: string | undefined): string {
+  const nearest = process.env.DPS_TRUST_PROXY === 'true' && typeof forwarded === 'string'
+    ? forwarded.split(',').at(-1)?.trim() : undefined
+  return nearest && isIP(nearest) ? nearest : remoteAddress ?? 'unknown'
 }
