@@ -117,6 +117,7 @@ export default function Home() {
   const optimizerSlotEditedRef = useRef(false);
   const optimizerInputKeyRef = useRef<string | null>(null);
   const requestIdRef = useRef(0);
+  const autoRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cohortRef = useRef<{ key: string; payload: CohortPayload } | null>(null);
   const progressionCacheRef = useRef(new Map<number, ProgressionApiResponse>());
   const buildsEditedRef = useRef(false);
@@ -453,6 +454,10 @@ export default function Home() {
 
   const run = useCallback(
     async (overrides: { selectedTargetId?: string; targetChampion?: string } = {}) => {
+      if (autoRunTimerRef.current !== null) {
+        clearTimeout(autoRunTimerRef.current);
+        autoRunTimerRef.current = null;
+      }
       setLoading(true);
       setError("");
       try {
@@ -576,7 +581,11 @@ export default function Home() {
   const runAutomatically = useEffectEvent(() => void run());
   useEffect(() => {
     const timer = setTimeout(runAutomatically, 280);
-    return () => clearTimeout(timer);
+    autoRunTimerRef.current = timer;
+    return () => {
+      clearTimeout(timer);
+      if (autoRunTimerRef.current === timer) autoRunTimerRef.current = null;
+    };
   }, [autoKey]);
 
   function markBuildsEdited() {
