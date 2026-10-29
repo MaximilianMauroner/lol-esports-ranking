@@ -1,3 +1,5 @@
+import type { statsPowerPolicy } from './internal/policy/statsPowerPolicy.ts'
+
 export type Region = 'LCK' | 'LPL' | 'LEC' | 'LCS' | 'LCP' | 'CBLOL' | 'VCS' | 'PCS' | 'International'
 
 export type EventTier =
@@ -225,6 +227,27 @@ export type PlayerIndividualResidual = {
     rolePowerRating: number
     teamWinRate: number | null
   }
+}
+
+export type StatsPowerMetric = (typeof statsPowerPolicy.roleMetrics)[Role][number]
+
+export type PlayerStatsPowerMetricEvidence = {
+  observed: number
+  missing: number
+  effectiveGames: number
+}
+
+/** Observed-stats display score with its own version. Legacy strength fields keep their meaning. */
+export type PlayerStatsPower = {
+  version: typeof statsPowerPolicy.version
+  score: number
+  role: Role
+  sampleGames: number
+  eligibleGames: number
+  priorOnly: boolean
+  leagueAnchor: number
+  evidenceThrough: string
+  metrics: Partial<Record<StatsPowerMetric, PlayerStatsPowerMetricEvidence>>
 }
 
 export type RosterPlayerAppearance = {
@@ -696,6 +719,7 @@ export type PlayerStanding = {
   appearance?: PlayerAppearanceSummary
   diagnostics?: PlayerDiagnostics
   individualResidual?: PlayerIndividualResidual
+  statsPower?: PlayerStatsPower
 }
 
 export type EventSummary = {

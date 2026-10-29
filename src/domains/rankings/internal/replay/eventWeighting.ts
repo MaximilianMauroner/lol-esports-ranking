@@ -52,8 +52,10 @@ export function eventKFactorForMatch(
 export function eventWeightForMatch(
   match: EventScoringMatch,
   context: EventWeightContext = emptyEventWeightContext,
+  eventWeights?: Readonly<Record<MatchRecord['tier'], number>>,
 ) {
-  return eventTierConfig[powerEvidenceTierForMatch(match)].weight * eventWeightMultiplierForMatch(match, context)
+  const tier = powerEvidenceTierForMatch(match)
+  return (eventWeights?.[tier] ?? eventTierConfig[tier].weight) * eventWeightMultiplierForMatch(match, context)
 }
 
 function powerEvidenceTierForMatch(match: EventScoringMatch) {

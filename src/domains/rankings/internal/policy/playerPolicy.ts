@@ -1,5 +1,6 @@
 import type { LeagueTierName, Role } from '../../types.ts'
 import { playerPerformancePolicy } from './playerPerformancePolicy.ts'
+import { cappedLeagueRatingForTier, leaguePriorFor, leagueTierFor } from './leagueTiers.ts'
 
 export const initialPlayerRating = 100
 export const sourcedPlayerKFactor = 8
@@ -95,3 +96,15 @@ export const playerModelParameters = {
   playerPerformancePolicy,
   playerPregameEvidencePolicy,
 } as const
+
+export function playerBaselineForLeague(league: string, leagueRatings: ReadonlyMap<string, number>) {
+  const leagueRating = cappedLeagueRatingForTier(league, leagueRatings.get(league) ?? leaguePriorFor(league))
+  return Number(Math.min(
+    playerLeagueBaselineBounds.max,
+    Math.max(playerLeagueBaselineBounds.min, initialPlayerRating + (leagueRating - playerLeagueAnchorRating) * playerLeagueBaselineCoefficient),
+  ).toFixed(1))
+}
+
+export function playerSignalMultiplierForLeague(league: string) {
+  return playerLeagueSignalMultiplierByTier[leagueTierFor(league).tier]
+}

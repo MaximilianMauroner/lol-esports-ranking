@@ -97,6 +97,18 @@ export function rosterContinuity(
   return retainedValue / totalValue
 }
 
+export function isCompleteSourcedMatchup(
+  roster: MatchRecord['teamARoster'],
+  opponentRoster: MatchRecord['teamARoster'],
+) {
+  if (roster?.completeness !== 'complete-five-role' || opponentRoster?.completeness !== 'complete-five-role') {
+    return false
+  }
+  return roster.players.every((player) =>
+    player.stats && opponentRoster.players.some((opponent) => opponent.role === player.role && opponent.stats),
+  )
+}
+
 export function rosterFingerprint(roster?: MatchRosterSnapshot) {
   if (!roster || roster.completeness !== 'complete-five-role') return undefined
   return roster.players
