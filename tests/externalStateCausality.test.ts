@@ -4,7 +4,7 @@ import type { LeagueStrength, MatchRecord, MatchRosterSnapshot, Region, Role, Si
 import type { CausalRecomputeDecision } from '../src/domains/rankings/internal/replay/causalRecompute.ts'
 import {
   buildPlayerModel,
-  buildPlayerLineupEdges,
+  buildPregamePlayerRatingEdges,
   buildSourcedPlayerCausalSummary,
   reconcileSourcedPlayerCausality,
   recomputeSourcedPlayerCausalOutputs,
@@ -106,13 +106,11 @@ test('sourced-player causality accepts append and replays same-day inserts or so
     'context-unproven',
   )
 
-  const lineupEdges = buildPlayerLineupEdges([first, appended], ratingContext)
   assert.deepEqual(
     recomputeSourcedPlayerCausalOutputs([first, appended], causalContext),
     {
       players: buildPlayerModel([first, appended], causalContext.rosters, ratingContext),
-      pregameEdges: lineupEdges.forecast,
-      continuityRetention: lineupEdges.continuityRetention,
+      pregameEdges: buildPregamePlayerRatingEdges([first, appended], ratingContext),
     },
   )
 })

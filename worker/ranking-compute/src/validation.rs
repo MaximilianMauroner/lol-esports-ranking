@@ -246,9 +246,6 @@ pub(crate) fn validate(request: &Request) -> Result<()> {
             if u64::from(series.wins[0]) + u64::from(series.wins[1]) > series.members.len() as u64 {
                 return Err("series wins exceed members".into());
             }
-            if series.continuity_retention == Some([ContinuityRetention::BaselineContraction; 2]) {
-                return Err("an all-baseline continuity retention must be omitted".into());
-            }
             for team in series.teams {
                 use_team(team)?;
             }

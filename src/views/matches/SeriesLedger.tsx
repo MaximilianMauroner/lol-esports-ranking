@@ -37,9 +37,9 @@ export function SeriesTable({ series, expanded, onToggle, publication }: SeriesL
     <Table className="table-fixed" containerClassName="hidden border-t border-border md:block">
       <TableHeader>
         <TableRow className="bg-[var(--surface-2)] hover:bg-[var(--surface-2)]">
-          <TableHead className="w-40 pl-4 lg:w-52 xl:w-56">Date</TableHead>
+          <TableHead className="w-40 pl-4 lg:w-60 xl:w-80">Date</TableHead>
           <TableHead className="text-center">Result</TableHead>
-          <TableHead className="w-48 lg:w-64 xl:w-72">Rating change</TableHead>
+          <TableHead className="w-48 lg:w-56 xl:w-64">Rating change</TableHead>
           <TableHead className="w-14"><span className="sr-only">Games</span></TableHead>
         </TableRow>
       </TableHeader>
@@ -216,11 +216,10 @@ function SeriesCard({ series, expanded, onToggle, publication }: { series: Match
 }
 
 function EventLine({ match, className }: { match: PublicMatchHistoryEntry; className?: string }) {
-  const label = matchEventLabel(match.event)
   return (
-    <span className={cn('flex min-w-0 items-start gap-1.5', className)}>
-      <Badge variant="event" className="shrink-0">{match.league}</Badge>
-      <span className="line-clamp-2 min-w-0 text-xs text-foreground" title={label}>{label}</span>
+    <span className={cn('grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-1.5 text-xs leading-[1.45] text-foreground', className)}>
+      <Badge variant="event">{match.league}</Badge>
+      <span>{matchEventLabel(match.event)}</span>
     </span>
   )
 }
@@ -273,14 +272,14 @@ function RatingDelta({ delta }: { delta: number }) {
 function ChanceLine({ change, match }: { change: Extract<SeriesRatingChange, { kind: 'applied' }>; match: PublicMatchHistoryEntry }) {
   const team = change.chanceSide === 'A' ? match.teamA : match.teamB
   const parts = [
-    change.chance !== undefined ? `${team.code} ${formatRatio(change.chance)} replay win` : '',
+    change.chance !== undefined ? `${team.code} ${formatRatio(change.chance)} pre-match` : '',
     change.eventWeight !== undefined ? `${formatDecimal(change.eventWeight)}× event weight` : '',
   ].filter(Boolean)
   if (parts.length === 0) return null
   return (
     <span
       className="text-2xs text-[var(--faint)]"
-      title={change.chance !== undefined ? `Replay win estimate for ${team.name} from earlier match dates` : undefined}
+      title={change.chance !== undefined ? `Model's pre-match chance for ${team.name}` : undefined}
     >
       {parts.join(' · ')}
     </span>
@@ -291,7 +290,7 @@ function UpsetTag({ change, match }: { change: Extract<SeriesRatingChange, { kin
   const team = change.chanceSide === 'A' ? match.teamA : match.teamB
   const chance = formatRatio(change.chance)
   return (
-    <Badge variant="warning" className="shrink-0" title={`${team.name} won with a ${chance} replay win estimate from earlier match dates`}>
+    <Badge variant="warning" className="shrink-0" title={`${team.name} won with a ${chance} pre-match chance`}>
       Upset · {chance}
     </Badge>
   )

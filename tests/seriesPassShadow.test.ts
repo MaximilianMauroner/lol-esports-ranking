@@ -6,15 +6,12 @@ import test from 'node:test'
 import { createRatingReplayContext, materializeRankingModel, replayRatingDates } from '../src/domains/rankings/build.ts'
 import { mergeCommunityMatchSources } from '../src/domains/rankings/internal/evidence/communitySources.ts'
 import { resolveCanonicalSeries } from '../src/domains/rankings/internal/evidence/seriesResolver.ts'
-import { initialTeamRating, rosterContinuityFloor } from '../src/domains/rankings/internal/policy/modelConfig.ts'
-import { createRatingRunState } from '../src/domains/rankings/internal/replay/ratingRunState.ts'
-import type { SeriesPassCapture } from '../src/domains/rankings/internal/replay/seriesPass.ts'
 import type { MatchRecord } from '../src/domains/rankings/types.ts'
 import {
   compareSeriesPassResponse, encodeSeriesPassRequest, MAX_BATCH_BYTES, numberBits, readBounded, runSeriesPassShadow,
   seriesPassDateResponseBytes, sha256,
 } from '../tools/audit/series-pass-shadow.ts'
-import { game, observe, profiles, protectedDate, roster, sparseDate, variedGames } from './seriesPassFixtures.ts'
+import { game, observe, profiles, roster, sparseDate, variedGames } from './seriesPassFixtures.ts'
 import { crossMidnightReviewCases, crossMidnightTeams } from './fixtures/crossMidnightReviewCases.ts'
 
 const binary = process.env.RANKING_COMPUTE_TEST_BINARY
@@ -258,65 +255,6 @@ test('sparse maps preserve absence and ordered insertions while local execution 
     assert.deepEqual(JSON.parse(request.toString()), fixture.request, 'Synthetic native fixture input differs from its Node source')
     assert.deepEqual(responseFor([capture], request).dates, fixture.expectedDates, 'Synthetic native fixture expectation differs from Node')
     await runSeriesPassShadow({ captures: [capture], binaryPath: binary!, outputDir: join(root, 'sparse') })
-  } finally { await rm(root, { recursive: true, force: true }) }
-})
-
-test('the protected native fixture carries the builder decision on final-member sides', async () => {
-  const capture = protectedDate()
-  const series = capture.frame.series[0]
-  assert.deepEqual(series.continuityRetention, ['baseline-contraction', 'proven-stronger-lineup'])
-  const alpha = series.members.at(-1)!.sides[1].team
-  assert.equal(capture.frame.teams[alpha].team, 'Alpha')
-  assert.equal(series.teams[0], alpha, 'the proven final side is the first canonical team')
-  const before = capture.frame.teams[alpha]
-  const continuity = capture.expected.series[0].continuity[1]
-  assert.equal(continuity.rosterContinuity, 0)
-  assert.ok(before.rating! > initialTeamRating && before.executionRating! < initialTeamRating, 'mixed stable and execution signs')
-  assert.equal(continuity.rating, before.rating, 'the positive stable offset is kept')
-  assert.ok(continuity.executionRating! > before.executionRating!, 'the negative execution offset keeps the baseline move')
-  assert.equal(continuity.executionRating, initialTeamRating + rosterContinuityFloor * (before.executionRating! - initialTeamRating))
-  const request = encodeSeriesPassRequest([capture.frame])
-  assert.deepEqual(JSON.parse(request.toString()).dates[0].series[0].continuityRetention, series.continuityRetention)
-  assert.equal(encodeSeriesPassRequest([sparseDate().frame]).includes('continuityRetention'), false, 'all-baseline series omit the field')
-  const fixture = JSON.parse(await readFile(new URL('./fixtures/rankingComputeSeriesPassProtected.json', import.meta.url), 'utf8'))
-  assert.deepEqual(JSON.parse(request.toString()), fixture.request, 'Protected native fixture input differs from its Node source')
-  assert.deepEqual(responseFor([capture], request).dates, fixture.expectedDates, 'Protected native fixture expectation differs from Node')
-})
-
-test('native applies the protected retention and fails when the decision is dropped', { skip: !binary }, async () => {
-  const root = await temporary()
-  try {
-    const capture = protectedDate()
-    const result = await runSeriesPassShadow({ captures: [capture], binaryPath: binary!, outputDir: join(root, 'protected') })
-    assert.equal(result.mismatches, 0)
-    const dropped: SeriesPassCapture = { ...capture, frame: { ...capture.frame,
-      series: [{ ...capture.frame.series[0], continuityRetention: undefined }] } }
-    await assert.rejects(runSeriesPassShadow({ captures: [dropped], binaryPath: binary!, outputDir: join(root, 'dropped') }),
-      /teams\[0\]\.rating/)
-  } finally { await rm(root, { recursive: true, force: true }) }
-})
-
-test('native retention matches Math.max for signed zero and each rating sign', { skip: !binary }, async () => {
-  const root = await temporary()
-  try {
-    const context = { ...createRatingReplayContext([game('zero')], structuredClone(profiles)),
-      continuityRetention: new Map([['zero', { teamA: 'proven-stronger-lineup', teamB: 'proven-stronger-lineup' } as const]]) }
-    const state = createRatingRunState(context.authoritativeMatches, context.teams, context.eventWeightContext, context.tournamentLifecycles)
-    state.ratings.set('Alpha', -0)
-    state.executionRatings.set('Alpha', -0)
-    state.lastRosterByTeam.set('Alpha', roster('Alpha'))
-    state.ratings.set('Beta', 1388.25)
-    state.executionRatings.set('Beta', 1612.5)
-    state.lastRosterByTeam.set('Beta', roster('changed'))
-    const captures: SeriesPassCapture[] = []
-    replayRatingDates({ context, state, replayMatches: context.authoritativeMatches, onSeriesPassDate: (capture) => captures.push(capture) })
-    const [alpha, beta] = captures[0].expected.series[0].continuity
-    assert(Object.is(captures[0].frame.teams[0].rating, -0))
-    assert(Object.is(alpha.rating, 0) && Object.is(alpha.executionRating, 0), 'Math.max(-0, +0) is +0')
-    assert.ok(beta.rating! > 1388.25, 'the negative stable offset keeps the baseline move')
-    assert.equal(beta.executionRating, 1612.5, 'the positive execution offset is kept')
-    const result = await runSeriesPassShadow({ captures, binaryPath: binary!, outputDir: join(root, 'zero') })
-    assert.equal(result.mismatches, 0)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 

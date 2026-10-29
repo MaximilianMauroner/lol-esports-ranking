@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
-import { History, Search } from 'lucide-react'
+import { Globe2, History, Search, Trophy } from 'lucide-react'
 import type { PublicMatchHistoryEntry, PublicMatchHistorySeriesRef } from '../../domains/rankings/types'
 import type { MatchHistoryState } from '../../browser/rankings/usePublicArtifacts'
 import { formatNumber } from '../../shared/display'
@@ -189,10 +189,10 @@ export function MatchesView({ hashQuery, state, onRequestPages, searchRef, archi
     <PageShell
       aria-label="Match history results"
       ribbon={
-        <StatRibbon label="Match ledger summary">
+        <StatRibbon label="Match ledger summary" className="stat-ribbon-compact">
           <StatCell icon={<History aria-hidden="true" />} label="Series" value={formatNumber(filtered.length)} detail={`${formatNumber(filteredGameCount)} games`} />
-          <StatCell label="Leagues" value={formatNumber(filteredLeagueCount)} />
-          <StatCell label="Events" value={formatNumber(filteredEventCount)} />
+          <StatCell icon={<Globe2 aria-hidden="true" />} label="Leagues" value={formatNumber(filteredLeagueCount)} />
+          <StatCell icon={<Trophy aria-hidden="true" />} label="Events" value={formatNumber(filteredEventCount)} />
         </StatRibbon>
       }
     >
@@ -200,9 +200,10 @@ export function MatchesView({ hashQuery, state, onRequestPages, searchRef, archi
         <PanelHeader
           title="Series ledger"
           titleId={headingId}
+          description={archiveYears.length > 1 && onYearChange ? 'The season and period above set the scope. Archive year shows complete series played in that calendar year.' : undefined}
         />
-        <PanelBody className="grid gap-2 items-end sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_180px_220px_auto]">
-          {archiveYears.length > 1 && onYearChange ? <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">Year</span><Select aria-label="Match history year" className="w-full max-w-none" value={archiveYear ?? 'All'} onChange={(event) => onYearChange(event.target.value)}><option value="All">All years</option>{archiveYears.map((year) => <option key={year} value={year}>{year}</option>)}</Select></label> : null}
+        <PanelBody className="match-filter-grid grid grid-cols-2 items-end gap-2 lg:grid-cols-[minmax(220px,1fr)_180px_220px_auto]">
+          {archiveYears.length > 1 && onYearChange ? <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">Archive year</span><Select aria-label="Match history year" className="w-full max-w-none" value={archiveYear ?? 'All'} onChange={(event) => onYearChange(event.target.value)}><option value="All">All years</option>{archiveYears.map((year) => <option key={year} value={year}>{year}</option>)}</Select></label> : null}
           <label className="relative min-w-0">
             <span className="sr-only">Find a team</span><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--faint)]" aria-hidden="true" />
             <Input ref={searchRef} type="search" aria-keyshortcuts="/" className="w-full pl-9" value={view.search} onChange={(event) => update({ search: event.target.value })} placeholder="Find a team" />
@@ -210,7 +211,7 @@ export function MatchesView({ hashQuery, state, onRequestPages, searchRef, archi
           <label className="grid min-w-0 gap-1"><span className="text-xs text-muted-foreground">League</span><Select className="w-full max-w-none" value={view.league} onChange={(event) => { const league = event.target.value; update({ league, event: compatibleMatchEvents(refs, league).includes(view.event) ? view.event : 'All' }) }}><option>All</option>{leagues.map((league) => <option key={league}>{league}</option>)}</Select></label>
           <label className="grid min-w-0 gap-1">
             <span className="text-xs text-muted-foreground">Event</span>
-            <Select className="w-full max-w-none" value={view.event} onChange={(event) => update({ event: event.target.value })}>
+            <Select data-wrap className="w-full min-w-0 max-w-none" value={view.event} onChange={(event) => update({ event: event.target.value })}>
               <option value="All">All</option>
               {eventGroups.map((group) => (
                 <optgroup key={group.label} label={group.label}>

@@ -9,7 +9,6 @@ import { formatNumber, formatRating } from '../../shared/display'
 import { cn } from '../../shared/utils'
 import { clampNumber, teamScoreFor, teamScoreTitle } from './boardFormat'
 
-/** Chips for a small, fixed set of mutually exclusive filter values. */
 export function ChipGroup<T extends string>({
   label,
   value,
@@ -28,11 +27,11 @@ export function ChipGroup<T extends string>({
           key={option.value}
           type="button"
           variant="tab"
-          size="sm"
+          size="tab"
           aria-pressed={value === option.value}
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
-          className="h-8 px-3 disabled:opacity-50"
+          className="border-transparent bg-transparent px-2.5 disabled:opacity-50"
         >
           {option.label}
         </Button>
@@ -96,7 +95,7 @@ export function TeamBoardRank({
   if (team.eligibility?.eligible === false) {
     return (
       <span className="board-rank-stack inline-flex min-w-0 flex-col items-start gap-1">
-        <span className="board-rank board-rank--excluded min-w-0 text-xs font-bold text-muted-foreground tabular-nums">Unranked</span>
+        <span className="board-rank board-rank--excluded min-w-0 text-xs font-semibold text-muted-foreground tabular-nums">Unranked</span>
         {typeof rawScoreRank === 'number' ? (
           <span className="text-2xs text-[var(--faint)]" title="Where the score would place if eligibility checks were ignored.">score #{formatNumber(rawScoreRank)}</span>
         ) : null}
@@ -105,7 +104,7 @@ export function TeamBoardRank({
   }
 
   return (
-    <span className={cn('board-rank min-w-[1.4em] text-base font-bold text-[var(--text-strong)] tabular-nums', typeof rank === 'number' && rank <= 3 && 'podium text-[var(--rank-gold)]')}>
+    <span className={cn('board-rank min-w-[1.4em] text-base font-semibold text-[var(--text-strong)] tabular-nums', typeof rank === 'number' && rank <= 3 && 'podium text-[var(--rank-gold)]')}>
       {rank ?? '—'}
     </span>
   )

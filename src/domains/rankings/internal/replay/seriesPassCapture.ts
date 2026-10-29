@@ -2,7 +2,7 @@ import type { CanonicalSeries } from '../evidence/seriesResolver.ts'
 import { gameNumberFor } from '../evidence/seriesResolver.ts'
 import { homeLeagueForMatch } from '../evidence/matchContext.ts'
 import type { MatchRecord, MatchRosterSnapshot, TeamProfile } from '../../types.ts'
-import type { FinalSideRetention, PregamePlayerRatingEdge } from '../players/playerModel.ts'
+import type { PregamePlayerRatingEdge } from '../players/playerModel.ts'
 import { eventKFactorForMatch, eventWeightForMatch } from './eventWeighting.ts'
 import { isInternationalMatch } from './ratingCalculations.ts'
 import type { RatingRunState } from './ratingRunState.ts'
@@ -93,7 +93,7 @@ export class SeriesPassRecorder {
   private readonly updateSources = new Map<string, SeriesPassSource>()
   private readonly trails: Array<Omit<SeriesPassSeriesTrail, 'members'> & { members: SeriesPassMemberTrail[] }> = []
 
-  constructor({ groups, matches, profiles, state, lastDate, sideAdjustments, playerEdges, retentions }: {
+  constructor({ groups, matches, profiles, state, lastDate, sideAdjustments, playerEdges }: {
     groups: readonly SeriesPassGroup[]
     matches: readonly MatchRecord[]
     profiles: Record<string, TeamProfile>
@@ -101,7 +101,6 @@ export class SeriesPassRecorder {
     lastDate: string
     sideAdjustments: Map<string, number>
     playerEdges: Map<string, PregamePlayerRatingEdge>
-    retentions: readonly (FinalSideRetention | undefined)[]
   }) {
     this.groups = groups
     this.state = state
@@ -141,10 +140,9 @@ export class SeriesPassRecorder {
       authoritativeMatchIds: matches.map((match) => match.officialGameId ?? match.sourceGameId ?? match.id).sort(),
       teams: teamNames.map((team) => teamBefore(team, state)), leagues: leagueNames.map((league) => leagueState(league, state)),
       sideSamples: [...state.sideAdjustmentSamples], processedMatchCount: state.processedMatchCount,
-      series: groups.map((group, index) => {
+      series: groups.map((group) => {
         const final = group.finalMatch
         const leagueFor = (team: string) => homeLeagueForMatch(final, final.teamA === team ? 'A' : 'B', profiles)
-        const retention = retentions[index]
         return {
           seriesId: group.key, teams: [this.teamIndexes.get(group.teamA)!, this.teamIndexes.get(group.teamB)!],
           leagues: [this.leagueIndexes.get(leagueFor(group.teamA))!, this.leagueIndexes.get(leagueFor(group.teamB))!],
@@ -157,8 +155,6 @@ export class SeriesPassRecorder {
             international: isInternationalMatch(match), eventK: eventKFactorForMatch(match, state.eventWeightContext),
             eventWeight: eventWeightForMatch(match, state.eventWeightContext), patch: match.patch, event: match.event, tier: match.tier,
           })),
-          ...(retention && (retention.teamA !== 'baseline-contraction' || retention.teamB !== 'baseline-contraction')
-            ? { continuityRetention: [retention.teamA, retention.teamB] as const } : {}),
         }
       }),
     })

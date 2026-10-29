@@ -118,7 +118,7 @@ export function CompareProfileChart<E>({
           return (
             <div className="grid grid-cols-[minmax(120px,150px)_minmax(0,1fr)] items-start gap-3.5 max-[900px]:grid-cols-1 max-[900px]:gap-2" key={metric.key}>
               <div className="min-w-0 pt-1">
-                <span className="block text-xs font-semibold tracking-label text-[var(--faint)] uppercase">{metric.label}</span>
+                <span className="block text-xs font-medium text-muted-foreground">{metric.label}</span>
                 <span className="mt-1 block text-xs text-muted-foreground tabular-nums">{range}{metric.better === 'low' ? ' · lower is better' : ''}</span>
               </div>
               <div className="grid min-w-0 gap-2">
@@ -290,7 +290,7 @@ function RegionTrendEvents({ events }: { events: RegionTrendEvent[] }) {
   return (
     <div className="border-t border-border px-4 pt-3.5 pb-4 max-[900px]:px-3.5 max-[900px]:pt-3 max-[900px]:pb-3.5" aria-label="Largest derived region trend movement drivers">
       <div className="mb-2.5 flex items-baseline justify-between gap-2.5 max-[900px]:grid max-[900px]:gap-1">
-        <span className="text-xs font-semibold tracking-label text-foreground uppercase">Biggest moves</span>
+        <span className="text-xs font-medium text-foreground">Biggest moves</span>
       </div>
       <div className="grid grid-cols-2 gap-2 max-[900px]:grid-cols-1">
         {events.map((event) => (

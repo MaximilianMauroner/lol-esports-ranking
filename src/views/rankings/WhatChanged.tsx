@@ -19,6 +19,7 @@ export type UpsetSpotlight = {
   loser: string
   /** Source event name, such as "LPL/2026 Season/Regional Finals". */
   event?: string
+  /** Winner's pre-match chance, 0 to 1. */
   chance: number
 }
 
@@ -50,7 +51,7 @@ export function WhatChanged({
           <li className="flex min-w-0 items-center gap-2.5 bg-card px-4 py-2.5 text-sm">
             <Badge variant="warning" className="shrink-0">Upset</Badge>
             <span className="min-w-0 text-muted-foreground">
-              <b className="font-semibold text-[var(--text-strong)]">{upset.winner}</b> beat {upset.loser} with a {Math.round(upset.chance * 100)}% replay win estimate
+              <b className="font-semibold text-[var(--text-strong)]">{upset.winner}</b> beat {upset.loser} with a {Math.round(upset.chance * 100)}% chance
               {upset.event ? <span className="block truncate text-xs text-[var(--faint)]">{matchEventLabel(upset.event)}</span> : null}
             </span>
           </li>

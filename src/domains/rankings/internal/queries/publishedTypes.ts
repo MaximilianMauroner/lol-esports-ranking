@@ -14,11 +14,6 @@ export type ArtifactMeta = {
 
 export type ProviderAliasMap = Partial<Record<'oracles-elixir' | 'leaguepedia-cargo' | 'manual', string[]>>
 
-export type PublicReplayForecastSource = {
-  basis: 'latest-corrected-prior-replay'
-  predictionId: string
-}
-
 export type PublicRecentMatch = {
   date: string
   event: string
@@ -28,7 +23,6 @@ export type PublicRecentMatch = {
   delta: number
   matchImpact?: number
   expectedWinProbability?: number
-  forecastSource?: PublicReplayForecastSource
   wins?: number
   losses?: number
   games?: number
@@ -58,7 +52,6 @@ export type PublicRollingUpsetWin = {
   event: string
   opponent: string
   expectedWinProbability: number
-  forecastSource?: PublicReplayForecastSource
   ratingDelta: number
 }
 
@@ -392,7 +385,6 @@ export type PublicTeamHistoryPointContext = {
 
 export type PublicTeamHistoryModelContext = {
   e?: number
-  forecastSource?: PublicReplayForecastSource
   r?: number
   v?: number
   s?: number
@@ -598,8 +590,6 @@ export type PublicMatchHistoryImpact = {
   teamA?: number
   teamB?: number
   expectedTeamA?: number
-  expectedTeamB?: number
-  forecastSource?: PublicReplayForecastSource
   eventWeight?: number
 }
 

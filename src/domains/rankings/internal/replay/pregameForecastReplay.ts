@@ -62,17 +62,14 @@ function validateInputs(inputs: readonly AvailableRankingGame[]) {
     if (!['oracles-elixir', 'leaguepedia-cargo'].includes(match.sourceProvider ?? '') || !match.sourceGameId
       || !/^\d{4}-\d{2}-\d{2}$/.test(match.date) || !Number.isSafeInteger(observedAt)
       || !Number.isFinite(Date.parse(match.date)) || new Date(match.date).toISOString().slice(0, 10) !== match.date
-      || observedAt < 0 || (resultAvailableAt !== null && (!Number.isSafeInteger(resultAvailableAt)
-        || resultAvailableAt < Date.parse(match.datetimeUtc ?? match.date)
-        || resultAvailableAt < Date.parse(match.gameCompletedAtUtc ?? match.datetimeUtc ?? match.date) || resultAvailableAt > observedAt))) {
+      || observedAt < 0 || (resultAvailableAt !== null && (!Number.isSafeInteger(resultAvailableAt) || resultAvailableAt < Date.parse(match.datetimeUtc ?? match.date) || resultAvailableAt > observedAt))) {
       throw new Error('Unsupported, seeded or missing source provenance')
     }
   }
 }
 
 function availableInputs(inputs: readonly AvailableRankingGame[], request: PregameSeriesRequest, cutoffDate: string, availability: Availability) {
-  return inputs.filter(({ match, observedAt, resultAvailableAt }) => match.date < cutoffDate
-    && (match.gameCompletedAtUtc === undefined || Date.parse(match.gameCompletedAtUtc) <= request.asOf) && (availability === 'historical-limited'
+  return inputs.filter(({ match, observedAt, resultAvailableAt }) => match.date < cutoffDate && (availability === 'historical-limited'
     ? resultAvailableAt === null || resultAvailableAt <= request.asOf
     : resultAvailableAt !== null && resultAvailableAt <= request.asOf && observedAt <= request.asOf))
 }
@@ -103,7 +100,7 @@ function forecastFromHistory(history: ReturnType<typeof replayHistory>, request:
   }
   prepareRatingUtcDateBoundary({ dateMatches: [target], teams, state })
   let exact: ExactPregameProbabilityState | undefined
-  emitPregamePredictionsForDate({ matches: [target], teams, state, pregamePlayerRatingEdges: new Map(),
+  emitPregamePredictionsForDate({ matches: [target], teams, state, pregamePlayerRatingEdges: new Map(), sideAdjustments: new Map(),
     onExactState: value => { exact = value } })
   if (!exact) throw new Error('Replay did not produce exact state')
   return { state: exact, sourceObservedAt: [...new Set([request.scheduleObservedAt, ...history.observedAt])].sort((a, b) => a - b),

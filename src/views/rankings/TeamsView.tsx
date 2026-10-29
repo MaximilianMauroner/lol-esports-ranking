@@ -209,7 +209,7 @@ export function TeamsView({
   )
   const { rows, visibleRows, page, tierCounts, unrankedOnTournamentBoard, activeFilterCount } = board
   const { hiddenFromRankedCount } = board.disclosure
-  const resultSummary = `${formatNumber(rows.length === 0 ? 0 : page.start + 1)}-${formatNumber(page.end)} of ${formatNumber(rows.length)}`
+  const resultSummary = rows.length === 0 ? '0 teams' : `${formatNumber(page.start + 1)}-${formatNumber(page.end)} of ${formatNumber(rows.length)}`
   const hasActiveFilters = activeFilterCount > 0
 
   const movementPeriod = activeTournament
@@ -388,17 +388,17 @@ export function TeamsView({
   }
 
   return (
-    <PageShell>
+    <PageShell className="rankings-view">
       {detail.missing ? (
         <Alert variant="warning" role="status">
           This team is not available in {dataSummary?.scopeLabel ?? 'the selected scope'}. Showing the ranking board.
           <Button variant="ghost" onClick={detail.dismissMissing}>Dismiss</Button>
         </Alert>
       ) : null}
-      {headline ? <p className="max-w-[72ch] text-lg leading-[1.3] font-semibold text-[var(--text-strong)]">{headline}</p> : null}
+      {headline ? <p className="board-headline max-w-[72ch] text-lg leading-[1.3] font-semibold text-[var(--text-strong)]">{headline}</p> : null}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_320px] items-start gap-6 max-[1280px]:grid-cols-1">
         <div className="min-w-0">
-          <Panel>
+          <Panel className="ranking-board">
             <PanelHeader
               title={activeTournament ? `${activeTournament.label} standings` : 'Power ranking'}
               description={activeTournament ? `Ranks and scores at the event endpoint, ${formatDate(activeTournament.boundaryDate)}.${board.showsWholeTournamentField ? ' Includes every participant.' : ''}` : undefined}
@@ -494,12 +494,11 @@ export function TeamsView({
                 </Select>
               </label>
               </div>
-              {/* The legend replaces two disclosures and three helper lines. */}
-              <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--faint)]" title={`Model ${formatModelVersion(model?.version)}${model?.configHash ? ` · config ${model.configHash}` : ''}`}>
-                <span><b className="font-semibold text-muted-foreground">100 points</b> ≈ {gapExample}% game win</span>
-                {rankedOrder ? <span><b className="font-semibold text-muted-foreground">Bracket</b> near tie: under {Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game</span> : null}
-                <span className="max-sm:hidden"><b className="font-semibold text-muted-foreground">{activeTournament ? 'Event move' : '30 days'}</b> rank change {movementPeriod}</span>
-                <span><b className="font-semibold text-muted-foreground">Form</b> oldest → latest · latest underlined</span>
+              <p className="board-legend flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" title={`Model ${formatModelVersion(model?.version)}${model?.configHash ? ` · config ${model.configHash}` : ''}`}>
+                <span><b className="font-semibold">100 points</b> ≈ {gapExample}% game win</span>
+                {rankedOrder ? <span><b className="font-semibold">Bracket</b> marks a near tie, under {Math.round(NEAR_TIE_WIN_PROBABILITY * 100)}% per game</span> : null}
+                <span><b className="font-semibold">{activeTournament ? 'Event move' : '30 days'}</b> rank change {movementPeriod}</span>
+                <span><b className="font-semibold">Form</b> oldest → latest · latest underlined</span>
               </p>
             </PanelBody>
 
@@ -532,7 +531,9 @@ export function TeamsView({
                 icon={<Users size={26} aria-hidden="true" />}
                 title="No teams match these filters"
                 action={hasActiveFilters ? <Button type="button" variant="outline" onClick={resetFilters}>Clear filters</Button> : undefined}
-              />
+              >
+                Try another team name, or select all regions and tiers.
+              </DataState>
             ) : (
                 <Table containerClassName="@container/board max-w-full [contain:paint] [overscroll-behavior-x:contain]" className="ranking-table board-grid w-full min-w-[640px] border-collapse text-sm max-sm:min-w-full">
                   <colgroup>

@@ -35,6 +35,7 @@ impl<'f> Pass<'f> {
         let execution_power = [0, 1].map(|s| model.power_rating(execution[s], league_score[s]));
         let offset = [0, 1].map(|s| {
             model.roster_prior_offset(
+                sides[s].roster.as_ref(),
                 bits(sides[s].player_adjustment),
                 bits(frame.teams[team[s]].roster_prior_offset),
             )

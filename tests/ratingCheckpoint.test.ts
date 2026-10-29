@@ -10,7 +10,7 @@ import {
   processRatingUtcDateBoundary,
 } from '../src/domains/rankings/internal/replay/model.ts'
 import { transparentGprModelMetadata } from '../src/domains/rankings/internal/policy/modelConfig.ts'
-import { buildPlayerLineupEdges } from '../src/domains/rankings/internal/players/playerModel.ts'
+import { buildPregamePlayerRatingEdges } from '../src/domains/rankings/internal/players/playerModel.ts'
 import type { PlacementTournamentLifecycle } from '../src/domains/rankings/internal/replay/placementResiduals.ts'
 import {
   decodeRatingCheckpoint,
@@ -485,7 +485,7 @@ function processDates(
 ) {
   const sorted = sortedMatches(matches)
   const stateTeams = cloneTeams()
-  const lineupEdges = buildPlayerLineupEdges(sorted, {
+  const pregamePlayerRatingEdges = buildPregamePlayerRatingEdges(sorted, {
     teams: stateTeams,
     eventWeightContext: eventWeightContextForMatches(sorted),
   })
@@ -498,8 +498,7 @@ function processDates(
       teams: stateTeams,
       state,
       lastDate,
-      pregamePlayerRatingEdges: lineupEdges.forecast,
-      continuityRetention: lineupEdges.continuityRetention,
+      pregamePlayerRatingEdges,
     })
   }
 }

@@ -52,8 +52,8 @@ export const eventTierConfig: Record<
   },
   'minor-international': {
     label: 'Regional cups and minor international',
-    kFactor: 22,
-    weight: 22 / 14,
+    kFactor: 23,
+    weight: 23 / 14,
     description: 'Demacia Cup and cross-region events below MSI and Worlds in global signal strength.',
   },
   qualifier: {

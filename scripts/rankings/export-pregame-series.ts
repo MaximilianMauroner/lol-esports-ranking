@@ -128,7 +128,6 @@ export async function exportPregameSeries(manifestPath: string, requestsPath: st
     const lifecycleTargets = verified ? [targets.reduce((earliest, target) => target.asOf < earliest.asOf ? target : earliest)] : targets
     const lifecycles = lifecycleTargets.flatMap(request => deriveTournamentInstances({
       matches: inputs.filter(row => row.match.date < new Date(request.asOf).toISOString().slice(0, 10)
-        && (row.match.gameCompletedAtUtc === undefined || Date.parse(row.match.gameCompletedAtUtc) <= request.asOf)
         && (row.resultAvailableAt === null ? !verified : row.resultAvailableAt <= request.asOf)
         && (!verified || row.observedAt <= request.asOf)).map(row => row.match),
       scheduleReferences: source.tournamentScheduleReferences.filter(reference => {

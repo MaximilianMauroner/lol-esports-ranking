@@ -7,6 +7,7 @@ import {
   checkpointFromScope,
   checkpointOptionsForSeason,
   checkpointScope,
+  normalizeScopeForData,
   scopeLabel,
   seasonFromScope,
   usePublicArtifacts,
@@ -51,9 +52,13 @@ const COMPARE_LIMIT = 4
 
 const CHECKPOINT_SEQUENCE = ['split-1', 'split-2', 'split-3'] as const
 
+function scopeForMode(mode: Mode, scope: string) {
+  return mode === 'players' && checkpointFromScope(scope) ? `season:${seasonFromScope(scope)}` : scope
+}
+
 export function RankingRoute() {
   const [mode, setMode] = useState<Mode>(readModeFromHash)
-  const [scope, setScope] = useState(() => readScopeFromHash() ?? currentSeasonScope())
+  const [scope, setScope] = useState(() => scopeForMode(readModeFromHash(), readScopeFromHash() ?? currentSeasonScope()))
   const [loadPlayers, setLoadPlayers] = useState(() => readModeFromHash() === 'players')
   const [loadTeamHistory, setLoadTeamHistory] = useState(false)
   const [historyTeams, setHistoryTeams] = useState<readonly string[]>([])
@@ -158,9 +163,16 @@ export function RankingRoute() {
       if (nextMode === 'players') setLoadPlayers(true)
       if (nextMode === 'matches' || nextMode === 'regions') setLoadMatchHistory(true)
       if (nextMode === 'matches') setMatchesHashQuery(currentHashQuery())
-      if (nextMode === 'players') setPlayersHashQuery(currentHashQuery())
       const nextScope = readScopeFromHash()
-      if (nextScope) selectScope(nextScope)
+      if (nextMode === 'players') {
+        const requestedScope = scopeForMode(nextMode, nextScope ?? effectiveScope)
+        const normalizedScope = manifestState.status === 'ready'
+          ? normalizeScopeForData(requestedScope, manifestState.data)
+          : requestedScope
+        selectScope(normalizedScope)
+        replaceHashForModeAndScope(nextMode, normalizedScope)
+      } else if (nextScope) selectScope(nextScope)
+      if (nextMode === 'players') setPlayersHashQuery(currentHashQuery())
       // Every board filter is read in this one listener. React renders after
       // each hashchange listener, and that render would write the old board
       // filters back to the hash before a second listener could read them.
@@ -174,7 +186,7 @@ export function RankingRoute() {
     const transition = () => startTransition(onHashChange)
     window.addEventListener('hashchange', transition)
     return () => window.removeEventListener('hashchange', transition)
-  }, [selectScope])
+  }, [effectiveScope, manifestState, selectScope])
 
   useEffect(() => {
     replaceHashForModeAndScope(mode, effectiveScope)

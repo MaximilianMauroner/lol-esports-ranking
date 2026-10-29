@@ -1,11 +1,10 @@
 import { createReplayEvidence } from './replayEvidence.ts'
-import { recordedSeriesForecastLookup, type RecordedSeriesForecastLookup } from '../published/recordedSeriesForecast.ts'
 import { compareCodeUnits } from '../../../../shared/codeUnitOrder.mjs'
 import type {
   ChampionPicks, CompactPlayer, CompactPlayerRating, ComputedRankingSnapshot, DataCoverage, DataQualityAudit, DataQualityLeagueSummary, DataSourceInfo, EventSummary,
   LeagueStrengthHistoryPoint, LeagueTierName,
   MatchRecord,
-  PlayerAppearanceSummary, PlayerComparisonMetricInfo, PlayerDirectory, PlayerIndividualResidual, PlayerLifecycleEvent, PlayerLifecycleReleaseEvent, PlayerMetricInfo, PlayerProfile, PlayerRatingProof, PlayerStanding, PublicReplayForecastSource, PublicCurrentLineup, PublicMatchHistoryCatalog, PublicMatchHistoryEntry, PublicMatchHistoryIndex, PublicMatchHistoryPage, PublicMatchHistoryPageRef, PublicMatchHistorySeriesRef, PublicRegionHistoryPoint, PublicRegionHistoryPointContext, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicRollingWindow, PublicTeamDirectory, PublicTeamHistoryModelContext, PublicTeamHistoryPoint, PublicTeamHistoryPointContext, PublicTeamHistoryShard, PublicTeamRollingMovement, PublicTournamentMovementShard, PublicTournamentMovementTeam, PublishedRatingScale, RankingSummarySnapshot, Region, RegionHistoryDirectory, Role, SameTeamTopFiveClusteringDiagnostic, SeasonSummary, SnapshotCheckpointOption, SnapshotFilter, SnapshotSourceBreakdown, StaticRankingData, StaticRankingSummaryData, TeamDirectory, TeamEligibility, TeamHistoryArtifacts, TeamHistoryDirectory, TeamHistoryPoint, TeamHistoryPointCompact, TeamHistorySeries, TeamProfile,
+  PlayerAppearanceSummary, PlayerComparisonMetricInfo, PlayerDirectory, PlayerIndividualResidual, PlayerLifecycleEvent, PlayerLifecycleReleaseEvent, PlayerMetricInfo, PlayerProfile, PlayerRatingProof, PlayerStanding, PublicCurrentLineup, PublicMatchHistoryCatalog, PublicMatchHistoryEntry, PublicMatchHistoryIndex, PublicMatchHistoryPage, PublicMatchHistoryPageRef, PublicMatchHistorySeriesRef, PublicRegionHistoryPoint, PublicRegionHistoryPointContext, PublicRegionHistoryScope, PublicRegionHistorySeries, PublicRollingWindow, PublicTeamDirectory, PublicTeamHistoryModelContext, PublicTeamHistoryPoint, PublicTeamHistoryPointContext, PublicTeamHistoryShard, PublicTeamRollingMovement, PublicTournamentMovementShard, PublicTournamentMovementTeam, PublishedRatingScale, RankingSummarySnapshot, Region, RegionHistoryDirectory, Role, SameTeamTopFiveClusteringDiagnostic, SeasonSummary, SnapshotCheckpointOption, SnapshotFilter, SnapshotSourceBreakdown, StaticRankingData, StaticRankingSummaryData, TeamDirectory, TeamEligibility, TeamHistoryArtifacts, TeamHistoryDirectory, TeamHistoryPoint, TeamHistoryPointCompact, TeamHistorySeries, TeamProfile,
   TeamStanding, TournamentMovementArtifacts
 } from '../../types.ts'
 import {
@@ -114,10 +113,9 @@ type RankingScope = {
  */
 export function createTeamHistory(data: StaticRankingData): TeamHistoryDirectory {
   const defaultSnapshot = data.snapshots[data.defaultSnapshotKey]
-  const forecasts = recordedSeriesForecastLookup(data.matches ?? [], data.replayEvidence?.predictions ?? [])
   const minimumPointsPerSeries = 2
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
-  const defaultHistory = buildTeamHistorySeries(publishedTeamStandings(defaultSnapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt, forecasts })
+  const defaultHistory = buildTeamHistorySeries(publishedTeamStandings(defaultSnapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf: data.generatedAt })
   const scopeIndex = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([, snapshot]) => isSeasonHistoryScope(snapshot.filter))
@@ -160,11 +158,10 @@ export function createTeamHistoryArtifacts(
   } = {},
 ): TeamHistoryArtifacts {
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
-  const forecasts = recordedSeriesForecastLookup(data.matches ?? [], data.replayEvidence?.predictions ?? [])
   const historyScopes = Object.entries(data.snapshots)
     .filter(([key, snapshot]) => key === data.defaultSnapshotKey || isSeasonHistoryScope(snapshot.filter))
   const shards = Object.fromEntries(
-    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot, ratingScale, forecasts)]),
+    historyScopes.map(([key, snapshot]) => [key, createTeamHistoryShard(data, snapshot, ratingScale)]),
   )
   const defaultShard = shards[data.defaultSnapshotKey]
   const omissionPolicy = defaultShard?.omissionPolicy ?? {
@@ -251,14 +248,13 @@ export function createTournamentMovementArtifacts(
 function createTeamHistoryShard(
   data: StaticRankingData,
   snapshot: ComputedRankingSnapshot | undefined,
-  ratingScale: PublishedRatingScale,
-  forecasts: RecordedSeriesForecastLookup,
+  ratingScale: PublishedRatingScale = data.model.ratingScale ?? publishedRatingScale,
 ): PublicTeamHistoryShard {
   const minimumPointsPerSeries = 2
   // A completed season shard is immutable: its standing is as of its last
   // resolved match, while the all-time shard continues to expose the run time.
   const asOf = snapshot && isSeasonHistoryScope(snapshot.filter) ? '' : data.generatedAt
-  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf, forecasts })
+  const history = buildTeamHistorySeries(publishedTeamStandings(snapshot?.standings ?? [], ratingScale), minimumPointsPerSeries, { asOf })
   return {
     artifactKind: 'team-history-scope',
     schemaVersion: PUBLIC_ARTIFACT_SCHEMA_VERSION,
@@ -509,7 +505,7 @@ function buildRegionPowerHistorySeries(
 function buildTeamHistorySeries(
   standings: TeamStanding[],
   minimumPointsPerSeries: number,
-  { includeContext = true, asOf = '', forecasts }: { includeContext?: boolean; asOf?: string; forecasts?: RecordedSeriesForecastLookup } = {},
+  { includeContext = true, asOf = '' }: { includeContext?: boolean; asOf?: string } = {},
 ) {
   const series: Record<string, TeamHistorySeries> = {}
   let omittedSeriesCount = 0
@@ -519,7 +515,7 @@ function buildTeamHistorySeries(
     const validHistory = (standing.history ?? []).filter((point) => Boolean(point.date) && Number.isFinite(point.rating))
     const points = groupTeamHistoryPointsIntoMatches(validHistory)
       .filter(isResolvedTeamHistoryMatchGroup)
-      .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext, standing.team, forecasts))
+      .map((group): TeamHistoryPointCompact => compactTeamHistoryMatchPoint(group, includeContext))
       .sort((left, right) => compareCodeUnits(left[0], right[0]))
     if (points.length < minimumPointsPerSeries) {
       omittedSeriesCount += 1
@@ -610,7 +606,7 @@ function teamHistorySourceGameSeriesId(sourceGameId: string | undefined, bestOf:
   return undefined
 }
 
-function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includeContext: boolean, team: string, forecasts?: RecordedSeriesForecastLookup): TeamHistoryPointCompact {
+function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includeContext: boolean): TeamHistoryPointCompact {
   const latest = group.entries.at(-1)!
   const base: TeamHistoryPointCompact = [latest.date, Math.round(latest.rating), latest.rank]
   if (!includeContext) return base
@@ -620,7 +616,7 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
   const bestOf = inferBestOfForScore(resultSummary.wins, resultSummary.losses, latest.source?.bestOf)
   const sourceSummary = timelineSourceSummary(group.entries, (entry) => entry.source)
   const delta = sumTimelineRatingDeltas(group.entries)
-  const modelContext = compactTeamHistoryModelContext(group.entries, team, forecasts)
+  const modelContext = compactTeamHistoryModelContext(group.entries, result)
 
   return [
     latest.date,
@@ -644,15 +640,17 @@ function compactTeamHistoryMatchPoint(group: TeamHistoryPublicMatchGroup, includ
 
 function compactTeamHistoryModelContext(
   entries: TeamHistoryPoint[],
-  team: string,
-  forecasts?: RecordedSeriesForecastLookup,
+  result: 'W' | 'L' | 'T' | undefined,
 ): PublicTeamHistoryModelContext | undefined {
   const update = latestInformativeRatingUpdate(entries)
-  const latest = entries.at(-1)
-  const forecast = latest ? forecasts?.(latest.source?.seriesId, team, latest.opponent) : undefined
+  const residual = finiteNumber(update?.neutralResultResidual)
+  const observed = result === 'W' ? 1 : result === 'L' ? 0 : result === 'T' ? 0.5 : undefined
+  const expected = typeof observed === 'number' && typeof residual === 'number'
+    ? clamp01(observed - residual)
+    : undefined
   const components = compactTeamHistoryComponents(entries.at(-1)?.ratingComponents)
   const context: PublicTeamHistoryModelContext = {
-    ...(forecast ? { e: forecast.probability, forecastSource: forecast.source } : {}),
+    e: roundOptional(expected, 3, { keepZero: true }),
     w: roundOptional(update?.eventWeight, 3, { keepZero: true }),
     ...(components ? { c: components } : {}),
   }
@@ -714,6 +712,10 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): T | undefin
   return entries.length > 0 ? Object.fromEntries(entries) as T : undefined
 }
 
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value))
+}
+
 function isSeasonHistoryScope(filter: SnapshotFilter | undefined) {
   return Boolean(filter && filter.season !== 'All' && filter.event === 'All' && filter.region === 'All')
 }
@@ -754,12 +756,11 @@ export function createStaticRankingSummaryData(
   manifest: StaticRankingSummaryData
   snapshots: Record<string, RankingSummarySnapshot>
 } {
-  const forecasts = recordedSeriesForecastLookup(data.matches ?? [], data.replayEvidence?.predictions ?? [])
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const snapshots = Object.fromEntries(
     Object.entries(data.snapshots)
       .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
-      .map(([key, snapshot]) => [key, compactSnapshot(snapshot, data.generatedAt, ratingScale, forecasts)]),
+      .map(([key, snapshot]) => [key, compactSnapshot(snapshot, data.generatedAt, ratingScale)]),
   )
   const snapshotIndex = Object.fromEntries(
     Object.entries(snapshots).map(([key, snapshot]) => [
@@ -820,7 +821,6 @@ function compactSnapshot(
   snapshot: ComputedRankingSnapshot,
   generatedAt: string,
   ratingScale: PublishedRatingScale,
-  forecasts: RecordedSeriesForecastLookup,
 ): RankingSummarySnapshot {
   const {
     artifactKind: _artifactKind,
@@ -854,7 +854,7 @@ function compactSnapshot(
     standings: standings.map((standing, index) => compactPublicStanding(toPublishedTeamStanding(standing, ratingScale), {
       includeRecentMatches: index < 100,
       includeRatingUpdate: false,
-    }, forecasts)),
+    })),
   }
 }
 
@@ -865,14 +865,12 @@ function shouldPublishPublicScope(key: string, snapshot: ComputedRankingSnapshot
 function createTournamentMovementShards({
   matches,
   teams,
-  forecasts,
   generatedAt,
   scheduleReferences,
   materializeTournamentIds,
 }: {
   matches: MatchRecord[]
   teams: Record<string, TeamProfile>
-  forecasts: RecordedSeriesForecastLookup
   generatedAt: string
   scheduleReferences: TournamentScheduleReference[]
   materializeTournamentIds?: ReadonlySet<TournamentInstanceId>
@@ -923,7 +921,7 @@ function createTournamentMovementShards({
           )),
         )
           .filter(isResolvedTeamHistoryMatchGroup)
-          .map((group) => compactTeamHistoryMatchPoint(group, true, teamName, forecasts))
+          .map((group) => compactTeamHistoryMatchPoint(group, true))
           .sort((left, right) => compareCodeUnits(left[0], right[0]))
         const endpointKind: NonNullable<PublicTeamHistoryPointContext['kind']> = instance.status === 'completed'
           ? 'tournament-end'
@@ -1057,7 +1055,6 @@ export function createStaticRankingData({
   const regions = ['All', ...currentTopTierRegions.filter((region) => observedCurrentRegions.has(region))] as Array<Region | 'All'>
   const snapshots: Record<string, ComputedRankingSnapshot> = {}
   const globalRanking = precomputedGlobalRanking ?? buildRankingModel(matches, teams, rankingOptions)
-  const forecasts = recordedSeriesForecastLookup(matches, globalRanking.predictions)
   const globalRankingScope: RankingScope = { ranking: globalRanking, teams }
   const seasonRankingCache = new Map<string, RankingScope>()
   const rankingScopeForFilter = (filter: SnapshotFilter): RankingScope => {
@@ -1166,7 +1163,6 @@ export function createStaticRankingData({
     const rolling = rollingMovementForScope({
       filteredMatches,
       currentStandings: standingsWithDss,
-      forecasts,
     })
     const snapshotLeagueHistory = leagueHistoryForFilter(snapshotScope.ranking.leagueHistory, filteredMatches, snapshotScope.teams, filter)
     const snapshotRegions = withDeservedStandingRegionComparison(
@@ -1328,7 +1324,6 @@ export function createStaticRankingData({
     tournamentMovements: createTournamentMovementShards({
       matches,
       teams,
-      forecasts,
       generatedAt,
       scheduleReferences: tournamentScheduleReferences,
       ...(materializeTournamentIds ? { materializeTournamentIds } : {}),
@@ -1370,7 +1365,6 @@ export function createMatchHistoryArtifacts(
     matchHistoryPageUrlForKey?: (key: string, page: number) => string
   } = {},
 ): { index: PublicMatchHistoryIndex; catalogs: Record<string, PublicMatchHistoryCatalog>; pages: Record<string, Record<number, PublicMatchHistoryPage>> } {
-  const forecasts = recordedSeriesForecastLookup(data.matches, data.replayEvidence?.predictions ?? [])
   const ratingScale = data.model.ratingScale ?? publishedRatingScale
   const publishedScopes = Object.entries(data.snapshots)
     .filter(([key, snapshot]) => shouldPublishPublicScope(key, snapshot, data.defaultSnapshotKey))
@@ -1384,7 +1378,7 @@ export function createMatchHistoryArtifacts(
       && (snapshot.filter.region === 'All' || matchBelongsToRegion(match, data.teams, snapshot.filter.region))
     ))
     const standings = publishedTeamStandings(snapshot.standings, ratingScale)
-    const impact = matchImpactLookup(standings, forecasts)
+    const impact = matchImpactLookup(standings)
     const entries = resolveCanonicalSeries([...leadInMatches, ...matches])
       .flatMap((series) => series.games.map((match, index): PublicMatchHistoryEntry => {
         const teamA = series.teamA
@@ -1415,11 +1409,7 @@ export function createMatchHistoryArtifacts(
           winnerId: teamIdFor({ team: canonicalTeamNameFor(match.winner), region: data.teams[canonicalTeamNameFor(match.winner)]?.region, code: data.teams[canonicalTeamNameFor(match.winner)]?.code }),
           ...(picks ? { picks } : {}),
           impact: finalGame && (impactA || impactB)
-            ? { unit: 'series-applied',
-              ...(impactA ? { teamA: impactA.delta, expectedTeamA: impactA.expected, eventWeight: impactA.eventWeight } : {}),
-              ...(impactB ? { teamB: impactB.delta, expectedTeamB: impactB.expected } : {}),
-              ...(impactA?.forecastSource || impactB?.forecastSource ? { forecastSource: impactA?.forecastSource ?? impactB?.forecastSource } : {}),
-            }
+            ? { unit: 'series-applied', ...(impactA ? { teamA: impactA.delta, expectedTeamA: impactA.expected, eventWeight: impactA.eventWeight } : {}), ...(impactB ? { teamB: impactB.delta } : {}) }
             : { unit: 'held' },
           source: {
             provider: match.sourceProvider ?? 'seed',
@@ -1561,8 +1551,8 @@ function chunk<T>(items: T[], size: number): T[][] {
   return groups
 }
 
-function matchImpactLookup(standings: TeamStanding[], forecasts: RecordedSeriesForecastLookup) {
-  const lookup = new Map<string, { delta: number; expected?: number; forecastSource?: PublicReplayForecastSource; eventWeight?: number }>()
+function matchImpactLookup(standings: TeamStanding[]) {
+  const lookup = new Map<string, { delta: number; expected?: number; eventWeight?: number }>()
   for (const standing of standings) {
     const history = standing.history ?? []
     const groups = new Map<string, TeamHistoryPoint[]>()
@@ -1575,11 +1565,12 @@ function matchImpactLookup(standings: TeamStanding[], forecasts: RecordedSeriesF
     }
     for (const [seriesId, points] of groups) {
       const update = latestInformativeRatingUpdate(points)
-      const forecast = forecasts(seriesId, standing.team, points.at(-1)!.opponent)
+      const observed = points.filter((point) => point.result === 'W').length > points.length / 2 ? 1 : 0
+      const residual = finiteNumber(update?.neutralResultResidual)
       const displayDelta = sumTimelineRatingDeltas(points)
       lookup.set(`${canonicalTeamNameFor(standing.team)}\u0000${seriesId}`, {
         delta: Number(displayDelta.toFixed(1)),
-        ...(forecast ? { expected: forecast.probability, forecastSource: forecast.source } : {}),
+        ...(typeof residual === 'number' ? { expected: Number((observed - residual).toFixed(3)) } : {}),
         ...(typeof update?.eventWeight === 'number' ? { eventWeight: Number(update.eventWeight.toFixed(3)) } : {}),
       })
     }
@@ -2408,11 +2399,9 @@ const ROLLING_MOVEMENT_DAYS = 30 as const
 function rollingMovementForScope({
   filteredMatches,
   currentStandings,
-  forecasts,
 }: {
   filteredMatches: MatchRecord[]
   currentStandings: ComputedTeamStanding[]
-  forecasts: RecordedSeriesForecastLookup
 }): { window?: PublicRollingWindow, standings: ComputedTeamStanding[] } {
   const completedSeries = resolveCanonicalSeries(filteredMatches).filter((series) => series.state === 'completed')
   const endDate = completedSeries.map((series) => series.finalMatch.date).sort().at(-1)
@@ -2450,7 +2439,7 @@ function rollingMovementForScope({
     ]
     if (rankPoints.at(-1)?.[0] === endDate) rankPoints[rankPoints.length - 1] = [endDate, currentRank]
     else rankPoints.push([endDate, currentRank])
-    const biggestUpsetWin = rollingUpsetWin(standing, completedSeries, startDate, endDate, forecasts)
+    const biggestUpsetWin = rollingUpsetWin(standing, completedSeries, startDate, endDate)
     const hasBaseline = Boolean(baseline?.hasHistory && baselineRank !== undefined)
     const rollingMovement: PublicTeamRollingMovement = hasBaseline && baseline && endpoint && baselineRank !== undefined
       ? {
@@ -2519,24 +2508,27 @@ function rollingUpsetWin(
   completedSeries: ReturnType<typeof resolveCanonicalSeries>,
   startDate: string,
   endDate: string,
-  forecasts: RecordedSeriesForecastLookup,
 ) {
-  const permitted = new Set(completedSeries
-    .filter((series) => series.finalMatch.date > startDate && series.finalMatch.date <= endDate)
-    .map((series) => series.id))
+  const permitted = new Set(completedSeries.flatMap((series) => {
+    if (series.finalMatch.date <= startDate || series.finalMatch.date > endDate) return []
+    if (series.teamA === standing.team) return [`${series.finalMatch.date}\u0000${series.finalMatch.event}\u0000${series.teamB}`]
+    if (series.teamB === standing.team) return [`${series.finalMatch.date}\u0000${series.finalMatch.event}\u0000${series.teamA}`]
+    return []
+  }))
   return groupTeamHistoryPointsIntoMatches(standing.history)
     .flatMap((group) => {
       const latest = group.entries.at(-1)
       if (!latest || latest.source.seriesState !== 'completed' || latest.source.seriesOutcome !== 1) return []
-      if (!latest.source.seriesId || !permitted.has(latest.source.seriesId)) return []
-      const forecast = forecasts(latest.source.seriesId, standing.team, latest.opponent)
-      if (!forecast) return []
+      if (!permitted.has(`${latest.date}\u0000${latest.event}\u0000${latest.opponent}`)) return []
+      const residual = latest.ratingUpdate?.neutralResultResidual
+      if (typeof residual !== 'number') return []
+      const expectedWinProbability = Number((1 - residual).toFixed(4))
+      if (!Number.isFinite(expectedWinProbability) || expectedWinProbability < 0 || expectedWinProbability > 1) return []
       return [{
         date: latest.date,
         event: latest.event,
         opponent: latest.opponent,
-        expectedWinProbability: forecast.probability,
-        forecastSource: forecast.source,
+        expectedWinProbability,
         ratingDelta: Math.round(group.entries.reduce((sum, point) => sum + point.delta, 0)),
       }]
     })

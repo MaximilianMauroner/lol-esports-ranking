@@ -214,7 +214,7 @@ export function deriveUpsetHeadline(standings: readonly PublicTeamStanding[], ro
   const candidates = rollingWindow
     ? standings.flatMap((standing) => {
         const upset = standing.rollingMovement?.biggestUpsetWin
-        return upset?.forecastSource?.basis === 'latest-corrected-prior-replay' && upset.forecastSource.predictionId && upset.expectedWinProbability < 0.5 ? [upsetCandidate(standing, upset, standingLookup)] : []
+        return upset && upset.expectedWinProbability < 0.5 ? [upsetCandidate(standing, upset, standingLookup)] : []
       })
     : []
 
@@ -365,7 +365,7 @@ function upsetCandidate(
     matchDelta: match.ratingDelta,
     expectedWinProbability,
     score: roundOne(score),
-    headline: `${standing.code} beat ${opponent?.code ?? match.opponent} with a ${Math.round(expectedWinProbability * 100)}% replay win estimate`,
+    headline: `${standing.code} beat ${opponent?.code ?? match.opponent} with a ${Math.round(expectedWinProbability * 100)}% pre-match chance`,
   }
 }
 

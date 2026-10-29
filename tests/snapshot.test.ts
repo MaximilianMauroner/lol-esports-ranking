@@ -1387,6 +1387,7 @@ test('createTeamHistory preserves the final atomic delta for model-correct serie
   assert.equal(seriesPoint[3]?.bestOf, 5)
   assert.equal(seriesPoint[3]?.delta, -29)
   assert.deepEqual(seriesPoint[3]?.model, {
+    e: 0.43,
     w: 0.35,
   })
   assert.deepEqual(seriesPoint[3]?.sourceGameIds, [

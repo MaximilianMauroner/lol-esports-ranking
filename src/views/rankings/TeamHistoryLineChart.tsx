@@ -10,10 +10,11 @@ import {
   type ChartPointDetail,
 } from '../../shared/chartPoints'
 import { formatChartTimestamp } from '../../shared/chartTime'
+import { formatNumber } from '../../shared/display'
 
 export type TeamHistoryLineChartProps = Omit<LineChartProps, 'details'>
 
-const defaultValueFormat = (value: number) => String(Math.round(value))
+const defaultValueFormat = (value: number) => formatNumber(Math.round(value))
 
 export function TeamHistoryLineChart({ yFormat, ...props }: TeamHistoryLineChartProps) {
   const formatValue = yFormat ?? defaultValueFormat
@@ -117,7 +118,7 @@ function TooltipModelDetail({ detail }: { detail?: ChartPointDetail }) {
     <div className="ml-5 grid gap-1">
       {expected || residual ? (
         <div className="text-2xs leading-[1.35] text-[var(--faint)]">
-          {expected ? `Replay win ${expected} from earlier match dates` : null}
+          {expected ? `Expected win ${expected}` : null}
           {expected && residual ? ' / ' : null}
           {residual ? `Residual ${residual}` : null}
         </div>
