@@ -35,12 +35,12 @@ export async function ensureReferencePublicData() {
   await mkdir(dirname(referencePublicDir), { recursive: true })
   const staging = await mkdtemp(join(dirname(referencePublicDir), '.download-'))
   try {
-    const url = `https://codeload.github.com/MaximilianMauroner/lol-esports-ranking/tar.gz/${referenceCommit}`
+    const url = `https://codeload.github.com/MaximilianMauroner/rift-delta/tar.gz/${referenceCommit}`
     const response = await fetch(url, { signal: AbortSignal.timeout(120_000) })
     if (!response.ok || !response.body) throw new Error(`Reference data download failed: HTTP ${response.status}`)
     const archive = join(staging, 'reference.tar.gz')
     await pipeline(response.body, createWriteStream(archive))
-    await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=2', `lol-esports-ranking-${referenceCommit}/public/data`])
+    await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=2', `rift-delta-${referenceCommit}/public/data`])
     await verifyReferencePublicData(join(staging, 'data'))
     await mkdir(referencePublicDir, { recursive: true })
     await rename(join(staging, 'data'), referencePublicDataDir)

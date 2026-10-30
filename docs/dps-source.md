@@ -1,8 +1,8 @@
 # DPS source and evidence
 
-rift-delta combines the LoL Esports Power Index and [dps.lol](https://github.com/MaximilianMauroner/dps.lol).
+rift-delta combines the LoL Esports Power Index and the former dps.lol project.
 Both projects are by Maximilian Mauroner. The import receipt in `tools/dev/dps-import.json` records each original path and source hash.
-Source links retain their original repository names so that readers can find the original work.
+The dps.lol GitHub repository has been deleted. Its original repository and issue links remain as historical identifiers and no longer resolve.
 
 The damage lab uses patch-pinned formulas and inspectable expected values.
 Its expected critical strikes are not a kill probability. A fixture, manual target, or synthetic test does not prove live game behavior.

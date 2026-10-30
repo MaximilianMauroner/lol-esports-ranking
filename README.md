@@ -13,7 +13,7 @@ This is not an official Riot ranking. Keep each ranking claim tied to its source
 manifest, model config hash, schema version, and coverage window. A fixed reference
 snapshot, synthetic fixture, or no-data payload is not current official data.
 
-[Live site](https://lol.lab4code.com/) · [Source](https://github.com/MaximilianMauroner/lol-esports-ranking)
+[Live site](https://lol.lab4code.com/) · [Source](https://github.com/MaximilianMauroner/rift-delta)
 
 ## Run locally
 

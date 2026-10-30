@@ -1,6 +1,6 @@
 export const RIOT_PROJECT_NOTICE = 'rift-delta was created under Riot Games\' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project. rift-delta isn\'t endorsed by Riot Games and doesn\'t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.'
 
-export const PROJECT_REPOSITORY_URL = 'https://github.com/MaximilianMauroner/lol-esports-ranking'
+export const PROJECT_REPOSITORY_URL = 'https://github.com/MaximilianMauroner/rift-delta'
 export const PROJECT_CONTACT_EMAIL = 'support@lab4code.com'
 export const PROJECT_FEEDBACK_URL = `${PROJECT_REPOSITORY_URL}/issues/new?title=${encodeURIComponent('[Feedback] ')}&body=${encodeURIComponent('Thanks for helping improve rift-delta.\n\nWhat did you notice?\n\nWhat did you expect instead?\n')}`
 
