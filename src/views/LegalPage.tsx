@@ -6,7 +6,7 @@ import {
   type LegalPageName,
 } from '../data/legal'
 
-const UPDATED_AT = 'July 11, 2026'
+const UPDATED_AT = 'October 30, 2026'
 const OPERATOR_NAME = 'Maximilian Mauroner'
 
 export function LegalPage({ page }: { page: LegalPageName }) {
@@ -72,8 +72,16 @@ function PrivacyPolicy() {
         <p><EmailLink /></p>
       </Section>
       <Section title="Website requests and hosting">
-        <p>When you open the site, technical request data such as IP address, requested URL, time, browser headers, and request identifiers is transmitted to Railway, the hosting provider. It is processed to deliver and secure the site under GDPR Article 6(1)(f). The site stores a copy of the public tournament feed in your browser's local storage to show it faster on return visits. This copy contains no personal data. To remove this copy, clear this site's data in your browser settings. The site does not use cookies, analytics, or advertising.</p>
+        <p>When you open the site, technical request data such as IP address, requested URL, time, browser headers, and request identifiers is transmitted to Railway, the hosting provider. It is processed to deliver and secure the site under GDPR Article 6(1)(f). The site stores a copy of the public tournament feed in your browser's local storage to show it faster on return visits. This copy contains no personal data. To remove this copy, clear this site's data in your browser settings. The site does not use analytics or advertising. Private lab access uses the session cookie described below.</p>
         <p className="mt-3">Operational and security logs are retained only for the period configured by the hosting provider or as needed to investigate abuse and faults. Railway primarily processes data in the United States and provides transfer safeguards through the EU-U.S. Data Privacy Framework or EU Standard Contractual Clauses. See Railway's <ExternalLink href="https://railway.com/legal/privacy">privacy policy</ExternalLink> and <ExternalLink href="https://railway.com/legal/dpa">data-processing terms</ExternalLink>.</p>
+      </Section>
+      <Section title="Private DPS lab access">
+        <p>After login, the private DPS lab sets the strictly necessary rift_delta_session cookie. It contains a signed access token that expires after eight hours. Browser scripts cannot read this HttpOnly cookie. Logging out removes the cookie. The cookie enables access to private lab pages and data.</p>
+        <p className="mt-3">The server keeps failed-login counts keyed by client IP address in process memory to limit password guessing. Each attempt window lasts 15 minutes. Expired entries are removed on a later login request, and a server restart clears them. This processing secures private access under GDPR Article 6(1)(f).</p>
+      </Section>
+      <Section title="Private ranked match data">
+        <p>When the DPS dataset is populated, the server processes ranked match and timeline records from the Riot API. These records include player identifiers such as PUUIDs, champion choices, items, and game statistics. They support cohort analysis and damage modeling under the operator's legitimate interests in analysis and reproducibility, GDPR Article 6(1)(f).</p>
+        <p className="mt-3">DPS data endpoints require lab authentication. Original match archives and database records require server-side access. Stored records are retained while needed for historical analysis, source correction, recovery, and auditability. Fixture mode uses synthetic records and does not claim live Riot observations.</p>
       </Section>
       <Section title="Professional esports data">
         <p>The project processes publicly available professional-player identifiers, team membership, match and game statistics, and model-derived performance ratings. Sources include Oracle's Elixir, Leaguepedia, and public LoL Esports information. Processing supports transparent esports research and rankings under the operator's legitimate interests in analysis, documentation, and freedom of expression (GDPR Article 6(1)(f)).</p>
