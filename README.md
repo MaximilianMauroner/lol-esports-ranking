@@ -71,6 +71,10 @@ Login and logout are under `/api/dps/auth/`. All DPS data requests require a sig
 The ranking pages remain public. Both development and production use the same DPS handlers.
 No provider collection, migration, or bucket write runs on app startup.
 
+For observed timeline skill progression, the web service needs `DATABASE_URL` and all five `DPS_ARCHIVE_*` settings from the [DPS setup guide](scripts/dps/README.md).
+Without private archive access, skill progression uses an explicit legal fallback. Generic ranking bucket credentials cannot enable DPS archives.
+Apply private settings only after operator approval. Behind a proxy, also verify the client-IP and ingress restrictions in that guide before enabling `DPS_TRUST_PROXY`.
+
 Run `pnpm test:dps` for the imported DPS regression suite. `pnpm test` includes both suites.
 The [DPS command reference](scripts/dps/README.md) lists namespaced operator commands.
 Read [source attribution and evidence](docs/dps-source.md) before interpreting simulation results.
