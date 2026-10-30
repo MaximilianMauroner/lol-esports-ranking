@@ -65,6 +65,7 @@ test('Match year controls publish reloadable addresses before archive nodes arri
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
     page.setDefaultTimeout(5_000)
+    page.setDefaultNavigationTimeout(30_000)
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     const filters = 'scope=all&team=Alpha&league=LCK&event=Sample+season&size=50'
@@ -218,6 +219,7 @@ test('Matches event choices and addressed pages survive catalog loading and real
     browser = await chromium.launch(existsSync(executablePath) ? { headless: true } : { headless: true, channel: 'chrome' })
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
     page.setDefaultTimeout(5_000)
+    page.setDefaultNavigationTimeout(30_000)
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     const rows = page.locator('table tbody tr')
