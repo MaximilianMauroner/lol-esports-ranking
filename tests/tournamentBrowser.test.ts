@@ -98,10 +98,10 @@ test('tournament browser follows deep links, updates, stale state, recovery and 
     }, { ...feed, events: feed.events.slice(0, 1) })
 
     await page.goto(`${base}/#tournaments?event=${worldsAddress}&view=schedule&scope=season%3A2026&scenario=kept`)
+    await page.getByText('Loading tournament schedule', { exact: true }).waitFor()
     await waitForPendingFeed(pendingFeed)
     assert.equal(await page.getByRole('heading', { name: 'LCS 2026', exact: true }).count(), 0, 'A cache without the addressed event must not substitute another competition')
     assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('event'), worldsAddress)
-    await page.getByText('Loading tournament schedule', { exact: true }).waitFor()
     pendingFeed.splice(0).forEach((respond) => respond())
     await page.getByRole('heading', { name: 'Worlds 2026' }).waitFor()
     assert.doesNotMatch(await page.locator('body').innerText(), /Schedule may be stale/, 'Pending health is not a stale result')
