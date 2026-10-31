@@ -63,6 +63,14 @@ const domainDefinitions = {
       'contracts/index.ts': { browserRuntime: true },
     },
   },
+  style: {
+    dependencies: ['rankings'],
+    entries: {
+      'profile.ts': { browserRuntime: true },
+      'build.ts': {},
+    },
+    producers: ['build.ts'],
+  },
   rankings: {
     entries: {
       'types.ts': { browserRuntime: true },

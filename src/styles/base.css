@@ -1,23 +1,18 @@
-/* ============================================================
-   rift-delta dark product styles.
-   Charcoal panels, cyan selection accents, restrained league red.
-   ============================================================ */
-
 :root {
   color-scheme: dark;
 
-  --bg: oklch(0.125 0.004 250);
-  --surface: oklch(0.173 0.005 250);
-  --surface-2: oklch(0.205 0.005 250);
-  --surface-3: oklch(0.245 0.006 250);
-  --rail: oklch(0.145 0.004 250);
-  --line: oklch(0.29 0.006 250);
-  --line-strong: oklch(0.405 0.008 250);
+  --bg: #10151c;
+  --surface: #171e28;
+  --surface-2: #202a36;
+  --surface-3: #293645;
+  --rail: #131a23;
+  --line: #303d4c;
+  --line-strong: #4b6075;
 
-  --text: oklch(0.91 0.006 250);
-  --text-strong: oklch(0.97 0.004 250);
-  --muted: oklch(0.69 0.006 250);
-  --faint: oklch(0.64 0.006 250);
+  --text: #d7e1eb;
+  --text-strong: #edf3f8;
+  --muted: #b7c3d1;
+  --faint: #a5b4c7;
 
   /* ---- Colour roles. One meaning each. Do not reuse across roles. ----
      --accent      interactive and selected. Nothing else.
@@ -28,10 +23,10 @@
      --preview     hypothetical, user-chosen scenario content only.
      --live        a series in progress only, always with a "Live" label.
      -------------------------------------------------------------------- */
-  --accent: oklch(0.79 0.155 205);
-  --accent-strong: oklch(0.86 0.145 200);
-  --accent-soft: oklch(0.79 0.155 205 / 0.13);
-  --accent-line: oklch(0.79 0.155 205 / 0.52);
+  --accent: #75d9e9;
+  --accent-strong: #a3e9f3;
+  --accent-soft: rgb(117 217 233 / 0.13);
+  --accent-line: rgb(117 217 233 / 0.52);
   --on-accent: oklch(0.14 0.03 220);
   --league-red: oklch(0.64 0.23 27);
   --rank-gold: oklch(0.84 0.1 86);
@@ -119,15 +114,15 @@
   /* Radius. Three steps plus a pill. Panels are visibly rounder than the
      controls inside them, which is what makes the surface hierarchy readable. */
   --r-1: 4px;   /* chips, badges, inline controls */
-  --r-2: 8px;   /* buttons, inputs, cells */
-  --r-3: 12px;  /* panels, cards, drawers */
+  --r-2: 6px;
+  --r-3: 10px;
   --r-pill: 999px;
 
   /* Type scale. Do not introduce arbitrary rem sizes. */
   --t-0: 0.6rem;  /* dense mobile chrome only. Never body text. */
-  --t-1: 0.68rem; /* eyebrows, table meta, chips */
-  --t-2: 0.75rem; /* secondary and caption text */
-  --t-3: 0.82rem; /* default UI and table body */
+  --t-1: 0.75rem;
+  --t-2: 0.8125rem;
+  --t-3: 0.875rem;
   --t-4: 0.92rem; /* emphasised row text */
   --t-5: 1.05rem; /* panel title */
   --t-6: 1.25rem; /* section title, headline figure inside a panel */
@@ -140,8 +135,7 @@
   --w-emph: 680;
   --w-figure: 800;
 
-  /* Uppercase labels: table heads, eyebrows, stat captions. */
-  --track-label: 0.08em;
+    --track-label: 0.035em;
 
   /* Spacing, 4px grid. */
   --s-1: 4px;
@@ -151,7 +145,7 @@
   --s-6: 24px;
   --s-8: 32px;
 
-  --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --sans: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "Ubuntu Sans", system-ui, sans-serif;
   /* The one monospace face. It must name the @font-face family in index.css;
      "JetBrains Mono" without "Variable" matched nothing and fell through to
      the OS mono. */
@@ -162,7 +156,7 @@
      by these so the last rows are never hidden behind them. */
   --tabbar-h: 56px;
   --tray-h: 60px;
-  --page-x: clamp(20px, 4vw, 56px);
+  --page-x: clamp(16px, 3.3vw, 48px);
   /* One height for every control that sits in a filter or scope bar, so tabs,
      selects, inputs and buttons share a baseline. */
   --control-h: 36px;
@@ -196,21 +190,6 @@ body {
   margin: 0;
   overflow-x: hidden;
   background: var(--bg);
-}
-
-/* The ambient gradient lives on a fixed, painted-once layer instead of
-   `background-attachment: fixed` on the body, which repaints the whole
-   viewport on every scroll frame underneath the blurred sticky nav. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, oklch(0.16 0.03 220 / 0.34), transparent 220px),
-    radial-gradient(900px 380px at 72% -10%, oklch(0.79 0.155 205 / 0.1), transparent 58%),
-    radial-gradient(600px 300px at 2% 0%, oklch(0.64 0.23 27 / 0.07), transparent 62%);
 }
 
 /* Element defaults live in the base layer. Unlayered element rules beat every
@@ -350,4 +329,96 @@ body::before {
   width: 0.55rem;
   height: 0.55rem;
   border-radius: var(--r-pill);
+}
+
+.app-header {
+  gap: 20px;
+  background: var(--rail);
+}
+.app-wordmark b { font-size: var(--t-5); letter-spacing: -0.025em; font-weight: var(--w-emph); }
+.app-nav-desktop { gap: 2px; align-self: stretch; }
+.app-nav-desktop a {
+  height: auto;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: inset 0 -2px transparent;
+  font-weight: var(--w-label);
+}
+.app-nav-desktop a:hover { background: transparent; color: var(--text-strong); }
+.app-nav-desktop a[aria-current="page"] {
+  background: transparent;
+  color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.mode-header { display: grid; align-items: start; gap: 5px; padding-block: 20px 16px; }
+.mode-header h1 { font-size: var(--t-7); line-height: 1.15; letter-spacing: -0.025em; font-weight: var(--w-emph); }
+.mode-header p { max-width: 78ch; font-size: var(--t-3); }
+.ranking-period { padding-block: 8px; background: var(--rail); border-top: 1px solid var(--line); }
+.page-shell { gap: 16px; padding-top: 16px; }
+[data-slot="panel-header"] { padding-block: 14px; }
+[data-slot="panel-header"] h2 { letter-spacing: -0.015em; }
+:where([data-slot="select"][data-wrap]) {
+  height: auto;
+  min-height: var(--control-h);
+  padding-block: 6px;
+  line-height: 1.3;
+  white-space: normal;
+}
+:is(.team-detail-sheet, .compare-sheet) [data-slot="sheet-header"] { background: var(--rail); }
+:is(.team-detail-sheet, .compare-sheet) [data-slot="sheet-title"] { font-size: var(--t-6); letter-spacing: -0.02em; }
+@media (min-width: 640px) and (max-width: 1100px) {
+  .app-header { flex-wrap: wrap; gap: 8px 12px; }
+  .app-nav-desktop { flex: 1; justify-content: flex-end; }
+  .app-nav-desktop a { padding-inline: 8px; font-size: var(--t-3); }
+  .app-header-search { order: 3; width: 100%; }
+}
+@media (max-width: 639px) {
+  :is(.team-detail-sheet, .compare-sheet)[data-side="right"] { width: 100%; max-width: 100%; }
+  :root { --app-nav-h: 56px; }
+  .app-header { gap: 8px; padding-block: 6px; }
+  .app-wordmark { gap: 8px; padding-right: 0; }
+  .app-wordmark img { width: 28px; height: 28px; }
+  .app-wordmark b { font-size: var(--t-4); }
+  .mode-header { gap: 4px; padding-block: 12px; }
+  .mode-header h1 { font-size: var(--t-6); }
+  .mode-header p { font-size: var(--t-2); line-height: 1.45; }
+  .ranking-period:not(:has([role="group"])) > p { flex: 1 1 0; min-width: 0; }
+  .app-nav-mobile { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(76px, 1.25fr); }
+  .app-nav-mobile a { width: 100%; padding-inline: 2px; font-size: 0.625rem; font-weight: var(--w-label); letter-spacing: -0.015em; }
+  .app-nav-mobile a[aria-current="page"] { color: var(--accent); border-top: 2px solid var(--accent); }
+  .page-shell { gap: 16px; padding-top: 16px; }
+}
+
+@media (max-width: 639px) {
+  .stat-ribbon-compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stat-ribbon-compact > div { padding: 10px; }
+  .stat-ribbon-compact > div > span { display: block; line-height: 16px; }
+  .stat-ribbon-compact > div > span > svg { display: inline; margin-right: 4px; vertical-align: text-bottom; }
+  .stat-ribbon-compact > div > b,
+  .stat-ribbon-compact > div > small { overflow: visible; white-space: normal; }
+  .stat-ribbon-compact > div > small { line-height: 16px; }
+  .regions-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, auto) auto; }
+  .regions-summary > div { grid-row: 1 / 4; grid-template-rows: subgrid; gap: 4px; padding: 10px; }
+  .regions-summary > div > span { display: block; font-size: var(--t-3); line-height: 1.4; }
+  .regions-summary > div > span > svg { display: inline; margin-right: 4px; vertical-align: text-bottom; }
+  .regions-summary > div > b,
+  .regions-summary > div > small { overflow: visible; white-space: normal; }
+  .regions-summary > div > small { font-size: var(--t-3); line-height: 1.4; }
+  .regions-summary > div:nth-child(2) { grid-column: 1 / -1; grid-row: 4; grid-template-columns: auto auto 1fr; grid-template-rows: none; align-items: center; gap: 12px; }
+  .regions-summary > div:nth-child(2) > small { text-align: right; }
+}
+
+@media (max-width: 639px) {
+ .ranking-period { display:grid; grid-template-columns:minmax(104px,0.8fr) minmax(0,1.2fr); }
+ .ranking-period > span { grid-column:1; grid-row:1; }
+ .ranking-period > [role="group"] { grid-column:1 / -1; grid-row:2; }
+ .ranking-period > p { grid-column:2; grid-row:1; margin:0; }
+}
+
+@media(max-width:639px){
+ .stat-ribbon-compact{grid-template-rows:repeat(3,auto)}
+ .stat-ribbon-compact>div{grid-row:span 3;grid-template-rows:subgrid}
 }

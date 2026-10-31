@@ -12,6 +12,7 @@ import {
 import { Button } from './ui/button'
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from './ui/chart'
 import { formatChartTimestamp, monthTicks } from '../shared/chartTime'
+import { formatNumber } from '../shared/display'
 
 export type ChartPoint = {
   t: number
@@ -63,16 +64,17 @@ const SEGMENT_GAP_MS = 21 * 86_400_000
 /** Direct labels help from two lines; past six the right edge gets crowded. */
 const MAX_DIRECT_LABELS = 6
 const DIRECT_LABEL_WIDTH = 52
-const DIRECT_LABEL_MIN_GAP_PX = 13
+const DIRECT_LABEL_MIN_GAP_PX = 24
 const CHART_VERTICAL_CHROME_PX = 92
 /** Lines take their colours from the series, and the tooltip takes names from its payload. */
 const CHART_CONFIG: ChartConfig = {}
+const AXIS_TICK_STYLE = { fill: 'var(--muted)', fontSize: 13, fontWeight: 550 }
 
 export function LineChart({
   series,
   height = 300,
   yLabel = 'Rating',
-  yFormat = (value: number) => String(Math.round(value)),
+  yFormat = (value: number) => formatNumber(Math.round(value)),
   yTickFormat,
   yDomain,
   yTicks: providedYTicks,
@@ -104,6 +106,8 @@ export function LineChart({
   const xTicks = xMonthTicks ?? timeTicks(minT, maxT, 5)
   const lineType = curve === 'step' ? 'stepAfter' : 'linear'
   const detailT = hoveredT !== undefined && data.some((row) => row.t === hoveredT) ? hoveredT : data[data.length - 1].t
+  const selectedRow = activeRow(series, detailT)
+  const pointReadout = series.length === 1 && details !== undefined
   const summaries = series.flatMap((entry) => {
     const summary = summarizeSeries(entry)
     return summary ? [summary] : []
@@ -120,7 +124,7 @@ export function LineChart({
     )) : []
     // The live region stays mounted so screen readers hear each new row, as with the Recharts default tooltip.
     return (
-      <div role="status" aria-live="polite">
+      <div role="status" aria-live="polite" className={pointReadout ? 'sr-only' : undefined}>
         {row ? <ChartTooltipContent active={active} label={formatChartTimestamp(row.t)} payload={payload} /> : null}
       </div>
     )
@@ -128,7 +132,7 @@ export function LineChart({
 
   return (
     <div className="chart-shell">
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-3" role={interactiveLegend ? 'group' : undefined} aria-label={interactiveLegend ? 'Highlight a team' : undefined}>
+      <div className={`flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pt-3${pointReadout ? ' min-h-[58px]' : ''}`} role={interactiveLegend ? 'group' : undefined} aria-label={interactiveLegend ? 'Highlight a team' : undefined}>
         {interactiveLegend ? <Button variant="ghost" size="tab" aria-pressed={!focusedId} onClick={() => setFocusedSeriesId(undefined)}>All teams</Button> : null}
         {series.map((entry) => interactiveLegend ? (
           <Button key={entry.id} variant="ghost" size="tab" aria-pressed={focusedId === entry.id} onClick={() => setFocusedSeriesId(entry.id)} className={focusedId && focusedId !== entry.id ? 'opacity-45' : undefined}>
@@ -141,6 +145,12 @@ export function LineChart({
             {entry.label}
           </span>
         ))}
+        {pointReadout && selectedRow.points[0] ? (
+          <div className="chart-point-readout ml-auto grid justify-items-end gap-1 text-xs tabular-nums">
+            <time dateTime={new Date(selectedRow.t).toISOString()} className="text-muted-foreground">{formatChartTimestamp(selectedRow.t)}</time>
+            <strong className="text-sm text-foreground">{yFormat(selectedRow.points[0].point.y)}</strong>
+          </div>
+        ) : null}
       </div>
       <ChartContainer
         id={chartId}
@@ -162,6 +172,7 @@ export function LineChart({
             ticks={xTicks}
             tickLine={false}
             axisLine={false}
+            tick={{ style: AXIS_TICK_STYLE }}
             minTickGap={28}
             tickFormatter={(value: number, index: number) => !xMonthTicks
               ? formatChartTimestamp(value, 'month-day')
@@ -169,12 +180,14 @@ export function LineChart({
           />
           <YAxis
             type="number"
-            width={44}
+            width={52}
+            label={{ value: yLabel, position: 'top', offset: 6, style: AXIS_TICK_STYLE, textAnchor: 'start' }}
             domain={[minY, maxY]}
             ticks={yTicks}
             reversed={yReverse}
             tickLine={false}
             axisLine={false}
+            tick={{ style: AXIS_TICK_STYLE }}
             tickFormatter={(value) => formatYTick(Number(value))}
           />
           <RechartsTooltip trigger="hover" cursor={{ stroke: 'var(--line-strong)' }} content={renderTooltip} />
@@ -200,7 +213,7 @@ export function LineChart({
                     const target = directLabels.get(entry.id)
                     if (!target || props.index !== target.index || typeof props.x !== 'number') return <g />
                     return (
-                      <text x={props.x + 7} y={target.y(Number(props.y))} dy="0.32em" fill="var(--text)" fontSize={11} fontWeight={700} className="font-mono">
+                      <text x={props.x + 7} y={target.y(Number(props.y))} dy="0.32em" fill="var(--text)" fontSize={12} fontWeight={680} className="font-mono">
                         {entry.label}
                       </text>
                     )
@@ -213,7 +226,7 @@ export function LineChart({
       {gaps.length > 0 ? <p className="px-4 pb-2 text-xs text-muted-foreground">Dashed lines span gaps of more than 21 days.</p> : null}
       {details ? (
         <div className="min-w-0 px-4 pb-3" role="region" aria-label="Selected chart point details">
-          {details(activeRow(series, detailT))}
+          {details(selectedRow)}
         </div>
       ) : null}
       <div id={summaryId} className="sr-only">{summaryText}</div>

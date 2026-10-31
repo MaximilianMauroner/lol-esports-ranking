@@ -38,7 +38,7 @@ test('line charts share one hover model', { timeout: 90_000 }, async (t) => {
       const summaryId = await chart.getAttribute('aria-describedby')
       assert.ok(summaryId)
       assert.equal(await page.locator(`[id="${summaryId}"]`).textContent(),
-        'Rating chart data summary. Alpha: latest 1600 on Jun 30, 2026, minimum 1500 on Jun 1, 2026, maximum 1600 on Jun 30, 2026, 2 points.')
+        'Rating chart data summary. Alpha: latest 1,600 on Jun 30, 2026, minimum 1,500 on Jun 1, 2026, maximum 1,600 on Jun 30, 2026, 2 points.')
     })
     await t.test('tooltip shows the same calendar day as the axis in a polite live region', async () => {
       const box = await chart.boundingBox()
