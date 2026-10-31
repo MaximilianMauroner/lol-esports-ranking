@@ -1,3 +1,4 @@
+import { handleDpsRequest } from './scripts/dps/http'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
@@ -14,7 +15,7 @@ import { createTournamentFeedService } from './scripts/leaguepedia-tournament-fe
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [rankingManifestPreloadPlugin(), homepagePrerenderPlugin(), liveTournamentFeedPlugin(), react(), tailwindcss()],
+  plugins: [dpsApiPlugin(), rankingManifestPreloadPlugin(), homepagePrerenderPlugin(), liveTournamentFeedPlugin(), react(), tailwindcss()],
   build: { manifest: true },
   server: {
     allowedHosts: ['coding.tailbc92d.ts.net'],
@@ -87,6 +88,17 @@ function liveTournamentFeedPlugin(): Plugin {
           response.setHeader('cache-control', 'no-store')
           response.end(JSON.stringify(body ?? { ok: false, error: health?.warnings.join(' ') || 'Tournament feed is unavailable' }))
         }, next)
+      })
+    },
+  }
+}
+
+function dpsApiPlugin(): Plugin {
+  return {
+    name: 'dps-api',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        void handleDpsRequest(request, response).then((handled) => { if (!handled) next() }, next)
       })
     },
   }

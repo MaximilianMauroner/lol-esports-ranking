@@ -28,7 +28,7 @@ test('crawler entry files advertise the custom canonical host', async () => {
   assert.match(sitemap, new RegExp(`<loc>${escapeRegExp(`${PUBLIC_SITE_ORIGIN}/`)}</loc>`))
   assert.doesNotMatch(`${robots}\n${sitemap}`, /lol-esports-power-index\.up\.railway\.app/)
 
-  assert.match(llms, /^# LoL Esports Power Index/m)
+  assert.match(llms, /^# rift-delta/m)
   assert.match(llms, new RegExp(escapeRegExp(`${PUBLIC_SITE_ORIGIN}/`)))
   assert.match(llms, /\[[^\]]+\]\(https:\/\/lol\.lab4code\.com\/[^)]*\)/)
   assert.doesNotMatch(llms, /<div id="root"|<!doctype html>/i)

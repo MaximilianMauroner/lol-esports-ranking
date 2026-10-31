@@ -1,0 +1,686 @@
+{
+  "revision": "d3fd42ee44be3b4ae599ea9aa981b2e239a621d2",
+  "repository": "https://github.com/MaximilianMauroner/dps.lol",
+  "files": [
+    {
+      "source": ".env.example",
+      "target": "scripts/dps/env.example",
+      "sourceSha256": "b2e3c251e9a50c8779d00863ebfe2d9ab22c02f2ece63e79cdae7271fb938ebe"
+    },
+    {
+      "source": "README.md",
+      "target": "scripts/dps/README.md",
+      "sourceSha256": "a63f4e5a54a63a82f98e5dec5c374651055b10667e96f2978011f26fbced8b34"
+    },
+    {
+      "source": "migrations/001_initial.sql",
+      "target": "scripts/dps/migrations/001_initial.sql",
+      "sourceSha256": "c3fc0fd56a2569b35fd33afa60b9ffd3ee8ffca2b7f5541bb8c6c794ab23644d"
+    },
+    {
+      "source": "migrations/002_hybrid_storage.sql",
+      "target": "scripts/dps/migrations/002_hybrid_storage.sql",
+      "sourceSha256": "a88929f3aff4cffeff8b440ea7e9bf42a32a8b7e8d183d81a20abbf6474300d6"
+    },
+    {
+      "source": "migrations/003_anchor_provenance.sql",
+      "target": "scripts/dps/migrations/003_anchor_provenance.sql",
+      "sourceSha256": "d31608b95cfbcdac01ba7c25b5cc9f7283eb6adf87c1cacc7977ae9a8b8ac711"
+    },
+    {
+      "source": "migrations/004_storage_safety.sql",
+      "target": "scripts/dps/migrations/004_storage_safety.sql",
+      "sourceSha256": "c1643adba54eeb63a020b1c27d264df3ab6a0c26a698145305e192aaa41da773"
+    },
+    {
+      "source": "scripts/benchmark-optimizer.ts",
+      "target": "tools/dps/benchmark-optimizer.ts",
+      "sourceSha256": "6b9c57de47f21c638c4ea731598c8c79b7ea6811c65f025c3e6f2598beed394b"
+    },
+    {
+      "source": "scripts/check-plan.ts",
+      "target": "tools/dps/check-plan.ts",
+      "sourceSha256": "ccbac24a7930b1abba32294e931d01ba7dc6cd1705661d3366d014059ae24d63"
+    },
+    {
+      "source": "scripts/ingest.ts",
+      "target": "scripts/dps/ingest.ts",
+      "sourceSha256": "3669b61d06cb938cab0e6b9f688a6d5b66aedad84ae133f44602da9965b83282"
+    },
+    {
+      "source": "scripts/migrate.ts",
+      "target": "scripts/dps/migrate.ts",
+      "sourceSha256": "61c77a7439d8d45d5c4520197173c16911cc6baf135627fbc28fbd972b23fb95"
+    },
+    {
+      "source": "scripts/plan-baseline-files.txt",
+      "target": "tools/dps/plan-baseline-files.txt",
+      "sourceSha256": "bed903c39ded67b4731d225eb2b0aed462e373bcfd724cbdff93a08c2c92b061"
+    },
+    {
+      "source": "scripts/plan-contract.json",
+      "target": "tools/dps/plan-contract.json",
+      "sourceSha256": "e283bf48cb607a07892bbdaa8fadeda703e376286deb17d9776a49f6aeb743bc"
+    },
+    {
+      "source": "scripts/rebuild-from-archives.ts",
+      "target": "scripts/dps/rebuild-from-archives.ts",
+      "sourceSha256": "7860ec278913e7d336f3b3615328f93fd4458cf2aa7f844dd5b914ce79b6bd2b"
+    },
+    {
+      "source": "scripts/reconcile-archive.ts",
+      "target": "scripts/dps/reconcile-archive.ts",
+      "sourceSha256": "5c29f3e1f6500a9ff14390fde29ce7f4451160bc9dded0cedfee7afcf48dbac2"
+    },
+    {
+      "source": "scripts/rulesets/README.md",
+      "target": "tools/dps/rulesets/README.md",
+      "sourceSha256": "84f95785a939a0cea7dd5692e677eac787eb771b43a55b739c94962de01bea6c"
+    },
+    {
+      "source": "scripts/rulesets/compile-retained-cdragon-roster.ts",
+      "target": "tools/dps/rulesets/compile-retained-cdragon-roster.ts",
+      "sourceSha256": "ffb58d52f9d50d5cfa9ca755400568d832180616908b4ad1e45638880251e636"
+    },
+    {
+      "source": "scripts/rulesets/compile-retained-ddragon-auxiliary.ts",
+      "target": "tools/dps/rulesets/compile-retained-ddragon-auxiliary.ts",
+      "sourceSha256": "03d57d895937457c6eac785948972595e7bb5b808c107232aacb6cbae2b1e526"
+    },
+    {
+      "source": "scripts/rulesets/compile-retained-ddragon-item-structure.ts",
+      "target": "tools/dps/rulesets/compile-retained-ddragon-item-structure.ts",
+      "sourceSha256": "4ff4e22eb7f84c255b4c8f50b98e10c12093caca10dd0d0eb8718b5240f74ab5"
+    },
+    {
+      "source": "scripts/rulesets/compile-retained-ddragon.ts",
+      "target": "tools/dps/rulesets/compile-retained-ddragon.ts",
+      "sourceSha256": "d6949802ab6ec179296c27a7866e783ef9013c271ff9c47272f010aa713c5c1b"
+    },
+    {
+      "source": "scripts/rulesets/discover-retained-cdragon.ts",
+      "target": "tools/dps/rulesets/discover-retained-cdragon.ts",
+      "sourceSha256": "3e0aefc4349d447420fb922702ef0c2bbf9d3647405e5e2e71b4b939f478a162"
+    },
+    {
+      "source": "scripts/rulesets/discover-retained.ts",
+      "target": "tools/dps/rulesets/discover-retained.ts",
+      "sourceSha256": "7ebabbd0483321298989de7b61484f664202dcca35dadf7652ca7339444822b6"
+    },
+    {
+      "source": "scripts/rulesets/verify-retained.ts",
+      "target": "tools/dps/rulesets/verify-retained.ts",
+      "sourceSha256": "e918d7f70caa6df8556428ba78e8c2bf4299bff2694f8b8ead688d011938770f"
+    },
+    {
+      "source": "scripts/rulesets/verify-source-mapping.ts",
+      "target": "tools/dps/rulesets/verify-source-mapping.ts",
+      "sourceSha256": "252efeb72e1823f01cf3444aef5db813d00c45b75dad605cc9eb7686bec4a323"
+    },
+    {
+      "source": "scripts/storage-audit.ts",
+      "target": "scripts/dps/storage-audit.ts",
+      "sourceSha256": "7f499968ca4c380605e078d78a65b8f46c0f382e8cbdcf05c3f98dbb3704ca4b"
+    },
+    {
+      "source": "scripts/storage-status.ts",
+      "target": "scripts/dps/storage-status.ts",
+      "sourceSha256": "60b9922033a2714ef98f94967fe480351daa226071ae2382f32c31fdb007f238"
+    },
+    {
+      "source": "scripts/sync-static.ts",
+      "target": "scripts/dps/sync-static.ts",
+      "sourceSha256": "311322912f5ea4e77812654e6b5bff86eeb35154729b5a24aa5fd9968e71c4f6"
+    },
+    {
+      "source": "scripts/validate-mechanics.ts",
+      "target": "tools/dps/validate-mechanics.ts",
+      "sourceSha256": "c55eace8ca0d190316c95665860cb361856731ba1a8fdfd65e3070689a75b484"
+    },
+    {
+      "source": "scripts/verify-archive-rebuild.ts",
+      "target": "scripts/dps/verify-archive-rebuild.ts",
+      "sourceSha256": "8ccb1bb9023e1fb49ab2ef6302fae0f835d924390a14d6a50ef24f5000272740"
+    },
+    {
+      "source": "src/app/api/auth/login/route.ts",
+      "target": "scripts/dps/auth/login.ts",
+      "sourceSha256": "a4c6cb075de65b8772c32f04c34e8df7454dcc69494d40129c7c1573c034c948"
+    },
+    {
+      "source": "src/app/api/auth/logout/route.ts",
+      "target": "scripts/dps/auth/login.ts",
+      "sourceSha256": "fccd8444dcc0b3c3a08f97bf3e4de3bb27faa155815fa615bc7f7849daab0443"
+    },
+    {
+      "source": "src/app/api/cohort/route.ts",
+      "target": "scripts/dps/api/cohort/route.ts",
+      "sourceSha256": "5563278307e3c3ac144a9e99cfa31d167e3682d725cab52c61709d165cb32be0"
+    },
+    {
+      "source": "src/app/api/progression/route.ts",
+      "target": "scripts/dps/api/progression/route.ts",
+      "sourceSha256": "f653c053b22509f8b0cc2136a7ecd6ca844ff55c4eb1a2b68bbd909cf474b6c7"
+    },
+    {
+      "source": "src/app/api/simulate/route.ts",
+      "target": "scripts/dps/api/simulate/route.ts",
+      "sourceSha256": "fa8e74a934857d0890b3a23d4b8e64dddaddf7dfb25ead470cba3046a88a0eff"
+    },
+    {
+      "source": "src/app/globals.css",
+      "target": "src/styles/dps.css",
+      "sourceSha256": "ed5516cb91639c06805b28dafea5ae37fbbe9cae9510c7e6b5cfba934cf61f0e"
+    },
+    {
+      "source": "src/app/login/page.tsx",
+      "target": "src/views/dps/LoginPage.tsx",
+      "sourceSha256": "d81af29f434a59a257a303e08c430bfbac37adadd6c7543983d8c7a7920ecb10"
+    },
+    {
+      "source": "src/app/page.tsx",
+      "target": "src/views/dps/DpsLab.tsx",
+      "sourceSha256": "0988810cce220d850962e7b596a43dd8345c756f1749d43eba03fbc1c76119b2"
+    },
+    {
+      "source": "src/auth/session.ts",
+      "target": "scripts/dps/auth/session.ts",
+      "sourceSha256": "2a6c8f2b313ed17822fe064b66eee24623883dcea8813ec5d7bd3476cd72739b"
+    },
+    {
+      "source": "src/components/lab/breakpoints.tsx",
+      "target": "src/components/dps/breakpoints.tsx",
+      "sourceSha256": "8474dab5ca052f3f806a2454ed0238f5e5ad9f458f3bb00d24624b6f1be9b74d"
+    },
+    {
+      "source": "src/components/lab/controls.tsx",
+      "target": "src/components/dps/controls.tsx",
+      "sourceSha256": "77dc49b06dc9005bcc54d5d70343abdde5f5572871d9571a480058f6eeeb9476"
+    },
+    {
+      "source": "src/components/lab/head-to-head.tsx",
+      "target": "src/components/dps/head-to-head.tsx",
+      "sourceSha256": "df62df3cc1cbcc7f8fcb138b85651490a24601dd86225c9589de4d2f884a85c0"
+    },
+    {
+      "source": "src/components/lab/optimizer.tsx",
+      "target": "src/components/dps/optimizer.tsx",
+      "sourceSha256": "55a203542c970ab6e3f302355a900e334289b845edd814a7956de5d5d865fc86"
+    },
+    {
+      "source": "src/components/lab/panels.tsx",
+      "target": "src/components/dps/panels.tsx",
+      "sourceSha256": "45022138b5dab369df5ab4a7e22d50d6e2209f4a4ccc05a17b19a682ffb5c562"
+    },
+    {
+      "source": "src/components/lab/scenario/README.md",
+      "target": "src/components/dps/scenario/README.md",
+      "sourceSha256": "cad21c21fbede6cb22d8918b164c06d421b9d0a64b5f990e790101217d91df83"
+    },
+    {
+      "source": "src/components/lab/scenario/search-settings-panel.tsx",
+      "target": "src/components/dps/scenario/search-settings-panel.tsx",
+      "sourceSha256": "211675bd75f1cc6f0cea2ddd2edabe5303404542dad3074429dc40011ff71a34"
+    },
+    {
+      "source": "src/components/lab/scenario/search-settings-state.ts",
+      "target": "src/components/dps/scenario/search-settings-state.ts",
+      "sourceSha256": "020a9f36b2b4a18688ddfe295d25e004931e5ff767ac4596e32927168c10d045"
+    },
+    {
+      "source": "src/components/lab/scenario/search-settings.module.css",
+      "target": "src/components/dps/scenario/search-settings.module.css",
+      "sourceSha256": "38b7222920451bc4b7746408b0bdf55375e0dc819197eeb5978f1038b040ec5d"
+    },
+    {
+      "source": "src/components/lab/slices.tsx",
+      "target": "src/components/dps/slices.tsx",
+      "sourceSha256": "01b28eb66e5e20c886666635ccb9afef83514ddd60a11cb55f1ccdc12fdaef23"
+    },
+    {
+      "source": "src/components/lab/state/scenario-editor.ts",
+      "target": "src/components/dps/state/scenario-editor.ts",
+      "sourceSha256": "68452d31fb583a9c8375ba9e3e980eebd3ec1cc6b1de76d9b195058a09a45aca"
+    },
+    {
+      "source": "src/components/lab/types.ts",
+      "target": "src/components/dps/types.ts",
+      "sourceSha256": "3a0bd585781fd1bd01ce37456b7f7e549d0593fc300cded05d57f79d969c7e25"
+    },
+    {
+      "source": "src/components/lab/verdict.tsx",
+      "target": "src/components/dps/verdict.tsx",
+      "sourceSha256": "a9c933f5d11f1793163a0bd71808a8bfdcd770d2c0d129d973ebc07a42e99cdc"
+    },
+    {
+      "source": "src/data/fixtures.ts",
+      "target": "src/domains/dps/fixtures.ts",
+      "sourceSha256": "9f34276d85f9671d6fb37f8d346fc3809b78b6f10a30035bc5d00892f9e8098a"
+    },
+    {
+      "source": "src/data/level-targets.ts",
+      "target": "scripts/dps/data/level-targets.ts",
+      "sourceSha256": "ef6ff465f8d613befddf77ea18e8ffbf1839c81af44d2cfd9189e85e38f32a27"
+    },
+    {
+      "source": "src/data/progression.ts",
+      "target": "scripts/dps/data/progression.ts",
+      "sourceSha256": "a9630ac006b873fef1c69ee778aea86923ce03dc02ea959594158aa7605f57bd"
+    },
+    {
+      "source": "src/data/realistic-targets.ts",
+      "target": "scripts/dps/data/realistic-targets.ts",
+      "sourceSha256": "a67c8600058691ec7ae24c1274f4731213fd9daef97e509ece0ac3e64f8e8eee"
+    },
+    {
+      "source": "src/data/skill-progression.ts",
+      "target": "scripts/dps/data/skill-progression.ts",
+      "sourceSha256": "356e47e159ec7e4a177fa50717b4da4942da550c5a54d31710830867ec11aa07"
+    },
+    {
+      "source": "src/db/client.ts",
+      "target": "scripts/dps/db/client.ts",
+      "sourceSha256": "d999261d77ef150380ae97ed5d21dc2924151a2ded534bb6416c47f8330ee53a"
+    },
+    {
+      "source": "src/domain/build-state.ts",
+      "target": "src/domains/dps/build-state.ts",
+      "sourceSha256": "f6e1880c2d2acb365c39cad900f658fb8e6e722f08e4e4b77af25ae7b07655c3"
+    },
+    {
+      "source": "src/domain/champions/plugin.ts",
+      "target": "src/domains/dps/champions/plugin.ts",
+      "sourceSha256": "787cb4eccad468fc2c16980fd7552e63181b99004f2505774d8dfb952778a7cf"
+    },
+    {
+      "source": "src/domain/champions/yunara.ts",
+      "target": "src/domains/dps/champions/yunara.ts",
+      "sourceSha256": "16491b4069fd921150df6a9c3225c934b1acd9567fb2874f4066311b7e899a76"
+    },
+    {
+      "source": "src/domain/cohort-cache.ts",
+      "target": "src/domains/dps/cohort-cache.ts",
+      "sourceSha256": "5b4e27e48375c314eec4028343e708d6ea463f0ec26f7e42e092bb28eb16216b"
+    },
+    {
+      "source": "src/domain/compare-view.ts",
+      "target": "src/domains/dps/compare-view.ts",
+      "sourceSha256": "e7add0684db53a0e75f471a7ff27518e3852b9390c33d01fe09b9b433d6026a7"
+    },
+    {
+      "source": "src/domain/contracts/index.ts",
+      "target": "src/domains/dps/contracts/index.ts",
+      "sourceSha256": "a9cd3f60d95a739cb140a619cf8ebeea43d2b2daf23bbaee909ae8817ea93595"
+    },
+    {
+      "source": "src/domain/contracts/ports.ts",
+      "target": "src/domains/dps/contracts/ports.ts",
+      "sourceSha256": "6ca0466f5f8bffe4aae8f0e95d8c8accecc423a796caea55febe9e9448684450"
+    },
+    {
+      "source": "src/domain/contracts/schemas.ts",
+      "target": "src/domains/dps/contracts/schemas.ts",
+      "sourceSha256": "bcd2babd9c6d5970b24752a7f8d6a93174ef37e2dac1c97e0cabec265a631c1e"
+    },
+    {
+      "source": "src/domain/engine/kernel/entities.ts",
+      "target": "src/domains/dps/engine/kernel/entities.ts",
+      "sourceSha256": "64730d888e7f3c88cd2fb9717832da43845ce893577a44b41fd6d47e8789babf"
+    },
+    {
+      "source": "src/domain/engine/kernel/event-queue.ts",
+      "target": "src/domains/dps/engine/kernel/event-queue.ts",
+      "sourceSha256": "55c08ab59c2e1df403bdc658c8d2640e56995ff67e8901c0ce060a1faf742f9b"
+    },
+    {
+      "source": "src/domain/engine/kernel/lifecycle-event.ts",
+      "target": "src/domains/dps/engine/kernel/lifecycle-event.ts",
+      "sourceSha256": "4352e1845a10b4d93b7f15f822616e7d78300d7b36694118008526093e657b5e"
+    },
+    {
+      "source": "src/domain/engine/kernel/session.ts",
+      "target": "src/domains/dps/engine/kernel/session.ts",
+      "sourceSha256": "6c7f711b23d161a344134a7062710622a70eb8575d734d181d3159d1466a2cdd"
+    },
+    {
+      "source": "src/domain/engine/kernel/timer-port.ts",
+      "target": "src/domains/dps/engine/kernel/timer-port.ts",
+      "sourceSha256": "0fe515818485511c2f0c5ac701bf7399de281ef2f7593ba2f33cc7c0a6e9d5df"
+    },
+    {
+      "source": "src/domain/health.ts",
+      "target": "src/domains/dps/health.ts",
+      "sourceSha256": "6509eaa55a4eacc3194c48d7ba207b854550d2b6b6dd37eb361fbf631f4043fb"
+    },
+    {
+      "source": "src/domain/items.ts",
+      "target": "src/domains/dps/items.ts",
+      "sourceSha256": "ab7d8e2c6b15087d1e3e731778c712f38dc2f1e984cc545048eac5c94467bbe8"
+    },
+    {
+      "source": "src/domain/level-cohort.ts",
+      "target": "src/domains/dps/level-cohort.ts",
+      "sourceSha256": "356fd9d014bc93bec44ab12230d4e6a73b1bee7f188de00cdc34ea2f2c1ba606"
+    },
+    {
+      "source": "src/domain/math.ts",
+      "target": "src/domains/dps/math.ts",
+      "sourceSha256": "5b3cdcca47b611c87b568e20835f979ad9775ace4714b9c4dfc1add7a739b2d9"
+    },
+    {
+      "source": "src/domain/optimizer-engine.ts",
+      "target": "src/domains/dps/optimizer-engine.ts",
+      "sourceSha256": "774012b167b44ea8f7e2997b537d91edf1f359780ce2c18ee728a7e56c43d0ad"
+    },
+    {
+      "source": "src/domain/optimizer.ts",
+      "target": "src/domains/dps/optimizer.ts",
+      "sourceSha256": "7adb743710e20d913135b31450026d3187e93dac6099626041cac304e3e59796"
+    },
+    {
+      "source": "src/domain/progression.ts",
+      "target": "src/domains/dps/progression.ts",
+      "sourceSha256": "7eb6c698e37697977674f6b3f636fd39660d8bedfe63b187c2761f589558e8a5"
+    },
+    {
+      "source": "src/domain/rulesets/cdragon-champion-graph.ts",
+      "target": "src/domains/dps/rulesets/cdragon-champion-graph.ts",
+      "sourceSha256": "396782d5d750e8affffe7fcebef514587fbbbb22e9bf017bc0e5677dd395dc2c"
+    },
+    {
+      "source": "src/domain/rulesets/cdragon-directory-roster.ts",
+      "target": "src/domains/dps/rulesets/cdragon-directory-roster.ts",
+      "sourceSha256": "83361beb092b232415061b16127769f810761cd257de7f9bdb3ba42df1c72f07"
+    },
+    {
+      "source": "src/domain/rulesets/ddragon-ability-slots.ts",
+      "target": "src/domains/dps/rulesets/ddragon-ability-slots.ts",
+      "sourceSha256": "66bb752122a04c7efb28e814cb1d40a25937cf4d7b1be5a03d073875dbbd5674"
+    },
+    {
+      "source": "src/domain/rulesets/ddragon-auxiliary-inventory.ts",
+      "target": "src/domains/dps/rulesets/ddragon-auxiliary-inventory.ts",
+      "sourceSha256": "4305e402d18035f39d005773ff3fb3aa1fcad146c26f5973270ba5696f4c4966"
+    },
+    {
+      "source": "src/domain/rulesets/ddragon-discovery.ts",
+      "target": "src/domains/dps/rulesets/ddragon-discovery.ts",
+      "sourceSha256": "3c20baaed354c5bc3ff46e930301ef9a1a97b579d44d4ea35f9b84b27ecd62fd"
+    },
+    {
+      "source": "src/domain/rulesets/ddragon-item-structure.ts",
+      "target": "src/domains/dps/rulesets/ddragon-item-structure.ts",
+      "sourceSha256": "0d14e42933138b5ce52f668881d8c0004561e244f5daa64521c4fcb9e1a97dc6"
+    },
+    {
+      "source": "src/domain/rulesets/ddragon-source-catalog.ts",
+      "target": "src/domains/dps/rulesets/ddragon-source-catalog.ts",
+      "sourceSha256": "849fe851d72a72ac8a5d1f5813b65a9169ed904a4cb9207b47181025b1cb957c"
+    },
+    {
+      "source": "src/domain/rulesets/source-mapping.ts",
+      "target": "src/domains/dps/rulesets/source-mapping.ts",
+      "sourceSha256": "ab44c945d44f4c2ae140e392b0fde40969fabbad4eafbcdd69baa29af108a0e2"
+    },
+    {
+      "source": "src/domain/rulesets/source-validation.ts",
+      "target": "src/domains/dps/rulesets/source-validation.ts",
+      "sourceSha256": "8118bd2678eb539da905f7639b1444e879bf0fc6e7443483b73aa93b46e4cafb"
+    },
+    {
+      "source": "src/domain/simulator.ts",
+      "target": "src/domains/dps/simulator.ts",
+      "sourceSha256": "7b2da29d5b9cf25371f8600c018eb096e44da51494fd9e52ffbe9da898da1f10"
+    },
+    {
+      "source": "src/domain/skills.ts",
+      "target": "src/domains/dps/skills.ts",
+      "sourceSha256": "3cf72dacb28fa09103132448bb25febc209bff48cb3c66ab87a072626f038b87"
+    },
+    {
+      "source": "src/domain/types.ts",
+      "target": "src/domains/dps/types.ts",
+      "sourceSha256": "6b4b43278dedb1b9f2864ed11fb402a968e82a429a7a6939f47f59118c107c19"
+    },
+    {
+      "source": "src/ingestion/compact-projection.ts",
+      "target": "scripts/dps/ingestion/compact-projection.ts",
+      "sourceSha256": "083b18fdbf0e43fc6401b932221bb52e8a305ca10e932d01ed3dc424104d18ba"
+    },
+    {
+      "source": "src/ingestion/completed-items.ts",
+      "target": "src/domains/dps/observed-items.ts",
+      "sourceSha256": "b27b1ba4ce7818f146dcde083fb22337623ae169aa02df91cf9871f77f356e1e"
+    },
+    {
+      "source": "src/ingestion/inventory.ts",
+      "target": "scripts/dps/ingestion/inventory.ts",
+      "sourceSha256": "cd1c5463cd41dcc5ff0b04d2840ef7d3f3ab9593e2958f7db6bbbc418ad67547"
+    },
+    {
+      "source": "src/ingestion/limits.ts",
+      "target": "scripts/dps/ingestion/limits.ts",
+      "sourceSha256": "3f049af33a7324f1fe4650524da9f4569eaec8a50645f696d11897e3cc0dfa26"
+    },
+    {
+      "source": "src/ingestion/persist.ts",
+      "target": "scripts/dps/ingestion/persist.ts",
+      "sourceSha256": "716f3b0395b83f1821a1a00be6e25949118c20b7b019d6ced14205af4ae6da03"
+    },
+    {
+      "source": "src/ingestion/types.ts",
+      "target": "src/domains/dps/observation-types.ts",
+      "sourceSha256": "5ae77c88ccf02280bd750d90942592624c5447e501c54046cc1443ebf30d118e"
+    },
+    {
+      "source": "src/storage/archive-workflow.ts",
+      "target": "scripts/dps/storage/archive-workflow.ts",
+      "sourceSha256": "d19c05b7d4436bb91b3df5316e64db4437819201737c4358f17072748ddaa9d6"
+    },
+    {
+      "source": "src/storage/archive.ts",
+      "target": "scripts/dps/storage/archive.ts",
+      "sourceSha256": "b451847f23b27f6336def0c594d073a26e07f8eabd252005e39e1f5c55af5281"
+    },
+    {
+      "source": "src/storage/manifest.ts",
+      "target": "scripts/dps/storage/manifest.ts",
+      "sourceSha256": "d024dd5673e389297d3dba5384ef203a7298ef19889e7a67fd485452ac51a4c8"
+    },
+    {
+      "source": "src/storage/rebuild.ts",
+      "target": "scripts/dps/storage/rebuild.ts",
+      "sourceSha256": "daa482a3e1c98002678d5722bb148123adc922a4fbba1e23ff6fc99fab16af9f"
+    },
+    {
+      "source": "src/workers/optimizer-protocol.ts",
+      "target": "src/browser/dps/optimizer-protocol.ts",
+      "sourceSha256": "7aa3d082f1bdf0c47faf683c593facdb3d98594e8e13b7d1e75eb865b57fda6f"
+    },
+    {
+      "source": "src/workers/optimizer.worker.ts",
+      "target": "src/browser/dps/optimizer.worker.ts",
+      "sourceSha256": "26a725ab574330cb586eb9394f51e430ee8c16b9d50f3c017c84fd8ba5c7824d"
+    },
+    {
+      "source": "src/workers/simulation.worker.ts",
+      "target": "src/browser/dps/simulation.worker.ts",
+      "sourceSha256": "8f986255334cd3a1e1ab1b2aa0beeb96f886a0b0c8f778b2f55908cb06eaeeb7"
+    },
+    {
+      "source": "tests/cohort-cache.test.ts",
+      "target": "tests/dps/cohort-cache.test.ts",
+      "sourceSha256": "5742cdff130918513ecccba2f2e5e5387459472fd5e5ac640b793ad634b83b82"
+    },
+    {
+      "source": "tests/compare-view.test.ts",
+      "target": "tests/dps/compare-view.test.ts",
+      "sourceSha256": "58607cc50ca0bb650201c9764318e5aee736245efd189f7a8c56635ec3e6dadb"
+    },
+    {
+      "source": "tests/contracts/contracts.test.ts",
+      "target": "tests/dps/contracts/contracts.test.ts",
+      "sourceSha256": "b9863df19cfd762a46b0b1eb8dc8429e6989c69cd1dec63ffb822fcdb0012d7d"
+    },
+    {
+      "source": "tests/contracts/fixtures.ts",
+      "target": "tests/dps/contracts/fixtures.ts",
+      "sourceSha256": "de74b8d3487ede26831f751a2781904ad34310f5f4f556b9b6736f0ba655dfe1"
+    },
+    {
+      "source": "tests/contracts/mock-ports.ts",
+      "target": "tests/dps/contracts/mock-ports.ts",
+      "sourceSha256": "1350f4e662a1e9729bf71099b0d972216a4979bc45ec64d857ae26bdc868c464"
+    },
+    {
+      "source": "tests/database-wake.test.ts",
+      "target": "tests/dps/database-wake.test.ts",
+      "sourceSha256": "7aaa15a0b9c8455337a55cfce70dc6ec126f153b8d7a4fb5e183903d77aa24dc"
+    },
+    {
+      "source": "tests/domain.test.ts",
+      "target": "tests/dps/domain.test.ts",
+      "sourceSha256": "4ef6443125cb472af17d27b5dce4a97b11446e7988ad0d1c488725a11a763323"
+    },
+    {
+      "source": "tests/engine-harness/harness.test.ts",
+      "target": "tests/dps/engine-harness/harness.test.ts",
+      "sourceSha256": "160b264723e5662077cc0ab767091431b5204790bea2ba87629c1cc200c57dd4"
+    },
+    {
+      "source": "tests/engine-harness/harness.ts",
+      "target": "tools/dps/validation/harness.ts",
+      "sourceSha256": "2b00983a6749b7d843930f8f46e4833ab4250062a886d8e27e017b40eaedcc0c"
+    },
+    {
+      "source": "tests/engine/kernel/entities.test.ts",
+      "target": "tests/dps/engine/kernel/entities.test.ts",
+      "sourceSha256": "95fad6eaaf5c268bc13e4318ff5b545dd2b5facf52ca194140bd0b228e2b9833"
+    },
+    {
+      "source": "tests/engine/kernel/event-queue.test.ts",
+      "target": "tests/dps/engine/kernel/event-queue.test.ts",
+      "sourceSha256": "6b1ced874a7f457bd495bce65cf68b8189905cc697716776b22ee7fca56b2555"
+    },
+    {
+      "source": "tests/engine/kernel/session.test.ts",
+      "target": "tests/dps/engine/kernel/session.test.ts",
+      "sourceSha256": "33254c6ad89a49c36206611b0c205c5de596e3aa3ea457c5824939e7cf031d3a"
+    },
+    {
+      "source": "tests/engine/kernel/timer-port.test.ts",
+      "target": "tests/dps/engine/kernel/timer-port.test.ts",
+      "sourceSha256": "b4f9c581e81d67b88f5a4b809530480a98c29d4d3f3fea697b8cd4945e403a07"
+    },
+    {
+      "source": "tests/observations/cli.test.ts",
+      "target": "tests/dps/observations/cli.test.ts",
+      "sourceSha256": "243cb03b5a3a401d353b335d96d65c53ff1a98f238420bb3d0d05c5adf8ed5ee"
+    },
+    {
+      "source": "tests/observations/records.test.ts",
+      "target": "tests/dps/observations/records.test.ts",
+      "sourceSha256": "78579f5de50cf4faf66aa075c258a7100c9571aec52dcbf359a7a13e511fa554"
+    },
+    {
+      "source": "tests/observations/records.ts",
+      "target": "tools/dps/validation/records.ts",
+      "sourceSha256": "a931b0f5d00edda986be319a426e43f9601683a1fab6f14b5a57e54e90b6dfdb"
+    },
+    {
+      "source": "tests/optimizer-engine.test.ts",
+      "target": "tests/dps/optimizer-engine.test.ts",
+      "sourceSha256": "36dad2462b75e696f2ab0a7e0d57ac6ba4897a9b1633732a42e432a0f6ca3808"
+    },
+    {
+      "source": "tests/optimizer-protocol.test.ts",
+      "target": "tests/dps/optimizer-protocol.test.ts",
+      "sourceSha256": "00bc73a171535c0780f8763400a08888d8fd4c0aad2b1bb95b194bd25da03f6c"
+    },
+    {
+      "source": "tests/optimizer.test.ts",
+      "target": "tests/dps/optimizer.test.ts",
+      "sourceSha256": "738e8971ae1414136e857c95c778f07ed57316099b7a649648d46fa8623ea4ff"
+    },
+    {
+      "source": "tests/regressions/legacy-characterization/check-plan.test.ts",
+      "target": "tests/dps/regressions/legacy-characterization/check-plan.test.ts",
+      "sourceSha256": "6dfbf8207a80aa3cd5125d5ad63a202bdb31153d65aa35e4709483c239cc0a27"
+    },
+    {
+      "source": "tests/regressions/legacy-characterization/p00-baseline.test.ts",
+      "target": "tests/dps/regressions/legacy-characterization/p00-baseline.test.ts",
+      "sourceSha256": "1b551db79a1fef1ed8cb08355d5f0671b3930ff8f420c9b55ee3d39f4949fa5a"
+    },
+    {
+      "source": "tests/rulesets/cdragon-champion-graph.test.ts",
+      "target": "tests/dps/rulesets/cdragon-champion-graph.test.ts",
+      "sourceSha256": "0e580225d888a7affadaa01f60bec09d0f398ee3095df844dfbad5b643ef93bb"
+    },
+    {
+      "source": "tests/rulesets/cdragon-directory-roster.test.ts",
+      "target": "tests/dps/rulesets/cdragon-directory-roster.test.ts",
+      "sourceSha256": "941d33a3f40dd38352c342183149dc06cbba2a2e36ba418aa16f8076fc0add23"
+    },
+    {
+      "source": "tests/rulesets/ddragon-ability-slots.test.ts",
+      "target": "tests/dps/rulesets/ddragon-ability-slots.test.ts",
+      "sourceSha256": "db0b65352d3ecbe2fed03cfb5a52abe33c87ed8c73911ad878269718bc900cc7"
+    },
+    {
+      "source": "tests/rulesets/ddragon-auxiliary-inventory.test.ts",
+      "target": "tests/dps/rulesets/ddragon-auxiliary-inventory.test.ts",
+      "sourceSha256": "4c662ab561e4344a7b3e1f8f6a61efe23d913d25442f9ec605a3989abf9894db"
+    },
+    {
+      "source": "tests/rulesets/ddragon-discovery.test.ts",
+      "target": "tests/dps/rulesets/ddragon-discovery.test.ts",
+      "sourceSha256": "3893a9eed9e42403036b0eed6ae218eaeb7c8a560ecd0f033e7c41beaec58606"
+    },
+    {
+      "source": "tests/rulesets/ddragon-item-structure.test.ts",
+      "target": "tests/dps/rulesets/ddragon-item-structure.test.ts",
+      "sourceSha256": "a595257b21d96b76d35b67e7262abbcabf758f7fa74917ff5001defff5d07c44"
+    },
+    {
+      "source": "tests/rulesets/offline-discovery.test.ts",
+      "target": "tests/dps/rulesets/offline-discovery.test.ts",
+      "sourceSha256": "96c5f05acd2f63f9ceda1e28a82bc04543f830ce24fcd5a881a610fa3d812b8f"
+    },
+    {
+      "source": "tests/rulesets/retained-ddragon-catalog.test.ts",
+      "target": "tests/dps/rulesets/retained-ddragon-catalog.test.ts",
+      "sourceSha256": "377892e9c3edb2feb91b61237137e2127c5e4a50f8c98d6804eb188be8e7fe35"
+    },
+    {
+      "source": "tests/rulesets/retained-files.test.ts",
+      "target": "tests/dps/rulesets/retained-files.test.ts",
+      "sourceSha256": "8e0aeddc950a75d59bb9b76ecba25d8245e8a73630e09bb4726cad0b12d8fcba"
+    },
+    {
+      "source": "tests/rulesets/source-mapping.test.ts",
+      "target": "tests/dps/rulesets/source-mapping.test.ts",
+      "sourceSha256": "505f8168823745feeac7efe8739a61370d374bebc8663d14afefc6069fb1c204"
+    },
+    {
+      "source": "tests/rulesets/source-validation.test.ts",
+      "target": "tests/dps/rulesets/source-validation.test.ts",
+      "sourceSha256": "62631b9c1651c44f74a9af72c0688856b70391cd79885a3c805dd0ded039da5b"
+    },
+    {
+      "source": "tests/storage-safety.test.ts",
+      "target": "tests/dps/storage-safety.test.ts",
+      "sourceSha256": "3092b910f05b075ed67c80a465a7ee74bc1858b3fcd76561f2d40551018c6b55"
+    },
+    {
+      "source": "tests/ui/scenario/search-settings.test.tsx",
+      "target": "tests/dps/ui/scenario/search-settings.test.tsx",
+      "sourceSha256": "b0f8e886712536b249f086ec397f94cbe8bb0be30bbb747b4b15ee89c2164af8"
+    },
+    {
+      "source": "tests/ui/state/scenario-editor.test.ts",
+      "target": "tests/dps/ui/state/scenario-editor.test.ts",
+      "sourceSha256": "0796e85a258f259ab04aaa68eab708de19f4274ebf0a8d9a12994f4edf7c17cc"
+    }
+  ]
+}

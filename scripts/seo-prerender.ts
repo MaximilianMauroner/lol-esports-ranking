@@ -115,8 +115,8 @@ function renderHomepageStartup() {
   return [
     '<main class="homepage-startup flex min-h-svh flex-col items-center justify-center px-6 py-8">',
     `<div class="mb-8 size-32 sm:size-40" aria-hidden="true">${POWER_INDEX_MARK.replace('<svg ', '<svg width="100%" height="100%" ')}</div>`,
-    '<p class="mb-2 text-sm text-muted-foreground">LoL Esports</p>',
-    '<h1 class="text-2xl font-bold text-[var(--text-strong)]">Power Index</h1>',
+    '<p class="mb-2 text-sm text-muted-foreground">rift-delta</p>',
+    '<h1 class="text-2xl font-bold text-[var(--text-strong)]">Rankings</h1>',
     '<p class="mt-3 text-sm text-muted-foreground">Team power. Region strength.</p>',
     '<p class="mt-10 text-xs text-muted-foreground" role="status" aria-live="polite" aria-busy="true">Loading rankings</p>',
     '</main>',
@@ -133,10 +133,10 @@ function renderHomepageSnapshot(data: HomepagePrerenderData) {
   const sourceLabel = data.source ?? 'Oracle\'s Elixir primary with Leaguepedia Cargo gap-fill'
 
   return [
-    `<section class="min-h-full px-[var(--page-x)] py-[clamp(28px,6vw,72px)]" aria-label="Latest LoL Esports Power Index snapshot"${data.snapshotKey ? ` data-snapshot-key="${escapeHtml(data.snapshotKey)}"` : ''}>`,
+    `<section class="min-h-full px-[var(--page-x)] py-[clamp(28px,6vw,72px)]" aria-label="Latest rift-delta snapshot"${data.snapshotKey ? ` data-snapshot-key="${escapeHtml(data.snapshotKey)}"` : ''}>`,
     '<div class="mx-auto max-w-[1080px] [&>h1]:mt-2 [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:tracking-normal [&>h1]:text-[var(--text-strong)] max-[760px]:[&>h1]:text-xl">',
     '<p class="text-2xs font-semibold tracking-label text-muted-foreground uppercase">Latest model snapshot</p>',
-    '<h1>LoL Esports Power Index</h1>',
+    '<h1>rift-delta</h1>',
     '<p class="mt-3 max-w-[760px] text-base leading-[1.55] text-muted-foreground">Model-versioned League of Legends esports team and region power rankings with source provenance, coverage windows, and score context.</p>',
     data.seededSample
       ? '<p class="mt-3.5 max-w-[760px] rounded-sm border border-[color-mix(in_oklch,var(--warn)_46%,var(--line))] bg-[var(--warn-soft)] px-3 py-2.5 text-[var(--text-strong)]">Seeded sample data is loaded. These rows must not be treated as official LoL Esports rankings.</p>'

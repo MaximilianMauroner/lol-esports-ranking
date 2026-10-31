@@ -6,14 +6,14 @@ import {
   type LegalPageName,
 } from '../data/legal'
 
-const UPDATED_AT = 'July 11, 2026'
+const UPDATED_AT = 'October 30, 2026'
 const OPERATOR_NAME = 'Maximilian Mauroner'
 
 export function LegalPage({ page }: { page: LegalPageName }) {
   const title = page === 'legal' ? 'Legal notice' : page === 'privacy' ? 'Privacy policy' : 'Licenses & sources'
 
   useEffect(() => {
-    document.title = `${title} · LoL Esports Power Index`
+    document.title = `${title} · rift-delta`
   }, [title])
 
   return (
@@ -21,7 +21,7 @@ export function LegalPage({ page }: { page: LegalPageName }) {
       <div className="mx-auto grid w-full max-w-[900px] gap-6">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
           <div>
-            <a className="text-xs tracking-label text-[var(--accent)] uppercase" href="/">LoL Esports Power Index</a>
+            <a className="text-xs tracking-label text-[var(--accent)] uppercase" href="/">rift-delta</a>
             <h1 className="mt-2 text-xl font-semibold text-[var(--text-strong)]">{title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Last updated: {UPDATED_AT}</p>
           </div>
@@ -49,7 +49,7 @@ function LegalNotice() {
         <p>{OPERATOR_NAME}</p>
         <p>Private individual · Italy</p>
         <p><EmailLink /></p>
-        <p className="mt-3">LoL Esports Power Index and Lab4Code are project names, not separate legal entities or registered companies. No company-register, REA, VAT, or professional-register details apply.</p>
+        <p className="mt-3">rift-delta and Lab4Code are project names, not separate legal entities or registered companies. No company-register, REA, VAT, or professional-register details apply.</p>
       </Section>
       <Section title="Nature of the project">
         <p>This is a privately operated, free, non-commercial esports analytics project. It has no advertising, subscriptions, sales, gambling, or betting functionality. Rankings are independent model outputs, not official standings, professional advice, or guarantees of future results.</p>
@@ -72,8 +72,16 @@ function PrivacyPolicy() {
         <p><EmailLink /></p>
       </Section>
       <Section title="Website requests and hosting">
-        <p>When you open the site, technical request data such as IP address, requested URL, time, browser headers, and request identifiers is transmitted to Railway, the hosting provider. It is processed to deliver and secure the site under GDPR Article 6(1)(f). The site stores a copy of the public tournament feed in your browser's local storage to show it faster on return visits. This copy contains no personal data. To remove this copy, clear this site's data in your browser settings. The site does not use cookies, analytics, or advertising.</p>
+        <p>When you open the site, technical request data such as IP address, requested URL, time, browser headers, and request identifiers is transmitted to Railway, the hosting provider. It is processed to deliver and secure the site under GDPR Article 6(1)(f). The site stores a copy of the public tournament feed in your browser's local storage to show it faster on return visits. This copy contains no personal data. To remove this copy, clear this site's data in your browser settings. The site does not use analytics or advertising. Private lab access uses the session cookie described below.</p>
         <p className="mt-3">Operational and security logs are retained only for the period configured by the hosting provider or as needed to investigate abuse and faults. Railway primarily processes data in the United States and provides transfer safeguards through the EU-U.S. Data Privacy Framework or EU Standard Contractual Clauses. See Railway's <ExternalLink href="https://railway.com/legal/privacy">privacy policy</ExternalLink> and <ExternalLink href="https://railway.com/legal/dpa">data-processing terms</ExternalLink>.</p>
+      </Section>
+      <Section title="Private DPS lab access">
+        <p>After login, the private DPS lab sets the strictly necessary rift_delta_session cookie. It contains a signed access token that expires after eight hours. Browser scripts cannot read this HttpOnly cookie. Logging out removes the cookie. The cookie enables access to private lab pages and data.</p>
+        <p className="mt-3">The server keeps failed-login counts keyed by client IP address in process memory to limit password guessing. Each attempt window lasts 15 minutes. Expired entries are removed on a later login request, and a server restart clears them. This processing secures private access under GDPR Article 6(1)(f).</p>
+      </Section>
+      <Section title="Private ranked match data">
+        <p>When the DPS dataset is populated, the server processes ranked match and timeline records from the Riot API. These records include player identifiers such as PUUIDs, champion choices, items, and game statistics. They support cohort analysis and damage modeling under the operator's legitimate interests in analysis and reproducibility, GDPR Article 6(1)(f).</p>
+        <p className="mt-3">DPS data endpoints require lab authentication. Original match archives and database records require server-side access. Stored records are retained while needed for historical analysis, source correction, recovery, and auditability. Fixture mode uses synthetic records and does not claim live Riot observations.</p>
       </Section>
       <Section title="Professional esports data">
         <p>The project processes publicly available professional-player identifiers, team membership, match and game statistics, and model-derived performance ratings. Sources include Oracle's Elixir, Leaguepedia, and public LoL Esports information. Processing supports transparent esports research and rankings under the operator's legitimate interests in analysis, documentation, and freedom of expression (GDPR Article 6(1)(f)).</p>
@@ -107,7 +115,7 @@ function Licenses() {
         <p>Original project source code is available under the MIT License in the <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/LICENSE`}>repository</ExternalLink>. That license does not override third-party data, asset, font, icon, or trademark terms.</p>
       </Section>
       <Section title="Third-party software">
-        <p>The application uses open-source packages including React, Recharts, Base UI, Lucide, Tailwind CSS, and JetBrains Mono. Their MIT, ISC, Apache-2.0, BSD, and SIL Open Font License terms remain with the respective authors. Package names and exact versions are recorded in the repository's <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/package.json`}>package manifest</ExternalLink> and lockfile.</p>
+        <p>The application uses open-source packages including React, Recharts, Base UI, Lucide, Tailwind CSS, Inter, and JetBrains Mono. Their MIT, ISC, Apache-2.0, BSD, and SIL Open Font License terms remain with the respective authors. The <LegalLink href="/licenses/inter-OFL.txt">Inter copyright and license</LegalLink> is included with the bundled font. Package names and exact versions are recorded in the repository's <ExternalLink href={`${PROJECT_REPOSITORY_URL}/blob/main/package.json`}>package manifest</ExternalLink> and lockfile.</p>
       </Section>
     </div>
   )

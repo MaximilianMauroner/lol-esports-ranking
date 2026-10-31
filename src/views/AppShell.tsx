@@ -115,7 +115,7 @@ export function AppNavigation({
       <header className="app-header sticky top-0 z-50 flex min-h-[var(--app-nav-h)] items-center gap-x-4 border-b border-border bg-[var(--rail)]/98 px-[var(--page-x)] py-2.5 max-[900px]:px-3">
         <a className="app-wordmark flex min-w-0 shrink-0 items-center gap-2.5 rounded-md py-1 pr-2 text-left text-inherit no-underline transition-colors hover:bg-[color-mix(in_oklab,var(--surface-2)_46%,transparent)]" href={hashForModeAndScope('rankings', scope)} onClick={onGoHome} title="Go to Rankings home">
           <img className="block size-9 shrink-0 rounded-md" src="/logo.svg" alt="" aria-hidden="true" width={36} height={36} />
-          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] sm:max-lg:sr-only">Power Index</b>
+          <b className="block overflow-hidden text-ellipsis whitespace-nowrap text-md font-semibold text-[var(--text-strong)] max-[420px]:sr-only sm:max-lg:sr-only">rift-delta</b>
         </a>
         <nav className="app-nav-desktop flex shrink-0 items-center gap-1.5 max-sm:hidden" aria-label="Primary">{tabs}</nav>
         {onSearch ? (

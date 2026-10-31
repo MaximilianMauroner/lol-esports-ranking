@@ -1,7 +1,7 @@
-# LoL Esports Power Index
+# rift-delta
 
-An independent team-strength model for LoL esports. The app shows team and league
-rankings, match history, player timelines, and tournament forecasts.
+An independent League of Legends app. It combines team and league rankings,
+match history, player timelines, tournament forecasts, and the full patch-pinned DPS lab.
 
 This repository is the starting point for a connected League of Legends platform.
 Read the [product purpose](docs/product.md) and the
@@ -13,7 +13,7 @@ This is not an official Riot ranking. Keep each ranking claim tied to its source
 manifest, model config hash, schema version, and coverage window. A fixed reference
 snapshot, synthetic fixture, or no-data payload is not current official data.
 
-[Live site](https://lol.lab4code.com/) · [Source](https://github.com/MaximilianMauroner/lol-esports-ranking)
+[Live site](https://lol.lab4code.com/) · [Source](https://github.com/MaximilianMauroner/rift-delta)
 
 ## Run locally
 
@@ -55,6 +55,30 @@ Provider downloads stay in ignored `data/raw/`. Review changes to the tracked
 `pnpm data:build` produces an explicit no-data payload. It does not use samples as
 real rankings. `VITE_RANKING_DATA_URL` selects an external browser manifest.
 
+## Use the DPS lab
+
+Open `/lab` from the shared navigation. The lab includes item comparison, a selected-target
+trace, cohort filters, progression defaults, and worker-based optimization.
+It retains patch 26.18 and Data Dragon 16.18.1. Fixture mode is explicit and still requires login.
+
+Set `PROTOTYPE_ACCESS_PASSWORD` and `PROTOTYPE_SESSION_SECRET` in the server environment.
+Run `pnpm dev` to serve both capabilities on one origin. Do not set `DATABASE_URL` for fixture use.
+Use fresh local values for tests. Never copy production credentials into a browser variable.
+`pnpm build` builds both journeys. `pnpm start` serves them from the Node server.
+
+The private endpoints are `/api/dps/cohort`, `/api/dps/progression`, and `/api/dps/simulate`.
+Login and logout are under `/api/dps/auth/`. All DPS data requests require a signed session.
+The ranking pages remain public. Both development and production use the same DPS handlers.
+No provider collection, migration, or bucket write runs on app startup.
+
+For observed timeline skill progression, the web service needs `DATABASE_URL` and all five `DPS_ARCHIVE_*` settings from the [DPS setup guide](scripts/dps/README.md).
+Without private archive access, skill progression uses an explicit legal fallback. Generic ranking bucket credentials cannot enable DPS archives.
+Apply private settings only after operator approval. Behind a proxy, also verify the client-IP and ingress restrictions in that guide before enabling `DPS_TRUST_PROXY`.
+
+Run `pnpm test:dps` for the imported DPS regression suite. `pnpm test` includes both suites.
+The [DPS command reference](scripts/dps/README.md) lists namespaced operator commands.
+Read [source attribution and evidence](docs/dps-source.md) before interpreting simulation results.
+
 ## Source ownership
 
 The repository contains one private JavaScript application and a Rust Cargo
@@ -63,6 +87,7 @@ workspace. It has one JavaScript dependency set and no package split.
 | Path | Owner |
 | --- | --- |
 | `src/domains/rankings/` | Ranking evidence, policy, queries, replay, and publication codecs. |
+| `src/domains/dps/` | Damage simulation, optimizer, contracts, and retained-source rules. |
 | `src/domains/tournaments/` | Schedule rules, forecasts, and deterministic simulations. |
 | `src/lib/` | Five ranking safety implementations whose paths are bound by stored evidence. |
 | `src/shared/`, `src/data/` | Deterministic ordering, shared presentation helpers, branding facts, and legal text. |
@@ -125,8 +150,8 @@ remaining website routes. The image builds from a source archive without Git met
 Build and check the same image locally:
 
 ```sh
-docker build -f worker/Dockerfile.web -t ranking-web .
-docker run --rm -e PORT=8080 -p 127.0.0.1:4173:8080 ranking-web
+docker build -f worker/Dockerfile.web -t rift-delta-web .
+docker run --rm -e PORT=8080 -p 127.0.0.1:4173:8080 rift-delta-web
 ```
 
 After startup, `/api/live` must return 200 and a `/data/ranking-summary.json`

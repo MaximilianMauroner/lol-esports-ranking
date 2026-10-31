@@ -74,7 +74,7 @@ test('Railway server returns app shell only for known app routes', async () => {
   await mkdir(dataDir, { recursive: true })
   await mkdir(tournamentDir, { recursive: true })
   await writeFile(join(distDir, 'index.html'), '<!doctype html><div id="root">app shell</div>\n')
-  await writeFile(join(distDir, 'llms.txt'), '# LoL Esports Power Index\n')
+  await writeFile(join(distDir, 'llms.txt'), '# rift-delta\n')
   await writeFile(join(tournamentDir, 'feed.json'), '{"source":"synthetic-test"}\n')
 
   const server = await startRailwayServer(distDir, dataDir, { TOURNAMENT_PUBLIC_DATA_DIR: tournamentDir })
@@ -126,7 +126,7 @@ test('Railway server returns app shell only for known app routes', async () => {
 
     const llms = await httpRequest(server.port, '/llms.txt')
     assert.equal(llms.statusCode, 200)
-    assert.match(llms.body, /^# LoL Esports Power Index/m)
+    assert.match(llms.body, /^# rift-delta/m)
 
     const missing = await httpRequest(server.port, '/__definitely_missing_test_path_20260709', {
       headers: { accept: 'text/html' },

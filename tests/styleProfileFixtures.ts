@@ -12,4 +12,3 @@ export function styleGame(id = 'one', season = 2026): MatchRecord {
     teamATowers: 0, teamBTowers: 5, teamADragons: 0, teamBDragons: 4, teamABarons: 0, teamBBarons: 1, gameLengthSeconds: 1800,
     teamARoster: roster('a'), teamBRoster: roster('b') }
 }
-

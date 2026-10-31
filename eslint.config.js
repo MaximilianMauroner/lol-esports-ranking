@@ -29,6 +29,14 @@ export default defineConfig([
     },
   },
   {
+    files: [
+      'scripts/dps/ingest.ts', 'scripts/dps/reconcile-archive.ts',
+      'scripts/dps/rebuild-from-archives.ts', 'scripts/dps/sync-static.ts',
+      'scripts/dps/ingestion/persist.ts', 'scripts/dps/ingestion/compact-projection.ts',
+    ],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  {
     // Design-system guard: class strings must use the token scales from
     // src/styles/base.css through their Tailwind names.
     files: ['src/**/*.tsx', 'scripts/seo-prerender.ts'],
@@ -53,6 +61,14 @@ export default defineConfig([
         message: 'Use compareCodeUnits from src/shared/codeUnitOrder.mjs for locale-independent order.',
       }],
     },
+  },
+  {
+    files: [
+      'src/domains/dps/progression.ts', 'src/domains/dps/level-cohort.ts',
+      'src/domains/dps/optimizer-engine.ts', 'src/domains/dps/contracts/schemas.ts',
+      'scripts/dps/api/simulate/route.ts',
+    ],
+    rules: { 'no-restricted-properties': 'off' },
   },
   {
     files: ['src/components/ui/**/*.{ts,tsx}'],

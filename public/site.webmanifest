@@ -1,7 +1,7 @@
 {
-  "name": "LoL Esports Power Index",
-  "short_name": "Power Index",
-  "description": "Model-versioned LoL Esports team and region power rankings.",
+  "name": "rift-delta",
+  "short_name": "rift-delta",
+  "description": "League of Legends rankings and patch-pinned damage comparisons.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

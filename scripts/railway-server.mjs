@@ -1,3 +1,4 @@
+import { handleDpsRequest } from './dps/http.ts'
 import { createReadStream } from 'node:fs'
 import { access, readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -59,6 +60,8 @@ const server = createServer(async (request, response) => {
     const canonicalPresignedPath = isImmutableDataObjectPath(rawPathname)
     const encodedPresignedPath = isEncodedContentAddressedRequestPath(rawPathname)
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
+
+    if (await handleDpsRequest(request, response)) return
 
     if (url.pathname === '/api/live') {
       sendJson(response, 200, { ok: true, commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null })
@@ -228,7 +231,7 @@ async function serveAppShell(response, pathname, headOnly, requestHeaders) {
 
 async function sendHtml(response, html, { headOnly, requestHeaders }) {
   await sendText(response, html, {
-    cacheControl: htmlCacheControl,
+    cacheControl: response.getHeader('cache-control') ?? htmlCacheControl,
     contentType: 'text/html; charset=utf-8',
     headOnly,
     requestHeaders,
@@ -673,6 +676,8 @@ function isKnownAppRoute(pathname) {
     || normalizedPathname === '/regions'
     || normalizedPathname === '/matches'
     || normalizedPathname === '/tournaments'
+    || normalizedPathname === '/lab'
+    || normalizedPathname === '/lab/login'
     || normalizedPathname === '/legal'
     || normalizedPathname === '/privacy'
     || normalizedPathname === '/licenses'

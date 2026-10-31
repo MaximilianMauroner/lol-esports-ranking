@@ -31,6 +31,38 @@ const matches = (path, prefixes) => prefixes.some(prefix => prefix.endsWith('/')
 const sourcePath = /\.[cm]?[jt]sx?$/
 
 const domainDefinitions = {
+  dps: {
+    entries: {
+      'observed-items.ts': { browserRuntime: true },
+      'observation-types.ts': { browserRuntime: true },
+      'rulesets/cdragon-directory-roster.ts': {},
+      'rulesets/ddragon-source-catalog.ts': {},
+      'rulesets/ddragon-auxiliary-inventory.ts': {},
+      'rulesets/ddragon-ability-slots.ts': {},
+      'rulesets/cdragon-champion-graph.ts': {},
+      'rulesets/ddragon-item-structure.ts': {},
+      'rulesets/source-mapping.ts': {},
+      'rulesets/source-validation.ts': {},
+      'rulesets/ddragon-discovery.ts': {},
+
+      'datasets.ts': { browserRuntime: true },
+      'simulator.ts': { browserRuntime: true },
+      'optimizer-engine.ts': { browserRuntime: true },
+      'types.ts': { browserRuntime: true },
+      'math.ts': { browserRuntime: true },
+      'optimizer.ts': { browserRuntime: true },
+      'items.ts': { browserRuntime: true },
+      'health.ts': { browserRuntime: true },
+      'compare-view.ts': { browserRuntime: true },
+      'build-state.ts': { browserRuntime: true },
+      'fixtures.ts': { browserRuntime: true },
+      'skills.ts': { browserRuntime: true },
+      'level-cohort.ts': { browserRuntime: true },
+      'progression.ts': { browserRuntime: true },
+      'cohort-cache.ts': { browserRuntime: true },
+      'contracts/index.ts': { browserRuntime: true },
+    },
+  },
   style: {
     dependencies: ['rankings'],
     entries: {

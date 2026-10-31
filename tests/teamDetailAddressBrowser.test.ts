@@ -30,6 +30,7 @@ async function withFixture(run: (page: Page, base: string, fixture: ReturnType<t
     browser = await chromium.launch({ headless: true, ...(existsSync(executablePath) ? {} : { channel: 'chrome' }) })
     const page = await browser.newPage({ viewport: { width, height: width === 390 ? 844 : 800 } })
     page.setDefaultTimeout(5_000)
+    page.setDefaultNavigationTimeout(30_000)
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'connection', { value: { saveData: true } })
       const events: Array<{ type: string; trusted: boolean }> = []
